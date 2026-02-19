@@ -1,0 +1,13 @@
+<Project>
+  <!--
+    Relax TreatWarningsAsErrors for test projects so test-only patterns
+    (e.g. public fields in test classes, unused parameters in stubs) don't
+    fail the build.
+  -->
+  <PropertyGroup Condition="$(MSBuildProjectName.EndsWith('.Tests.Unit')) OR
+                             $(MSBuildProjectName.EndsWith('.Tests.Integration')) OR
+                             $(MSBuildProjectName.EndsWith('.Tests.Architecture'))">
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <AnalysisMode>Minimum</AnalysisMode>
+  </PropertyGroup>
+</Project>

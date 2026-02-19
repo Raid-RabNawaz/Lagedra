@@ -1,0 +1,69 @@
+## ── .NET ──────────────────────────────────────────────────────────────────────
+bin/
+obj/
+*.user
+*.suo
+.vs/
+*.DotSettings.user
+launchSettings.json
+
+## ── NuGet ─────────────────────────────────────────────────────────────────────
+*.nupkg
+*.snupkg
+packages/
+!packages/ui/
+!packages/contracts/
+!packages/test-utils/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+## ── Test results ──────────────────────────────────────────────────────────────
+TestResults/
+coverage/
+*.trx
+*.coveragexml
+
+## ── Node / pnpm ───────────────────────────────────────────────────────────────
+node_modules/
+.pnpm-store/
+.next/
+out/
+dist/
+.turbo/
+*.tsbuildinfo
+
+## ── Environment & secrets (NEVER commit real secrets) ────────────────────────
+.env
+.env.local
+.env.*.local
+!.env.example
+!deploy/env/*.env
+
+## ── IDE ───────────────────────────────────────────────────────────────────────
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/settings.json
+.vscode/launch.json
+*.code-workspace
+.cursor/
+
+## ── Docker ────────────────────────────────────────────────────────────────────
+.docker-volumes/
+
+## ── OS ────────────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+## ── Logs ──────────────────────────────────────────────────────────────────────
+logs/
+*.log
+
+## ── MinIO / S3 local data ─────────────────────────────────────────────────────
+minio-data/
+
+## ── Generated OpenAPI ─────────────────────────────────────────────────────────
+tools/openapi/*.json

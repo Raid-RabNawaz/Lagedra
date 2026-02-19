@@ -1,0 +1,34 @@
+name: lagedra
+
+# ---------------------------------------------------------------------------
+# Local development overrides — NOT used in production
+# ---------------------------------------------------------------------------
+services:
+
+  api:
+    build:
+      target: build
+    volumes:
+      - ./src:/src
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      DOTNET_USE_POLLING_FILE_WATCHER: "true"
+    entrypoint: ["dotnet", "watch", "run", "--project", "/src/Lagedra.ApiGateway/Lagedra.ApiGateway.csproj", "--urls", "http://0.0.0.0:8080"]
+
+  worker:
+    build:
+      target: build
+    volumes:
+      - ./src:/src
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+    entrypoint: ["dotnet", "watch", "run", "--project", "/src/Lagedra.Worker/Lagedra.Worker.csproj", "--urls", "http://0.0.0.0:8090"]
+
+  postgres:
+    ports:
+      - "5432:5432"
+
+  minio:
+    ports:
+      - "9000:9000"
+      - "9001:9001"

@@ -1,0 +1,23 @@
+{
+  "name": "lagedra",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Lagedra — Mid-Term Rental Trust Protocol",
+  "scripts": {
+    "dev": "pnpm --parallel --filter './apps/*' dev",
+    "build": "pnpm --recursive --filter './apps/*' build && pnpm --recursive --filter './packages/*' build",
+    "lint": "pnpm --recursive lint",
+    "test": "pnpm --recursive test",
+    "type-check": "pnpm --recursive type-check",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,md}\" --ignore-path .gitignore"
+  },
+  "devDependencies": {
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.3"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.4"
+}
