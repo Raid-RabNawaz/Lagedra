@@ -15,7 +15,7 @@
 |---|---|---|
 | Runtime | .NET 10, ASP.NET Core 10 | `net10.0` in `Directory.Build.props`; SDK 10.0.102 |
 | Database | PostgreSQL 16 | Schema-per-module, single Docker container |
-| ORM | Entity Framework Core 8 + Npgsql | Central package management |
+| ORM | Entity Framework Core 9 + Npgsql 9 | net10.0 runtime; EF Core 9.x + Npgsql 9.x (Npgsql 10.x not stable yet — upgrade together when released) |
 | CQRS/Bus | MediatR 12 | In-process only |
 | Auth | ASP.NET Identity + JWT (self-hosted) | Custom `ApplicationUser`; refresh tokens in DB |
 | Email (library) | MailKit + MimeKit | .NET SMTP client |
@@ -41,6 +41,60 @@
 | Deployment | Docker Compose + Nginx (VPS) | Primary; K8s/Terraform = optional Phase 2 |
 | CI/CD | GitHub Actions | Lint → test → build → deploy to VPS |
 | Secret Management | `.env` + Docker secrets (VPS) | No cloud Key Vault in v1 |
+
+---
+
+## Mandatory Coding Standards (enforced by TreatWarningsAsErrors)
+
+> Every `.cs` file written in this project **must** follow these rules or the build will fail.
+> These are not optional — they reflect permanently enabled Roslyn analyzer rules.
+
+### Logging
+- **Never** call `logger.LogInformation(...)`, `logger.LogError(...)`, etc. with interpolated strings or parameterised templates directly.
+- **Always** use compile-time `[LoggerMessage]` source generation:
+  ```csharp
+  public sealed partial class MyService(ILogger<MyService> logger) { ... }
+
+  [LoggerMessage(Level = LogLevel.Information, Message = "Did {Thing} for {Id}")]
+  private static partial void LogDidThing(ILogger logger, string thing, Guid id);
+  ```
+- The enclosing class **must** be declared `partial`.
+
+### Null Validation (CA1062)
+- All externally visible method parameters must be validated at the top of the method body:
+  ```csharp
+  ArgumentNullException.ThrowIfNull(parameter);
+  ```
+
+### IDisposable (CA2000)
+- Disposable objects (`MimeMessage`, `SmtpClient`, `HttpClient`, stream types, etc.) must be wrapped with `using var` or a `using` block before any `await`.
+
+### Exception Handling (CA1031)
+- Never use a bare `catch { }` or `catch (Exception) { }` to swallow exceptions silently.
+- Catch the most specific type available (e.g., `SecurityTokenException`, `HttpRequestException`, `DbException`).
+- If a broad catch is unavoidable (top-level exception boundary), rethrow or log then rethrow.
+
+### Token Validation — `ValidateLifetime = false` (CA5404)
+- Setting `ValidateLifetime = false` in `TokenValidationParameters` triggers CA5404.
+- This is **only** permitted in the refresh-token helper (`GetPrincipalFromExpiredToken`) where the lifetime is intentionally skipped because it is controlled by the `RefreshToken` entity expiry instead.
+- Suppress with a scoped pragma and a mandatory comment explaining the intent:
+  ```csharp
+  #pragma warning disable CA5404 // intentional: lifetime checked via RefreshToken entity
+  var parameters = new TokenValidationParameters { ValidateLifetime = false, ... };
+  #pragma warning restore CA5404
+  ```
+- Every other `TokenValidationParameters` construction **must** have `ValidateLifetime = true`.
+
+### Braces (IDE0011)
+- Always use braces for `if`, `else`, `for`, `foreach`, `while`, `using` blocks, even single-line bodies.
+
+### ConfigureAwait (CA2007)
+- `Lagedra.Infrastructure` and `Lagedra.Auth` suppress CA2007 project-wide via `<NoWarn>CA2007</NoWarn>` because ASP.NET Core has no synchronization context.
+- New projects that are class libraries **consumed outside ASP.NET Core** must add `.ConfigureAwait(false)` to every `await`.
+
+### DbContext base class selection
+- Module DbContexts that extend `BaseDbContext` receive auditing and outbox interceptors automatically and **must** pass `IClock` to the base constructor.
+- Module DbContexts that extend `IdentityDbContext` (e.g., `AuthDbContext`) do **not** extend `BaseDbContext` and do **not** take `IClock` — Identity manages its own timestamps.
 
 ---
 
@@ -75,8 +129,8 @@
 
 ### 0.1 Root-Level Solution & Config Files
 
-- [ ] Move `.sln` from `src/Lagedra.Api/Lagedra.Api.sln` → `Lagedra.sln` at repository root; re-add all future projects
-- [ ] Create root `Directory.Build.props`:
+- [x] Move `.sln` from `src/Lagedra.Api/Lagedra.Api.sln` → `Lagedra.sln` at repository root; re-add all future projects
+- [x] Create root `Directory.Build.props`:
   ```xml
   <Project>
     <PropertyGroup>
@@ -89,90 +143,90 @@
   </Project>
   ```
   > Note: Using `net10.0` (only SDK installed is 10.0.102). ASP.NET Core packages use `10.0.x`; EF Core uses `9.0.x` (latest stable that fully supports net10).
-- [ ] Create root `Directory.Build.targets` (common build targets; relax `TreatWarningsAsErrors` for test projects)
-- [ ] Create root `Directory.Packages.props` with `ManagePackageVersionsCentrally=true` and pinned versions for:
-  - [ ] `Microsoft.EntityFrameworkCore` 8.x
-  - [ ] `Microsoft.EntityFrameworkCore.Design` 8.x
-  - [ ] `Npgsql.EntityFrameworkCore.PostgreSQL` 8.x
-  - [ ] `MediatR` 12.x
-  - [ ] `MediatR.Contracts` 2.x
-  - [ ] `FluentValidation.AspNetCore` 11.x
-  - [ ] `Quartz` 3.x
-  - [ ] `Quartz.Extensions.Hosting` 3.x
-  - [ ] `Quartz.Serialization.Json` 3.x
-  - [ ] `Serilog.AspNetCore` 8.x
-  - [ ] `Serilog.Sinks.Console`
-  - [ ] `Serilog.Sinks.File`
-  - [ ] `Serilog.Enrichers.CorrelationId`
-  - [ ] `OpenTelemetry.Extensions.Hosting`
-  - [ ] `OpenTelemetry.Instrumentation.AspNetCore`
-  - [ ] `OpenTelemetry.Instrumentation.EntityFrameworkCore`
-  - [ ] `Polly` 8.x
-  - [ ] `Polly.Extensions.Http`
-  - [ ] `MailKit` (latest stable)
-  - [ ] `MimeKit` (latest stable)
-  - [ ] `Stripe.net` (latest stable)
-  - [ ] `Microsoft.AspNetCore.Identity.EntityFrameworkCore` 8.x
-  - [ ] `Microsoft.AspNetCore.Authentication.JwtBearer` 8.x
-  - [ ] `System.IdentityModel.Tokens.Jwt` 7.x
-  - [ ] `Microsoft.AspNetCore.OpenApi`
-  - [ ] `Swashbuckle.AspNetCore`
-  - [ ] `Asp.Versioning.Mvc`
-  - [ ] `Asp.Versioning.ApiExplorer`
-  - [ ] `AWSSDK.S3` (for MinIO S3-compatible client)
-  - [ ] `NetArchTest.Rules`
-  - [ ] `xunit` 2.x
-  - [ ] `xunit.runner.visualstudio`
-  - [ ] `coverlet.collector`
-  - [ ] `NSubstitute`
-  - [ ] `FluentAssertions`
-  - [ ] `Bogus`
-  - [ ] `Testcontainers.PostgreSql`
-  - [ ] `Microsoft.AspNetCore.Mvc.Testing`
-- [ ] Create `global.json` pinning .NET 8 SDK version
-- [ ] Create root `.gitignore` (.NET, Node, VS/Rider, Docker, `*.user`, `.env` files with secrets)
-- [ ] Create `.editorconfig` (indent=4 spaces, charset=utf-8, end-of-line=lf, .NET analyser rules)
-- [ ] Create `.gitattributes` (line-ending normalization, binary file markers)
-- [ ] Create `README.md` (project overview, local quickstart, architecture summary, tech stack table)
+- [x] Create root `Directory.Build.targets` (common build targets; relax `TreatWarningsAsErrors` for test projects)
+- [x] Create root `Directory.Packages.props` with `ManagePackageVersionsCentrally=true` and pinned versions for:
+  - [x] `Microsoft.EntityFrameworkCore` 9.x (Npgsql 10.x not yet stable; upgrade both together)
+  - [x] `Microsoft.EntityFrameworkCore.Design` 9.x
+  - [x] `Npgsql.EntityFrameworkCore.PostgreSQL` 9.x (must match EF Core major version exactly)
+  - [x] `MediatR` 12.x
+  - [x] `MediatR.Contracts` 2.x
+  - [x] `FluentValidation.AspNetCore` 11.x
+  - [x] `Quartz` 3.x
+  - [x] `Quartz.Extensions.Hosting` 3.x
+  - [x] `Quartz.Serialization.Json` 3.x
+  - [x] `Serilog.AspNetCore` 8.x
+  - [x] `Serilog.Sinks.Console`
+  - [x] `Serilog.Sinks.File`
+  - [x] `Serilog.Enrichers.CorrelationId`
+  - [x] `OpenTelemetry.Extensions.Hosting`
+  - [x] `OpenTelemetry.Instrumentation.AspNetCore`
+  - [x] `OpenTelemetry.Instrumentation.EntityFrameworkCore`
+  - [x] `Polly` 8.x
+  - [x] `Polly.Extensions.Http`
+  - [x] `MailKit` (latest stable)
+  - [x] `MimeKit` (latest stable)
+  - [x] `Stripe.net` (latest stable)
+  - [x] `Microsoft.AspNetCore.Identity.EntityFrameworkCore` 8.x
+  - [x] `Microsoft.AspNetCore.Authentication.JwtBearer` 8.x
+  - [x] `System.IdentityModel.Tokens.Jwt` 7.x
+  - [x] `Microsoft.AspNetCore.OpenApi`
+  - [x] `Swashbuckle.AspNetCore`
+  - [x] `Asp.Versioning.Mvc`
+  - [x] `Asp.Versioning.Mvc.ApiExplorer`
+  - [x] `AWSSDK.S3` (for MinIO S3-compatible client)
+  - [x] `NetArchTest.Rules`
+  - [x] `xunit` 2.x
+  - [x] `xunit.runner.visualstudio`
+  - [x] `coverlet.collector`
+  - [x] `NSubstitute`
+  - [x] `FluentAssertions`
+  - [x] `Bogus`
+  - [x] `Testcontainers.PostgreSql`
+  - [x] `Microsoft.AspNetCore.Mvc.Testing`
+- [x] Create `global.json` pinning .NET 8 SDK version
+- [x] Create root `.gitignore` (.NET, Node, VS/Rider, Docker, `*.user`, `.env` files with secrets)
+- [x] Create `.editorconfig` (indent=4 spaces, charset=utf-8, end-of-line=lf, .NET analyser rules)
+- [x] Create `.gitattributes` (line-ending normalization, binary file markers)
+- [x] Create `README.md` (project overview, local quickstart, architecture summary, tech stack table)
 
 ### 0.2 Rename / Migrate Existing Projects
 
-- [ ] Rename `src/Lagedra.Api/` → `src/Lagedra.ApiGateway/` (update `.sln` references, `docker-compose.yml`, `Dockerfile`)
-- [ ] Update `Lagedra.ApiGateway.csproj` to `Microsoft.NET.Sdk.Web`; inherit framework from `Directory.Build.props`
-- [ ] Remove boilerplate `WeatherForecast` endpoint from `Program.cs`
-- [ ] Move `src/Lagedra.Web/` → `apps/web/` (update `docker-compose.yml` paths)
-- [ ] Create `apps/admin/` folder placeholder
+- [x] Rename `src/Lagedra.Api/` → `src/Lagedra.ApiGateway/` (update `.sln` references, `docker-compose.yml`, `Dockerfile`)
+- [x] Update `Lagedra.ApiGateway.csproj` to `Microsoft.NET.Sdk.Web`; inherit framework from `Directory.Build.props`
+- [x] Remove boilerplate `WeatherForecast` endpoint from `Program.cs`
+- [x] Move `src/Lagedra.Web/` → `apps/web/` (update `docker-compose.yml` paths)
+- [x] Create `apps/admin/` folder placeholder
 
 ### 0.3 Top-Level Folder Scaffolding
 
-- [ ] Create `src/` subfolders: `Lagedra.SharedKernel`, `Lagedra.Auth`, `Lagedra.Infrastructure`, `Lagedra.Modules`, `Lagedra.TruthSurface`, `Lagedra.Compliance`, `Lagedra.ApiGateway`, `Lagedra.Worker`
-- [ ] Create `tests/` subfolders: `Lagedra.Tests.Unit`, `Lagedra.Tests.Integration`, `Lagedra.Tests.Architecture`
-- [ ] Create `apps/` subfolders: `web`, `admin`, `marketing`
-- [ ] Create `packages/` subfolders: `ui`, `contracts`, `test-utils`
-- [ ] Create `deploy/` subfolders: `env`, `nginx`
-- [ ] Create `docs/` subfolders: `architecture`, `runbooks`, `decisions`
-- [ ] Create `tools/` subfolders: `scripts`, `postman`, `openapi`
+- [x] Create `src/` subfolders: `Lagedra.SharedKernel`, `Lagedra.Auth`, `Lagedra.Infrastructure`, `Lagedra.Modules`, `Lagedra.TruthSurface`, `Lagedra.Compliance`, `Lagedra.ApiGateway`, `Lagedra.Worker`
+- [x] Create `tests/` subfolders: `Lagedra.Tests.Unit`, `Lagedra.Tests.Integration`, `Lagedra.Tests.Architecture`
+- [x] Create `apps/` subfolders: `web`, `admin`, `marketing`
+- [x] Create `packages/` subfolders: `ui`, `contracts`, `test-utils`
+- [x] Create `deploy/` subfolders: `env`, `nginx`
+- [x] Create `docs/` subfolders: `architecture`, `runbooks`, `decisions`
+- [x] Create `tools/` subfolders: `scripts`, `postman`, `openapi`
 
 ### 0.4 Docker & Compose
 
-- [ ] Update `docker-compose.yml` — add all services: `api`, `worker`, `web`, `admin`, `marketing`, `postgres`, `minio`, `clamav`
-- [ ] Create `docker-compose.override.yml` — local dev overrides (volume mounts, hot-reload, debug ports)
-- [ ] Create `Dockerfile` — multi-stage: `restore → build → publish → mcr.microsoft.com/dotnet/aspnet:8.0` runtime
-- [ ] Create `deploy/env/local.env`, `staging.env`, `prod.env` with documented placeholders (never commit real secrets)
-- [ ] Create `pnpm-workspace.yaml` for monorepo frontend packages (`apps/*`, `packages/*`)
-- [ ] Create root `package.json` (workspace root: lint, test, build scripts)
-- [ ] MinIO service in `docker-compose.yml`: image `minio/minio`, volume for persistence, console port exposed
-- [ ] ClamAV service in `docker-compose.yml`: image `clamav/clamav`, freshclam updates enabled
-- [ ] Marketing service in `docker-compose.yml`: Next.js app (`node:20-alpine`), port 3001, env var `NEXT_PUBLIC_API_URL` + `NEXT_PUBLIC_SITE_URL`
+- [x] Update `docker-compose.yml` — add all services: `api`, `worker`, `web`, `admin`, `marketing`, `postgres`, `minio`, `clamav`
+- [x] Create `docker-compose.override.yml` — local dev overrides (volume mounts, hot-reload, debug ports)
+- [x] Create `Dockerfile` — multi-stage: `restore → build → publish → mcr.microsoft.com/dotnet/aspnet:8.0` runtime
+- [x] Create `deploy/env/local.env`, `staging.env`, `prod.env` with documented placeholders (never commit real secrets)
+- [x] Create `pnpm-workspace.yaml` for monorepo frontend packages (`apps/*`, `packages/*`)
+- [x] Create root `package.json` (workspace root: lint, test, build scripts)
+- [x] MinIO service in `docker-compose.yml`: image `minio/minio`, volume for persistence, console port exposed
+- [x] ClamAV service in `docker-compose.yml`: image `clamav/clamav`, freshclam updates enabled
+- [x] Marketing service in `docker-compose.yml`: Next.js app (`node:20-alpine`), port 3001, env var `NEXT_PUBLIC_API_URL` + `NEXT_PUBLIC_SITE_URL`
 
 ### 0.5 Tooling Scripts
 
-- [ ] `tools/scripts/dev-up.ps1` / `dev-up.sh` — `docker compose up -d` + migrate + seed
-- [ ] `tools/scripts/dev-down.ps1` / `dev-down.sh` — `docker compose down`
-- [ ] `tools/scripts/db-migrate.ps1` / `db-migrate.sh` — run EF Core migrations for ALL DbContexts (loop all csproj with `--context`)
-- [ ] `tools/scripts/db-seed.ps1` / `db-seed.sh` — run seed runner
-- [ ] `tools/scripts/lint.ps1` / `lint.sh` — `dotnet format --verify-no-changes` + `pnpm lint`
-- [ ] `tools/scripts/test.ps1` / `test.sh` — `dotnet test` + `pnpm test`
+- [x] `tools/scripts/dev-up.ps1` / `dev-up.sh` — `docker compose up -d` + migrate + seed
+- [x] `tools/scripts/dev-down.ps1` / `dev-down.sh` — `docker compose down`
+- [x] `tools/scripts/db-migrate.ps1` / `db-migrate.sh` — run EF Core migrations for ALL DbContexts (loop all csproj with `--context`)
+- [x] `tools/scripts/db-seed.ps1` / `db-seed.sh` — run seed runner
+- [x] `tools/scripts/lint.ps1` / `lint.sh` — `dotnet format --verify-no-changes` + `pnpm lint`
+- [x] `tools/scripts/test.ps1` / `test.sh` — `dotnet test` + `pnpm test`
 
 ---
 
@@ -183,42 +237,42 @@
 
 ### 1.1 Project Setup
 
-- [ ] Create `src/Lagedra.Auth/Lagedra.Auth.csproj`
+- [x] Create `src/Lagedra.Auth/Lagedra.Auth.csproj`
   - References: `Lagedra.SharedKernel`, `Lagedra.Infrastructure`
   - Packages: `Microsoft.AspNetCore.Identity.EntityFrameworkCore`, `Microsoft.AspNetCore.Authentication.JwtBearer`, `System.IdentityModel.Tokens.Jwt`
-- [ ] Add project to `.sln`
+- [x] Add project to `.sln`
 
 ### 1.2 Domain
 
-- [ ] `Domain/ApplicationUser.cs` — extends `IdentityUser<Guid>`:
+- [x] `Domain/ApplicationUser.cs` — extends `IdentityUser<Guid>`:
   - `Role` (enum: `Landlord / Tenant / Arbitrator / PlatformAdmin / InsurancePartner / InstitutionPartner`)
   - `IsActive` bool
   - `CreatedAt` DateTime
   - `LastLoginAt` DateTime?
-- [ ] `Domain/RefreshToken.cs` — entity: `UserId`, `Token` (hashed), `ExpiresAt`, `RevokedAt`, `ReplacedByToken`, `CreatedByIp`
-- [ ] `Domain/Events/UserRegisteredEvent.cs` — emitted after email verified; downstream modules listen to create identity profile
-- [ ] `Domain/Events/UserRoleChangedEvent.cs`
+- [x] `Domain/RefreshToken.cs` — entity: `UserId`, `Token` (hashed), `ExpiresAt`, `RevokedAt`, `ReplacedByToken`, `CreatedByIp`
+- [x] `Domain/Events/UserRegisteredEvent.cs` — emitted after email verified; downstream modules listen to create identity profile
+- [x] `Domain/Events/UserRoleChangedEvent.cs`
 
 ### 1.3 Application
 
-- [ ] `Application/Commands/RegisterUserCommand.cs` + handler — creates `ApplicationUser`, sends verification email via `IEmailService`
-- [ ] `Application/Commands/VerifyEmailCommand.cs` + handler — validates token, marks user active, fires `UserRegisteredEvent`
-- [ ] `Application/Commands/LoginCommand.cs` + handler — validates credentials, returns `AccessToken` + `RefreshToken`
-- [ ] `Application/Commands/RefreshTokenCommand.cs` + handler — rotates refresh token, returns new pair
-- [ ] `Application/Commands/RevokeTokenCommand.cs` + handler — invalidates refresh token on logout
-- [ ] `Application/Commands/ForgotPasswordCommand.cs` + handler — generates reset token, sends email
-- [ ] `Application/Commands/ResetPasswordCommand.cs` + handler — validates token, updates password
-- [ ] `Application/Commands/ChangePasswordCommand.cs` + handler
-- [ ] `Application/Commands/UpdateRoleCommand.cs` + handler — admin only
-- [ ] `Application/Queries/GetCurrentUserQuery.cs` + handler — returns user profile from token claims
-- [ ] `Application/Services/JwtTokenService.cs` — generates signed JWT (`HS256`, configurable expiry), embeds: `sub`, `email`, `role`, `jti`
-- [ ] `Application/Services/RefreshTokenService.cs` — generates cryptographically random token, stores hashed
-- [ ] `Application/DTOs/AuthResultDto.cs` — `AccessToken`, `RefreshToken`, `ExpiresIn`, `Role`
-- [ ] `Application/DTOs/UserProfileDto.cs`
+- [x] `Application/Commands/RegisterUserCommand.cs` + handler — creates `ApplicationUser`, sends verification email via `IEmailService`
+- [x] `Application/Commands/VerifyEmailCommand.cs` + handler — validates token, marks user active, fires `UserRegisteredEvent`
+- [x] `Application/Commands/LoginCommand.cs` + handler — validates credentials, returns `AccessToken` + `RefreshToken`
+- [x] `Application/Commands/RefreshTokenCommand.cs` + handler — rotates refresh token, returns new pair
+- [x] `Application/Commands/RevokeTokenCommand.cs` + handler — invalidates refresh token on logout
+- [x] `Application/Commands/ForgotPasswordCommand.cs` + handler — generates reset token, sends email
+- [x] `Application/Commands/ResetPasswordCommand.cs` + handler — validates token, updates password
+- [x] `Application/Commands/ChangePasswordCommand.cs` + handler
+- [x] `Application/Commands/UpdateRoleCommand.cs` + handler — admin only
+- [x] `Application/Queries/GetCurrentUserQuery.cs` + handler — returns user profile from token claims
+- [x] `Application/Services/JwtTokenService.cs` — generates signed JWT (`HS256`, configurable expiry), embeds: `sub`, `email`, `role`, `jti`
+- [x] `Application/Services/RefreshTokenService.cs` — generates cryptographically random token, stores hashed
+- [x] `Application/DTOs/AuthResultDto.cs` — `AccessToken`, `RefreshToken`, `ExpiresIn`, `Role`
+- [x] `Application/DTOs/UserProfileDto.cs`
 
 ### 1.4 Presentation
 
-- [ ] `Presentation/Endpoints/AuthEndpoints.cs` (or `AuthController.cs`):
+- [x] `Presentation/Endpoints/AuthEndpoints.cs` (or `AuthController.cs`):
   - `POST /v1/auth/register`
   - `POST /v1/auth/verify-email`
   - `POST /v1/auth/login`
@@ -227,24 +281,24 @@
   - `POST /v1/auth/forgot-password`
   - `POST /v1/auth/reset-password`
   - `GET /v1/auth/me`
-- [ ] `Presentation/Contracts/RegisterRequest.cs` — `Email`, `Password`, `Role` (Landlord/Tenant only at self-registration)
-- [ ] `Presentation/Contracts/LoginRequest.cs`
-- [ ] `Presentation/Contracts/RefreshTokenRequest.cs`
-- [ ] `Presentation/Contracts/ResetPasswordRequest.cs`
+- [x] `Presentation/Contracts/RegisterRequest.cs` — `Email`, `Password`, `Role` (Landlord/Tenant only at self-registration)
+- [x] `Presentation/Contracts/LoginRequest.cs`
+- [x] `Presentation/Contracts/RefreshTokenRequest.cs`
+- [x] `Presentation/Contracts/ResetPasswordRequest.cs`
 
 ### 1.5 Infrastructure
 
-- [ ] `Infrastructure/Persistence/AuthDbContext.cs` — extends `IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>`; schema `auth`
-- [ ] `Infrastructure/Persistence/Schemas/auth.schema.sql`
-- [ ] `Infrastructure/Repositories/RefreshTokenRepository.cs`
-- [ ] `Infrastructure/Configurations/ApplicationUserConfiguration.cs`
-- [ ] `Infrastructure/Configurations/RefreshTokenConfiguration.cs`
-- [ ] `Infrastructure/Jobs/RefreshTokenCleanupJob.cs` — nightly: purge expired / revoked tokens older than 30 days
-- [ ] EF Core migrations for `auth` schema (users, roles, user-roles, refresh_tokens)
+- [x] `Infrastructure/Persistence/AuthDbContext.cs` — extends `IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>`; schema `auth`
+- [x] `Infrastructure/Persistence/Schemas/auth.schema.sql`
+- [x] `Infrastructure/Repositories/RefreshTokenRepository.cs`
+- [x] `Infrastructure/Configurations/ApplicationUserConfiguration.cs`
+- [x] `Infrastructure/Configurations/RefreshTokenConfiguration.cs`
+- [x] `Infrastructure/Jobs/RefreshTokenCleanupJob.cs` — nightly: purge expired / revoked tokens older than 30 days
+- [x] EF Core migrations for `auth` schema (users, roles, user-roles, refresh_tokens)
 
 ### 1.6 Module Registration
 
-- [ ] `AuthModuleRegistration.cs` — `AddAuth(IServiceCollection, IConfiguration)`:
+- [x] `AuthModuleRegistration.cs` — `AddAuth(IServiceCollection, IConfiguration)`:
   - Configure `Identity` with password policy
   - Configure JWT Bearer authentication
   - Register `JwtTokenService`, `RefreshTokenService`
@@ -259,45 +313,45 @@
 
 ### 2.1 Project Setup
 
-- [ ] Create `src/Lagedra.SharedKernel/Lagedra.SharedKernel.csproj` (references `MediatR.Contracts` only)
-- [ ] Add project to `.sln`
+- [x] Create `src/Lagedra.SharedKernel/Lagedra.SharedKernel.csproj` (references `MediatR.Contracts` only)
+- [x] Add project to `.sln`
 
 ### 2.2 Domain Primitives
 
-- [ ] `Domain/Entity.cs` — base entity: `Id`, `CreatedAt`, `UpdatedAt`, equality by Id
-- [ ] `Domain/AggregateRoot.cs` — extends `Entity<TId>`, owns `List<IDomainEvent>`, exposes `AddDomainEvent` / `ClearDomainEvents`
-- [ ] `Domain/ValueObject.cs` — abstract: `GetEqualityComponents`, structural equality, `==` / `!=` operators
-- [ ] `Domain/IDomainEvent.cs` — interface: `EventId` (Guid), `OccurredAt` (DateTime)
-- [ ] `Domain/IAggregateRoot.cs` — marker interface
-- [ ] `Domain/IRepository.cs` — generic: `GetByIdAsync`, `AddAsync`, `Update`, `UnitOfWork`
+- [x] `Domain/Entity.cs` — base entity: `Id`, `CreatedAt`, `UpdatedAt`, equality by Id
+- [x] `Domain/AggregateRoot.cs` — extends `Entity<TId>`, owns `List<IDomainEvent>`, exposes `AddDomainEvent` / `ClearDomainEvents`
+- [x] `Domain/ValueObject.cs` — abstract: `GetEqualityComponents`, structural equality, `==` / `!=` operators
+- [x] `Domain/IDomainEvent.cs` — interface: `EventId` (Guid), `OccurredAt` (DateTime)
+- [x] `Domain/IAggregateRoot.cs` — marker interface
+- [x] `Domain/IRepository.cs` — generic: `GetByIdAsync`, `AddAsync`, `Update`, `UnitOfWork`
 
 ### 2.3 Events
 
-- [ ] `Events/IEventBus.cs` — `Publish<TEvent>(TEvent, CancellationToken)` async
-- [ ] `Events/IDomainEventHandler.cs` — `Handle(TEvent, CancellationToken)` async
+- [x] `Events/IEventBus.cs` — `Publish<TEvent>(TEvent, CancellationToken)` async
+- [x] `Events/IDomainEventHandler.cs` — `Handle(TEvent, CancellationToken)` async
 
 ### 2.4 Persistence
 
-- [ ] `Persistence/IUnitOfWork.cs` — `SaveChangesAsync(CancellationToken)`
+- [x] `Persistence/IUnitOfWork.cs` — `SaveChangesAsync(CancellationToken)`
 
 ### 2.5 Time
 
-- [ ] `Time/IClock.cs` — `UtcNow` property
+- [x] `Time/IClock.cs` — `UtcNow` property
 
 ### 2.6 Security
 
-- [ ] `Security/IHashingService.cs` — `Hash(string): string`, `Verify(string, string): bool`
-- [ ] `Security/ICryptographicSigner.cs` — `Sign(byte[]): string`, `Verify(byte[], string): bool`
+- [x] `Security/IHashingService.cs` — `Hash(string): string`, `Verify(string, string): bool`
+- [x] `Security/ICryptographicSigner.cs` — `Sign(byte[]): string`, `Verify(byte[], string): bool`
 
 ### 2.7 Email Abstraction
 
-- [ ] `Email/IEmailService.cs` — `SendAsync(EmailMessage, CancellationToken)` — used by Auth + Notifications
-- [ ] `Email/EmailMessage.cs` — `To`, `Subject`, `HtmlBody`, `PlainTextBody`, `ReplyTo`
+- [x] `Email/IEmailService.cs` — `SendAsync(EmailMessage, CancellationToken)` — used by Auth + Notifications
+- [x] `Email/EmailMessage.cs` — `To`, `Subject`, `HtmlBody`, `PlainTextBody`, `ReplyTo`
 
 ### 2.8 Results / Errors
 
-- [ ] `Results/Result.cs` — `Result<T>` discriminated union (Success / Failure)
-- [ ] `Results/Error.cs` — structured error: `Code`, `Description`
+- [x] `Results/Result.cs` — `Result<T>` discriminated union (Success / Failure)
+- [x] `Results/Error.cs` — structured error: `Code`, `Description`
 
 ---
 

@@ -7,5 +7,6 @@
     <LangVersion>latest</LangVersion>
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <AnalysisMode>All</AnalysisMode>
+    <NoWarn>$(NoWarn);NU1903;NU1605</NoWarn>
   </PropertyGroup>
 </Project>
