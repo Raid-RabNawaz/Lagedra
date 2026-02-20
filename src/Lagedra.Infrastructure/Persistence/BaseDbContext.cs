@@ -9,11 +9,12 @@ public abstract class BaseDbContext(DbContextOptions options, IClock clock) : Db
 {
     private readonly AuditingInterceptor _auditInterceptor = new(clock);
     private readonly OutboxInterceptor _outboxInterceptor = new();
+    private readonly SoftDeleteInterceptor _softDeleteInterceptor = new();
 
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         ArgumentNullException.ThrowIfNull(optionsBuilder);
-        optionsBuilder.AddInterceptors(_auditInterceptor, _outboxInterceptor);
+        optionsBuilder.AddInterceptors(_auditInterceptor, _outboxInterceptor, _softDeleteInterceptor);
         base.OnConfiguring(optionsBuilder);
     }
 
@@ -22,15 +23,7 @@ public abstract class BaseDbContext(DbContextOptions options, IClock clock) : Db
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
-
-        modelBuilder.Entity<OutboxMessage>(b =>
-        {
-            b.ToTable("outbox_messages", "outbox");
-            b.HasKey(m => m.Id);
-            b.Property(m => m.Type).HasMaxLength(500).IsRequired();
-            b.Property(m => m.Content).IsRequired();
-        });
-
+        modelBuilder.ApplyConfiguration(new Configurations.OutboxMessageConfiguration());
         base.OnModelCreating(modelBuilder);
     }
 }

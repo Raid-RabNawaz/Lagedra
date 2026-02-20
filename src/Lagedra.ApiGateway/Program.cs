@@ -3,9 +3,12 @@ using Lagedra.Auth;
 using Lagedra.Auth.Infrastructure.Seed;
 using Lagedra.Auth.Presentation.Endpoints;
 using Lagedra.Infrastructure;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.OpenApi.Models;
 using Quartz;
 using Serilog;
+using System.Text.Json;
 
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console(formatProvider: CultureInfo.InvariantCulture)
@@ -86,6 +89,26 @@ try
     app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }))
        .AllowAnonymous()
        .WithTags("Health");
+
+    app.MapHealthChecks("/health/detail", new HealthCheckOptions
+    {
+        ResponseWriter = async (ctx, report) =>
+        {
+            ctx.Response.ContentType = "application/json";
+            var result = JsonSerializer.Serialize(new
+            {
+                status = report.Status.ToString(),
+                checks = report.Entries.Select(e => new
+                {
+                    name = e.Key,
+                    status = e.Value.Status.ToString(),
+                    description = e.Value.Description,
+                    tags = e.Value.Tags
+                })
+            });
+            await ctx.Response.WriteAsync(result).ConfigureAwait(false);
+        }
+    }).AllowAnonymous();
 
     app.MapAuthEndpoints();
 

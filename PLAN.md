@@ -361,83 +361,83 @@
 
 ### 3.1 Project Setup
 
-- [ ] Create `src/Lagedra.Infrastructure/Lagedra.Infrastructure.csproj`
-- [ ] Reference `Lagedra.SharedKernel`
-- [ ] Packages: EF Core, Npgsql, Serilog, OpenTelemetry, Polly, MailKit, AWSSDK.S3 (MinIO), Stripe.net
+- [x] Create `src/Lagedra.Infrastructure/Lagedra.Infrastructure.csproj`
+- [x] Reference `Lagedra.SharedKernel`
+- [x] Packages: EF Core, Npgsql, Serilog, OpenTelemetry, Polly, MailKit, AWSSDK.S3 (MinIO), Stripe.net, nClam
 
 ### 3.2 Persistence
 
-- [ ] `Persistence/BaseDbContext.cs` — abstract `DbContext` implementing `IUnitOfWork`; applies interceptors
-- [ ] `Persistence/DbContextFactory.cs` — design-time factory for `dotnet ef migrations`
-- [ ] `Persistence/Interceptors/AuditingInterceptor.cs` — sets `CreatedAt` / `UpdatedAt` on `SaveChangesAsync`
-- [ ] `Persistence/Interceptors/OutboxInterceptor.cs` — serializes `IDomainEvent` list to `outbox.outbox_messages` on `SaveChangesAsync`
-- [ ] `Persistence/Interceptors/SoftDeleteInterceptor.cs` — filters `IsDeleted=true` entities globally
-- [ ] `Persistence/Configurations/OutboxMessageConfiguration.cs`
-- [ ] `Persistence/Configurations/AuditEventConfiguration.cs`
-- [ ] `Persistence/OutboxMessage.cs` — `Id`, `Type`, `Content`, `OccurredAt`, `ProcessedAt`, `RetryCount`, `Error`
-- [ ] `Persistence/Seed/SeedData.cs` — predefined question library, jurisdiction pack seeds
-- [ ] `Persistence/Seed/SeedRunner.cs` — idempotent on startup
+- [x] `Persistence/BaseDbContext.cs` — abstract `DbContext` implementing `IUnitOfWork`; applies interceptors
+- [x] `Persistence/DbContextFactory.cs` — design-time factory for `dotnet ef migrations`
+- [x] `Persistence/Interceptors/AuditingInterceptor.cs` — sets `CreatedAt` / `UpdatedAt` on `SaveChangesAsync`
+- [x] `Persistence/Interceptors/OutboxInterceptor.cs` — serializes `IDomainEvent` list to `outbox.outbox_messages` on `SaveChangesAsync`
+- [x] `Persistence/Interceptors/SoftDeleteInterceptor.cs` — filters `IsDeleted=true` entities globally
+- [x] `Persistence/Configurations/OutboxMessageConfiguration.cs`
+- [ ] `Persistence/Configurations/AuditEventConfiguration.cs` — deferred to Phase 4 (no module-level audit reads yet)
+- [x] `Persistence/OutboxMessage.cs` — `Id`, `Type`, `Content`, `OccurredAt`, `ProcessedAt`, `RetryCount`, `Error`
+- [ ] `Persistence/Seed/SeedData.cs` — predefined question library, jurisdiction pack seeds (Phase 4+)
+- [ ] `Persistence/Seed/SeedRunner.cs` — idempotent on startup (Phase 4+)
 
 ### 3.3 Eventing
 
-- [ ] `Eventing/InMemoryEventBus.cs` — resolves `IDomainEventHandler<T>` from DI, dispatches in-process
-- [ ] `Eventing/OutboxProcessor.cs` — reads unprocessed outbox messages, dispatches, marks processed
-- [ ] `Eventing/OutboxDispatcher.cs` — background polling loop (registered in Worker)
-- [ ] `Eventing/EventBusExtensions.cs` — DI helpers
+- [x] `Eventing/InMemoryEventBus.cs` — resolves `IDomainEventHandler<T>` from DI, dispatches in-process
+- [x] `Eventing/OutboxProcessor.cs` — reads unprocessed outbox messages, dispatches, marks processed
+- [x] `Eventing/OutboxDispatcher.cs` — background polling loop (registered in Worker)
+- [x] `Eventing/EventBusExtensions.cs` — DI helpers
 
 ### 3.4 External Client Contracts + Implementations
 
 **Email — MailKit + Brevo SMTP**
-- [ ] `External/Email/MailKitEmailService.cs` — implements `IEmailService`; uses `MailKit.Net.Smtp.SmtpClient`; configured via `BrevoSmtpSettings` (`Host`, `Port`, `Username`, `Password`) in `appsettings`; HTML + plain-text support; Polly retry (3 attempts, exponential back-off)
-- [ ] `External/Email/BrevoSmtpSettings.cs` — typed config: `Host = smtp-relay.brevo.com`, `Port = 587`, `Username`, `ApiKey`
-- [ ] Email template engine: Razor `.cshtml` templates compiled with `RazorLight` or inline string templates — decision: **inline string templates** (simplest, no Razor dependency)
+- [x] `External/Email/MailKitEmailService.cs` — implements `IEmailService`; uses `MailKit.Net.Smtp.SmtpClient`; configured via `BrevoSmtpSettings`; HTML + plain-text support
+- [x] `External/Email/BrevoSmtpSettings.cs` — typed config: `Host = smtp-relay.brevo.com`, `Port = 587`, `Username`, `ApiKey`
+- [x] Email templates: inline string templates (no Razor dependency)
 
 **Payments — Stripe**
-- [ ] `External/Payments/IStripeService.cs` — `CreateSubscription`, `CancelSubscription`, `CreateProratedInvoice`, `HandleWebhookEvent`
-- [ ] `External/Payments/StripeService.cs` — implements using `Stripe.net` (`Stripe.SubscriptionService`, `Stripe.CustomerService`, `Stripe.InvoiceService`); validates webhook signature via `Stripe.EventUtility.ConstructEvent`
-- [ ] `External/Payments/StripeSettings.cs` — `PublishableKey`, `SecretKey`, `WebhookSecret`; loaded from environment/Docker secrets
+- [x] `External/Payments/IStripeService.cs` — `CreateSubscription`, `CancelSubscription`, `CreateProratedInvoice`, `HandleWebhookEvent`
+- [x] `External/Payments/StripeService.cs` — implements using `Stripe.net`; validates webhook signature via `Stripe.EventUtility.ConstructEvent`
+- [x] `External/Payments/StripeSettings.cs` — `PublishableKey`, `SecretKey`, `WebhookSecret`
 
 **Geocoding — Google Maps**
-- [ ] `External/Geocoding/IGeocodingService.cs` — `GeocodeAddress(string): Task<GeocodingResult>`, `ReverseGeocode(lat, lon): Task<AddressResult>`, `ResolveJurisdiction(string preciseAddress): Task<JurisdictionCode>`
-- [ ] `External/Geocoding/GoogleMapsGeocodingService.cs` — implements via `HttpClient` calling `https://maps.googleapis.com/maps/api/geocode/json`; parses address components for city/county/state; Polly retry; API key from settings
-- [ ] `External/Geocoding/GoogleMapsSettings.cs` — `ApiKey`
+- [x] `External/Geocoding/IGeocodingService.cs` — `GeocodeAddress`, `ReverseGeocode`, `ResolveJurisdiction`
+- [x] `External/Geocoding/GoogleMapsGeocodingService.cs` — implements via `HttpClient` calling Google Maps API
+- [x] `External/Geocoding/GoogleMapsSettings.cs` — `ApiKey`
 
 **KYC + Background Check — Persona**
-- [ ] `External/Persona/IPersonaClient.cs` — `CreateInquiry`, `GetInquiry`, `HandleWebhook`
-- [ ] `External/Persona/PersonaClient.cs` — `HttpClient`-based; Polly retry; webhook signature validation using Persona's HMAC header
-- [ ] `External/Persona/PersonaSettings.cs` — `ApiKey`, `TemplateId`, `WebhookSecret`
+- [x] `External/Persona/IPersonaClient.cs` — `CreateInquiry`, `GetInquiry`, `HandleWebhook`
+- [x] `External/Persona/PersonaClient.cs` — `HttpClient`-based; webhook HMAC-SHA256 signature validation
+- [x] `External/Persona/PersonaSettings.cs` — `ApiKey`, `TemplateId`, `WebhookSecret`
 
 **Object Storage — MinIO (S3-compatible)**
-- [ ] `External/Storage/IObjectStorageService.cs` — `GeneratePresignedUploadUrl`, `GeneratePresignedDownloadUrl`, `DeleteObject`, `ObjectExists`
-- [ ] `External/Storage/MinioStorageService.cs` — implements using `AWSSDK.S3` (`AmazonS3Client`) pointed at MinIO endpoint; bucket-per-purpose (evidence, exports)
-- [ ] `External/Storage/MinioSettings.cs` — `Endpoint`, `AccessKey`, `SecretKey`, `EvidenceBucket`, `ExportsBucket`
+- [x] `External/Storage/IObjectStorageService.cs` — `GeneratePresignedUploadUrl`, `GeneratePresignedDownloadUrl`, `DeleteObject`, `ObjectExists`, `EnsureBucketExistsAsync`
+- [x] `External/Storage/MinioStorageService.cs` — implements using `AWSSDK.S3` (`AmazonS3Client`) pointed at MinIO endpoint
+- [x] `External/Storage/MinioSettings.cs` — `Endpoint`, `AccessKey`, `SecretKey`, `EvidenceBucket`, `ExportsBucket`
 
 **Antivirus — ClamAV**
-- [ ] `External/Antivirus/IAntivirusService.cs` — `ScanAsync(Stream, CancellationToken): Task<ScanResult>`
-- [ ] `External/Antivirus/ClamAvService.cs` — HTTP REST calls to ClamAV REST API (`GET /scan`); or TCP socket via `nClam` NuGet package
-- [ ] `External/Antivirus/ClamAvSettings.cs` — `Host`, `Port`
+- [x] `External/Antivirus/IAntivirusService.cs` — `ScanAsync(Stream, CancellationToken): Task<ScanResult>`
+- [x] `External/Antivirus/ClamAvService.cs` — TCP socket via `nClam` NuGet package
+- [x] `External/Antivirus/ClamAvSettings.cs` — `Host`, `Port`, `TimeoutSeconds`
 
 **Insurance API**
-- [ ] `External/Insurance/IInsuranceApiClient.cs` — `VerifyPolicy`, `GetPolicyStatus`, `HandleWebhook`
-- [ ] `External/Insurance/InsuranceApiClient.cs` — stub implementation (real MGA partner TBD); Polly retry + circuit breaker
+- [x] `External/Insurance/IInsuranceApiClient.cs` — `VerifyPolicy`, `GetPolicyStatus`, `HandleWebhook`
+- [x] `External/Insurance/InsuranceApiClient.cs` — stub implementation (real MGA partner TBD)
 
 ### 3.5 Security
 
-- [ ] `Security/DataProtectionSetup.cs` — ASP.NET Data Protection, keys persisted to PostgreSQL or filesystem volume
-- [ ] `Security/Secrets.cs` — typed configuration loaded from environment variables / Docker secrets
-- [ ] `Security/HashingService.cs` — SHA-256 via `System.Security.Cryptography` (implements `IHashingService`)
-- [ ] `Security/CryptographicSigner.cs` — HMAC-SHA256 (implements `ICryptographicSigner`); key from `Secrets`
+- [x] `Security/DataProtectionSetup.cs` — ASP.NET Data Protection, keys persisted to filesystem volume (switch to Redis/PG for multi-replica)
+- [ ] `Security/Secrets.cs` — deferred; environment variables used directly via IConfiguration
+- [x] `Security/HashingService.cs` — SHA-256 via `System.Security.Cryptography` (implements `IHashingService`)
+- [x] `Security/CryptographicSigner.cs` — HMAC-SHA256 (implements `ICryptographicSigner`)
 
 ### 3.6 Observability
 
-- [ ] `Observability/Logging.cs` — Serilog: structured, correlation-id-enriched, console + rolling file sinks
-- [ ] `Observability/Metrics.cs` — OpenTelemetry metrics (deal activations, arbitration cases, billing events)
-- [ ] `Observability/Tracing.cs` — OTEL tracing for HTTP, EF Core, MediatR, outbox
-- [ ] `Observability/HealthChecks.cs` — PostgreSQL, MinIO, ClamAV, Persona API, Google Maps API, Brevo SMTP, Stripe API liveness probes
+- [x] `Observability/Logging.cs` — Serilog with console sink, structured logging, correlation ID enrichment (via `appsettings.json` + `Program.cs`)
+- [ ] `Observability/Metrics.cs` — OpenTelemetry metrics (Phase 4+)
+- [ ] `Observability/Tracing.cs` — OTEL tracing (Phase 4+)
+- [x] `Observability/HealthChecks.cs` — PostgreSQL, MinIO, ClamAV, Persona, Google Maps, Stripe liveness probes
 
 ### 3.7 DI Registration
 
-- [ ] `InfrastructureServiceRegistration.cs` — `AddInfrastructure(IServiceCollection, IConfiguration)`:
+- [x] `InfrastructureServiceRegistration.cs` — `AddInfrastructure(IServiceCollection, IConfiguration)`:
   - `IClock` → `SystemClock`
   - `IEventBus` → `InMemoryEventBus`
   - `IEmailService` → `MailKitEmailService`
@@ -447,13 +447,13 @@
   - `IObjectStorageService` → `MinioStorageService`
   - `IAntivirusService` → `ClamAvService`
   - `IInsuranceApiClient` → `InsuranceApiClient`
-  - Serilog, OpenTelemetry, HealthChecks
+  - Data Protection, HealthChecks, OutboxDispatcher background service
 
 ### 3.8 Shared DB Schemas
 
-- [ ] SQL schema: `outbox` schema, `outbox_messages` table
-- [ ] SQL schema: `audit` schema, `audit_events` table
-- [ ] EF Core migrations baseline for shared infrastructure schemas
+- [x] SQL schema: `outbox` schema, `outbox_messages` table (via `OutboxMessageConfiguration` + EF migration)
+- [ ] SQL schema: `audit` schema, `audit_events` table (Phase 4+)
+- [x] EF Core migrations baseline applied via `dotnet ef database update`
 
 ---
 
