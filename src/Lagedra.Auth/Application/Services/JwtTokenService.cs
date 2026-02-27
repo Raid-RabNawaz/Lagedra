@@ -2,13 +2,17 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Lagedra.Auth.Domain;
+using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Time;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
 
 namespace Lagedra.Auth.Application.Services;
 
-public sealed class JwtTokenService(IConfiguration configuration, IClock clock)
+public sealed class JwtTokenService(
+    IConfiguration configuration,
+    IClock clock,
+    IPartnerMembershipProvider? partnerMembershipProvider = null)
 {
     private readonly string _secret = configuration["Jwt:Secret"]
         ?? throw new InvalidOperationException("Jwt:Secret is not configured.");
@@ -20,20 +24,32 @@ public sealed class JwtTokenService(IConfiguration configuration, IClock clock)
 
     public int ExpirySeconds => _expiryMinutes * 60;
 
-    public string GenerateAccessToken(ApplicationUser user)
+    public async Task<string> GenerateAccessTokenAsync(ApplicationUser user)
     {
         ArgumentNullException.ThrowIfNull(user);
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_secret));
         var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-        var claims = new[]
+        var claims = new List<Claim>
         {
-            new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-            new Claim(JwtRegisteredClaimNames.Email, user.Email!),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-            new Claim(ClaimTypes.Role, user.Role.ToString()),
-            new Claim("role", user.Role.ToString())
+            new(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new(JwtRegisteredClaimNames.Email, user.Email!),
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new(ClaimTypes.Role, user.Role.ToString()),
+            new("role", user.Role.ToString())
         };
+
+        if (partnerMembershipProvider is not null)
+        {
+            var orgId = await partnerMembershipProvider
+                .GetPartnerOrganizationIdAsync(user.Id)
+                .ConfigureAwait(false);
+
+            if (orgId.HasValue)
+            {
+                claims.Add(new Claim("partner_org_id", orgId.Value.ToString()));
+            }
+        }
 
         var token = new JwtSecurityToken(
             issuer: _issuer,

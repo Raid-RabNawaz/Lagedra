@@ -1,6 +1,6 @@
 namespace Lagedra.SharedKernel.Domain;
 
-public abstract class Entity<TId> where TId : notnull
+public abstract class Entity<TId> : ISoftDeletable where TId : notnull
 {
     protected Entity(TId id)
     {
@@ -15,6 +15,8 @@ public abstract class Entity<TId> where TId : notnull
     public TId Id { get; protected set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+    public bool IsDeleted { get; set; }
+    public DateTime? DeletedAt { get; set; }
 
     public override bool Equals(object? obj)
     {

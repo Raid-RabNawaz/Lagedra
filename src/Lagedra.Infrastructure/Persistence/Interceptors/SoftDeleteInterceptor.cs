@@ -1,10 +1,11 @@
 using Lagedra.SharedKernel.Domain;
+using Lagedra.SharedKernel.Time;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 
 namespace Lagedra.Infrastructure.Persistence.Interceptors;
 
-public sealed class SoftDeleteInterceptor : SaveChangesInterceptor
+public sealed class SoftDeleteInterceptor(IClock? clock = null) : SaveChangesInterceptor
 {
     public override ValueTask<InterceptionResult<int>> SavingChangesAsync(
         DbContextEventData eventData,
@@ -18,6 +19,8 @@ public sealed class SoftDeleteInterceptor : SaveChangesInterceptor
             return base.SavingChangesAsync(eventData, result, cancellationToken);
         }
 
+        var now = clock?.UtcNow ?? DateTime.UtcNow;
+
         foreach (var entry in eventData.Context.ChangeTracker.Entries<ISoftDeletable>())
         {
             if (entry.State != EntityState.Deleted)
@@ -27,7 +30,7 @@ public sealed class SoftDeleteInterceptor : SaveChangesInterceptor
 
             entry.State = EntityState.Modified;
             entry.Entity.IsDeleted = true;
-            entry.Entity.DeletedAt = DateTime.UtcNow;
+            entry.Entity.DeletedAt = now;
         }
 
         return base.SavingChangesAsync(eventData, result, cancellationToken);

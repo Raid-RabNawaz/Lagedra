@@ -1,3 +1,4 @@
+using Lagedra.Infrastructure.Behaviors;
 using Lagedra.Infrastructure.Eventing;
 using Lagedra.Infrastructure.External.Antivirus;
 using Lagedra.Infrastructure.External.Email;
@@ -7,12 +8,18 @@ using Lagedra.Infrastructure.External.Payments;
 using Lagedra.Infrastructure.External.Persona;
 using Lagedra.Infrastructure.External.Storage;
 using Lagedra.Infrastructure.Observability;
+using Lagedra.Infrastructure.RealTime;
 using Lagedra.Infrastructure.Security;
+using Lagedra.Infrastructure.Settings;
 using Lagedra.Infrastructure.Time;
 using Lagedra.SharedKernel.Email;
 using Lagedra.SharedKernel.Events;
+using Lagedra.SharedKernel.RealTime;
 using Lagedra.SharedKernel.Security;
+using Lagedra.SharedKernel.Settings;
 using Lagedra.SharedKernel.Time;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -31,6 +38,7 @@ public static class InfrastructureServiceRegistration
         services.AddSingleton<IClock, SystemClock>();
         services.AddSingleton<IHashingService, HashingService>();
         services.AddSingleton<ICryptographicSigner, CryptographicSigner>();
+        services.AddSingleton<IEncryptionService, EncryptionService>();
 
         // Data Protection
         services.AddLagedraDataProtection();
@@ -73,6 +81,20 @@ public static class InfrastructureServiceRegistration
 
         // Insurance (stub — replace when MGA partner is confirmed)
         services.AddScoped<IInsuranceApiClient, InsuranceApiClient>();
+
+        // Platform Settings (DB-backed, admin-editable)
+        services.AddDbContext<PlatformSettingsDbContext>(options =>
+            options.UseNpgsql(configuration.GetConnectionString("Default")));
+        services.AddMemoryCache();
+        services.AddScoped<IPlatformSettingsService, PlatformSettingsService>();
+
+        // SignalR (real-time notifications)
+        services.AddSignalR();
+        services.AddSingleton<INotificationPusher, SignalRNotificationPusher>();
+
+        // MediatR Pipeline Behaviors
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(UnhandledExceptionBehavior<,>));
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
 
         // Health Checks
         services.AddInfrastructureHealthChecks(configuration);

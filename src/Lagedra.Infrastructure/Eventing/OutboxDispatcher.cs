@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+using Lagedra.Infrastructure.Persistence;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -32,14 +32,17 @@ public sealed partial class OutboxDispatcher(
         {
             await using var scope = serviceProvider.CreateAsyncScope();
 
-            var dbContext = scope.ServiceProvider.GetService<DbContext>();
-            if (dbContext is null)
-            {
-                return;
-            }
-
+            // Resolve every registered module outbox.
+            // Each IOutboxContext points to a different physical table
+            // (e.g. truth_surface.outbox_messages, compliance.outbox_messages)
+            // so iterating them sequentially is safe — no cross-module row collisions.
+            var contexts = scope.ServiceProvider.GetServices<IOutboxContext>();
             var processor = scope.ServiceProvider.GetRequiredService<OutboxProcessor>();
-            await processor.ProcessAsync(dbContext, ct).ConfigureAwait(false);
+
+            foreach (var context in contexts)
+            {
+                await processor.ProcessAsync(context, ct).ConfigureAwait(false);
+            }
         }
         catch (OperationCanceledException)
         {

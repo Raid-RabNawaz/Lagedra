@@ -36,7 +36,7 @@ public sealed class RefreshTokenCommandHandler(
         var newHash = newRaw; // already stored by service; revoke old pointing to new
         await refreshTokenService.RevokeAsync(existing, request.IpAddress, newHash, cancellationToken).ConfigureAwait(true);
 
-        var accessToken = jwtTokenService.GenerateAccessToken(user);
+        var accessToken = await jwtTokenService.GenerateAccessTokenAsync(user).ConfigureAwait(true);
 
         return Result<AuthResultDto>.Success(new AuthResultDto(
             AccessToken: accessToken,

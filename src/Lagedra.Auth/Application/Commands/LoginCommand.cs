@@ -84,7 +84,7 @@ public sealed class LoginCommandHandler(
         user.LastLoginAt = clock.UtcNow;
         await userManager.UpdateAsync(user).ConfigureAwait(true);
 
-        var accessToken = jwtTokenService.GenerateAccessToken(user);
+        var accessToken = await jwtTokenService.GenerateAccessTokenAsync(user).ConfigureAwait(true);
         var (_, rawToken) = await refreshTokenService.CreateAsync(user.Id, ipAddress, ct).ConfigureAwait(true);
 
         return Result<AuthResultDto>.Success(new AuthResultDto(

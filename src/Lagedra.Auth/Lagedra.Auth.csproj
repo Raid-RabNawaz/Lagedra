@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Lagedra.SharedKernel\Lagedra.SharedKernel.csproj" />
     <ProjectReference Include="..\Lagedra.Infrastructure\Lagedra.Infrastructure.csproj" />
+    <ProjectReference Include="..\Lagedra.Modules\Notifications\Notifications.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -19,6 +20,9 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="Quartz" />
     <PackageReference Include="Quartz.Extensions.Hosting" />
+    <PackageReference Include="Google.Apis.Auth" />
+    <PackageReference Include="Microsoft.Identity.Client" />
+    <PackageReference Include="Microsoft.IdentityModel.Protocols.OpenIdConnect" />
   </ItemGroup>
 
 </Project>

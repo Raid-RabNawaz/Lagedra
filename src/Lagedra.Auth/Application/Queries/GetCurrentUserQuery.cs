@@ -21,12 +21,33 @@ public sealed class GetCurrentUserQueryHandler(UserManager<ApplicationUser> user
             return AuthErrors.UserNotFound;
         }
 
-        return Result<UserProfileDto>.Success(new UserProfileDto(
+        return Result<UserProfileDto>.Success(MapToDto(user));
+    }
+
+    internal static UserProfileDto MapToDto(ApplicationUser user) =>
+        new(
             UserId: user.Id,
             Email: user.Email!,
             Role: user.Role,
             IsActive: user.IsActive,
-            CreatedAt: user.CreatedAt,
-            LastLoginAt: user.LastLoginAt));
-    }
+            FirstName: user.FirstName,
+            LastName: user.LastName,
+            DisplayName: user.DisplayName,
+            PhoneNumber: user.PhoneNumber,
+            Bio: user.Bio,
+            ProfilePhotoUrl: user.ProfilePhotoUrl,
+            City: user.City,
+            State: user.State,
+            Country: user.Country,
+            Languages: user.Languages,
+            Occupation: user.Occupation,
+            DateOfBirth: user.DateOfBirth,
+            EmergencyContactName: user.EmergencyContactName,
+            EmergencyContactPhone: user.EmergencyContactPhone,
+            IsGovernmentIdVerified: user.IsGovernmentIdVerified,
+            IsPhoneVerified: user.IsPhoneVerified,
+            ResponseRatePercent: user.ResponseRatePercent,
+            ResponseTimeMinutes: user.ResponseTimeMinutes,
+            MemberSince: user.CreatedAt,
+            LastLoginAt: user.LastLoginAt);
 }

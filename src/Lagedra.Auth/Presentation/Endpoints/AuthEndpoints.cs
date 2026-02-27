@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Lagedra.Auth.Application.Commands;
 using Lagedra.Auth.Application.Queries;
+using Lagedra.Auth.Domain;
 using Lagedra.Auth.Presentation.Contracts;
 using Lagedra.SharedKernel.Results;
 using MediatR;
@@ -23,11 +24,16 @@ public static class AuthEndpoints
         group.MapGet("/verify-email", VerifyEmail).AllowAnonymous();
         group.MapPost("/resend-verification", ResendVerification).AllowAnonymous();
         group.MapPost("/login", Login).AllowAnonymous();
+        group.MapPost("/external-login", ExternalLogin).AllowAnonymous();
         group.MapPost("/refresh", Refresh).AllowAnonymous();
         group.MapPost("/logout", Logout).RequireAuthorization();
         group.MapPost("/forgot-password", ForgotPassword).AllowAnonymous();
         group.MapPost("/reset-password", ResetPassword).AllowAnonymous();
         group.MapGet("/me", GetMe).RequireAuthorization();
+        group.MapPut("/me", UpdateProfile).RequireAuthorization();
+        group.MapPost("/change-password", ChangePassword).RequireAuthorization();
+        group.MapPut("/users/{userId:guid}/role", UpdateRole).RequireAuthorization("RequirePlatformAdmin");
+        group.MapGet("/users", ListUsers).RequireAuthorization("RequirePlatformAdmin");
 
         return app;
     }
@@ -179,17 +185,135 @@ public static class AuthEndpoints
         IMediator mediator,
         CancellationToken ct)
     {
-        var userIdClaim = principal.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? principal.FindFirstValue("sub");
-
-        if (!Guid.TryParse(userIdClaim, out var userId))
+        var userId = GetUserId(principal);
+        if (userId is null)
         {
             return Results.Unauthorized();
         }
 
-        var result = await mediator.Send(new GetCurrentUserQuery(userId), ct).ConfigureAwait(true);
+        var result = await mediator.Send(new GetCurrentUserQuery(userId.Value), ct).ConfigureAwait(true);
         return result.IsSuccess
             ? Results.Ok(result.Value)
             : Results.NotFound(new { error = result.Error.Code });
+    }
+
+    private static async Task<IResult> ExternalLogin(
+        [FromBody] ExternalLoginRequest request,
+        HttpContext httpContext,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        if (!Enum.TryParse<ExternalAuthProvider>(request.Provider, ignoreCase: true, out var provider))
+        {
+            return Results.BadRequest(new { error = "Auth.UnsupportedProvider", detail = $"Provider '{request.Provider}' is not supported. Use Google, Apple, or Microsoft." });
+        }
+
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var result = await mediator.Send(
+            new ExternalLoginCommand(provider, request.IdToken, request.PreferredRole, ip), ct).ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+    }
+
+    private static async Task<IResult> UpdateProfile(
+        [FromBody] UpdateProfileRequest request,
+        ClaimsPrincipal principal,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var userId = GetUserId(principal);
+        if (userId is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        var result = await mediator.Send(
+            new UpdateProfileCommand(
+                userId.Value,
+                request.FirstName,
+                request.LastName,
+                request.DisplayName,
+                request.PhoneNumber,
+                request.Bio,
+                request.ProfilePhotoUrl,
+                request.City,
+                request.State,
+                request.Country,
+                request.Occupation,
+                request.Languages,
+                request.DateOfBirth,
+                request.EmergencyContactName,
+                request.EmergencyContactPhone),
+            ct).ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+    }
+
+    private static async Task<IResult> ChangePassword(
+        [FromBody] ChangePasswordRequest request,
+        ClaimsPrincipal principal,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var userId = GetUserId(principal);
+        if (userId is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        var result = await mediator.Send(
+            new ChangePasswordCommand(userId.Value, request.CurrentPassword, request.NewPassword),
+            ct).ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(new { message = "Password changed successfully." })
+            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+    }
+
+    private static async Task<IResult> UpdateRole(
+        [FromRoute] Guid userId,
+        [FromBody] UpdateRoleRequest request,
+        ClaimsPrincipal principal,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var adminId = GetUserId(principal);
+        if (adminId is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        var result = await mediator.Send(
+            new UpdateRoleCommand(adminId.Value, userId, request.NewRole),
+            ct).ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(new { message = "Role updated successfully." })
+            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+    }
+
+    private static Guid? GetUserId(ClaimsPrincipal principal)
+    {
+        var claim = principal.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? principal.FindFirstValue("sub");
+        return Guid.TryParse(claim, out var id) ? id : null;
+    }
+
+    private static async Task<IResult> ListUsers(
+        [FromQuery] int page,
+        [FromQuery] int pageSize,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(
+            new ListUsersQuery(page <= 0 ? 1 : page, pageSize <= 0 ? 50 : pageSize), ct).ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
     }
 }

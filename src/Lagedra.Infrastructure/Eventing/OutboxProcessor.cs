@@ -14,11 +14,16 @@ public sealed partial class OutboxProcessor(
 {
     private const int BatchSize = 50;
 
-    public async Task ProcessAsync(DbContext dbContext, CancellationToken ct)
+    /// <summary>
+    /// Processes pending outbox messages for a single module context.
+    /// Each module has its own outbox table in its own schema, so calling this
+    /// once per registered IOutboxContext is safe — no cross-module row collisions.
+    /// </summary>
+    public async Task ProcessAsync(IOutboxContext context, CancellationToken ct)
     {
-        ArgumentNullException.ThrowIfNull(dbContext);
+        ArgumentNullException.ThrowIfNull(context);
 
-        var messages = await dbContext.Set<OutboxMessage>()
+        var messages = await context.OutboxMessages
             .Where(m => m.ProcessedAt == null && m.RetryCount < 5)
             .OrderBy(m => m.OccurredAt)
             .Take(BatchSize)
@@ -34,13 +39,11 @@ public sealed partial class OutboxProcessor(
 
         foreach (var message in messages)
         {
-            await ProcessMessageAsync(dbContext, message, ct).ConfigureAwait(false);
+            await ProcessMessageAsync(context, message, ct).ConfigureAwait(false);
         }
-
-        await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 
-    private async Task ProcessMessageAsync(DbContext dbContext, OutboxMessage message, CancellationToken ct)
+    private async Task ProcessMessageAsync(IOutboxContext context, OutboxMessage message, CancellationToken ct)
     {
         try
         {
@@ -50,6 +53,7 @@ public sealed partial class OutboxProcessor(
                 LogUnknownMessageType(logger, message.Id, message.Type);
                 message.ProcessedAt = DateTime.UtcNow;
                 message.Error = $"Unknown type: {message.Type}";
+                await context.SaveChangesAsync(ct).ConfigureAwait(false);
                 return;
             }
 
@@ -59,6 +63,7 @@ public sealed partial class OutboxProcessor(
                 LogDeserializationFailed(logger, message.Id, message.Type);
                 message.ProcessedAt = DateTime.UtcNow;
                 message.Error = "Deserialization returned null.";
+                await context.SaveChangesAsync(ct).ConfigureAwait(false);
                 return;
             }
 
@@ -88,7 +93,7 @@ public sealed partial class OutboxProcessor(
             }
         }
 
-        await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+        await context.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Processing outbox batch of {Count} messages")]

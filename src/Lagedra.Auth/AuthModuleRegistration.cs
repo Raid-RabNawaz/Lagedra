@@ -1,10 +1,14 @@
 using System.Text;
 using Lagedra.Auth.Application.Services;
+using Lagedra.Auth.Application.Settings;
 using Lagedra.Auth.Domain;
 using Lagedra.Auth.Infrastructure.Jobs;
 using Lagedra.Auth.Infrastructure.Persistence;
 using Lagedra.Auth.Infrastructure.Repositories;
 using Lagedra.Auth.Infrastructure.Seed;
+using Lagedra.Auth.Infrastructure.Services;
+using Lagedra.Infrastructure.Eventing;
+using Lagedra.SharedKernel.Integration;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -69,18 +73,43 @@ public static class AuthModuleRegistration
                 ValidateLifetime = true,
                 ClockSkew = TimeSpan.Zero
             };
+
+            options.Events = new JwtBearerEvents
+            {
+                OnMessageReceived = context =>
+                {
+                    var accessToken = context.Request.Query["access_token"];
+                    var path = context.HttpContext.Request.Path;
+                    if (!string.IsNullOrEmpty(accessToken)
+                        && path.StartsWithSegments("/hubs", StringComparison.OrdinalIgnoreCase))
+                    {
+                        context.Token = accessToken;
+                    }
+                    return Task.CompletedTask;
+                }
+            };
         });
 
         services.AddAuthorizationBuilder();
 
         services.AddScoped<JwtTokenService>();
         services.AddScoped<RefreshTokenService>();
+        services.AddScoped<ExternalAuthValidator>();
 
         services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
 
         services.Configure<SuperAdminSettings>(
             configuration.GetSection(SuperAdminSettings.SectionName));
+        services.Configure<ExternalAuthSettings>(
+            configuration.GetSection(ExternalAuthSettings.SectionName));
+
+        services.AddHttpClient();
         services.AddScoped<AuthDataSeeder>();
+        services.AddScoped<IUserEmailResolver, UserEmailResolver>();
+
+        // Notification handlers
+        services.AddDomainEventHandler<Domain.Events.UserRegisteredEvent,
+            Application.EventHandlers.OnUserRegisteredNotify>();
 
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(AuthModuleRegistration).Assembly));
