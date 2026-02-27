@@ -14,9 +14,11 @@ public sealed class SavedListingConfiguration : IEntityTypeConfiguration<SavedLi
 
         builder.HasKey(s => new { s.UserId, s.ListingId });
 
+        builder.Property(s => s.CollectionId);
         builder.Property(s => s.SavedAt).IsRequired();
 
         builder.HasIndex(s => s.UserId);
         builder.HasIndex(s => s.ListingId);
+        builder.HasIndex(s => s.CollectionId);
     }
 }

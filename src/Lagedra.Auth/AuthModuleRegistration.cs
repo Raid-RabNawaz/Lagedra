@@ -106,6 +106,8 @@ public static class AuthModuleRegistration
         services.AddHttpClient();
         services.AddScoped<AuthDataSeeder>();
         services.AddScoped<IUserEmailResolver, UserEmailResolver>();
+        services.AddScoped<IHostProfileProvider, HostProfileProvider>();
+        services.AddScoped<IUserVerificationFlagUpdater, UserVerificationFlagUpdater>();
 
         // Notification handlers
         services.AddDomainEventHandler<Domain.Events.UserRegisteredEvent,

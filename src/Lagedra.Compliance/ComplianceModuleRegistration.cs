@@ -1,6 +1,8 @@
 using Lagedra.Compliance.Infrastructure.Persistence;
 using Lagedra.Compliance.Infrastructure.Repositories;
+using Lagedra.Compliance.Infrastructure.Services;
 using Lagedra.Infrastructure.Eventing;
+using Lagedra.SharedKernel.Integration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,6 +25,7 @@ public static class ComplianceModuleRegistration
 
         services.AddScoped<ViolationRepository>();
         services.AddScoped<TrustLedgerRepository>();
+        services.AddScoped<IUserViolationCountProvider, UserViolationCountProvider>();
 
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(ComplianceModuleRegistration).Assembly));

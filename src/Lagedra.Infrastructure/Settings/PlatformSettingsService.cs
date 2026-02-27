@@ -1,12 +1,12 @@
+using Lagedra.SharedKernel.Caching;
 using Lagedra.SharedKernel.Settings;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Caching.Memory;
 
 namespace Lagedra.Infrastructure.Settings;
 
 public sealed class PlatformSettingsService(
     PlatformSettingsDbContext dbContext,
-    IMemoryCache cache)
+    ICacheService cache)
     : IPlatformSettingsService
 {
     private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(5);
@@ -57,14 +57,15 @@ public sealed class PlatformSettingsService(
 
         await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
 
-        cache.Remove($"platform_setting:{key}");
+        await cache.RemoveAsync($"platform_setting:{key}", ct).ConfigureAwait(false);
     }
 
     private async Task<string?> GetValueAsync(string key, CancellationToken ct)
     {
         var cacheKey = $"platform_setting:{key}";
 
-        if (cache.TryGetValue(cacheKey, out string? cached))
+        var cached = await cache.GetAsync<string>(cacheKey, ct).ConfigureAwait(false);
+        if (cached is not null)
         {
             return cached;
         }
@@ -76,7 +77,10 @@ public sealed class PlatformSettingsService(
 
         var value = setting?.Value;
 
-        cache.Set(cacheKey, value, CacheDuration);
+        if (value is not null)
+        {
+            await cache.SetAsync(cacheKey, value, CacheDuration, ct).ConfigureAwait(false);
+        }
 
         return value;
     }

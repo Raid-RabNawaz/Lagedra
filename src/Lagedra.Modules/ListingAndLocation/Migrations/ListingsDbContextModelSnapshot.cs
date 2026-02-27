@@ -81,6 +81,11 @@ namespace ListingAndLocation.Migrations
                         .HasMaxLength(5000)
                         .HasColumnType("character varying(5000)");
 
+                    b.Property<bool>("InstantBookingEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<bool>("InsuranceRequired")
                         .HasColumnType("boolean");
 
@@ -126,6 +131,10 @@ namespace ListingAndLocation.Migrations
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("VirtualTourUrl")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
 
                     b.HasKey("Id");
 
@@ -308,6 +317,45 @@ namespace ListingAndLocation.Migrations
                     b.ToTable("listing_photos", "listings");
                 });
 
+            modelBuilder.Entity("Lagedra.Modules.ListingAndLocation.Domain.Entities.ListingPriceHistory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("EffectiveTo")
+                        .HasColumnType("date");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("ListingId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("MonthlyRentCents")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ListingId");
+
+                    b.HasIndex("ListingId", "EffectiveFrom");
+
+                    b.ToTable("listing_price_history", "listings");
+                });
+
             modelBuilder.Entity("Lagedra.Modules.ListingAndLocation.Domain.Entities.ListingSafetyDevice", b =>
                 {
                     b.Property<Guid>("ListingId")
@@ -419,16 +467,54 @@ namespace ListingAndLocation.Migrations
                     b.Property<Guid>("ListingId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("CollectionId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("SavedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("UserId", "ListingId");
+
+                    b.HasIndex("CollectionId");
 
                     b.HasIndex("ListingId");
 
                     b.HasIndex("UserId");
 
                     b.ToTable("saved_listings", "listings");
+                });
+
+            modelBuilder.Entity("Lagedra.Modules.ListingAndLocation.Domain.Entities.SavedListingCollections", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("saved_listing_collections", "listings");
                 });
 
             modelBuilder.Entity("Lagedra.Modules.ListingAndLocation.Domain.Aggregates.Listing", b =>

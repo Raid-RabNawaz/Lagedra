@@ -31,9 +31,14 @@ public static class IdentityVerificationModuleRegistration
         services.AddScoped<VerificationCaseRepository>();
         services.AddScoped<HostPaymentDetailsRepository>();
         services.AddScoped<IHostPaymentDetailsProvider, HostPaymentDetailsProvider>();
+        services.AddScoped<IHostVerificationProvider, HostVerificationProvider>();
+        services.AddScoped<IVerificationSignalProvider, VerificationSignalProvider>();
 
         // Notification handlers
         services.AddDomainEventHandler<IdentityVerifiedEvent, OnIdentityVerifiedNotify>();
+
+        // Sync IsGovernmentIdVerified flag to Auth
+        services.AddDomainEventHandler<IdentityVerifiedEvent, OnIdentityVerifiedSyncAuthHandler>();
         services.AddDomainEventHandler<IdentityVerificationFailedEvent, OnIdentityVerificationFailedNotify>();
         services.AddDomainEventHandler<VerificationClassChangedEvent, OnVerificationClassChangedNotify>();
 

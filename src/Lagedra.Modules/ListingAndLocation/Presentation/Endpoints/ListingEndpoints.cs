@@ -1,6 +1,7 @@
 using Lagedra.Modules.ListingAndLocation.Application.Commands;
 using Lagedra.Modules.ListingAndLocation.Application.DTOs;
 using Lagedra.Modules.ListingAndLocation.Application.Queries;
+using Lagedra.Modules.ListingAndLocation.Domain.Enums;
 using Lagedra.Modules.ListingAndLocation.Presentation.Contracts;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
@@ -25,6 +26,9 @@ public static class ListingEndpoints
         group.MapPost("/{listingId:guid}/close", CloseListing).RequireAuthorization("RequireLandlord");
         group.MapGet("/{listingId:guid}", GetListingDetails).AllowAnonymous();
         group.MapGet("/", SearchListings).AllowAnonymous();
+        group.MapGet("/{listingId:guid}/similar", GetSimilarListings).AllowAnonymous();
+        group.MapGet("/{listingId:guid}/share-url", GetShareUrl).AllowAnonymous();
+        group.MapGet("/{listingId:guid}/price-history", GetPriceHistory).AllowAnonymous();
         group.MapGet("/{listingId:guid}/availability", GetAvailability).AllowAnonymous();
         group.MapPost("/{listingId:guid}/block-dates", BlockDates).RequireAuthorization("RequireLandlord");
         group.MapDelete("/{listingId:guid}/block-dates/{blockId:guid}", UnblockDates).RequireAuthorization("RequireLandlord");
@@ -41,6 +45,16 @@ public static class ListingEndpoints
         savedGroup.MapPost("/{listingId:guid}", SaveListing);
         savedGroup.MapDelete("/{listingId:guid}", UnsaveListing);
         savedGroup.MapGet("/", GetSavedListings);
+        savedGroup.MapPost("/{listingId:guid}/collections/{collectionId:guid}", AddListingToCollection);
+        savedGroup.MapDelete("/{listingId:guid}/collections", RemoveListingFromCollection);
+
+        var collectionsGroup = app.MapGroup("/v1/saved-listings/collections")
+            .WithTags("Saved Listing Collections")
+            .RequireAuthorization();
+
+        collectionsGroup.MapPost("/", CreateCollection);
+        collectionsGroup.MapGet("/", GetCollections);
+        collectionsGroup.MapGet("/{collectionId:guid}", GetCollectionListings);
 
         return app;
     }
@@ -68,7 +82,9 @@ public static class ListingEndpoints
                 MapCancellationPolicy(request.CancellationPolicy),
                 request.AmenityIds,
                 request.SafetyDeviceIds,
-                request.ConsiderationIds),
+                request.ConsiderationIds,
+                request.InstantBookingEnabled,
+                request.VirtualTourUrl),
             cancellationToken).ConfigureAwait(true);
 
         return result.IsSuccess
@@ -100,7 +116,9 @@ public static class ListingEndpoints
                 MapCancellationPolicy(request.CancellationPolicy),
                 request.AmenityIds,
                 request.SafetyDeviceIds,
-                request.ConsiderationIds),
+                request.ConsiderationIds,
+                request.InstantBookingEnabled,
+                request.VirtualTourUrl),
             cancellationToken).ConfigureAwait(true);
 
         return result.IsSuccess
@@ -148,10 +166,11 @@ public static class ListingEndpoints
     }
 
     private static async Task<IResult> SearchListings(
+        [FromQuery] string? keyword,
         [FromQuery] double? latitude,
         [FromQuery] double? longitude,
         [FromQuery] double? radiusKm,
-        [FromQuery] Domain.Enums.PropertyType? propertyType,
+        [FromQuery] PropertyType? propertyType,
         [FromQuery] int? minBedrooms,
         [FromQuery] int? minBathrooms,
         [FromQuery] int? minStayDays,
@@ -160,6 +179,10 @@ public static class ListingEndpoints
         [FromQuery] long? maxPriceCents,
         [FromQuery] DateOnly? availableFrom,
         [FromQuery] DateOnly? availableTo,
+        [FromQuery] Guid[]? amenityIds,
+        [FromQuery] Guid[]? safetyDeviceIds,
+        [FromQuery] Guid[]? considerationIds,
+        [FromQuery] SearchListingsSortBy? sortBy,
         [FromQuery] int page,
         [FromQuery] int pageSize,
         IMediator mediator,
@@ -167,11 +190,16 @@ public static class ListingEndpoints
     {
         var result = await mediator.Send(
             new SearchListingsQuery(
+                keyword,
                 latitude, longitude, radiusKm,
                 propertyType, minBedrooms, minBathrooms,
                 minStayDays, maxStayDays,
                 minPriceCents, maxPriceCents,
                 availableFrom, availableTo,
+                amenityIds,
+                safetyDeviceIds,
+                considerationIds,
+                sortBy ?? SearchListingsSortBy.Newest,
                 page <= 0 ? 1 : page,
                 pageSize <= 0 ? 20 : pageSize),
             cancellationToken).ConfigureAwait(true);
@@ -179,6 +207,49 @@ public static class ListingEndpoints
         return result.IsSuccess
             ? Results.Ok(result.Value)
             : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+    }
+
+    private static async Task<IResult> GetSimilarListings(
+        [FromRoute] Guid listingId,
+        [FromQuery] int limit,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(
+            new GetSimilarListingsQuery(listingId, limit <= 0 ? 6 : Math.Min(limit, 20)),
+            cancellationToken).ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : Results.NotFound(new { error = result.Error.Code, detail = result.Error.Description });
+    }
+
+    private static async Task<IResult> GetShareUrl(
+        [FromRoute] Guid listingId,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(
+            new GetListingShareUrlQuery(listingId),
+            cancellationToken).ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : Results.NotFound(new { error = result.Error.Code, detail = result.Error.Description });
+    }
+
+    private static async Task<IResult> GetPriceHistory(
+        [FromRoute] Guid listingId,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var result = await mediator.Send(
+            new GetListingPriceHistoryQuery(listingId),
+            cancellationToken).ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : Results.NotFound(new { error = result.Error.Code, detail = result.Error.Description });
     }
 
     private static async Task<IResult> GetAvailability(
@@ -312,6 +383,7 @@ public static class ListingEndpoints
     }
 
     private static async Task<IResult> GetSavedListings(
+        [FromQuery] Guid? collectionId,
         [FromQuery] int page,
         [FromQuery] int pageSize,
         HttpContext httpContext,
@@ -320,7 +392,89 @@ public static class ListingEndpoints
     {
         var userId = GetUserId(httpContext);
         var result = await mediator.Send(
-            new GetSavedListingsQuery(userId, page <= 0 ? 1 : page, pageSize <= 0 ? 20 : pageSize),
+            new GetSavedListingsQuery(userId, collectionId, page <= 0 ? 1 : page, pageSize <= 0 ? 20 : pageSize),
+            cancellationToken).ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+    }
+
+    private static async Task<IResult> AddListingToCollection(
+        [FromRoute] Guid listingId,
+        [FromRoute] Guid collectionId,
+        HttpContext httpContext,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetUserId(httpContext);
+        var result = await mediator.Send(
+            new AddListingToCollectionCommand(userId, listingId, collectionId),
+            cancellationToken).ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.NoContent()
+            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+    }
+
+    private static async Task<IResult> RemoveListingFromCollection(
+        [FromRoute] Guid listingId,
+        HttpContext httpContext,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetUserId(httpContext);
+        var result = await mediator.Send(
+            new RemoveListingFromCollectionCommand(userId, listingId),
+            cancellationToken).ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.NoContent()
+            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+    }
+
+    private static async Task<IResult> CreateCollection(
+        [FromBody] CreateCollectionRequest request,
+        HttpContext httpContext,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetUserId(httpContext);
+        var result = await mediator.Send(
+            new CreateCollectionCommand(userId, request.Name),
+            cancellationToken).ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Created($"/v1/saved-listings/collections/{result.Value.Id}", result.Value)
+            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+    }
+
+    private static async Task<IResult> GetCollections(
+        HttpContext httpContext,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetUserId(httpContext);
+        var result = await mediator.Send(
+            new GetCollectionsQuery(userId),
+            cancellationToken).ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+    }
+
+    private static async Task<IResult> GetCollectionListings(
+        [FromRoute] Guid collectionId,
+        [FromQuery] int page,
+        [FromQuery] int pageSize,
+        HttpContext httpContext,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetUserId(httpContext);
+        var result = await mediator.Send(
+            new GetCollectionListingsQuery(userId, collectionId, page <= 0 ? 1 : page, pageSize <= 0 ? 20 : pageSize),
             cancellationToken).ConfigureAwait(true);
 
         return result.IsSuccess

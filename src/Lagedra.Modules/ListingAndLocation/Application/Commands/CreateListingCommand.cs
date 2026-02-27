@@ -1,5 +1,6 @@
 using Lagedra.Modules.ListingAndLocation.Application.DTOs;
 using Lagedra.Modules.ListingAndLocation.Domain.Aggregates;
+using Lagedra.Modules.ListingAndLocation.Domain.Entities;
 using Lagedra.Modules.ListingAndLocation.Domain.Enums;
 using Lagedra.Modules.ListingAndLocation.Domain.Policies;
 using Lagedra.Modules.ListingAndLocation.Domain.ValueObjects;
@@ -26,7 +27,9 @@ public sealed record CreateListingCommand(
     CancellationPolicyDto? CancellationPolicy = null,
     IReadOnlyList<Guid>? AmenityIds = null,
     IReadOnlyList<Guid>? SafetyDeviceIds = null,
-    IReadOnlyList<Guid>? ConsiderationIds = null) : IRequest<Result<ListingDetailsDto>>;
+    IReadOnlyList<Guid>? ConsiderationIds = null,
+    bool InstantBookingEnabled = false,
+    Uri? VirtualTourUrl = null) : IRequest<Result<ListingDetailsDto>>;
 
 public sealed class CreateListingCommandHandler(ListingsDbContext dbContext)
     : IRequestHandler<CreateListingCommand, Result<ListingDetailsDto>>
@@ -88,7 +91,17 @@ public sealed class CreateListingCommandHandler(ListingsDbContext dbContext)
             listing.SetConsiderations(request.ConsiderationIds);
         }
 
+        listing.SetInstantBooking(request.InstantBookingEnabled);
+        if (request.VirtualTourUrl is not null)
+        {
+            listing.SetVirtualTourUrl(request.VirtualTourUrl);
+        }
+
         dbContext.Listings.Add(listing);
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var initialPrice = ListingPriceHistory.Create(listing.Id, listing.MonthlyRentCents, today);
+        dbContext.ListingPriceHistory.Add(initialPrice);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return Result<ListingDetailsDto>.Success(ListingMapper.ToDetails(listing));

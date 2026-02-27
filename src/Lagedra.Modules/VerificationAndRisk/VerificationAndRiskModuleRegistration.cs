@@ -1,4 +1,6 @@
 using Lagedra.Infrastructure.Eventing;
+using Lagedra.Modules.IdentityAndVerification.Domain.Events;
+using Lagedra.Modules.InsuranceIntegration.Domain.Events;
 using Lagedra.Modules.PartnerNetwork.Domain.Events;
 using Lagedra.Modules.VerificationAndRisk.Application.EventHandlers;
 using Lagedra.Modules.VerificationAndRisk.Infrastructure.Persistence;
@@ -27,6 +29,15 @@ public static class VerificationAndRiskModuleRegistration
 
         services.AddDomainEventHandler<ReferralRedeemedEvent,
             OnReferralRedeemedRecalculateRiskHandler>();
+
+        services.AddDomainEventHandler<IdentityVerifiedEvent,
+            OnIdentityVerifiedRecalculateRiskHandler>();
+
+        services.AddDomainEventHandler<BackgroundCheckReceivedEvent,
+            OnBackgroundCheckReceivedRecalculateRiskHandler>();
+
+        services.AddDomainEventHandler<InsuranceStatusChangedEvent,
+            OnInsuranceStatusChangedRecalculateRiskHandler>();
 
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(VerificationAndRiskModuleRegistration).Assembly));

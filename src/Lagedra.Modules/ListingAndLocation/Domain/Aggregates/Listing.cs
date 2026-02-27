@@ -27,6 +27,8 @@ public sealed class Listing : AggregateRoot<Guid>
     public long? SuggestedDepositHighCents { get; private set; }
     public HouseRules? HouseRules { get; private set; }
     public CancellationPolicy? CancellationPolicy { get; private set; }
+    public bool InstantBookingEnabled { get; private set; }
+    public Uri? VirtualTourUrl { get; private set; }
 
     private readonly List<ListingAmenity> _amenities = [];
     private readonly List<ListingSafetyDevice> _safetyDevices = [];
@@ -168,6 +170,23 @@ public sealed class Listing : AggregateRoot<Guid>
         EnsureEditable();
         ArgumentNullException.ThrowIfNull(policy);
         CancellationPolicy = policy;
+    }
+
+    public void SetInstantBooking(bool enabled)
+    {
+        EnsureEditable();
+        InstantBookingEnabled = enabled;
+    }
+
+    public void SetVirtualTourUrl(Uri? url)
+    {
+        EnsureEditable();
+        if (url is { OriginalString.Length: > 2000 })
+        {
+            throw new ArgumentOutOfRangeException(nameof(url), "Virtual tour URL must not exceed 2000 characters.");
+        }
+
+        VirtualTourUrl = (url is { OriginalString.Length: > 0 and <= 2000 } clean) ? clean : null;
     }
 
     public void SetAmenities(IEnumerable<Guid> amenityDefinitionIds)

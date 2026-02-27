@@ -3,6 +3,8 @@
     <ProjectReference Include="..\..\Lagedra.SharedKernel\Lagedra.SharedKernel.csproj" />
     <ProjectReference Include="..\..\Lagedra.Infrastructure\Lagedra.Infrastructure.csproj" />
     <ProjectReference Include="..\PartnerNetwork\PartnerNetwork.csproj" />
+    <ProjectReference Include="..\IdentityAndVerification\IdentityAndVerification.csproj" />
+    <ProjectReference Include="..\InsuranceIntegration\InsuranceIntegration.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="MediatR" />

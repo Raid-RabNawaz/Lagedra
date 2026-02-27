@@ -1,14 +1,19 @@
 using Lagedra.Modules.ListingAndLocation.Application.DTOs;
 using Lagedra.Modules.ListingAndLocation.Domain.Aggregates;
+using Lagedra.SharedKernel.Integration;
 
 namespace Lagedra.Modules.ListingAndLocation.Application.Commands;
 
 internal static class ListingMapper
 {
-    public static ListingDetailsDto ToDetails(Listing listing)
+    public static ListingDetailsDto ToDetails(
+        Listing listing,
+        ListingVerificationBadgesDto? hostVerificationBadges = null,
+        HostProfileDto? hostProfile = null,
+        int qualityScore = 0)
     {
         ArgumentNullException.ThrowIfNull(listing);
-        
+
         return new ListingDetailsDto(
             listing.Id,
             listing.LandlordUserId,
@@ -72,11 +77,16 @@ internal static class ListingMapper
                 .Select(p => new ListingPhotoDto(
                     p.Id, p.Url, p.Caption, p.IsCover, p.SortOrder))
                 .ToList(),
+            listing.InstantBookingEnabled,
+            listing.VirtualTourUrl,
+            hostVerificationBadges,
+            hostProfile,
+            qualityScore,
             listing.CreatedAt,
             listing.UpdatedAt);
     }
 
-    public static ListingSummaryDto ToSummary(Listing listing)
+    public static ListingSummaryDto ToSummary(Listing listing, int? qualityScore = null)
     {
         ArgumentNullException.ThrowIfNull(listing);
 
@@ -95,6 +105,7 @@ internal static class ListingMapper
             listing.ApproxGeoPoint?.Longitude,
             listing.Photos.FirstOrDefault(p => p.IsCover)?.Url
                 ?? listing.Photos.OrderBy(p => p.SortOrder).FirstOrDefault()?.Url,
+            qualityScore,
             listing.CreatedAt);
     }
 }

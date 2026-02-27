@@ -87,9 +87,27 @@ public sealed class InsurancePolicyRecord : AggregateRoot<Guid>
         AddDomainEvent(new InsuranceStatusChangedEvent(DealId, oldState, InsuranceState.NotActive));
     }
 
+    public void RecordInstitutionBacked(
+        string? provider = null,
+        string? policyNumber = null,
+        string? coverageScope = null,
+        DateTime? expiresAt = null)
+    {
+        var oldState = State;
+        State = InsuranceState.InstitutionBacked;
+        Provider = provider;
+        PolicyNumber = policyNumber;
+        CoverageScope = coverageScope;
+        ExpiresAt = expiresAt;
+        VerifiedAt = DateTime.UtcNow;
+        UnknownSince = null;
+
+        AddDomainEvent(new InsuranceStatusChangedEvent(DealId, oldState, InsuranceState.InstitutionBacked));
+    }
+
     public void CancelPolicy(string reason)
     {
-        if (State != InsuranceState.Active)
+        if (State is not (InsuranceState.Active or InsuranceState.InstitutionBacked))
         {
             return;
         }

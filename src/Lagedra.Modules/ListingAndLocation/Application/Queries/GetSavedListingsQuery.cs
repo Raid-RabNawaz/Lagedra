@@ -9,6 +9,7 @@ namespace Lagedra.Modules.ListingAndLocation.Application.Queries;
 
 public sealed record GetSavedListingsQuery(
     Guid UserId,
+    Guid? CollectionId = null,
     int Page = 1,
     int PageSize = 20) : IRequest<Result<IReadOnlyList<ListingSummaryDto>>>;
 
@@ -21,9 +22,16 @@ public sealed class GetSavedListingsQueryHandler(ListingsDbContext dbContext)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var savedListingIds = await dbContext.SavedListings
+        var query = dbContext.SavedListings
             .AsNoTracking()
-            .Where(s => s.UserId == request.UserId)
+            .Where(s => s.UserId == request.UserId);
+
+        if (request.CollectionId.HasValue)
+        {
+            query = query.Where(s => s.CollectionId == request.CollectionId.Value);
+        }
+
+        var savedListingIds = await query
             .OrderByDescending(s => s.SavedAt)
             .Skip((request.Page - 1) * request.PageSize)
             .Take(request.PageSize)

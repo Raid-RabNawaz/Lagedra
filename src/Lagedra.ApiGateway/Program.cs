@@ -39,6 +39,7 @@ using Lagedra.Modules.PartnerNetwork.Presentation.Endpoints;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.OpenApi.Models;
+using Lagedra.Infrastructure.Middleware;
 using Lagedra.Infrastructure.Observability;
 using Lagedra.Infrastructure.RealTime;
 using Lagedra.Infrastructure.Settings;
@@ -161,6 +162,7 @@ try
     app.UseCors("Frontend");
     app.UseAuthentication();
     app.UseAuthorization();
+    app.UseIdempotency();
 
     app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }))
        .AllowAnonymous()
@@ -200,6 +202,7 @@ try
     app.MapHostPaymentEndpoints();
     app.MapVerificationEndpoints();
     app.MapInsuranceEndpoints();
+    app.MapInsuranceWebhookEndpoints();
     app.MapInquiryEndpoints();
     app.MapRiskEndpoints();
     app.MapComplianceMonitoringEndpoints();

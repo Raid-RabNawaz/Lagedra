@@ -16,4 +16,5 @@ public sealed record ListingSummaryDto(
     double? Latitude,
     double? Longitude,
     Uri? CoverPhotoUrl,
+    int? QualityScore,
     DateTime CreatedAt);

@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Lagedra.Modules.InsuranceIntegration.Application.Commands;
 using Lagedra.Modules.InsuranceIntegration.Application.DTOs;
 using Lagedra.Modules.InsuranceIntegration.Application.Queries;
@@ -42,11 +43,14 @@ public static class InsuranceEndpoints
 
     private static async Task<IResult> StartVerification(
         [FromRoute] Guid dealId,
+        ClaimsPrincipal user,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        var tenantUserId = GetUserId(user);
+
         var result = await mediator.Send(
-            new StartInsuranceVerificationCommand(dealId, Guid.Empty), cancellationToken)
+            new StartInsuranceVerificationCommand(dealId, tenantUserId), cancellationToken)
             .ConfigureAwait(false);
 
         return result.IsSuccess
@@ -68,6 +72,10 @@ public static class InsuranceEndpoints
             ? Results.Accepted()
             : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
     }
+
+    private static Guid GetUserId(ClaimsPrincipal user) =>
+        Guid.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? throw new InvalidOperationException("User ID claim not found."));
 
     private static InsuranceStatusResponse ToResponse(InsuranceStatusDto dto) =>
         new(dto.PolicyRecordId, dto.DealId, dto.State.ToString(),

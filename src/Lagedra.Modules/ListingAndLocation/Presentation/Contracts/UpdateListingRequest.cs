@@ -18,4 +18,6 @@ public sealed record UpdateListingRequest(
     CancellationPolicyRequest? CancellationPolicy = null,
     IReadOnlyList<Guid>? AmenityIds = null,
     IReadOnlyList<Guid>? SafetyDeviceIds = null,
-    IReadOnlyList<Guid>? ConsiderationIds = null);
+    IReadOnlyList<Guid>? ConsiderationIds = null,
+    bool? InstantBookingEnabled = null,
+    Uri? VirtualTourUrl = null);

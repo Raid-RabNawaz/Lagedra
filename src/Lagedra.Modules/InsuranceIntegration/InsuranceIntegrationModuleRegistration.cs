@@ -10,6 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Quartz;
+using Lagedra.Modules.InsuranceIntegration.Infrastructure.Services;
 
 namespace Lagedra.Modules.InsuranceIntegration;
 
@@ -28,6 +29,9 @@ public static class InsuranceIntegrationModuleRegistration
         services.AddOutboxContext<InsuranceDbContext>();
 
         services.AddScoped<InsurancePolicyRecordRepository>();
+        services.AddScoped<IInsuranceStatusProvider, InsuranceStatusProvider>();
+        services.AddScoped<Lagedra.SharedKernel.Integration.IUserInsuranceStatusProvider,
+            UserInsuranceStatusProvider>();
 
         var feeMode = configuration["Insurance:FeeCalculationMode"];
         if (string.Equals(feeMode, "Api", StringComparison.OrdinalIgnoreCase))
@@ -41,6 +45,14 @@ public static class InsuranceIntegrationModuleRegistration
 
         services.AddDomainEventHandler<DealActivatedEvent,
             OnDealActivatedActivateInsuranceHandler>();
+
+        services.AddDomainEventHandler<
+            Lagedra.Modules.ActivationAndBilling.Domain.Events.BookingCancelledEvent,
+            OnBookingCancelledCancelInsuranceHandler>();
+
+        services.AddDomainEventHandler<
+            Lagedra.Modules.ActivationAndBilling.Domain.Events.BillingStoppedEvent,
+            OnBillingStoppedCancelInsuranceHandler>();
 
         // Notification handlers
         services.AddDomainEventHandler<

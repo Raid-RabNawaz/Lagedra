@@ -23,6 +23,8 @@ public sealed class ListingsDbContext(
     public DbSet<ListingAvailabilityBlock> ListingAvailabilityBlocks => Set<ListingAvailabilityBlock>();
     public DbSet<ListingPhoto> ListingPhotos => Set<ListingPhoto>();
     public DbSet<SavedListing> SavedListings => Set<SavedListing>();
+    public DbSet<SavedListingCollections> SavedListingCollections => Set<SavedListingCollections>();
+    public DbSet<ListingPriceHistory> ListingPriceHistory => Set<ListingPriceHistory>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

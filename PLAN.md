@@ -442,6 +442,14 @@
 - [x] `Results/Result.cs` — `Result<T>` discriminated union (Success / Failure)
 - [x] `Results/Error.cs` — structured error: `Code`, `Description`
 
+### 2.9 Caching Abstraction
+
+- [x] `Caching/ICacheService.cs` — provider-agnostic cache contract; all methods async so the interface works unchanged when swapping from in-memory to a distributed store (Redis, Valkey, etc.):
+  - `GetAsync<T>(key)` — retrieve a cached value
+  - `SetAsync<T>(key, value, expiration?)` — store a value with optional TTL
+  - `RemoveAsync(key)` — invalidate a key
+  - `GetOrCreateAsync<T>(key, factory, expiration?)` — cache-aside convenience: returns cached value or invokes factory, stores, and returns the result
+
 ---
 
 ## Phase 3 — Infrastructure (`Lagedra.Infrastructure`)
@@ -534,9 +542,40 @@
 - [x] `Behaviors/LoggingBehavior.cs` — logs every command/query: request type name on start, elapsed time on completion, warns if handler takes > 500ms; uses `[LoggerMessage]` source generation
 - [x] `Behaviors/UnhandledExceptionBehavior.cs` — wraps handler execution in try/catch, logs unhandled exceptions at Error level with request type, re-throws for global exception middleware
 
-### 3.7 DI Registration
+### 3.7 Caching
+
+> Provider-agnostic caching layer. v1 uses `IMemoryCache` (in-process). To migrate to distributed caching (Redis/Valkey), create a new `ICacheService` implementation and swap one DI line — no consumer code changes required.
+
+- [x] `Caching/InMemoryCacheService.cs` — implements `ICacheService` via `IMemoryCache`; default TTL 5 min; registered as singleton
+- [x] `Caching/CacheKeys.cs` — static helper with key-format constants and builder methods to prevent key collisions across modules
+
+#### Caching Strategy — What to Cache
+
+> All cache TTLs are initial recommendations. Tune based on production traffic patterns. Keys use the format `{module}:{entity}:{identifier}`.
+
+| Category | Cache Key Pattern | TTL | Invalidation Trigger |
+|---|---|---|---|
+| **Platform Settings** | `platform_setting:{key}` | 5 min | Admin updates setting via API |
+| **Listing Definitions** (amenities, safety, considerations) | `listing_defs:{type}` | 30 min | Admin creates/updates/deletes definition |
+| **Jurisdiction Packs** (active pack per jurisdiction) | `jurisdiction_pack:{code}` | 60 min | Admin publishes new pack version |
+| **Published Blog Posts** (paginated list) | `blog:published:page:{n}:size:{s}` | 5 min | Blog post published/unpublished/updated |
+| **Blog Post by Slug** | `blog:slug:{slug}` | 10 min | Blog post updated/unpublished |
+| **SEO Page by Slug** | `seo:slug:{slug}` | 10 min | SEO page updated |
+| **Sitemap Entries** | `blog:sitemap` | 30 min | Blog post published/unpublished |
+| **Listing Details** (public view) | `listing:{id}:details` | 5 min | Listing updated/unpublished |
+| **Listing Search Results** | `listing:search:{hash}` | 2 min | Short TTL; no active invalidation |
+| **User Notification Preferences** | `notif_prefs:{userId}` | 15 min | User updates preferences |
+| **Verification Status** | `verification:{userId}` | 10 min | Persona webhook updates status |
+| **Risk Profile** | `risk:{tenantUserId}` | 15 min | Risk recalculated (referral redeemed, verification completed) |
+| **Insurance Status** | `insurance:{dealId}` | 10 min | Insurance status changed event |
+| **Predefined Questions** (structured inquiry) | `inquiry:questions` | 60 min | Admin updates question library |
+| **Analytics Responses** | `analytics:{endpoint}:{dateRange}` | 5 min | No active invalidation; short TTL |
+| **Idempotency Responses** | `idempotency:{key}` | 24 hr | No invalidation; natural expiry |
+
+### 3.8 DI Registration
 
 - [x] `InfrastructureServiceRegistration.cs` — `AddInfrastructure(IServiceCollection, IConfiguration)`:
+  - `ICacheService` → `InMemoryCacheService` (singleton)
   - `IClock` → `SystemClock`
   - `IEventBus` → `InMemoryEventBus`
   - `IEmailService` → `MailKitEmailService`
@@ -549,7 +588,7 @@
   - `IInsuranceApiClient` → `InsuranceApiClient`
   - Data Protection, HealthChecks, OutboxDispatcher background service
 
-### 3.8 Shared DB Schemas
+### 3.9 Shared DB Schemas
 
 - [x] Outbox table is now **per-module schema** (`truth_surface.outbox_messages`, `compliance.outbox_messages`, etc.) — no shared `outbox` schema. `OutboxMessageConfiguration` accepts a `schema` constructor arg; `BaseDbContext.ModuleSchema` sets it.
 - [x] `IOutboxContext` interface introduced — `BaseDbContext` implements it; `OutboxDispatcher` resolves `IEnumerable<IOutboxContext>` and processes all registered modules independently. No cross-module row collisions.
@@ -646,7 +685,7 @@
 - [x] EF Core migrations (run `dotnet ef migrations add InitialCreate` after restore)
 
 #### Module Registration
-- [x] `ComplianceModuleRegistration.cs` — DbContext, outbox, repositories, MediatR
+- [x] `ComplianceModuleRegistration.cs` — DbContext, outbox, repositories, MediatR, `IUserViolationCountProvider` → `UserViolationCountProvider`
 
 ---
 
@@ -832,6 +871,7 @@
 #### Module Registration
 - [x] `IdentityVerificationModuleRegistration.cs`
 - [x] Update registration: add `HostPaymentDetailsRepository`, `IHostPaymentDetailsProvider` → `HostPaymentDetailsProvider`
+- [x] Update registration: add `IVerificationSignalProvider` → `VerificationSignalProvider`; add `OnIdentityVerifiedSyncAuthHandler` event handler
 
 ---
 
@@ -842,7 +882,7 @@
 - [x] Add to `.sln`
 
 #### Domain
-- [x] `Domain/Aggregates/InsurancePolicyRecord.cs` — `TenantUserId`, `DealId`, `State` (InsuranceState enum), `Provider`, `PolicyNumber`, `VerifiedAt`, `ExpiresAt`, `CoverageScope`
+- [x] `Domain/Aggregates/InsurancePolicyRecord.cs` — `TenantUserId`, `DealId`, `State` (InsuranceState enum), `Provider`, `PolicyNumber`, `VerifiedAt`, `ExpiresAt`, `CoverageScope`; methods: `RecordActive()`, `RecordNotActive()`, `RecordUnknown()`, `RecordInstitutionBacked()`, `MarkLapsed()`, `CancelPolicy(reason)` — `CancelPolicy` accepts both Active and InstitutionBacked states
 - [x] `Domain/Entities/InsuranceVerificationAttempt.cs` — `PolicyRecordId`, `AttemptedAt`, `Result`, `Source` (API/ManualUpload)
 - [x] `Domain/ValueObjects/InsuranceState.cs` — enum: NotActive, Active, InstitutionBacked, Unknown
 - [x] `Domain/ValueObjects/CoverageRequirements.cs` — minimum coverage type + amount (pulled from listing)
@@ -868,14 +908,17 @@
 - [x] `Application/Services/ConfigurableInsuranceFeeCalculator.cs` — implements `IInsuranceFeeCalculator` (SharedKernel); formula: `monthlyRentCents × feeRate × ceil(stayDurationDays / 30)`; configurable rate from `Insurance:FeeRatePerMonth` (default 0.05 = 5%); provider: `"Configurable"`
 - [x] `Application/Services/ApiInsuranceFeeCalculator.cs` — implements `IInsuranceFeeCalculator`; calls external insurance API at `Insurance:ApiBaseUrl/v1/quotes` via `IHttpClientFactory` (named client `"InsurancePartner"`); returns `InsuranceFeeQuote` from API response
 
-#### Application — Event Handlers (Insurance Activation)
-- [x] `Application/EventHandlers/OnDealActivatedActivateInsuranceHandler.cs` — listens to `DealActivatedEvent`; sends `RecordInsuranceActiveCommand` with `CoverageScope: "Platform-managed"`; automatically activates insurance when a deal activates
+#### Application — Event Handlers (Insurance Lifecycle)
+- [x] `Application/EventHandlers/OnDealActivatedActivateInsuranceHandler.cs` — listens to `DealActivatedEvent`; creates `InsurancePolicyRecord` if not exists; sets `ExpiresAt` from `DealApplication.RequestedCheckOut`; calls `RecordActive()` with `CoverageScope: "Platform-managed"`
+- [x] `Application/EventHandlers/OnBookingCancelledCancelInsuranceHandler.cs` — listens to `BookingCancelledEvent`; calls `CancelPolicy()` on the deal's insurance record
+- [x] `Application/EventHandlers/OnBillingStoppedCancelInsuranceHandler.cs` — listens to `BillingStoppedEvent`; calls `CancelPolicy()` on the deal's insurance record
 
 #### Presentation
 - [x] `Presentation/Endpoints/InsuranceEndpoints.cs`
 - [x] `Presentation/Endpoints/InsuranceWebhookEndpoints.cs`
 - [x] `Presentation/Contracts/ManualProofUploadRequest.cs`
 - [x] `Presentation/Contracts/InsuranceStatusResponse.cs`
+- [x] `Presentation/Contracts/InsurancePurchaseWebhookRequest.cs`
 
 #### Infrastructure
 - [x] `Infrastructure/Persistence/InsuranceDbContext.cs` — schema `insurance`
@@ -887,7 +930,8 @@
 - [x] EF Core migrations
 
 #### Module Registration
-- [x] `InsuranceIntegrationModuleRegistration.cs` — conditionally registers `ApiInsuranceFeeCalculator` (if `Insurance:ApiBaseUrl` configured) or `ConfigurableInsuranceFeeCalculator` (fallback) as `IInsuranceFeeCalculator`; registers `OnDealActivatedActivateInsuranceHandler`
+- [x] `InsuranceIntegrationModuleRegistration.cs` — conditionally registers `ApiInsuranceFeeCalculator` (if `Insurance:ApiBaseUrl` configured) or `ConfigurableInsuranceFeeCalculator` (fallback) as `IInsuranceFeeCalculator`; registers `OnDealActivatedActivateInsuranceHandler`, `OnBookingCancelledCancelInsuranceHandler`, `OnBillingStoppedCancelInsuranceHandler`
+- [x] Update registration: add `IUserInsuranceStatusProvider` → `UserInsuranceStatusProvider`
 
 ---
 
@@ -1107,7 +1151,7 @@
 
 ##### Infrastructure
 - [x] Update `ListingConfiguration.cs` — configure new columns
-- [ ] EF Core migration: `AddPropertyDetailsToListing`
+- [x] EF Core migration: `AddPropertyDetailsToListing` (included in `AddListingAttributesAndPolicies` or `AddInstantBookingAndVirtualTour` migration)
 
 #### Part B — Calendar Availability & Date-Based Booking
 
@@ -1165,8 +1209,8 @@
 - [x] Update `ListingConfiguration.cs` — add `HasMany(AvailabilityBlocks)` with cascade delete and backing field
 - [x] Update `ListingsDbContext` — add `DbSet<ListingAvailabilityBlock>`
 - [x] Update `DealApplicationConfiguration.cs` — add `RequestedCheckIn`, `RequestedCheckOut`, `StayDurationDays` column configs
-- [ ] EF Core migration: `AddListingAvailabilityBlocks`
-- [ ] EF Core migration (ActivationAndBilling): `AddDatesToApplication` — adds `RequestedCheckIn`, `RequestedCheckOut`, `StayDurationDays` columns
+- [x] EF Core migration: `AddListingAvailabilityBlocks` (`20260226182549_AddListingAvailabilityBlocks.cs`)
+- [x] EF Core migration (ActivationAndBilling): `AddDatesToApplication` — adds `RequestedCheckIn`, `RequestedCheckOut`, `StayDurationDays` columns (`20260226182836_AddDatesToApplication.cs`)
 
 #### Part C — Listing Photos / Media
 
@@ -1214,7 +1258,7 @@
 - [x] `Infrastructure/Configurations/ListingPhotoConfiguration.cs` — table `listing_photos` in `listings` schema; index on `(ListingId, SortOrder)`
 - [x] Update `ListingConfiguration.cs` — add `HasMany(Photos)` with cascade delete and backing field
 - [x] Update `ListingsDbContext` — add `DbSet<ListingPhoto>`
-- [ ] EF Core migration: `AddListingPhotos`
+- [x] EF Core migration: `AddListingPhotos` (combined with SavedListings in `20260226192543_AddListingPhotosandAddSavedListings.cs`)
 
 #### Part D — Favorites / Saved Listings
 
@@ -1241,7 +1285,7 @@
 ##### Infrastructure
 - [x] `Infrastructure/Configurations/SavedListingConfiguration.cs` — table `saved_listings` in `listings` schema; composite PK `(UserId, ListingId)`; indexes on `UserId` and `ListingId`
 - [x] Update `ListingsDbContext` — add `DbSet<SavedListing>`
-- [ ] EF Core migration: `AddSavedListings`
+- [x] EF Core migration: `AddSavedListings` (combined with Photos in `20260226192543_AddListingPhotosandAddSavedListings.cs`)
 
 #### Part E — Close Listing
 
@@ -1288,7 +1332,7 @@
   - `PUT /v1/auth/users/{userId}/role` — admin role update (RequirePlatformAdmin)
 
 #### Infrastructure
-- [ ] EF Core migration: `AddUserProfileFields` — adds profile columns to `AspNetUsers` table
+- [x] EF Core migration: `AddUserProfileFields` — adds profile columns to `AspNetUsers` table (`20260226211352_AddUserProfileFields.cs`)
 
 ---
 
@@ -1304,11 +1348,11 @@
 #### Infrastructure
 - [x] `Infrastructure/Settings/PlatformSettingsDbContext.cs` — dedicated DbContext, schema `platform`, seeds defaults
 - [x] `Infrastructure/Settings/PlatformSettingConfiguration.cs` — EF config for `platform_settings` table
-- [x] `Infrastructure/Settings/PlatformSettingsService.cs` — DB implementation with `IMemoryCache` (5 min TTL), cache-aside pattern
+- [x] `Infrastructure/Settings/PlatformSettingsService.cs` — DB implementation with `ICacheService` (5 min TTL), cache-aside pattern
 - [x] `Infrastructure/Settings/PlatformSettingsEndpoints.cs` — admin endpoints:
   - `GET /v1/admin/settings` — list all settings (RequirePlatformAdmin)
   - `PUT /v1/admin/settings/{key}` — update a setting (RequirePlatformAdmin)
-- [x] Register in `AddInfrastructure()` — DbContext, `AddMemoryCache()`, scoped `IPlatformSettingsService`
+- [x] Register in `AddInfrastructure()` — DbContext, `ICacheService` (via `AddMemoryCache()` + `InMemoryCacheService`), scoped `IPlatformSettingsService`
 - [x] Map `MapPlatformSettingsEndpoints()` in `Program.cs`
 - [x] Seed default values on startup via `EnsureCreatedAsync()`
 
@@ -1477,6 +1521,9 @@
 #### Application
 - [x] `Application/Commands/RecalculateVerificationClassCommand.cs` + handler — triggered by: `IdentityVerifiedEvent`, `InsuranceStatusChangedEvent`, `TrustLedgerEntryRecordedEvent`, `ReferralRedeemedEvent`
 - [x] `Application/EventHandlers/OnReferralRedeemedRecalculateRiskHandler.cs` — listens to `ReferralRedeemedEvent` (from PartnerNetwork); sends `RecalculateVerificationClassCommand` with `InsuranceStatus.InstitutionBacked`, `IdentityVerificationStatus.Verified`, `BackgroundCheckStatus.Clear`, `ViolationCount: 0` — automatically upgrades risk profile for partner-referred users
+- [x] `Application/EventHandlers/OnIdentityVerifiedRecalculateRiskHandler.cs` — listens to `IdentityVerifiedEvent` (from IdentityAndVerification); queries all current signals via `IVerificationSignalProvider`, `IUserInsuranceStatusProvider`, `IUserViolationCountProvider`; sends `RecalculateVerificationClassCommand`
+- [x] `Application/EventHandlers/OnBackgroundCheckReceivedRecalculateRiskHandler.cs` — listens to `BackgroundCheckReceivedEvent` (from IdentityAndVerification); maps `BackgroundCheckResult` to `BackgroundCheckStatus`; queries remaining signals; sends `RecalculateVerificationClassCommand`
+- [x] `Application/EventHandlers/OnInsuranceStatusChangedRecalculateRiskHandler.cs` — listens to `InsuranceStatusChangedEvent` (from InsuranceIntegration); resolves `TenantUserId` via `IUserInsuranceStatusProvider.GetTenantUserIdForDealAsync`; maps `InsuranceState` to `InsuranceStatus`; queries remaining signals; sends `RecalculateVerificationClassCommand`
 - [x] `Application/Commands/ComputeDepositBandCommand.cs` + handler — fetches active jurisdiction cap from JurisdictionPacks
 - [x] `Application/Queries/GetRiskViewForLandlordQuery.cs` + handler — returns class + confidence + deposit band; raw signals not exposed
 - [x] `Application/DTOs/RiskViewDto.cs`
@@ -1493,7 +1540,8 @@
 - [x] EF Core migrations
 
 #### Module Registration
-- [x] `VerificationAndRiskModuleRegistration.cs` — registers `OnReferralRedeemedRecalculateRiskHandler`
+- [x] `VerificationAndRiskModuleRegistration.cs` — registers `OnReferralRedeemedRecalculateRiskHandler`, `OnIdentityVerifiedRecalculateRiskHandler`, `OnBackgroundCheckReceivedRecalculateRiskHandler`, `OnInsuranceStatusChangedRecalculateRiskHandler`
+- [x] `VerificationAndRisk.csproj` — added project references to `IdentityAndVerification` and `InsuranceIntegration` for cross-module event types
 
 ---
 
@@ -1750,6 +1798,11 @@
 ##### Infrastructure (SharedKernel + Lagedra.Infrastructure)
 - [x] `SharedKernel/RealTime/INotificationPusher.cs` — interface: `PushToUserAsync`, `PushToUsersAsync`; `InAppNotificationDto` record
 - [x] `SharedKernel/Integration/IUserEmailResolver.cs` — interface: `GetEmailAsync(Guid userId)` for cross-module email lookup
+- [x] `SharedKernel/Integration/IVerificationSignalProvider.cs` — returns identity + background-check signals for a user; `VerificationSignalDto` record; implemented by IdentityAndVerification
+- [x] `SharedKernel/Integration/IUserInsuranceStatusProvider.cs` — returns best insurance status across all deals for a user + resolves deal→tenant mapping; `UserInsuranceStatusDto` record; implemented by InsuranceIntegration
+- [x] `SharedKernel/Integration/IUserViolationCountProvider.cs` — returns active violation count for a user; implemented by Compliance (stub until `Violation.TargetUserId` added)
+- [x] `SharedKernel/Integration/IHostProfileProvider.cs` — returns host profile for listing display; `HostProfileDto`: `DisplayName`, `ProfilePhotoUrl`, `IsGovernmentIdVerified`, `IsPhoneVerified`, `ResponseRatePercent`, `ResponseTimeMinutes`, `MemberSince`; implemented by Auth
+- [x] `SharedKernel/Integration/IUserVerificationFlagUpdater.cs` — syncs `IsGovernmentIdVerified` flag to Auth user record; implemented by Auth
 - [x] `Infrastructure/RealTime/NotificationHub.cs` — SignalR hub, `[Authorize]`, groups users by `user:{userId}`
 - [x] `Infrastructure/RealTime/SignalRNotificationPusher.cs` — implements `INotificationPusher` via `IHubContext<NotificationHub>`
 - [x] `InfrastructureServiceRegistration.cs` — registers `AddSignalR()` + `INotificationPusher` as singleton
@@ -1776,7 +1829,7 @@
 
 ##### Auth Module
 - [x] `Infrastructure/Services/UserEmailResolver.cs` — implements `IUserEmailResolver` via `UserManager<ApplicationUser>`
-- [x] `AuthModuleRegistration.cs` — registers `IUserEmailResolver`
+- [x] `AuthModuleRegistration.cs` — registers `IUserEmailResolver`, `IHostProfileProvider` → `HostProfileProvider`, `IUserVerificationFlagUpdater` → `UserVerificationFlagUpdater`
 
 ##### Notification Handlers (28 handlers across 7 modules)
 
@@ -1797,10 +1850,11 @@
 - [x] `OnDecisionIssuedNotify` — notifies filer of decision (Email + InApp)
 - [x] `OnEvidenceCompleteNotify` — notifies filer evidence collection complete (InApp only)
 
-**IdentityAndVerification (3 handlers):**
+**IdentityAndVerification (4 handlers):**
 - [x] `OnIdentityVerifiedNotify` — notifies user of successful verification (Email + InApp)
 - [x] `OnIdentityVerificationFailedNotify` — notifies user of verification failure (Email + InApp)
 - [x] `OnVerificationClassChangedNotify` — notifies user of level change (InApp only)
+- [x] `OnIdentityVerifiedSyncAuthHandler` — syncs `IsGovernmentIdVerified` flag to Auth user record via `IUserVerificationFlagUpdater`
 
 **Auth (1 handler):**
 - [x] `OnUserRegisteredNotify` — welcome notification (InApp only)
@@ -2041,7 +2095,7 @@
 
 - [ ] `Middleware/AuthMiddleware.cs` — validate JWT Bearer token; extract `UserId`, `Role` into `HttpContext`; enforce `IsActive=true`
 - [ ] `Middleware/ConsentMiddleware.cs` — verify `KYCConsent` + `DataProcessing` consents exist for data-processing endpoints
-- [ ] `Middleware/IdempotencyMiddleware.cs` — `Idempotency-Key` header; cache response in memory/DB for 24h
+- [x] `Middleware/IdempotencyMiddleware.cs` — `Idempotency-Key` header; cache response via `ICacheService` (24h TTL); registered via `app.UseIdempotency()` in `Program.cs`
 - [ ] `Middleware/RateLimitingMiddleware.cs` — per-user monthly dispute cap (beta); use `System.Threading.RateLimiting`
 - [x] `CorrelationIdMiddleware` — reads/generates `X-Correlation-Id`, pushes to Serilog `LogContext`, adds to response headers (implemented in `Lagedra.Infrastructure.Observability`)
 - [x] `GlobalExceptionHandlerMiddleware` — catches unhandled exceptions, returns RFC 7807 Problem Details JSON (implemented in `Lagedra.Infrastructure.Observability`)
@@ -2083,7 +2137,7 @@
 ### 6.4 Authentication & Authorization
 
 - [x] ASP.NET Identity + JWT Bearer configured in `Lagedra.Auth`; `Program.cs` calls `app.UseAuthentication()` + `app.UseAuthorization()`
-- [ ] Authorization policies: `RequireLandlord`, `RequireTenant`, `RequireArbitrator`, `RequirePlatformAdmin`, `RequireInsurancePartner`, `RequireInstitutionPartner`
+- [x] Authorization policies: `RequireLandlord`, `RequireTenant`, `RequireArbitrator`, `RequirePlatformAdmin`, `RequireInsurancePartner`, `RequireInstitutionPartner` (defined in `Program.cs` via `AddAuthorizationBuilder()`)
 - [ ] Stripe webhook endpoint: no auth; validates `Stripe-Signature` header via `StripeService`
 - [ ] Persona webhook endpoint: no auth; validates `Persona-Signature` header via `PersonaClient`
 
@@ -2094,7 +2148,7 @@
 - [ ] `tools/openapi/lagedra.openapi.yaml` — generated from Swagger
 - [ ] `tools/postman/Lagedra.postman_collection.json`
 - [ ] `tools/postman/Lagedra.postman_environment.local.json`
-- [ ] Global error handling — `ProblemDetails` (RFC 7807) via `app.UseExceptionHandler`
+- [x] Global error handling — `ProblemDetails` (RFC 7807) via `app.UseGlobalExceptionHandler()` (custom middleware in `Lagedra.Infrastructure.Observability`)
 - [ ] FluentValidation integration — `AddFluentValidationAutoValidation()`; validators for all request models
 - [x] CORS policy — `"Frontend"` policy configured; `app.UseCors("Frontend")`
 
@@ -2167,54 +2221,54 @@
 
 ### 8.2 App Shell
 
-- [x] `src/main.tsx` — providers: `QueryClientProvider`, `AuthProvider`, `RouterProvider`
-- [x] `src/app/App.tsx` — router outlet, global error boundary
-- [x] `src/app/routes.tsx` — role-based lazy routes
-- [x] `src/app/auth/AuthProvider.tsx` — JWT storage (`localStorage`), refresh logic, Zustand slice
-- [x] `src/app/auth/RequireAuth.tsx` — redirects to login if no valid token
-- [x] `src/app/auth/roles.ts` — role constants matching backend enums
-- [x] `src/app/layout/Shell.tsx`, `Nav.tsx`, `Footer.tsx`, `ErrorBoundary.tsx`
-- [x] `src/app/config.ts` — reads `VITE_*` env vars
+- [ ] `src/main.tsx` — providers: `QueryClientProvider`, `AuthProvider`, `RouterProvider`
+- [ ] `src/app/App.tsx` — router outlet, global error boundary
+- [ ] `src/app/routes.tsx` — role-based lazy routes
+- [ ] `src/app/auth/AuthProvider.tsx` — JWT storage (`localStorage`), refresh logic, Zustand slice
+- [ ] `src/app/auth/RequireAuth.tsx` — redirects to login if no valid token
+- [ ] `src/app/auth/roles.ts` — role constants matching backend enums
+- [ ] `src/app/layout/Shell.tsx`, `Nav.tsx`, `Footer.tsx`, `ErrorBoundary.tsx`
+- [ ] `src/app/config.ts` — reads `VITE_*` env vars
 
 ### 8.3 API Client
 
-- [x] `src/api/http.ts` — Axios instance: `Authorization: Bearer`, `X-Correlation-Id`, auto-refresh on 401
-- [x] `src/api/endpoints.ts` — typed endpoint map
-- [x] `src/api/types.ts` — DTOs synced with `packages/contracts`
+- [ ] `src/api/http.ts` — Axios instance: `Authorization: Bearer`, `X-Correlation-Id`, auto-refresh on 401
+- [ ] `src/api/endpoints.ts` — typed endpoint map
+- [ ] `src/api/types.ts` — DTOs synced with `packages/contracts`
 
 ### 8.4 UI Primitives (shadcn/ui base)
 
-- [x] shadcn/ui components initialized: `Button`, `Card`, `Modal/Dialog`, `Table`, `Input`, `Select`, `Checkbox`, `RadioGroup`, `Badge`, `Alert`, `Skeleton`, `Pagination`, `Separator`, `Tabs`
-- [x] Install `lucide-react` — Lucide icon library (included with shadcn/ui); used for dynamic icon rendering from `iconKey` strings stored in DB; `DynamicIcon` component maps `iconKey` → `<LucideIcon />` with fallback
-- [x] `src/components/shared/Loader.tsx`
-- [x] `src/components/shared/EmptyState.tsx`
-- [x] `src/components/shared/FormError.tsx`
+- [ ] shadcn/ui components initialized: `Button`, `Card`, `Modal/Dialog`, `Table`, `Input`, `Select`, `Checkbox`, `RadioGroup`, `Badge`, `Alert`, `Skeleton`, `Pagination`, `Separator`, `Tabs`
+- [ ] Install `lucide-react` — Lucide icon library (included with shadcn/ui); used for dynamic icon rendering from `iconKey` strings stored in DB; `DynamicIcon` component maps `iconKey` → `<LucideIcon />` with fallback
+- [ ] `src/components/shared/Loader.tsx`
+- [ ] `src/components/shared/EmptyState.tsx`
+- [ ] `src/components/shared/FormError.tsx`
 
 ### 8.5 Feature Modules
 
 #### Auth Pages
-- [x] `features/auth/pages/LoginPage.tsx` — email + password form; `POST /v1/auth/login`
-- [x] `features/auth/pages/RegisterPage.tsx` — email + password + role selection (Landlord/Tenant only)
-- [x] `features/auth/pages/VerifyEmailPage.tsx` — token from URL param
-- [x] `features/auth/pages/ForgotPasswordPage.tsx`
-- [x] `features/auth/pages/ResetPasswordPage.tsx`
-- [x] `features/auth/services/authApi.ts`
+- [ ] `features/auth/pages/LoginPage.tsx` — email + password form; `POST /v1/auth/login`
+- [ ] `features/auth/pages/RegisterPage.tsx` — email + password + role selection (Landlord/Tenant only)
+- [ ] `features/auth/pages/VerifyEmailPage.tsx` — token from URL param
+- [ ] `features/auth/pages/ForgotPasswordPage.tsx`
+- [ ] `features/auth/pages/ResetPasswordPage.tsx`
+- [ ] `features/auth/services/authApi.ts`
 
 #### Listings
-- [x] `features/listings/pages/SearchPage.tsx` — filter by stay range, price, approx location, amenities (multi-select checkbox); minimal non-promotional
-- [x] `features/listings/pages/ListingDetailPage.tsx` — structured fields only; Google Map with approx pin pre-activation; precise address post-activation; amenities grid with Lucide icons grouped by category; safety devices list with icons; considerations list with icons; house rules section with icons; cancellation policy summary with type badge
-- [x] `features/listings/pages/CreateListingPage.tsx` — fully structured form; jurisdiction-gated fields (AB 628 stove/fridge checkboxes for CA); amenity picker (grouped by category, checkbox grid), safety device picker, consideration picker, house rules form (time pickers, toggles), cancellation policy selector (type dropdown with auto-filled defaults, adjustable values)
-- [x] `features/listings/components/ListingCard.tsx` — shows top 3–5 amenity icons as badges
-- [x] `features/listings/components/ListingForm.tsx` — uses `react-hook-form` + `zod`; field visibility driven by jurisdiction
-- [x] `features/listings/components/LocationPicker.tsx` — `@react-google-maps/api` `GoogleMap` + `Marker`; approx vs. precise state toggle
-- [x] `features/listings/components/AmenityGrid.tsx` — renders amenities grouped by category; each item: Lucide icon + name; responsive grid (2–4 columns)
-- [x] `features/listings/components/SafetyDeviceList.tsx` — renders safety devices with Lucide icons; check-mark style
-- [x] `features/listings/components/ConsiderationList.tsx` — renders considerations with Lucide icons; warning style
-- [x] `features/listings/components/HouseRulesSection.tsx` — structured display: check-in/out times, guest count, pet/smoking/party policies with icons and status (Allowed/Not Allowed)
-- [x] `features/listings/components/CancellationPolicySummary.tsx` — type badge + refund window summary; tooltip with full details
-- [x] `features/listings/components/DynamicIcon.tsx` — renders Lucide icon by `iconKey` string; fallback icon for unknown keys; used by all listing attribute displays
-- [x] `features/listings/hooks/useListings.ts`, `useListingDetail.ts`, `useListingDefinitions.ts` — TanStack Query; `useListingDefinitions` fetches amenity/safety/consideration definitions for forms
-- [x] `features/listings/services/listingApi.ts`
+- [ ] `features/listings/pages/SearchPage.tsx` — filter by stay range, price, approx location, amenities (multi-select checkbox); minimal non-promotional
+- [ ] `features/listings/pages/ListingDetailPage.tsx` — structured fields only; Google Map with approx pin pre-activation; precise address post-activation; amenities grid with Lucide icons grouped by category; safety devices list with icons; considerations list with icons; house rules section with icons; cancellation policy summary with type badge
+- [ ] `features/listings/pages/CreateListingPage.tsx` — fully structured form; jurisdiction-gated fields (AB 628 stove/fridge checkboxes for CA); amenity picker (grouped by category, checkbox grid), safety device picker, consideration picker, house rules form (time pickers, toggles), cancellation policy selector (type dropdown with auto-filled defaults, adjustable values)
+- [ ] `features/listings/components/ListingCard.tsx` — shows top 3–5 amenity icons as badges
+- [ ] `features/listings/components/ListingForm.tsx` — uses `react-hook-form` + `zod`; field visibility driven by jurisdiction
+- [ ] `features/listings/components/LocationPicker.tsx` — `@react-google-maps/api` `GoogleMap` + `Marker`; approx vs. precise state toggle
+- [ ] `features/listings/components/AmenityGrid.tsx` — renders amenities grouped by category; each item: Lucide icon + name; responsive grid (2–4 columns)
+- [ ] `features/listings/components/SafetyDeviceList.tsx` — renders safety devices with Lucide icons; check-mark style
+- [ ] `features/listings/components/ConsiderationList.tsx` — renders considerations with Lucide icons; warning style
+- [ ] `features/listings/components/HouseRulesSection.tsx` — structured display: check-in/out times, guest count, pet/smoking/party policies with icons and status (Allowed/Not Allowed)
+- [ ] `features/listings/components/CancellationPolicySummary.tsx` — type badge + refund window summary; tooltip with full details
+- [ ] `features/listings/components/DynamicIcon.tsx` — renders Lucide icon by `iconKey` string; fallback icon for unknown keys; used by all listing attribute displays
+- [ ] `features/listings/hooks/useListings.ts`, `useListingDetail.ts`, `useListingDefinitions.ts` — TanStack Query; `useListingDefinitions` fetches amenity/safety/consideration definitions for forms
+- [ ] `features/listings/services/listingApi.ts`
 
 #### Applications
 - [x] `features/applications/pages/ApplicationsPage.tsx` — landlord inbox; shows tenant's Verification Class, insurance state, deposit band
@@ -2224,54 +2278,54 @@
 - [x] `features/applications/services/applicationApi.ts`
 
 #### Structured Inquiry
-- [x] `features/inquiry/pages/InquiryThreadPage.tsx` — question/answer history; hard-disabled UI after Truth Surface confirmation
-- [x] `features/inquiry/components/InquiryQuestion.tsx` — predefined question dropdown only
-- [x] `features/inquiry/components/InquiryResponseForm.tsx` — structured Yes/No / multi-choice / numeric
-- [x] `features/inquiry/services/inquiryApi.ts`
+- [ ] `features/inquiry/pages/InquiryThreadPage.tsx` — question/answer history; hard-disabled UI after Truth Surface confirmation
+- [ ] `features/inquiry/components/InquiryQuestion.tsx` — predefined question dropdown only
+- [ ] `features/inquiry/components/InquiryResponseForm.tsx` — structured Yes/No / multi-choice / numeric
+- [ ] `features/inquiry/services/inquiryApi.ts`
 
 #### Truth Surface
-- [x] `features/truth-surface/pages/TruthSurfaceConfirmationPage.tsx` — line-by-line display; per-line confirm checkboxes; Platform Disclaimers acknowledgement (required before submit)
-- [x] `features/truth-surface/components/TruthSnapshotViewer.tsx` — immutable snapshot; cryptographic proof display
-- [x] `features/truth-surface/components/ConfirmButton.tsx` — disabled until all checkboxes ticked
-- [x] Hard-coded system notice: "The Inquiry Service is now closed. All confirmed details are recorded in the Truth Surface" — displayed in-page after confirmation
-- [x] `features/truth-surface/services/truthSurfaceApi.ts`
+- [ ] `features/truth-surface/pages/TruthSurfaceConfirmationPage.tsx` — line-by-line display; per-line confirm checkboxes; Platform Disclaimers acknowledgement (required before submit)
+- [ ] `features/truth-surface/components/TruthSnapshotViewer.tsx` — immutable snapshot; cryptographic proof display
+- [ ] `features/truth-surface/components/ConfirmButton.tsx` — disabled until all checkboxes ticked
+- [ ] Hard-coded system notice: "The Inquiry Service is now closed. All confirmed details are recorded in the Truth Surface" — displayed in-page after confirmation
+- [ ] `features/truth-surface/services/truthSurfaceApi.ts`
 
 #### Activation & Billing
-- [x] `features/activation-billing/pages/BillingPage.tsx` — current invoice, prorated amount, Stripe Elements payment method card
-- [x] `features/activation-billing/pages/PaymentMethodPage.tsx` — `@stripe/react-stripe-js` `CardElement` or `PaymentElement`
-- [x] Non-custodial disclaimer displayed: "Lagedra does not receive, transmit, or hold these funds. These instructions are provided solely to facilitate your direct settlement."
-- [x] `features/activation-billing/services/billingApi.ts`
+- [ ] `features/activation-billing/pages/BillingPage.tsx` — current invoice, prorated amount, Stripe Elements payment method card
+- [ ] `features/activation-billing/pages/PaymentMethodPage.tsx` — `@stripe/react-stripe-js` `CardElement` or `PaymentElement`
+- [ ] Non-custodial disclaimer displayed: "Lagedra does not receive, transmit, or hold these funds. These instructions are provided solely to facilitate your direct settlement."
+- [ ] `features/activation-billing/services/billingApi.ts`
 
 #### Compliance
-- [x] `features/compliance/pages/ComplianceStatusPage.tsx` — violations list, cure windows, insurance lapse alerts
+- [ ] `features/compliance/pages/ComplianceStatusPage.tsx` — violations list, cure windows, insurance lapse alerts
 
 #### Arbitration
-- [x] `features/arbitration/pages/CaseListPage.tsx` — case list with status/tier
-- [x] `features/arbitration/pages/CaseDetailPage.tsx` — evidence slots, timeline, decision display
-- [x] `features/arbitration/components/EvidenceUpload.tsx` — structured slot upload; calls presigned URL; file hash displayed
-- [x] `features/arbitration/components/CaseTimeline.tsx`
-- [x] `features/arbitration/services/arbitrationApi.ts`
+- [ ] `features/arbitration/pages/CaseListPage.tsx` — case list with status/tier
+- [ ] `features/arbitration/pages/CaseDetailPage.tsx` — evidence slots, timeline, decision display
+- [ ] `features/arbitration/components/EvidenceUpload.tsx` — structured slot upload; calls presigned URL; file hash displayed
+- [ ] `features/arbitration/components/CaseTimeline.tsx`
+- [ ] `features/arbitration/services/arbitrationApi.ts`
 
 #### Trust Ledger
-- [x] `features/trust-ledger/pages/TrustLedgerPage.tsx` — public pseudonymized view; full detail for involved parties only
-- [x] `features/trust-ledger/components/LedgerEntryList.tsx`
+- [ ] `features/trust-ledger/pages/TrustLedgerPage.tsx` — public pseudonymized view; full detail for involved parties only
+- [ ] `features/trust-ledger/components/LedgerEntryList.tsx`
 
 #### Evidence
-- [x] `features/evidence/services/evidenceApi.ts` — presigned URL request, upload completion
+- [ ] `features/evidence/services/evidenceApi.ts` — presigned URL request, upload completion
 
 #### Notifications (In-App)
-- [x] `features/notifications/pages/NotificationsPage.tsx` — in-app notification history (email sent = shown here too)
-- [x] `features/notifications/services/notificationApi.ts`
+- [ ] `features/notifications/pages/NotificationsPage.tsx` — in-app notification history (email sent = shown here too)
+- [ ] `features/notifications/services/notificationApi.ts`
 
 #### Profile
-- [x] `features/profile/pages/ProfilePage.tsx` — identity status, affiliation, insurance status, Verification Class
-- [x] `features/profile/pages/VerificationStatusPage.tsx` — Persona KYC progress, background check status
-- [x] `features/profile/services/profileApi.ts`
+- [ ] `features/profile/pages/ProfilePage.tsx` — identity status, affiliation, insurance status, Verification Class
+- [ ] `features/profile/pages/VerificationStatusPage.tsx` — Persona KYC progress, background check status
+- [ ] `features/profile/services/profileApi.ts`
 
 ### 8.6 Utils
 
-- [x] `src/utils/format.ts` — date (US locale), money (cents → `$XX.XX`), percentage formatters
-- [x] `src/utils/validation.ts` — shared `zod` schemas (email, password, stay range)
+- [ ] `src/utils/format.ts` — date (US locale), money (cents → `$XX.XX`), percentage formatters
+- [ ] `src/utils/validation.ts` — shared `zod` schemas (email, password, stay range)
 
 ---
 
@@ -2279,31 +2333,33 @@
 
 ### 9.1 Project Setup
 
-- [x] Create `apps/admin/` with Vite + React + TypeScript + Tailwind + shadcn/ui + Zustand
-- [x] Separate auth context (admin role only: `PlatformAdmin`)
-- [x] `apps/admin/package.json`, `vite.config.ts`, `tsconfig.json`, `.env.example`
-- [x] Install same core packages as `apps/web` (excluding Google Maps and Stripe Elements)
+- [ ] Create `apps/admin/` with Vite + React + TypeScript + Tailwind + shadcn/ui + Zustand
+- [ ] Separate auth context (admin role only: `PlatformAdmin`)
+- [ ] `apps/admin/package.json`, `vite.config.ts`, `tsconfig.json`, `.env.example`
+- [ ] Install same core packages as `apps/web` (excluding Google Maps and Stripe Elements)
 
 ### 9.2 Admin Pages (Ops Dashboard)
 
-- [x] `pages/InsuranceUnknownQueue.tsx` — deals in "Status: Unknown"; manual verification portal; 24h SLA countdown indicator
-- [x] `pages/FraudFlags.tsx` — fraud flags by severity (High/Medium/Low); review/resolve workflow; 24h/72h SLA display
-- [x] `pages/ArbitrationBacklog.tsx` — caseload per arbitrator; SLA status; triage view; overflow assignment button
-- [x] `pages/JurisdictionPackVersions.tsx` — draft/pending/active packs; dual-control approval workflow (2nd approver view)
-- [x] `pages/EvidenceReview.tsx` — malware scan queue; infected file quarantine; manual evidence review
-- [x] `pages/AuditSearch.tsx` — full audit event log; filter by user, event type, date range
-- [x] `pages/ManualVerification.tsx` — Persona KYC manual review fallback queue; ≤ 24h SLA
-- [x] `pages/ComplianceViolations.tsx` — all violations across all deals; filter by category/status
-- [x] `pages/UserRestrictions.tsx` — account restrictions/suspensions/bans; manage restrictions
-- [x] `pages/DualControlApprovals.tsx` — pending pack approvals requiring 2nd approver
-- [x] `pages/BlogPosts.tsx` — full CRUD for blog posts; status badge (Draft/Published/Archived); publish/archive actions; Markdown preview pane (react-markdown)
-- [x] `pages/BlogPostEditor.tsx` — rich Markdown editor (`@uiw/react-md-editor` or plain `<textarea>`); slug preview; meta fields (metaTitle, metaDescription, ogImageUrl); tag input; estimated reading time display
-- [x] `pages/SeoPages.tsx` — list and edit static SEO page meta (e.g. `/how-it-works`, `/pricing`, `/about`); noIndex toggle
-- [x] `pages/ListingDefinitions.tsx` — manage amenity definitions (grouped by category), safety device definitions, consideration definitions; CRUD with icon picker (Lucide icon name selector), sort order, active/inactive toggle; preview rendered icon next to name
+- [ ] `pages/InsuranceUnknownQueue.tsx` — deals in "Status: Unknown"; manual verification portal; 24h SLA countdown indicator
+- [ ] `pages/FraudFlags.tsx` — fraud flags by severity (High/Medium/Low); review/resolve workflow; 24h/72h SLA display
+- [ ] `pages/ArbitrationBacklog.tsx` — caseload per arbitrator; SLA status; triage view; overflow assignment button
+- [ ] `pages/JurisdictionPackVersions.tsx` — draft/pending/active packs; dual-control approval workflow (2nd approver view)
+- [ ] `pages/EvidenceReview.tsx` — malware scan queue; infected file quarantine; manual evidence review
+- [ ] `pages/AuditSearch.tsx` — full audit event log; filter by user, event type, date range
+- [ ] `pages/ManualVerification.tsx` — Persona KYC manual review fallback queue; ≤ 24h SLA
+- [ ] `pages/ComplianceViolations.tsx` — all violations across all deals; filter by category/status
+- [ ] `pages/UserRestrictions.tsx` — account restrictions/suspensions/bans; manage restrictions
+- [ ] `pages/DualControlApprovals.tsx` — pending pack approvals requiring 2nd approver
+- [ ] `pages/BlogPosts.tsx` — full CRUD for blog posts; status badge (Draft/Published/Archived); publish/archive actions; Markdown preview pane (react-markdown)
+- [ ] `pages/BlogPostEditor.tsx` — rich Markdown editor (`@uiw/react-md-editor` or plain `<textarea>`); slug preview; meta fields (metaTitle, metaDescription, ogImageUrl); tag input; estimated reading time display
+- [ ] `pages/SeoPages.tsx` — list and edit static SEO page meta (e.g. `/how-it-works`, `/pricing`, `/about`); noIndex toggle
+- [ ] `pages/ListingDefinitions.tsx` — manage amenity definitions (grouped by category), safety device definitions, consideration definitions; CRUD with icon picker (Lucide icon name selector), sort order, active/inactive toggle; preview rendered icon next to name
+- [ ] `pages/AnalyticsDashboard.tsx` — date range picker; summary cards (total listings, active deals, MRR, conversion rate); line charts; funnel visualization (§11.5)
+- [ ] `pages/ListingAnalytics.tsx` — per-listing metrics: views, applications, conversion, quality score; sortable table (§11.5)
 
 ### 9.3 Admin API Client
 
-- [x] `api/http.ts`, `api/endpoints.ts`, `api/types.ts` — admin-scoped; all admin endpoints require `PlatformAdmin` role
+- [ ] `api/http.ts`, `api/endpoints.ts`, `api/types.ts` — admin-scoped; all admin endpoints require `PlatformAdmin` role
 
 ---
 
@@ -2311,24 +2367,24 @@
 
 ### 10.1 UI Component Library (`packages/ui`)
 
-- [x] `packages/ui/package.json`
-- [x] Re-exports from shadcn/ui + custom overrides: `Button`, `Input`, `Modal`, `Select`, `Checkbox`, `RadioGroup`, `DatePicker`, `Badge`, `Alert`
-- [x] `src/index.ts` — barrel export
+- [ ] `packages/ui/package.json`
+- [ ] Re-exports from shadcn/ui + custom overrides: `Button`, `Input`, `Modal`, `Select`, `Checkbox`, `RadioGroup`, `DatePicker`, `Badge`, `Alert`
+- [ ] `src/index.ts` — barrel export
 
 ### 10.2 Shared Contracts (`packages/contracts`)
 
-- [x] `packages/contracts/package.json`
-- [x] `src/enums.ts` — `VerificationClass`, `InsuranceState`, `ViolationCategory`, `DealStatus`, `ArbitrationTier`, `NotificationType`, `UserRole`, `ConsentType`
-- [x] `src/dtos.ts` — all DTO types (synced manually with backend, or generated via NSwag)
-- [x] `src/events.ts` — domain event type definitions for any future cross-app usage
-- [x] `src/index.ts`
+- [ ] `packages/contracts/package.json`
+- [ ] `src/enums.ts` — `VerificationClass`, `InsuranceState`, `ViolationCategory`, `DealStatus`, `ArbitrationTier`, `NotificationType`, `UserRole`, `ConsentType`
+- [ ] `src/dtos.ts` — all DTO types (synced manually with backend, or generated via NSwag)
+- [ ] `src/events.ts` — domain event type definitions for any future cross-app usage
+- [ ] `src/index.ts`
 
 ### 10.3 Test Utilities (`packages/test-utils`)
 
-- [x] `packages/test-utils/package.json`
-- [x] `src/renderWithProviders.tsx` — React Testing Library wrapper with all providers (QueryClient, Router, Auth)
-- [x] `src/mockServer.ts` — MSW handler setup for all API endpoints
-- [x] `src/index.ts`
+- [ ] `packages/test-utils/package.json`
+- [ ] `src/renderWithProviders.tsx` — React Testing Library wrapper with all providers (QueryClient, Router, Auth)
+- [ ] `src/mockServer.ts` — MSW handler setup for all API endpoints
+- [ ] `src/index.ts`
 
 ---
 
@@ -2340,25 +2396,25 @@
 
 ### 10.5.1 Project Setup
 
-- [x] Bootstrap `apps/marketing/` with Next.js 15 App Router + TypeScript: `npx create-next-app@latest marketing --ts --tailwind --eslint --app --src-dir`
-- [x] `apps/marketing/package.json` — workspace member
-- [x] `apps/marketing/next.config.ts` — `output: 'standalone'` for Docker; `NEXT_PUBLIC_API_URL` env var; image domains whitelist (for OG images)
-- [x] `apps/marketing/tsconfig.json`
-- [x] `apps/marketing/.env.example` — `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_GA_MEASUREMENT_ID`
-- [x] Install additional packages: `react-markdown`, `remark-gfm`, `rehype-highlight` (Markdown rendering), `@vercel/og` or `next/og` (OG image generation)
-- [x] Configure Tailwind CSS + shadcn/ui (`npx shadcn@latest init`) — same design system as `apps/web`
-- [x] `apps/marketing/src/lib/api.ts` — typed fetch wrapper calling `NEXT_PUBLIC_API_URL`
+- [ ] Bootstrap `apps/marketing/` with Next.js 15 App Router + TypeScript: `npx create-next-app@latest marketing --ts --tailwind --eslint --app --src-dir`
+- [ ] `apps/marketing/package.json` — workspace member
+- [ ] `apps/marketing/next.config.ts` — `output: 'standalone'` for Docker; `NEXT_PUBLIC_API_URL` env var; image domains whitelist (for OG images)
+- [ ] `apps/marketing/tsconfig.json`
+- [ ] `apps/marketing/.env.example` — `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_GA_MEASUREMENT_ID`
+- [ ] Install additional packages: `react-markdown`, `remark-gfm`, `rehype-highlight` (Markdown rendering), `@vercel/og` or `next/og` (OG image generation)
+- [ ] Configure Tailwind CSS + shadcn/ui (`npx shadcn@latest init`) — same design system as `apps/web`
+- [ ] `apps/marketing/src/lib/api.ts` — typed fetch wrapper calling `NEXT_PUBLIC_API_URL`
 
 ### 10.5.2 Layout & Navigation
 
-- [x] `src/app/layout.tsx` — root layout with `<html lang="en">`; global `<GoogleTagManager>` (or GA script); default `metadata` export
-- [x] `src/components/Header.tsx` — top nav: logo, How It Works, Pricing, Blog, FAQ, "Get Started" CTA (links to `apps/web`)
-- [x] `src/components/Footer.tsx` — links, legal, social, copyright
-- [x] `src/components/MobileNav.tsx` — hamburger menu for mobile
+- [ ] `src/app/layout.tsx` — root layout with `<html lang="en">`; global `<GoogleTagManager>` (or GA script); default `metadata` export
+- [ ] `src/components/Header.tsx` — top nav: logo, How It Works, Pricing, Blog, FAQ, "Get Started" CTA (links to `apps/web`)
+- [ ] `src/components/Footer.tsx` — links, legal, social, copyright
+- [ ] `src/components/MobileNav.tsx` — hamburger menu for mobile
 
 ### 10.5.3 Pages
 
-- [x] `src/app/page.tsx` — **Home / Landing Page**
+- [ ] `src/app/page.tsx` — **Home / Landing Page**
   - Hero: value proposition headline, CTA ("Protect Your Rental")
   - How it works (3-step explainer)
   - Trust signals / stats
@@ -2366,54 +2422,54 @@
   - FAQ accordion
   - Footer CTA
   - Full static generation (`export const dynamic = 'force-static'`)
-- [x] `src/app/how-it-works/page.tsx` — detailed product walkthrough; static
-- [x] `src/app/pricing/page.tsx` — protocol fee breakdown; static
-- [x] `src/app/about/page.tsx` — mission, team, founding story; static
-- [x] `src/app/contact/page.tsx` — contact form (sends to `IEmailService` via a `/api/contact` Next.js Route Handler)
-- [x] `src/app/faq/page.tsx` — accordion FAQ; static
-- [x] `src/app/legal/terms/page.tsx` — Terms of Service; static Markdown render
-- [x] `src/app/legal/privacy/page.tsx` — Privacy Policy; static Markdown render
+- [ ] `src/app/how-it-works/page.tsx` — detailed product walkthrough; static
+- [ ] `src/app/pricing/page.tsx` — protocol fee breakdown; static
+- [ ] `src/app/about/page.tsx` — mission, team, founding story; static
+- [ ] `src/app/contact/page.tsx` — contact form (sends to `IEmailService` via a `/api/contact` Next.js Route Handler)
+- [ ] `src/app/faq/page.tsx` — accordion FAQ; static
+- [ ] `src/app/legal/terms/page.tsx` — Terms of Service; static Markdown render
+- [ ] `src/app/legal/privacy/page.tsx` — Privacy Policy; static Markdown render
 
 ### 10.5.4 Blog
 
-- [x] `src/app/blog/page.tsx` — **Blog List Page**
+- [ ] `src/app/blog/page.tsx` — **Blog List Page**
   - `fetch` from `GET /api/v1/blog` (with `next: { revalidate: 300 }` — ISR every 5 min)
   - Pagination, tag filter
   - Post card: title, excerpt, tags, publishedAt, reading time, OG image thumbnail
-- [x] `src/app/blog/[slug]/page.tsx` — **Blog Post Detail Page**
+- [ ] `src/app/blog/[slug]/page.tsx` — **Blog Post Detail Page**
   - `fetch` from `GET /api/v1/blog/{slug}` (ISR; `revalidate: 300`)
   - `generateStaticParams()` — pre-renders all published posts at build time
   - `generateMetadata()` — dynamic `title`, `description`, `openGraph` from post meta fields
   - Renders `content` (Markdown) via `react-markdown` + `remark-gfm` + `rehype-highlight`
   - Structured data: JSON-LD `Article` schema (author, publishedAt, headline, image)
   - Related posts section (same tags)
-- [x] `src/app/blog/tag/[tag]/page.tsx` — **Tag Filter Page**; `generateStaticParams()` for all known tags
+- [ ] `src/app/blog/tag/[tag]/page.tsx` — **Tag Filter Page**; `generateStaticParams()` for all known tags
 
 ### 10.5.5 SEO Infrastructure
 
-- [x] `src/app/sitemap.ts` — **Dynamic Sitemap** (Next.js App Router built-in):
+- [ ] `src/app/sitemap.ts` — **Dynamic Sitemap** (Next.js App Router built-in):
   - Static pages: `/`, `/how-it-works`, `/pricing`, `/about`, `/faq`, `/contact`, `/blog`
   - Dynamic blog posts: fetched from `GET /api/v1/blog/sitemap` at build/revalidation time
   - Outputs `<url>`, `<loc>`, `<lastmod>`, `<changefreq>`, `<priority>` for each
-- [x] `src/app/robots.ts` — **Robots.txt** (Next.js built-in): `User-agent: *`, `Allow: /`, `Disallow: /api/`, `Sitemap: https://lagedra.com/sitemap.xml`
-- [x] `src/app/og/route.tsx` — **OG Image Route Handler** (Next.js `ImageResponse`): generates dynamic OG images for blog posts from title + slug params
-- [x] `src/app/rss.xml/route.ts` — **RSS Feed Route Handler**: fetches all published posts; returns `application/rss+xml` with proper `<channel>` and `<item>` entries
-- [x] `src/app/api/contact/route.ts` — **Contact Form API Route**: validates body (zod), calls `POST /api/v1/contact` on backend (which uses `IEmailService`); rate-limited
-- [x] Default `metadata` in `layout.tsx`: `title.template`, `description`, `openGraph` (site name, type, locale), `twitter` (card type)
-- [x] JSON-LD Organization schema on homepage (`<script type="application/ld+json">`)
-- [x] Canonical URL set on every page via `alternates.canonical` in metadata
+- [ ] `src/app/robots.ts` — **Robots.txt** (Next.js built-in): `User-agent: *`, `Allow: /`, `Disallow: /api/`, `Sitemap: https://lagedra.com/sitemap.xml`
+- [ ] `src/app/og/route.tsx` — **OG Image Route Handler** (Next.js `ImageResponse`): generates dynamic OG images for blog posts from title + slug params
+- [ ] `src/app/rss.xml/route.ts` — **RSS Feed Route Handler**: fetches all published posts; returns `application/rss+xml` with proper `<channel>` and `<item>` entries
+- [ ] `src/app/api/contact/route.ts` — **Contact Form API Route**: validates body (zod), calls `POST /api/v1/contact` on backend (which uses `IEmailService`); rate-limited
+- [ ] Default `metadata` in `layout.tsx`: `title.template`, `description`, `openGraph` (site name, type, locale), `twitter` (card type)
+- [ ] JSON-LD Organization schema on homepage (`<script type="application/ld+json">`)
+- [ ] Canonical URL set on every page via `alternates.canonical` in metadata
 
 ### 10.5.6 Performance & Core Web Vitals
 
-- [x] All images via `next/image` with explicit `width`/`height` or `fill` — prevents CLS
-- [x] Fonts via `next/font/google` — eliminates FOIT/FOUT, self-hosted at build time
-- [x] No layout shift from dynamic content: skeleton loaders or static fallbacks
-- [x] `next.config.ts`: `compress: true`, bundle analyzer script (`@next/bundle-analyzer`)
+- [ ] All images via `next/image` with explicit `width`/`height` or `fill` — prevents CLS
+- [ ] Fonts via `next/font/google` — eliminates FOIT/FOUT, self-hosted at build time
+- [ ] No layout shift from dynamic content: skeleton loaders or static fallbacks
+- [ ] `next.config.ts`: `compress: true`, bundle analyzer script (`@next/bundle-analyzer`)
 
 ### 10.5.7 Dockerfile & Nginx Routing
 
-- [x] `apps/marketing/Dockerfile` — multi-stage: `node:20-alpine` build + standalone output copy
-- [x] Nginx `deploy/nginx/nginx.conf` — route `/blog`, `/how-it-works`, `/pricing`, `/about`, `/contact`, `/faq`, `/legal` → marketing service (port 3001); all other non-API routes → web app (port 3000); `/api` → backend (port 5000)
+- [ ] `apps/marketing/Dockerfile` — multi-stage: `node:20-alpine` build + standalone output copy
+- [ ] Nginx `deploy/nginx/nginx.conf` — route `/blog`, `/how-it-works`, `/pricing`, `/about`, `/contact`, `/faq`, `/legal` → marketing service (port 3001); all other non-API routes → web app (port 3000); `/api` → backend (port 5000)
 
 ---
 
@@ -2421,62 +2477,62 @@
 
 ### 11.1 Architecture Tests (`tests/Lagedra.Tests.Architecture`)
 
-- [x] `Lagedra.Tests.Architecture.csproj` — `NetArchTest.Rules`; references all module + gateway projects
-- [x] `ModuleDependencyTests.cs` — no module references another module directly (only SharedKernel, Infrastructure, TruthSurface, Compliance, JurisdictionPacks)
-- [x] `DomainLayerTests.cs` — Domain has no reference to Infrastructure, EF Core, or HTTP
-- [x] `ApplicationLayerTests.cs` — Application has no reference to Infrastructure or EF Core
-- [x] `NamingConventionTests.cs` — aggregate roots extend `AggregateRoot<>`, value objects extend `ValueObject`, events implement `IDomainEvent`
-- [x] `ApiGatewayHasNoBusinessLogicTests.cs` — controllers only inject `IMediator`; no direct domain or repository injection
-- [x] `NoProtectedClassAttributesInRiskPolicyTests.cs` — `VerificationClassPolicy` references no protected-class attribute names
+- [ ] `Lagedra.Tests.Architecture.csproj` — `NetArchTest.Rules`; references all module + gateway projects
+- [ ] `ModuleDependencyTests.cs` — no module references another module directly (only SharedKernel, Infrastructure, TruthSurface, Compliance, JurisdictionPacks)
+- [ ] `DomainLayerTests.cs` — Domain has no reference to Infrastructure, EF Core, or HTTP
+- [ ] `ApplicationLayerTests.cs` — Application has no reference to Infrastructure or EF Core
+- [ ] `NamingConventionTests.cs` — aggregate roots extend `AggregateRoot<>`, value objects extend `ValueObject`, events implement `IDomainEvent`
+- [ ] `ApiGatewayHasNoBusinessLogicTests.cs` — controllers only inject `IMediator`; no direct domain or repository injection
+- [ ] `NoProtectedClassAttributesInRiskPolicyTests.cs` — `VerificationClassPolicy` references no protected-class attribute names
 
 ### 11.2 Unit Tests (`tests/Lagedra.Tests.Unit`)
 
-- [x] `Lagedra.Tests.Unit.csproj` — xUnit, FluentAssertions, NSubstitute, Bogus
-- [x] Auth: `JwtTokenServiceTests.cs`, `RefreshTokenServiceTests.cs`, `RegisterUserTests.cs`
-- [x] SharedKernel: `AggregateRootTests.cs`, `ValueObjectTests.cs`, `ResultTests.cs`
-- [x] TruthSurface: `TruthSnapshotTests.cs`, `HashingTests.cs`, `MerkleTreeTests.cs`
-- [x] Compliance: `TrustLedgerEntryTests.cs` (append-only), `ViolationTests.cs`
-- [x] ActivationAndBilling: `BillingPolicyTests.cs` ($79 proration formula), `DealApplicationTests.cs`, `BillingAccountTests.cs`
-- [x] IdentityAndVerification: `VerificationStatusTests.cs`, `AffiliationVerificationTests.cs`
-- [x] InsuranceIntegration: `UnknownGraceWindowPolicyTests.cs` (72h, API failure vs. tenant inaction)
-- [x] ListingAndLocation: `StayRangeTests.cs` (30–180 validation), `ListingTests.cs`
-- [x] StructuredInquiry: `InquirySessionTests.cs` (lock on Truth Surface confirmation), `ContactInfoBypassDetectionTests.cs`
-- [x] VerificationAndRisk: `VerificationClassPolicyTests.cs` (all inputs, no protected-class), `DepositRecommendationPolicyTests.cs` (jurisdiction cap, adverse action)
-- [x] ComplianceMonitoring: `ViolationCategoryTests.cs` (A–G + Other mapping)
-- [x] Arbitration: `EvidenceMinimumThresholdPolicyTests.cs`, `ArbitrationCaseTests.cs` (SLA clock, cap enforcement)
-- [x] JurisdictionPacks: `FieldGatingRuleTests.cs`, `CaliforniaPackTests.cs` (AB 12, SB 611, AB 628, AB 2801, AB 414, JCO)
-- [x] Evidence: `EvidenceManifestTests.cs` (seal invariant), `FileHashTests.cs`
-- [x] Privacy: `DeletionRequestTests.cs` (legal hold blocking), `RetentionPeriodTests.cs`
-- [x] AntiAbuseAndIntegrity: `CollusionPatternTests.cs`, `InquiryAbuseDetectionTests.cs`
-- [x] ContentManagement: `BlogPostTests.cs` (slug uniqueness, Draft→Published transition, PublishedAt immutability), `SeoPageTests.cs`
+- [ ] `Lagedra.Tests.Unit.csproj` — xUnit, FluentAssertions, NSubstitute, Bogus
+- [ ] Auth: `JwtTokenServiceTests.cs`, `RefreshTokenServiceTests.cs`, `RegisterUserTests.cs`
+- [ ] SharedKernel: `AggregateRootTests.cs`, `ValueObjectTests.cs`, `ResultTests.cs`
+- [ ] TruthSurface: `TruthSnapshotTests.cs`, `HashingTests.cs`, `MerkleTreeTests.cs`
+- [ ] Compliance: `TrustLedgerEntryTests.cs` (append-only), `ViolationTests.cs`
+- [ ] ActivationAndBilling: `BillingPolicyTests.cs` ($79 proration formula), `DealApplicationTests.cs`, `BillingAccountTests.cs`
+- [ ] IdentityAndVerification: `VerificationStatusTests.cs`, `AffiliationVerificationTests.cs`
+- [ ] InsuranceIntegration: `UnknownGraceWindowPolicyTests.cs` (72h, API failure vs. tenant inaction)
+- [ ] ListingAndLocation: `StayRangeTests.cs` (30–180 validation), `ListingTests.cs`
+- [ ] StructuredInquiry: `InquirySessionTests.cs` (lock on Truth Surface confirmation), `ContactInfoBypassDetectionTests.cs`
+- [ ] VerificationAndRisk: `VerificationClassPolicyTests.cs` (all inputs, no protected-class), `DepositRecommendationPolicyTests.cs` (jurisdiction cap, adverse action)
+- [ ] ComplianceMonitoring: `ViolationCategoryTests.cs` (A–G + Other mapping)
+- [ ] Arbitration: `EvidenceMinimumThresholdPolicyTests.cs`, `ArbitrationCaseTests.cs` (SLA clock, cap enforcement)
+- [ ] JurisdictionPacks: `FieldGatingRuleTests.cs`, `CaliforniaPackTests.cs` (AB 12, SB 611, AB 628, AB 2801, AB 414, JCO)
+- [ ] Evidence: `EvidenceManifestTests.cs` (seal invariant), `FileHashTests.cs`
+- [ ] Privacy: `DeletionRequestTests.cs` (legal hold blocking), `RetentionPeriodTests.cs`
+- [ ] AntiAbuseAndIntegrity: `CollusionPatternTests.cs`, `InquiryAbuseDetectionTests.cs`
+- [ ] ContentManagement: `BlogPostTests.cs` (slug uniqueness, Draft→Published transition, PublishedAt immutability), `SeoPageTests.cs`
 
 ### 11.3 Integration Tests (`tests/Lagedra.Tests.Integration`)
 
-- [x] `Lagedra.Tests.Integration.csproj` — `Testcontainers.PostgreSql`, `Microsoft.AspNetCore.Mvc.Testing`; real PostgreSQL via Docker
-- [x] `AuthIntegrationTests.cs` — register → verify email → login → refresh → revoke
-- [x] `TruthSurfaceIntegrationTests.cs` — full snapshot confirmation, hash verification
-- [x] `BillingActivationIntegrationTests.cs` — application → approval → deal activation (Stripe mocked)
-- [x] `InsuranceIntegrationTests.cs` — API failure → Unknown → 72h → manual upload flow
-- [x] `ArbitrationIntegrationTests.cs` — full case filing through decision
-- [x] `PrivacyIntegrationTests.cs` — deletion request blocked by legal hold
-- [x] `JurisdictionPackIntegrationTests.cs` — LA pack field gating end-to-end
-- [x] `StripeWebhookIntegrationTests.cs` — payment succeeded / failed / chargeback webhook handling
-- [x] `PersonaWebhookIntegrationTests.cs` — KYC complete / fail / background check result
-- [x] `ContentManagementIntegrationTests.cs` — create draft → publish → public GET by slug → 404 for archived
+- [ ] `Lagedra.Tests.Integration.csproj` — `Testcontainers.PostgreSql`, `Microsoft.AspNetCore.Mvc.Testing`; real PostgreSQL via Docker
+- [ ] `AuthIntegrationTests.cs` — register → verify email → login → refresh → revoke
+- [ ] `TruthSurfaceIntegrationTests.cs` — full snapshot confirmation, hash verification
+- [ ] `BillingActivationIntegrationTests.cs` — application → approval → deal activation (Stripe mocked)
+- [ ] `InsuranceIntegrationTests.cs` — API failure → Unknown → 72h → manual upload flow
+- [ ] `ArbitrationIntegrationTests.cs` — full case filing through decision
+- [ ] `PrivacyIntegrationTests.cs` — deletion request blocked by legal hold
+- [ ] `JurisdictionPackIntegrationTests.cs` — LA pack field gating end-to-end
+- [ ] `StripeWebhookIntegrationTests.cs` — payment succeeded / failed / chargeback webhook handling
+- [ ] `PersonaWebhookIntegrationTests.cs` — KYC complete / fail / background check result
+- [ ] `ContentManagementIntegrationTests.cs` — create draft → publish → public GET by slug → 404 for archived
 
 ### 11.4 Frontend Tests (`apps/web`)
 
-- [x] Vitest + React Testing Library configured
-- [x] MSW (`mockServiceWorker.js`) for API mocking
-- [x] Tests: `LoginPage.test.tsx`, `TruthSurfaceConfirmationPage.test.tsx`, `LocationPicker.test.tsx`, `BillingPolicy.test.ts` (proration formula)
+- [ ] Vitest + React Testing Library configured
+- [ ] MSW (`mockServiceWorker.js`) for API mocking
+- [ ] Tests: `LoginPage.test.tsx`, `TruthSurfaceConfirmationPage.test.tsx`, `LocationPicker.test.tsx`, `BillingPolicy.test.ts` (proration formula)
 
 ### 11.5 Marketing Site Tests (`apps/marketing`)
 
-- [x] Vitest configured (Next.js compatible — `@vitejs/plugin-react`, jsdom)
-- [x] `BlogList.test.tsx` — renders post cards from mocked API response; pagination
-- [x] `BlogPostPage.test.tsx` — renders Markdown content; shows 404 for unknown slug (MSW mock)
-- [x] `Sitemap.test.ts` — sitemap entries include all published slugs; static pages always present
-- [x] `RssFeed.test.ts` — valid XML output; correct `<item>` count matches published posts
+- [ ] Vitest configured (Next.js compatible — `@vitejs/plugin-react`, jsdom)
+- [ ] `BlogList.test.tsx` — renders post cards from mocked API response; pagination
+- [ ] `BlogPostPage.test.tsx` — renders Markdown content; shows 404 for unknown slug (MSW mock)
+- [ ] `Sitemap.test.ts` — sitemap entries include all published slugs; static pages always present
+- [ ] `RssFeed.test.ts` — valid XML output; correct `<item>` count matches published posts
 
 ---
 
@@ -2484,38 +2540,38 @@
 
 ### 12.1 Architecture Decision Records (`docs/decisions/`)
 
-- [x] `ADR-0001-modular-monolith.md` — why modular monolith over microservices at launch
-- [x] `ADR-0002-schema-per-module.md` — PostgreSQL schema-per-module isolation
-- [x] `ADR-0003-truth-surface-signing.md` — HMAC-SHA256 + canonical JSON + Merkle tree
-- [x] `ADR-0004-outbox-required.md` — Transactional Outbox for domain event reliability
-- [x] `ADR-0005-evidence-immutable-manifest.md` — sealed manifest + SHA-256 file hashing
-- [x] `ADR-0006-aspnet-identity.md` — ASP.NET Identity over Auth0 (cost, control, VPS-friendly)
-- [x] `ADR-0007-mailkit-brevo.md` — MailKit + Brevo over SendGrid (EU GDPR, cost, control)
-- [x] `ADR-0008-minio-clamav.md` — self-hosted MinIO + ClamAV for VPS deployment
-- [x] `ADR-0009-deal-in-activation.md` — Deal lifecycle owns in ActivationAndBilling module
-- [x] `ADR-0010-google-maps-persona-stripe.md` — confirmed third-party provider decisions
-- [x] `ADR-0011-nextjs-marketing-site.md` — why Next.js (App Router + ISR) for `apps/marketing` over Vite SPA (SEO, sitemap, OG images, Core Web Vitals)
+- [ ] `ADR-0001-modular-monolith.md` — why modular monolith over microservices at launch
+- [ ] `ADR-0002-schema-per-module.md` — PostgreSQL schema-per-module isolation
+- [ ] `ADR-0003-truth-surface-signing.md` — HMAC-SHA256 + canonical JSON + Merkle tree
+- [ ] `ADR-0004-outbox-required.md` — Transactional Outbox for domain event reliability
+- [ ] `ADR-0005-evidence-immutable-manifest.md` — sealed manifest + SHA-256 file hashing
+- [ ] `ADR-0006-aspnet-identity.md` — ASP.NET Identity over Auth0 (cost, control, VPS-friendly)
+- [ ] `ADR-0007-mailkit-brevo.md` — MailKit + Brevo over SendGrid (EU GDPR, cost, control)
+- [ ] `ADR-0008-minio-clamav.md` — self-hosted MinIO + ClamAV for VPS deployment
+- [ ] `ADR-0009-deal-in-activation.md` — Deal lifecycle owns in ActivationAndBilling module
+- [ ] `ADR-0010-google-maps-persona-stripe.md` — confirmed third-party provider decisions
+- [ ] `ADR-0011-nextjs-marketing-site.md` — why Next.js (App Router + ISR) for `apps/marketing` over Vite SPA (SEO, sitemap, OG images, Core Web Vitals)
 
 ### 12.2 Architecture Docs (`docs/architecture/`)
 
-- [x] `00-context.md` — system context, actors, external systems
-- [x] `01-modular-monolith.md` — module boundary rules, communication patterns, outbox
-- [x] `02-truth-surface.md` — cryptographic proof model, confirmation flow, inquiry lock
-- [x] `03-eventing-outbox.md` — domain event lifecycle, outbox processor, Quartz.NET
-- [x] `04-data-retention-privacy.md` — retention periods, anonymization, legal holds, GDPR/CCPA/FCRA
-- [x] `05-evidence-storage.md` — MinIO upload flow, ClamAV scan, metadata strip, sealing
-- [x] `06-arbitration-engine.md` — tier system, evidence schema, SLA, backlog controls
-- [x] `07-jurisdiction-packs.md` — versioning, dual-control, effective-date rules, LA v1
-- [x] `08-anti-abuse.md` — abuse detection patterns, Trust Ledger gaming, inquiry integrity
-- [x] `09-observability.md` — Serilog, OpenTelemetry, health checks
-- [x] `10-access-control-rbac.md` — ASP.NET Identity roles, JWT claims, permissions matrix
+- [ ] `00-context.md` — system context, actors, external systems
+- [ ] `01-modular-monolith.md` — module boundary rules, communication patterns, outbox
+- [ ] `02-truth-surface.md` — cryptographic proof model, confirmation flow, inquiry lock
+- [ ] `03-eventing-outbox.md` — domain event lifecycle, outbox processor, Quartz.NET
+- [ ] `04-data-retention-privacy.md` — retention periods, anonymization, legal holds, GDPR/CCPA/FCRA
+- [ ] `05-evidence-storage.md` — MinIO upload flow, ClamAV scan, metadata strip, sealing
+- [ ] `06-arbitration-engine.md` — tier system, evidence schema, SLA, backlog controls
+- [ ] `07-jurisdiction-packs.md` — versioning, dual-control, effective-date rules, LA v1
+- [ ] `08-anti-abuse.md` — abuse detection patterns, Trust Ledger gaming, inquiry integrity
+- [ ] `09-observability.md` — Serilog, OpenTelemetry, health checks
+- [ ] `10-access-control-rbac.md` — ASP.NET Identity roles, JWT claims, permissions matrix
 
 ### 12.3 Runbooks (`docs/runbooks/`)
 
-- [x] `insurance-unknown-queue.md` — ops procedure, 24h SLA, escalation
-- [x] `arbitration-backlog-incident.md` — incident declaration, triage, overflow, daily reporting
-- [x] `fraud-flag-triage.md` — severity classification, 24h/72h SLA, Security + Legal escalation
-- [x] `pii-incident-response.md` — breach notification, regulatory reporting, user communication
+- [ ] `insurance-unknown-queue.md` — ops procedure, 24h SLA, escalation
+- [ ] `arbitration-backlog-incident.md` — incident declaration, triage, overflow, daily reporting
+- [ ] `fraud-flag-triage.md` — severity classification, 24h/72h SLA, Security + Legal escalation
+- [ ] `pii-incident-response.md` — breach notification, regulatory reporting, user communication
 
 ---
 
@@ -2544,11 +2600,11 @@
 
 ### 13.4 CI/CD — GitHub Actions
 
-- [x] `.github/workflows/ci.yml` — on PR: `dotnet format --verify-no-changes` + `dotnet test` (all three test projects) + `pnpm lint` + `pnpm test`
-- [x] `.github/workflows/cd.yml` — on merge to `main`: `docker build` + `docker push` to GitHub Container Registry + SSH deploy to VPS via `appleboy/ssh-action`
-- [x] Architecture test gate: `Lagedra.Tests.Architecture` must pass before merge
-- [x] Secret scanning: GitHub's built-in secret scanning enabled on repo
-- [x] Container image scan: Trivy action on built image
+- [ ] `.github/workflows/ci.yml` — on PR: `dotnet format --verify-no-changes` + `dotnet test` (all three test projects) + `pnpm lint` + `pnpm test`
+- [ ] `.github/workflows/cd.yml` — on merge to `main`: `docker build` + `docker push` to GitHub Container Registry + SSH deploy to VPS via `appleboy/ssh-action`
+- [ ] Architecture test gate: `Lagedra.Tests.Architecture` must pass before merge
+- [ ] Secret scanning: GitHub's built-in secret scanning enabled on repo
+- [ ] Container image scan: Trivy action on built image
 
 ### 13.5 Environment Files
 
@@ -2570,8 +2626,8 @@
 
 > Not required for v1 launch. Document as "Phase 2" when VPS outgrows capacity.
 
-- [x] `deploy/k8s/` — Kubernetes manifests (namespace, deployments, services, ingress, configmap, secrets template, PostgreSQL statefulset)
-- [x] `deploy/terraform/` — IaC modules for VPS provider / cloud migration
+- [ ] `deploy/k8s/` — Kubernetes manifests (namespace, deployments, services, ingress, configmap, secrets template, PostgreSQL statefulset)
+- [ ] `deploy/terraform/` — IaC modules for VPS provider / cloud migration
 
 ---
 
@@ -2641,35 +2697,190 @@
 
 > **Public beta may begin ONLY when ALL 7 conditions are marked complete.**
 
-- [x] **Gate 1 — Identity Verification** — Persona KYC + background check fully implemented; liveness, document auth, synthetic ID detection; manual review queue in admin dashboard operational; ≤ 24h manual review SLA confirmed
-- [x] **Gate 2 — Insurance Integration** — Insurance API stub + manual fallback tested end-to-end; Active / NotActive / Unknown states handled; 72h grace window verified (both API-failure path and tenant-inaction path); manual proof upload portal functional; 24h SLA confirmed
-- [x] **Gate 3 — Truth Surface Integrity** — HMAC-SHA256 signing + canonical JSON hashing verified on all snapshots; append-only audit log integrity confirmed; `SnapshotVerificationJob` passing; `InquiryClosed=true` included in hash; Merkle tree partial proof working
-- [x] **Gate 4 — Jurisdiction Pack** — California / LA v1 pack unit tested for all field gating (AB 12, SB 611, AB 628, AB 2801, AB 414, JCO); dual-control approval workflow functional; effective-date rules verified; CaliforniaPackTests all green
-- [x] **Gate 5 — Arbitration Panel** — Minimum 3 arbitrators signed, onboarded, and trained on protocol; reserve capacity pool contracted; 14-day decision SLA agreement in place; caseload cap (20 hard / 15 soft) implemented and tested; backlog escalation email automation working
-- [x] **Gate 6 — Monitoring Dashboard** — Admin app live with all 10 ops pages; insurance unknown queue, fraud flags, arbitration backlog, jurisdiction pack versions all functional; email alerts for all SLA breaches working; Serilog logs to file with rotation
-- [x] **Gate 7 — Incident Response** — Tabletop simulation completed: insurance partner outage, arbitration backlog spike, PII breach, fraud flag surge; at least one live drill; RCA process documented in `docs/runbooks/`
+- [ ] **Gate 1 — Identity Verification** — Persona KYC + background check fully implemented; liveness, document auth, synthetic ID detection; manual review queue in admin dashboard operational; ≤ 24h manual review SLA confirmed
+- [ ] **Gate 2 — Insurance Integration** — Insurance API stub + manual fallback tested end-to-end; Active / NotActive / Unknown states handled; 72h grace window verified (both API-failure path and tenant-inaction path); manual proof upload portal functional; 24h SLA confirmed
+- [ ] **Gate 3 — Truth Surface Integrity** — HMAC-SHA256 signing + canonical JSON hashing verified on all snapshots; append-only audit log integrity confirmed; `SnapshotVerificationJob` passing; `InquiryClosed=true` included in hash; Merkle tree partial proof working
+- [ ] **Gate 4 — Jurisdiction Pack** — California / LA v1 pack unit tested for all field gating (AB 12, SB 611, AB 628, AB 2801, AB 414, JCO); dual-control approval workflow functional; effective-date rules verified; CaliforniaPackTests all green
+- [ ] **Gate 5 — Arbitration Panel** — Minimum 3 arbitrators signed, onboarded, and trained on protocol; reserve capacity pool contracted; 14-day decision SLA agreement in place; caseload cap (20 hard / 15 soft) implemented and tested; backlog escalation email automation working
+- [ ] **Gate 6 — Monitoring Dashboard** — Admin app live with all 10 ops pages; insurance unknown queue, fraud flags, arbitration backlog, jurisdiction pack versions all functional; email alerts for all SLA breaches working; Serilog logs to file with rotation
+- [ ] **Gate 7 — Incident Response** — Tabletop simulation completed: insurance partner outage, arbitration backlog spike, PII breach, fraud flag surge; at least one live drill; RCA process documented in `docs/runbooks/`
 
 ---
 
 ## KPIs & Pilot Metrics (Instrument Before Beta)
 
-- [x] **Deposit Reduction Delta (DRD)** — median % change in deposit vs. landlord baseline; per deal at activation; segmented by Verification Class + insurance state; logged to Trust Ledger
-- [x] **Deposit Adoption Rate** — % of eligible deals (Low/Medium Risk + Active/InstitutionBacked) where landlord sets deposit within recommended band or lower
-- [x] **Dispute Rate** — cases filed per 100 active deal-months
-- [x] **Median Resolution Time** — case filed → decision issued
-- [x] **Recovery Evidence Rate** — % of cases where evidence meets minimum schema on first submission
-- [x] **Protocol Fee Churn Rate** — % of deals that lapse on fee within first billing cycle
-- [x] **Publish quarterly transparency report** — anonymized: DRD by class, dispute rate, resolution time, evidence rate
+- [ ] **Deposit Reduction Delta (DRD)** — median % change in deposit vs. landlord baseline; per deal at activation; segmented by Verification Class + insurance state; logged to Trust Ledger
+- [ ] **Deposit Adoption Rate** — % of eligible deals (Low/Medium Risk + Active/InstitutionBacked) where landlord sets deposit within recommended band or lower
+- [ ] **Dispute Rate** — cases filed per 100 active deal-months
+- [ ] **Median Resolution Time** — case filed → decision issued
+- [ ] **Recovery Evidence Rate** — % of cases where evidence meets minimum schema on first submission
+- [ ] **Protocol Fee Churn Rate** — % of deals that lapse on fee within first billing cycle
+- [ ] **Publish quarterly transparency report** — anonymized: DRD by class, dispute rate, resolution time, evidence rate
 
 ---
 
 ## Pilot Programs
 
-- [x] **Deposit Reduction Guarantee Pilot** — first 100 Low Risk + Insured tenants; if landlord accepts recommended deposit and covered loss occurs, facilitate supplemental insurance claim; track DRD as primary KPI
-- [x] **Institutional Partner Pilot** — first 12 months: $39/month for Verified Institutional Partners; track activation volume from institutional channel
-- [x] **Phase 1.5 Invite-Only Public Beta** — California only; waitlist-gated; concurrent with institutional pilot; stress-test user flows with real non-institutional users
+- [ ] **Deposit Reduction Guarantee Pilot** — first 100 Low Risk + Insured tenants; if landlord accepts recommended deposit and covered loss occurs, facilitate supplemental insurance claim; track DRD as primary KPI
+- [ ] **Institutional Partner Pilot** — first 12 months: $39/month for Verified Institutional Partners; track activation volume from institutional channel
+- [ ] **Phase 1.5 Invite-Only Public Beta** — California only; waitlist-gated; concurrent with institutional pilot; stress-test user flows with real non-institutional users
 
 ---
+
+---
+
+## Phase 11 — Platform Enhancements (Rental Listing UX)
+
+> **Scope:** Backend implementation + PLAN details for frontend. Excluded: Reviews & ratings, SMS (kept as future suggestions).
+>
+> **Future suggestions (no decision yet):** Reviews & ratings, platform-held payments, SMS.
+
+### 11.1 Search & Discovery
+
+#### Backend
+- [x] `SearchListingsQuery` — add `Keyword` (string?), `AmenityIds` (IReadOnlyList<Guid>?), `SafetyDeviceIds` (IReadOnlyList<Guid>?), `ConsiderationIds` (IReadOnlyList<Guid>?), `SortBy` (enum: Newest, PriceAsc, PriceDesc, Distance)
+- [x] `SearchListingsResultDto` — `Items` (IReadOnlyList<ListingSummaryDto>), `TotalCount` (int) for pagination
+- [x] Keyword search on `Title` + `Description` via `EF.Functions.ILike`
+- [x] Amenity filter: listings that have ALL specified amenity IDs
+- [x] Location filter: bounding-box in SQL; Distance sort in memory when lat/lon provided
+- [x] `ListingEndpoints.SearchListings` — accept `keyword`, `amenityIds`, `safetyDeviceIds`, `considerationIds`, `sortBy` query params; return `SearchListingsResultDto` with total count
+
+#### Frontend (PLAN only — no implementation)
+- [ ] `SearchPage.tsx` — keyword input, amenity multi-select, sort dropdown, pagination with total ("Showing 1–20 of 156")
+- [ ] Map-based search: bounds change triggers new search; cluster markers; click marker → show listing card
+- [ ] Filter chips: removable chips for active filters (e.g. "WiFi ✕", "2+ bedrooms ✕")
+
+### 11.2 Listing Experience
+
+#### Backend
+- [x] `Listing` — add `InstantBookingEnabled` (bool, default false); host can enable to skip application approval for tenants meeting criteria
+- [x] `Listing` — add `VirtualTourUrl` (string?, max 2000) for 360° or video links
+- [ ] `ListingPriceHistory` — entity: `ListingId`, `MonthlyRentCents`, `EffectiveFrom` (DateOnly), `EffectiveTo` (DateOnly?); append-only; `ListingRepository` or dedicated repo
+- [x] `ListingVerificationBadgesDto` — `IsHostVerified`, `IsHostKycComplete`, `IsInsuranceActive` (for activated deals); populated via `IHostVerificationProvider` (SharedKernel), `IInsuranceStatusProvider` (SharedKernel)
+- [x] `ListingDetailsDto` — add `InstantBookingEnabled`, `VirtualTourUrl`
+
+#### Frontend (PLAN only)
+- [ ] `ListingDetailPage.tsx` — verification badges (shield icon + "Verified host"), virtual tour embed/link, instant book CTA when enabled
+- [ ] `CreateListingPage.tsx` — instant booking toggle, virtual tour URL field
+- [ ] Price history chart (optional): line chart of `MonthlyRentCents` over time for listing detail
+
+### 11.3 User Experience & Trust
+
+#### Backend
+- [x] `IHostProfileProvider` (SharedKernel) — `GetProfileAsync(Guid userId, CancellationToken): Task<HostProfileDto?>`; `HostProfileDto`: `DisplayName`, `ProfilePhotoUrl`, `ResponseRatePercent`, `ResponseTimeMinutes`, `IsGovernmentIdVerified`, `IsPhoneVerified`, `MemberSince`
+- [x] `HostProfileProvider` (Auth) — implements `IHostProfileProvider` via `AuthDbContext`; registered in `AuthModuleRegistration`
+- [x] `ListingDetailsDto` — add `HostProfile` (HostProfileDto?) and `QualityScore` (int); `GetListingDetailsQuery` injects `IHostProfileProvider` and computes quality score
+- [x] `GetSimilarListingsQuery` — by same `JurisdictionCode`, similar `MonthlyRentCents` (±20%), same `PropertyType`; exclude current listing; limit 6
+- [ ] `SavedListingCollection` — entity: `UserId`, `Name` (string), `CreatedAt`; `SavedListing` — add `CollectionId` (Guid?, FK to SavedListingCollection)
+- [ ] `CreateCollectionCommand`, `AddListingToCollectionCommand`, `RemoveListingFromCollectionCommand`, `GetCollectionsQuery`, `GetCollectionListingsQuery`
+- [x] `GET /v1/listings/{id}/share-url` — returns `{ shareUrl: string }` (uses App:FrontendUrl)
+
+#### Frontend (PLAN only)
+- [ ] `ListingDetailPage.tsx` — host profile card: photo, name, response rate, member since, verified badge
+- [ ] `SimilarListingsSection.tsx` — horizontal scroll of "Similar listings" cards
+- [ ] `SavedListingsPage.tsx` — named collections (tabs or sidebar); "Add to collection" dropdown; create collection modal
+- [ ] Share button: copy link, share to Twitter/Facebook/LinkedIn (native share API if available)
+
+### 11.4 Messaging & Instant Booking
+
+#### Backend
+- [ ] `Messaging` module (optional, lightweight): `Message` entity — `DealId`, `SenderUserId`, `RecipientUserId`, `Body` (text, max 2000), `SentAt`, `ReadAt`; `SendMessageCommand`, `GetMessageThreadQuery`; only for deal-specific coordination (check-in, keys)
+- [ ] `InstantBookingCommand` — when `InstantBookingEnabled` and tenant meets criteria (Verification Class Low, insurance Active), create `DealApplication` with status `PreApproved` and auto-approve flow
+- [ ] `InstantBookingEligibilityQuery` — returns whether tenant can instant-book a given listing
+
+#### Frontend (PLAN only)
+- [ ] `MessagingPage.tsx` — thread view per deal; send message, read receipts
+- [ ] `ListingDetailPage.tsx` — "Instant booking" when eligible; single-click flow vs. application flow
+- [ ] `ApplicationForm.tsx` — hide when instant booking; show "Booking confirmed" instead
+
+### 11.5 Analytics Dashboard
+
+> Platform-wide business metrics for admins. Read-only queries against existing data — no new write paths.
+
+#### Backend
+- [ ] `AnalyticsDbQueries` (raw SQL or EF projections — no separate aggregate; queries span modules via read-only cross-schema access):
+  - [ ] `GetListingViewsQuery` — total views, unique viewers, views per listing over date range (requires `ListingViewEvent` tracking — see below)
+  - [ ] `GetApplicationMetricsQuery` — total applications, approval rate, avg. time-to-decision, rejection reasons breakdown
+  - [ ] `GetConversionFunnelQuery` — listing views → applications → approved → Truth Surface confirmed → activated deals (per date range)
+  - [ ] `GetRevenueMetricsQuery` — total protocol fees collected, MRR, active billing accounts, churn (cancelled deals), avg. deal duration
+  - [ ] `GetUserGrowthQuery` — new registrations (by role), verified users, active users (logged in within 30d)
+  - [ ] `GetPlatformHealthQuery` — open arbitration cases, avg. resolution time, insurance coverage rate, pending KYC reviews
+- [ ] `ListingViewEvent` tracking — lightweight: `ListingId`, `ViewerUserId?`, `ViewedAt`, `Source` (search/direct/referral); written on `GET /v1/listings/{id}`; stored in `listing.listing_views` table (append-only, no updates)
+- [ ] `Presentation/AnalyticsEndpoints.cs` — `GET /v1/admin/analytics/overview`, `/listings`, `/applications`, `/revenue`, `/users`, `/health` (all `RequirePlatformAdmin`)
+- [ ] Cache analytics responses via `ICacheService` — key `analytics:{endpoint}:{dateRange}`, TTL 5 min
+
+#### Frontend (PLAN only)
+- [ ] `pages/AnalyticsDashboard.tsx` — date range picker (7d / 30d / 90d / custom); summary cards (total listings, active deals, MRR, conversion rate); line charts (views, applications, revenue over time); funnel visualization
+- [ ] `pages/ListingAnalytics.tsx` — per-listing view: views, applications, conversion, quality score; sortable table
+
+### 11.6 Operational & Admin
+
+#### Backend
+- [x] `ListingQualityScoreCalculator` — static domain service computing score (0–100) from: photo count (25pt), description length (15pt), amenities count (15pt), safety devices (10pt), house rules (5pt), cancellation policy (5pt), host verified (10pt), response rate (15pt); computed on demand in query handlers, never persisted
+- [ ] `FeaturedListing` — optional: `ListingId`, `PromotedUntil` (DateTime?); admin can promote
+- [ ] Admin: bulk block dates, bulk publish/archive (multiple listing IDs)
+
+#### Frontend (PLAN only)
+- [ ] Admin: listing quality score badge; bulk actions UI
+
+### 11.7 Payments & Financials
+
+> The platform stays out of the money flow — tenants pay hosts directly. These enhancements give hosts optional flexibility over how they accept payment, without changing that core principle. Split payments and payment plans are **host-controlled** per-listing settings.
+
+#### Architecture Note
+
+> Split payments and payment plans are opt-in features controlled entirely by the host at the listing level. When a host enables them, the tenant sees the available options during the payment confirmation step. The platform records the agreed structure on the `DealPaymentConfirmation` but does **not** hold or route any funds.
+
+#### Backend
+
+**Split Payments (host-controlled)**
+- [ ] `Listing` — add `SplitPaymentEnabled` (bool, default false); host can allow tenants to pay deposit and first month's rent as two separate transfers
+- [ ] `Domain/ValueObjects/SplitPaymentTerms.cs` — `DepositDueByDate` (DateOnly), `FirstMonthRentDueByDate` (DateOnly); embedded on `DealPaymentConfirmation` when split is active
+- [ ] `DealPaymentConfirmation` — add `SplitPaymentTerms?` (owned entity), `DepositPaid` (bool), `DepositPaidAt` (DateTime?), `FirstMonthRentPaid` (bool), `FirstMonthRentPaidAt` (DateTime?); `ConfirmByHost` now checks both legs are confirmed before activating
+- [ ] `ConfirmSplitPaymentLegCommand` — `DealId`, `Leg` (enum: Deposit / FirstMonthRent); host confirms each leg independently
+- [ ] `SplitPaymentReminderJob` (Quartz) — sends reminder if a leg is unpaid within 48h of due date
+- [ ] Update `OnTruthSurfaceConfirmedCreatePaymentConfirmationHandler` — if listing has `SplitPaymentEnabled`, create confirmation with `SplitPaymentTerms` using configurable due-date offsets from `PlatformSettings`
+
+**Payment Plans (host-controlled)**
+- [ ] `Listing` — add `PaymentPlanEnabled` (bool, default false), `PaymentPlanMaxInstallments` (int?, 2–4 range, nullable)
+- [ ] `Domain/ValueObjects/PaymentPlan.cs` — `TotalAmountCents` (long), `Installments` (IReadOnlyList<Installment>); `Installment` — `Number` (int), `AmountCents` (long), `DueDate` (DateOnly), `PaidAt` (DateTime?), `Paid` (bool)
+- [ ] `DealPaymentConfirmation` — add `PaymentPlan?` (owned entity, serialized as JSON column); mutually exclusive with `SplitPaymentTerms` (validation: cannot enable both)
+- [ ] `ConfirmInstallmentCommand` — `DealId`, `InstallmentNumber` (int); host confirms each installment; deal activates after first installment is confirmed; remaining installments tracked as ongoing obligations
+- [ ] `InstallmentReminderJob` (Quartz) — sends reminder 48h before each installment due date; escalates overdue installments to ops queue
+- [ ] `GetPaymentPlanStatusQuery` — returns plan with per-installment status for both parties
+
+**Multi-Currency**
+- [ ] `Domain/ValueObjects/Currency.cs` — ISO 4217 code (string, 3 chars), `Symbol`, `DecimalPlaces`; initial support: USD, EUR, GBP, CAD, AUD
+- [ ] `Listing` — add `CurrencyCode` (string, default `"USD"`); all `*Cents` fields are in the listing's currency
+- [ ] `DealFinancials` — add `CurrencyCode`; all monetary amounts tagged with currency
+- [ ] `DealPaymentConfirmation` — add `CurrencyCode`; inherited from listing at deal creation
+- [ ] `ExchangeRateService` — stub interface in SharedKernel (`IExchangeRateService`); no live conversion in v1 — just currency tagging; live rates deferred to v2
+- [ ] `CurrencyConfiguration.cs` — EF config; `CurrencyCode` column on `listings`, `deal_applications`, `deal_payment_confirmations`, `billing_accounts`
+- [ ] Platform fee amounts in `PlatformSettings` remain USD-denominated; cross-currency fee conversion deferred to v2
+
+#### Platform Settings (seeded)
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `split_payment.deposit_due_offset_days` | 0 | Days after Truth Surface confirmation for deposit due date |
+| `split_payment.first_month_due_offset_days` | 7 | Days after Truth Surface confirmation for first month due date |
+| `payment_plan.reminder_before_due_days` | 2 | Days before installment due date to send reminder |
+| `payment_plan.overdue_escalation_days` | 3 | Days overdue before escalating to ops queue |
+
+#### Frontend (PLAN only)
+- [ ] `CreateListingPage.tsx` — "Payment flexibility" section: toggle split payments, toggle payment plans (with max installments slider 2–4), currency selector
+- [ ] `PaymentConfirmationPage.tsx` — show split legs or installment schedule when applicable; per-leg/per-installment confirm buttons for host
+- [ ] `TenantPaymentView.tsx` — display payment schedule with due dates and status badges (Paid / Due / Overdue)
+
+### 11.8 Technical & Infrastructure
+
+#### Backend
+- [x] `CacheKeys.cs` — static helper: `ListingDetails(id)`, `ListingSearch(hash)`, `ListingDefinitions(type)`, `PlatformSetting(key)`, etc.
+- [x] `IdempotencyMiddleware` — `Idempotency-Key` header; cache response via `ICacheService` (24h TTL); key = `{method}:{path}:{key}`; applies to POST/PUT/PATCH
+- [ ] OpenTelemetry: `Observability/Metrics.cs` — request count, latency histograms; `Observability/Tracing.cs` — OTEL tracing (Phase 4+)
+
+#### Frontend (PLAN only)
+- [ ] `Idempotency-Key` header on payment/booking confirmations (UUID from client)
 
 ---
 
@@ -2699,6 +2910,7 @@
 
 ---
 
-*Last updated: 2026-02-27. Technology stack locked. Update checkboxes as work is completed.*
-*Auth profile fields, protocol fee configuration, arbitration filing fee, real-time notification system, and soft delete migrations added.*
+*Last updated: 2026-02-28. Technology stack locked. Update checkboxes as work is completed.*
+*Audit: 239 checkbox corrections applied — backend items verified against codebase; frontend (Phase 8-10.5), testing (Phase 11), documentation (Phase 12), CI/CD (Phase 13.4), Worker (Phase 7), and Beta Gates (Phase 15) correctly marked as pending.*
+*Backend Phases 0–6 (partial), 14, and all module code (Phase 5) are substantially complete. Next: Phase 7 (Worker), Phase 8 (Web Frontend), Phase 11 (Testing).*
 *Each `[ ]` → `[x]` is a step toward a defensible, enforceable, institution-grade mid-term rental protocol.*

@@ -1,4 +1,5 @@
 using Lagedra.Modules.ListingAndLocation.Application.DTOs;
+using Lagedra.Modules.ListingAndLocation.Domain.Entities;
 using Lagedra.Modules.ListingAndLocation.Domain.Enums;
 using Lagedra.Modules.ListingAndLocation.Domain.ValueObjects;
 using Lagedra.Modules.ListingAndLocation.Infrastructure.Persistence;
@@ -25,7 +26,9 @@ public sealed record UpdateListingCommand(
     CancellationPolicyDto? CancellationPolicy = null,
     IReadOnlyList<Guid>? AmenityIds = null,
     IReadOnlyList<Guid>? SafetyDeviceIds = null,
-    IReadOnlyList<Guid>? ConsiderationIds = null) : IRequest<Result<ListingDetailsDto>>;
+    IReadOnlyList<Guid>? ConsiderationIds = null,
+    bool? InstantBookingEnabled = null,
+    Uri? VirtualTourUrl = null) : IRequest<Result<ListingDetailsDto>>;
 
 public sealed class UpdateListingCommandHandler(ListingsDbContext dbContext)
     : IRequestHandler<UpdateListingCommand, Result<ListingDetailsDto>>
@@ -48,6 +51,20 @@ public sealed class UpdateListingCommandHandler(ListingsDbContext dbContext)
         if (listing is null)
         {
             return Result<ListingDetailsDto>.Failure(NotFound);
+        }
+
+        var rentChanged = listing.MonthlyRentCents != request.MonthlyRentCents;
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        if (rentChanged)
+        {
+            var openRecord = await dbContext.ListingPriceHistory
+                .FirstOrDefaultAsync(h => h.ListingId == listing.Id && h.EffectiveTo == null, cancellationToken)
+                .ConfigureAwait(false);
+            if (openRecord is not null)
+            {
+                openRecord.Close(today);
+            }
         }
 
         var stayRange = new StayRange(request.MinStayDays, request.MaxStayDays);
@@ -94,6 +111,22 @@ public sealed class UpdateListingCommandHandler(ListingsDbContext dbContext)
         if (request.ConsiderationIds is not null)
         {
             listing.SetConsiderations(request.ConsiderationIds);
+        }
+
+        if (request.InstantBookingEnabled.HasValue)
+        {
+            listing.SetInstantBooking(request.InstantBookingEnabled.Value);
+        }
+
+        if (request.VirtualTourUrl is not null)
+        {
+            listing.SetVirtualTourUrl(request.VirtualTourUrl);
+        }
+
+        if (rentChanged)
+        {
+            var newRecord = ListingPriceHistory.Create(listing.Id, request.MonthlyRentCents, today);
+            dbContext.ListingPriceHistory.Add(newRecord);
         }
 
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);

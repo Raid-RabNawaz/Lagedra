@@ -1,4 +1,5 @@
 using Lagedra.Infrastructure.Behaviors;
+using Lagedra.Infrastructure.Caching;
 using Lagedra.Infrastructure.Eventing;
 using Lagedra.Infrastructure.External.Antivirus;
 using Lagedra.Infrastructure.External.Email;
@@ -12,6 +13,7 @@ using Lagedra.Infrastructure.RealTime;
 using Lagedra.Infrastructure.Security;
 using Lagedra.Infrastructure.Settings;
 using Lagedra.Infrastructure.Time;
+using Lagedra.SharedKernel.Caching;
 using Lagedra.SharedKernel.Email;
 using Lagedra.SharedKernel.Events;
 using Lagedra.SharedKernel.RealTime;
@@ -82,10 +84,13 @@ public static class InfrastructureServiceRegistration
         // Insurance (stub — replace when MGA partner is confirmed)
         services.AddScoped<IInsuranceApiClient, InsuranceApiClient>();
 
+        // Caching — swap InMemoryCacheService for a distributed impl (e.g. Redis) here
+        services.AddMemoryCache();
+        services.AddSingleton<ICacheService, InMemoryCacheService>();
+
         // Platform Settings (DB-backed, admin-editable)
         services.AddDbContext<PlatformSettingsDbContext>(options =>
             options.UseNpgsql(configuration.GetConnectionString("Default")));
-        services.AddMemoryCache();
         services.AddScoped<IPlatformSettingsService, PlatformSettingsService>();
 
         // SignalR (real-time notifications)

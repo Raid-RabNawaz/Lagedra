@@ -19,7 +19,9 @@ public sealed record CreateListingRequest(
     CancellationPolicyRequest? CancellationPolicy = null,
     IReadOnlyList<Guid>? AmenityIds = null,
     IReadOnlyList<Guid>? SafetyDeviceIds = null,
-    IReadOnlyList<Guid>? ConsiderationIds = null);
+    IReadOnlyList<Guid>? ConsiderationIds = null,
+    bool InstantBookingEnabled = false,
+    Uri? VirtualTourUrl = null);
 
 public sealed record HouseRulesRequest(
     TimeOnly CheckInTime,
