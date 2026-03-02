@@ -16,10 +16,12 @@ public sealed class PackVersion : Entity<Guid>
     private readonly List<EffectiveDateRule> _effectiveDateRules = [];
     private readonly List<FieldGatingRule> _fieldGatingRules = [];
     private readonly List<EvidenceSchedule> _evidenceSchedules = [];
+    private readonly List<DepositCapRule> _depositCapRules = [];
 
     public IReadOnlyList<EffectiveDateRule> EffectiveDateRules => _effectiveDateRules.AsReadOnly();
     public IReadOnlyList<FieldGatingRule> FieldGatingRules => _fieldGatingRules.AsReadOnly();
     public IReadOnlyList<EvidenceSchedule> EvidenceSchedules => _evidenceSchedules.AsReadOnly();
+    public IReadOnlyList<DepositCapRule> DepositCapRules => _depositCapRules.AsReadOnly();
 
     private PackVersion() { }
 
@@ -56,6 +58,19 @@ public sealed class PackVersion : Entity<Guid>
     {
         EnsureDraft();
         _evidenceSchedules.Add(EvidenceSchedule.Create(Id, category, minimumRequirements));
+    }
+
+    public void AddDepositCapRule(
+        string jurisdictionCode,
+        decimal maxMultiplier,
+        string legalReference,
+        string? exceptionCondition = null,
+        decimal? exceptionMultiplier = null)
+    {
+        EnsureDraft();
+        _depositCapRules.Add(DepositCapRule.Create(
+            Id, jurisdictionCode, maxMultiplier, legalReference,
+            exceptionCondition, exceptionMultiplier));
     }
 
     public void RequestApproval()

@@ -57,7 +57,8 @@ public static class JurisdictionPackEndpoints
                 request.EffectiveDate,
                 request.EffectiveDateRules,
                 request.FieldGatingRules,
-                request.EvidenceSchedules), cancellationToken)
+                request.EvidenceSchedules,
+                request.DepositCapRules), cancellationToken)
             .ConfigureAwait(true);
 
         return result.Match(

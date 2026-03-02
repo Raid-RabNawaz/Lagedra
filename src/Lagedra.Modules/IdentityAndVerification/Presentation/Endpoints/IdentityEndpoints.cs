@@ -47,7 +47,7 @@ public static class IdentityEndpoints
         CancellationToken cancellationToken)
     {
         var result = await mediator.Send(
-            new CompleteKycCommand(request.UserId, request.PersonaInquiryId),
+            new CompleteKycCommand(request.UserId, request.ExternalInquiryId),
             cancellationToken)
             .ConfigureAwait(false);
 
@@ -72,4 +72,4 @@ public static class IdentityEndpoints
     }
 }
 
-public sealed record CompleteKycRequest(Guid UserId, string? PersonaInquiryId);
+public sealed record CompleteKycRequest(Guid UserId, string? ExternalInquiryId);

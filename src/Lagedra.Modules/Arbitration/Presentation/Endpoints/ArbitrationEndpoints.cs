@@ -26,6 +26,9 @@ public static class ArbitrationEndpoints
         group.MapPost("/{caseId:guid}/evidence-complete", MarkEvidenceComplete);
         group.MapPost("/{caseId:guid}/assign", AssignArbitrator);
         group.MapPost("/{caseId:guid}/decision", IssueDecision);
+        group.MapPut("/{caseId:guid}/close", CloseCase)
+            .RequireAuthorization("RequireArbitrator");
+        group.MapPost("/{caseId:guid}/appeal", AppealCase);
         group.MapGet("/{caseId:guid}", GetCase);
         group.MapGet("/", ListCasesByStatus);
 
@@ -63,7 +66,7 @@ public static class ArbitrationEndpoints
         CancellationToken ct)
     {
         var result = await mediator.Send(
-            new AttachEvidenceCommand(caseId, request.SlotType, request.SubmittedBy, request.FileReference), ct)
+            new AttachEvidenceCommand(caseId, request.SlotType, request.SubmittedBy, request.EvidenceManifestId), ct)
             .ConfigureAwait(true);
 
         return result.IsSuccess
@@ -135,6 +138,35 @@ public static class ArbitrationEndpoints
         return result.IsSuccess
             ? Results.Ok(result.Value)
             : Results.NotFound(new { error = result.Error.Code, detail = result.Error.Description });
+    }
+
+    private static async Task<IResult> CloseCase(
+        [FromRoute] Guid caseId,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(new CloseCaseCommand(caseId), ct).ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.NoContent()
+            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+    }
+
+    private static async Task<IResult> AppealCase(
+        [FromRoute] Guid caseId,
+        [FromBody] AppealCaseRequest request,
+        HttpContext httpContext,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var userId = GetUserId(httpContext);
+        var result = await mediator.Send(
+            new AppealCaseCommand(caseId, userId, request.Reason), ct)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.NoContent()
+            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
     }
 
     private static async Task<IResult> ListCasesByStatus(

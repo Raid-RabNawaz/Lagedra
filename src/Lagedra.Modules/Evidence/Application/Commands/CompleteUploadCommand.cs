@@ -1,3 +1,4 @@
+using Lagedra.Infrastructure.External.Storage;
 using Lagedra.Modules.Evidence.Domain.Entities;
 using Lagedra.Modules.Evidence.Domain.ValueObjects;
 using Lagedra.Modules.Evidence.Infrastructure.Persistence;
@@ -16,9 +17,12 @@ public sealed record CompleteUploadCommand(
     string FileHashHex) : IRequest<Result>;
 
 public sealed class CompleteUploadCommandHandler(
-    EvidenceDbContext dbContext)
+    EvidenceDbContext dbContext,
+    IObjectStorageService storageService)
     : IRequestHandler<CompleteUploadCommand, Result>
 {
+    private const string EvidenceBucket = "lagedra-evidence";
+
     public async Task<Result> Handle(
         CompleteUploadCommand request,
         CancellationToken cancellationToken)
@@ -34,6 +38,16 @@ public sealed class CompleteUploadCommandHandler(
         {
             return Result.Failure(
                 new Error("Evidence.ManifestNotFound", "Manifest not found."));
+        }
+
+        var exists = await storageService
+            .ObjectExistsAsync(EvidenceBucket, request.StorageKey, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!exists)
+        {
+            return Result.Failure(
+                new Error("Evidence.FileNotUploaded", "The file has not been uploaded to storage."));
         }
 
         var upload = manifest.AddUpload(

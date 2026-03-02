@@ -64,7 +64,7 @@ public static class InquiryEndpoints
         CancellationToken cancellationToken)
     {
         var result = await mediator.Send(
-            new SubmitInquiryQuestionCommand(dealId, request.Category, request.PredefinedQuestionId),
+            new SubmitInquiryQuestionCommand(dealId, request.Category, request.PredefinedQuestionId, request.CustomQuestionText),
             cancellationToken)
             .ConfigureAwait(true);
 

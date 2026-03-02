@@ -1,3 +1,4 @@
+using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Results;
 using Lagedra.TruthSurface.Application.DTOs;
 using Lagedra.TruthSurface.Domain;
@@ -13,12 +14,24 @@ public sealed record CreateSnapshotCommand(
     string CanonicalContent) : IRequest<Result<TruthSurfaceDto>>;
 
 public sealed class CreateSnapshotCommandHandler(
-    TruthSurfaceDbContext dbContext)
+    TruthSurfaceDbContext dbContext,
+    IDealApplicationStatusProvider dealStatusProvider)
     : IRequestHandler<CreateSnapshotCommand, Result<TruthSurfaceDto>>
 {
     public async Task<Result<TruthSurfaceDto>> Handle(CreateSnapshotCommand request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        var isApproved = await dealStatusProvider
+            .IsApprovedAsync(request.DealId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!isApproved)
+        {
+            return Result<TruthSurfaceDto>.Failure(
+                new Error("TruthSurface.DealNotApproved",
+                    "Cannot create a truth surface snapshot for a deal that has not been approved."));
+        }
 
         var snapshot = TruthSnapshot.CreateDraft(
             request.DealId,

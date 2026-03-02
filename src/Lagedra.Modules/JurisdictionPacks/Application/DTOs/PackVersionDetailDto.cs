@@ -13,4 +13,5 @@ public sealed record PackVersionDetailDto(
     Guid? SecondApproverId,
     IReadOnlyList<EffectiveDateRuleDto> EffectiveDateRules,
     IReadOnlyList<FieldGatingRuleDto> FieldGatingRules,
-    IReadOnlyList<EvidenceScheduleDto> EvidenceSchedules);
+    IReadOnlyList<EvidenceScheduleDto> EvidenceSchedules,
+    IReadOnlyList<DepositCapRuleDto> DepositCapRules);

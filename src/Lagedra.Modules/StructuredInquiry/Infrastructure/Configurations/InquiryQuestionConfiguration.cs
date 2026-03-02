@@ -21,7 +21,8 @@ public sealed class InquiryQuestionConfiguration : IEntityTypeConfiguration<Inqu
             .HasMaxLength(30)
             .IsRequired();
 
-        builder.Property(q => q.PredefinedQuestionId).IsRequired();
+        builder.Property(q => q.PredefinedQuestionId);
+        builder.Property(q => q.CustomText).HasMaxLength(500);
 
         builder.HasOne(q => q.Answer)
             .WithOne()

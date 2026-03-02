@@ -1,4 +1,6 @@
 using Lagedra.Infrastructure.Eventing;
+using Lagedra.TruthSurface.Application.EventHandlers;
+using Lagedra.TruthSurface.Domain.Events;
 using Lagedra.TruthSurface.Infrastructure.Jobs;
 using Lagedra.TruthSurface.Infrastructure.Persistence;
 using Lagedra.TruthSurface.Infrastructure.Repositories;
@@ -25,6 +27,10 @@ public static class TruthSurfaceModuleRegistration
 
         services.AddScoped<SnapshotRepository>();
 
+        services.AddDomainEventHandler<TruthSurfaceInitiatedEvent, OnTruthSurfaceInitiatedNotify>();
+        services.AddDomainEventHandler<TruthSurfaceConfirmedEvent, OnTruthSurfaceConfirmedNotify>();
+        services.AddDomainEventHandler<TruthSurfaceSupersededEvent, OnTruthSurfaceSupersededNotify>();
+
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(TruthSurfaceModuleRegistration).Assembly));
 
@@ -35,7 +41,7 @@ public static class TruthSurfaceModuleRegistration
             q.AddTrigger(opts => opts
                 .ForJob(jobKey)
                 .WithIdentity("SnapshotVerification-trigger")
-                .WithCronSchedule("0 0 3 ? * SUN")); // Every Sunday at 3 AM
+                .WithCronSchedule("0 0 3 ? * SUN"));
         });
 
         return services;

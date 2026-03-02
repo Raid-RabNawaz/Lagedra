@@ -4,7 +4,9 @@ using Lagedra.Modules.ActivationAndBilling.Domain.Interfaces;
 using Lagedra.Modules.ActivationAndBilling.Infrastructure.Jobs;
 using Lagedra.Modules.ActivationAndBilling.Infrastructure.Persistence;
 using Lagedra.Modules.ActivationAndBilling.Infrastructure.Repositories;
+using Lagedra.Modules.ActivationAndBilling.Infrastructure.Services;
 using Lagedra.Infrastructure.Eventing;
+using Lagedra.SharedKernel.Integration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -31,6 +33,7 @@ public static class ActivationAndBillingModuleRegistration
         services.AddScoped<BillingAccountRepository>();
         services.AddScoped<InvoiceRepository>();
         services.AddScoped<IDealPaymentConfirmationRepository, DealPaymentConfirmationRepository>();
+        services.AddScoped<IDealApplicationStatusProvider, DealApplicationStatusProvider>();
 
         services.AddDomainEventHandler<TruthSurfaceConfirmedEvent,
             OnTruthSurfaceConfirmedCreatePaymentConfirmationHandler>();

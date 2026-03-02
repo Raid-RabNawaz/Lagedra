@@ -6,28 +6,28 @@ namespace Lagedra.Modules.IdentityAndVerification.Domain.Aggregates;
 public sealed class VerificationCase : AggregateRoot<Guid>
 {
     public Guid UserId { get; private set; }
-    public string? PersonaInquiryId { get; private set; }
+    public string? ExternalInquiryId { get; private set; }
     public VerificationStatus Status { get; private set; }
     public DateTime? CompletedAt { get; private set; }
 
     private VerificationCase() { }
 
-    public static VerificationCase Create(Guid userId, string? personaInquiryId = null)
+    public static VerificationCase Create(Guid userId, string? externalInquiryId = null)
     {
         return new VerificationCase
         {
             Id = Guid.NewGuid(),
             UserId = userId,
-            PersonaInquiryId = personaInquiryId,
+            ExternalInquiryId = externalInquiryId,
             Status = VerificationStatus.Pending,
             CreatedAt = DateTime.UtcNow
         };
     }
 
-    public void AssignInquiry(string personaInquiryId)
+    public void AssignInquiry(string externalInquiryId)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(personaInquiryId);
-        PersonaInquiryId = personaInquiryId;
+        ArgumentException.ThrowIfNullOrWhiteSpace(externalInquiryId);
+        ExternalInquiryId = externalInquiryId;
     }
 
     public void MarkCompleted()

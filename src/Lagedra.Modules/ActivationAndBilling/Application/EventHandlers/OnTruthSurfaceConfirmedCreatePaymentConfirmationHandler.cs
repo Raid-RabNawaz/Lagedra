@@ -1,4 +1,5 @@
 using Lagedra.Modules.ActivationAndBilling.Domain.Aggregates;
+using Lagedra.Modules.ActivationAndBilling.Domain.ValueObjects;
 using Lagedra.Modules.ActivationAndBilling.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Events;
 using Lagedra.SharedKernel.Settings;
@@ -41,17 +42,19 @@ public sealed partial class OnTruthSurfaceConfirmedCreatePaymentConfirmationHand
 
         if (application is not null)
         {
-            var rent = application.FirstMonthRentCents ?? 0;
-            var deposit = application.DepositAmountCents ?? 0;
-            var insurance = application.InsuranceFeeCents ?? 0;
-
             var monthlyFee = await settings.GetLongAsync(PlatformSettingKeys.ProtocolFeeMonthly, 7900, ct).ConfigureAwait(false);
             var pilotDiscount = await settings.GetLongAsync(PlatformSettingKeys.ProtocolFeePilotDiscount, 3900, ct).ConfigureAwait(false);
             var isPilot = await settings.GetBoolAsync(PlatformSettingKeys.ProtocolFeePilotActive, false, ct).ConfigureAwait(false);
             var protocolFee = isPilot ? monthlyFee - pilotDiscount : monthlyFee;
 
-            totalTenantPayment = rent + deposit + insurance;
-            totalHostPlatformPayment = insurance + protocolFee;
+            var financials = DealFinancials.Create(
+                application.FirstMonthRentCents ?? 1,
+                application.DepositAmountCents ?? 0,
+                application.InsuranceFeeCents ?? 0,
+                protocolFee);
+
+            totalTenantPayment = financials.TotalTenantPaymentCents;
+            totalHostPlatformPayment = financials.TotalHostPlatformPaymentCents;
         }
 
         var graceDays = (int)await settings

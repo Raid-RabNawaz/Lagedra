@@ -6,8 +6,10 @@ using Lagedra.Infrastructure.External.Email;
 using Lagedra.Infrastructure.External.Geocoding;
 using Lagedra.Infrastructure.External.Insurance;
 using Lagedra.Infrastructure.External.Payments;
+using Lagedra.Infrastructure.External.Kyc;
 using Lagedra.Infrastructure.External.Persona;
 using Lagedra.Infrastructure.External.Storage;
+using Lagedra.SharedKernel.Integration;
 using Lagedra.Infrastructure.Observability;
 using Lagedra.Infrastructure.RealTime;
 using Lagedra.Infrastructure.Security;
@@ -66,10 +68,19 @@ public static class InfrastructureServiceRegistration
             configuration.GetSection(GoogleMapsSettings.SectionName));
         services.AddHttpClient<IGeocodingService, GoogleMapsGeocodingService>();
 
-        // Persona (KYC + Background Check)
-        services.Configure<PersonaSettings>(
-            configuration.GetSection(PersonaSettings.SectionName));
-        services.AddHttpClient<IPersonaClient, PersonaClient>();
+        // KYC Provider (provider-agnostic)
+        var kycProvider = configuration.GetValue<string>("Kyc:Provider");
+        if (string.Equals(kycProvider, "Persona", StringComparison.OrdinalIgnoreCase))
+        {
+            services.Configure<PersonaSettings>(
+                configuration.GetSection(PersonaSettings.SectionName));
+            services.AddHttpClient<IPersonaClient, PersonaClient>();
+            services.AddScoped<IKycProvider, PersonaKycProvider>();
+        }
+        else
+        {
+            services.AddScoped<IKycProvider, NoOpKycProvider>();
+        }
 
         // MinIO (Object Storage)
         services.Configure<MinioSettings>(

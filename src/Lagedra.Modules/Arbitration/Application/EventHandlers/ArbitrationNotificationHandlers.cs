@@ -5,6 +5,7 @@ using Lagedra.Modules.Notifications.Domain.Enums;
 using Lagedra.SharedKernel.Events;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Lagedra.Modules.Arbitration.Application.EventHandlers;
 
@@ -78,4 +79,56 @@ public sealed class OnEvidenceCompleteNotify(ArbitrationDbContext db, IMediator 
             new() { ["caseId"] = e.CaseId.ToString(), ["decisionDueAt"] = e.DecisionDueAt.ToString("o") },
             Channels.InAppOnly, e.CaseId, "ArbitrationCase"), ct).ConfigureAwait(false);
     }
+}
+
+public sealed class OnCaseClosedNotify(ArbitrationDbContext db, IMediator m)
+    : IDomainEventHandler<CaseClosedEvent>
+{
+    public async Task Handle(CaseClosedEvent e, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        var arbitrationCase = await db.ArbitrationCases.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == e.CaseId, ct).ConfigureAwait(false);
+        if (arbitrationCase is null) return;
+
+        await m.Send(new NotifyUserCommand(
+            arbitrationCase.FiledByUserId, "arbitration_case_closed",
+            "Arbitration Case Closed",
+            "Your arbitration case has been formally closed.",
+            new() { ["caseId"] = e.CaseId.ToString(), ["dealId"] = e.DealId.ToString() },
+            Channels.EmailAndInApp, e.CaseId, "ArbitrationCase"), ct).ConfigureAwait(false);
+    }
+}
+
+public sealed class OnCaseAppealedNotify(ArbitrationDbContext db, IMediator m)
+    : IDomainEventHandler<CaseAppealedEvent>
+{
+    public async Task Handle(CaseAppealedEvent e, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        var arbitrationCase = await db.ArbitrationCases.AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == e.CaseId, ct).ConfigureAwait(false);
+        if (arbitrationCase is null) return;
+
+        await m.Send(new NotifyUserCommand(
+            arbitrationCase.FiledByUserId, "arbitration_case_appealed",
+            "Arbitration Case Appealed",
+            $"An appeal has been filed for your arbitration case. Reason: {e.Reason}",
+            new() { ["caseId"] = e.CaseId.ToString(), ["dealId"] = e.DealId.ToString(), ["reason"] = e.Reason },
+            Channels.EmailAndInApp, e.CaseId, "ArbitrationCase"), ct).ConfigureAwait(false);
+    }
+}
+
+public sealed partial class OnBacklogEscalationHandler(ILogger<OnBacklogEscalationHandler> logger)
+    : IDomainEventHandler<ArbitrationBacklogEscalationEvent>
+{
+    public Task Handle(ArbitrationBacklogEscalationEvent e, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        LogBacklogEscalation(logger, e.OverdueCaseCount, e.CheckedAt);
+        return Task.CompletedTask;
+    }
+
+    [LoggerMessage(Level = LogLevel.Critical, Message = "ARBITRATION BACKLOG ESCALATION: {OverdueCaseCount} overdue cases detected at {CheckedAt}")]
+    private static partial void LogBacklogEscalation(ILogger logger, int overdueCaseCount, DateTime checkedAt);
 }

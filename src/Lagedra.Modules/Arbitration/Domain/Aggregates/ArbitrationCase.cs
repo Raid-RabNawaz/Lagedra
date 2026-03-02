@@ -53,20 +53,20 @@ public sealed class ArbitrationCase : AggregateRoot<Guid>
         return arbitrationCase;
     }
 
-    public void AttachEvidence(string slotType, Guid submittedBy, string fileReference)
+    public void AttachEvidence(string slotType, Guid submittedBy, Guid evidenceManifestId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(slotType);
-        ArgumentException.ThrowIfNullOrWhiteSpace(fileReference);
 
-        if (Status is not (ArbitrationStatus.Filed or ArbitrationStatus.EvidencePending))
+        if (Status is not (ArbitrationStatus.Filed or ArbitrationStatus.EvidencePending
+                        or ArbitrationStatus.Appealed))
         {
             throw new InvalidOperationException($"Cannot attach evidence in status '{Status}'.");
         }
 
-        var slot = new EvidenceSlot(Id, slotType, submittedBy, fileReference, DateTime.UtcNow);
+        var slot = new EvidenceSlot(Id, slotType, submittedBy, evidenceManifestId, DateTime.UtcNow);
         _evidenceSlots.Add(slot);
 
-        if (Status == ArbitrationStatus.Filed)
+        if (Status is ArbitrationStatus.Filed or ArbitrationStatus.Appealed)
         {
             Status = ArbitrationStatus.EvidencePending;
         }
@@ -127,6 +127,36 @@ public sealed class ArbitrationCase : AggregateRoot<Guid>
         Status = ArbitrationStatus.Decided;
 
         AddDomainEvent(new DecisionIssuedEvent(Id, DealId, Tier, now));
+    }
+
+    public void CloseCase()
+    {
+        if (Status != ArbitrationStatus.Decided)
+        {
+            throw new InvalidOperationException($"Cannot close case in status '{Status}'. Only decided cases can be closed.");
+        }
+
+        var now = DateTime.UtcNow;
+        Status = ArbitrationStatus.Closed;
+
+        AddDomainEvent(new CaseClosedEvent(Id, DealId, now));
+    }
+
+    public void Appeal(Guid appealedByUserId, string reason)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+
+        if (Status != ArbitrationStatus.Decided)
+        {
+            throw new InvalidOperationException($"Cannot appeal case in status '{Status}'. Only decided cases can be appealed.");
+        }
+
+        var now = DateTime.UtcNow;
+        Status = ArbitrationStatus.Appealed;
+        EvidenceCompleteAt = null;
+        DecisionDueAt = null;
+
+        AddDomainEvent(new CaseAppealedEvent(Id, DealId, appealedByUserId, reason, now));
     }
 
     internal void RaiseBacklogEscalation(int overdueCaseCount) =>

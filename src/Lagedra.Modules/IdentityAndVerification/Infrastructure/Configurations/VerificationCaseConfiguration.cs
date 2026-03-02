@@ -16,7 +16,9 @@ public sealed class VerificationCaseConfiguration : IEntityTypeConfiguration<Ver
         builder.Property(c => c.UserId).IsRequired();
         builder.HasIndex(c => c.UserId);
 
-        builder.Property(c => c.PersonaInquiryId).HasMaxLength(200);
+        builder.Property(c => c.ExternalInquiryId)
+            .HasColumnName("PersonaInquiryId")
+            .HasMaxLength(200);
 
         builder.Property(c => c.Status)
             .HasConversion<string>()

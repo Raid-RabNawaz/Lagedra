@@ -84,6 +84,8 @@ public sealed class DamageClaim : AggregateRoot<Guid>
         Status = DamageClaimStatus.Approved;
         ResolvedAt = DateTime.UtcNow;
         ResolutionNotes = notes;
+
+        AddDomainEvent(new DamageClaimApprovedEvent(Id, DealId, TenantUserId, approvedAmountCents));
     }
 
     public void PartiallyApprove(long approvedAmountCents, string? notes)
@@ -101,6 +103,8 @@ public sealed class DamageClaim : AggregateRoot<Guid>
         Status = DamageClaimStatus.PartiallyApproved;
         ResolvedAt = DateTime.UtcNow;
         ResolutionNotes = notes;
+
+        AddDomainEvent(new DamageClaimApprovedEvent(Id, DealId, TenantUserId, approvedAmountCents));
     }
 
     public void Reject(string? notes)
@@ -116,6 +120,8 @@ public sealed class DamageClaim : AggregateRoot<Guid>
         Status = DamageClaimStatus.Rejected;
         ResolvedAt = DateTime.UtcNow;
         ResolutionNotes = notes;
+
+        AddDomainEvent(new DamageClaimRejectedEvent(Id, DealId, TenantUserId));
     }
 
     public void MarkUnderReview()

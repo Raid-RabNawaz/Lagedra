@@ -1,3 +1,4 @@
+using Lagedra.Infrastructure.External.Geocoding;
 using Lagedra.Modules.ListingAndLocation.Application.DTOs;
 using Lagedra.Modules.ListingAndLocation.Domain.Aggregates;
 using Lagedra.Modules.ListingAndLocation.Domain.Entities;
@@ -29,9 +30,12 @@ public sealed record CreateListingCommand(
     IReadOnlyList<Guid>? SafetyDeviceIds = null,
     IReadOnlyList<Guid>? ConsiderationIds = null,
     bool InstantBookingEnabled = false,
-    Uri? VirtualTourUrl = null) : IRequest<Result<ListingDetailsDto>>;
+    Uri? VirtualTourUrl = null,
+    string? ApproxAddress = null) : IRequest<Result<ListingDetailsDto>>;
 
-public sealed class CreateListingCommandHandler(ListingsDbContext dbContext)
+public sealed class CreateListingCommandHandler(
+    ListingsDbContext dbContext,
+    IGeocodingService geocodingService)
     : IRequestHandler<CreateListingCommand, Result<ListingDetailsDto>>
 {
     public async Task<Result<ListingDetailsDto>> Handle(
@@ -54,6 +58,18 @@ public sealed class CreateListingCommandHandler(ListingsDbContext dbContext)
             stayRange,
             request.MaxDepositCents,
             request.SquareFootage);
+
+        if (!string.IsNullOrWhiteSpace(request.ApproxAddress))
+        {
+            var geocoded = await geocodingService
+                .GeocodeAddressAsync(request.ApproxAddress, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (geocoded is not null)
+            {
+                listing.SetApproxLocation(new GeoPoint(geocoded.Latitude, geocoded.Longitude));
+            }
+        }
 
         if (request.HouseRules is { } hr)
         {

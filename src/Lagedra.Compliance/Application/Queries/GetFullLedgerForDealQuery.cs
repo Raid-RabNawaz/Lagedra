@@ -31,14 +31,15 @@ public sealed class GetFullLedgerForDealQueryHandler(ComplianceDbContext dbConte
             .Where(v => v.DealId == request.DealId)
             .OrderByDescending(v => v.DetectedAt)
             .Select(v => new ViolationDto(
-                v.Id, v.DealId, v.ReportedByUserId, v.Category, v.Status,
+                v.Id, v.DealId, v.ReportedByUserId, v.TargetUserId, v.Category, v.Status,
                 v.Description, v.EvidenceReference, v.DetectedAt, v.ResolvedAt))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        // Ledger entries for users involved in this deal — requires a join through violations
-        // For now, collect the distinct user IDs from the deal's violations
-        var userIds = violations.Select(v => v.ReportedByUserId).Distinct().ToList();
+        var userIds = violations
+            .SelectMany(v => new[] { v.ReportedByUserId, v.TargetUserId })
+            .Distinct()
+            .ToList();
 
         var ledgerEntries = await dbContext.TrustLedgerEntries
             .AsNoTracking()

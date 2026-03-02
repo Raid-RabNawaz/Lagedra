@@ -2,6 +2,8 @@ using Lagedra.Infrastructure.Eventing;
 using Lagedra.Modules.Evidence.Infrastructure.Jobs;
 using Lagedra.Modules.Evidence.Infrastructure.Persistence;
 using Lagedra.Modules.Evidence.Infrastructure.Repositories;
+using Lagedra.Modules.Evidence.Infrastructure.Services;
+using Lagedra.SharedKernel.Integration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,6 +26,7 @@ public static class EvidenceModuleRegistration
         services.AddOutboxContext<EvidenceDbContext>();
 
         services.AddScoped<EvidenceManifestRepository>();
+        services.AddScoped<IEvidenceManifestProvider, EvidenceManifestProvider>();
 
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(EvidenceModuleRegistration).Assembly));

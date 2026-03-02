@@ -49,7 +49,7 @@ public sealed class CancelBookingCommandHandler(
         var refund = CancellationRefundCalculator.Calculate(
             application.RequestedCheckIn,
             today,
-            application.FirstMonthRentCents ?? 0 + (application.DepositAmountCents ?? 0),
+            (application.FirstMonthRentCents ?? 0) + (application.DepositAmountCents ?? 0),
             application.InsuranceFeeCents ?? 0,
             request.FreeCancellationDays,
             request.PartialRefundPercent,

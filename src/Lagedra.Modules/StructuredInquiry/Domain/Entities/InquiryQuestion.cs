@@ -7,7 +7,8 @@ public sealed class InquiryQuestion : Entity<Guid>
 {
     public Guid SessionId { get; private set; }
     public InquiryCategory Category { get; private set; }
-    public Guid PredefinedQuestionId { get; private set; }
+    public Guid? PredefinedQuestionId { get; private set; }
+    public string? CustomText { get; private set; }
     public DateTime SubmittedAt { get; private set; }
 
     public InquiryAnswer? Answer { get; private set; }
@@ -17,14 +18,21 @@ public sealed class InquiryQuestion : Entity<Guid>
     internal static InquiryQuestion Create(
         Guid sessionId,
         InquiryCategory category,
-        Guid predefinedQuestionId)
+        Guid? predefinedQuestionId,
+        string? customText = null)
     {
+        if (predefinedQuestionId is null && string.IsNullOrWhiteSpace(customText))
+        {
+            throw new ArgumentException("Either a predefined question or custom text must be provided.");
+        }
+
         return new InquiryQuestion
         {
             Id = Guid.NewGuid(),
             SessionId = sessionId,
             Category = category,
             PredefinedQuestionId = predefinedQuestionId,
+            CustomText = customText?.Length > 500 ? customText[..500] : customText,
             SubmittedAt = DateTime.UtcNow
         };
     }

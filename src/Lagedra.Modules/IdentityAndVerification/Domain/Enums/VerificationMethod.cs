@@ -4,5 +4,6 @@ public enum VerificationMethod
 {
     OAuth,
     DomainEmail,
-    PartnerAPI
+    PartnerAPI,
+    BackgroundCheck
 }

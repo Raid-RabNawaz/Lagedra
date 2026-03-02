@@ -13,11 +13,15 @@ public sealed record UpdatePackDraftCommand(
     DateTime? EffectiveDate,
     IReadOnlyList<EffectiveDateRuleInput>? EffectiveDateRules,
     IReadOnlyList<FieldGatingRuleInput>? FieldGatingRules,
-    IReadOnlyList<EvidenceScheduleInput>? EvidenceSchedules) : IRequest<Result<PackVersionDetailDto>>;
+    IReadOnlyList<EvidenceScheduleInput>? EvidenceSchedules,
+    IReadOnlyList<DepositCapRuleInput>? DepositCapRules) : IRequest<Result<PackVersionDetailDto>>;
 
 public sealed record EffectiveDateRuleInput(string FieldName, DateTime EffectiveDate);
 public sealed record FieldGatingRuleInput(string FieldName, GatingType GatingType, string Value, string? Condition);
 public sealed record EvidenceScheduleInput(string Category, string MinimumRequirements);
+public sealed record DepositCapRuleInput(
+    string JurisdictionCode, decimal MaxMultiplier, string LegalReference,
+    string? ExceptionCondition = null, decimal? ExceptionMultiplier = null);
 
 public sealed class UpdatePackDraftCommandValidator : AbstractValidator<UpdatePackDraftCommand>
 {
@@ -80,6 +84,16 @@ public sealed class UpdatePackDraftCommandHandler(JurisdictionPackRepository rep
             }
         }
 
+        if (request.DepositCapRules is not null)
+        {
+            foreach (var rule in request.DepositCapRules)
+            {
+                version.AddDepositCapRule(
+                    rule.JurisdictionCode, rule.MaxMultiplier, rule.LegalReference,
+                    rule.ExceptionCondition, rule.ExceptionMultiplier);
+            }
+        }
+
         repository.Update(pack);
         await repository.UnitOfWork.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
@@ -91,5 +105,6 @@ public sealed class UpdatePackDraftCommandHandler(JurisdictionPackRepository rep
             v.EffectiveDate, v.ApprovedAt, v.ApprovedBy, v.SecondApproverId,
             v.EffectiveDateRules.Select(r => new EffectiveDateRuleDto(r.Id, r.FieldName, r.EffectiveDate)).ToList(),
             v.FieldGatingRules.Select(r => new FieldGatingRuleDto(r.Id, r.FieldName, r.GatingType, r.Value, r.Condition)).ToList(),
-            v.EvidenceSchedules.Select(r => new EvidenceScheduleDto(r.Id, r.Category, r.MinimumRequirements)).ToList());
+            v.EvidenceSchedules.Select(r => new EvidenceScheduleDto(r.Id, r.Category, r.MinimumRequirements)).ToList(),
+            v.DepositCapRules.Select(r => new DepositCapRuleDto(r.Id, r.JurisdictionCode, r.MaxMultiplier, r.ExceptionCondition, r.ExceptionMultiplier, r.LegalReference)).ToList());
 }

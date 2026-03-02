@@ -66,6 +66,8 @@ public sealed class TruthSnapshot : AggregateRoot<Guid>
         }
 
         Status = TruthSurfaceStatus.PendingBothConfirmations;
+
+        AddDomainEvent(new TruthSurfaceInitiatedEvent(Id, DealId));
     }
 
     public void ConfirmByLandlord()

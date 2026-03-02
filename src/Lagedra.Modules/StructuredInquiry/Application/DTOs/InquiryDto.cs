@@ -13,10 +13,11 @@ public sealed record InquiryDto(
 
 public sealed record InquiryQuestionDto(
     Guid QuestionId,
-    Guid PredefinedQuestionId,
+    Guid? PredefinedQuestionId,
     InquiryCategory Category,
     DateTime SubmittedAt,
-    InquiryAnswerDto? Answer);
+    InquiryAnswerDto? Answer,
+    string? CustomText = null);
 
 public sealed record InquiryAnswerDto(
     Guid AnswerId,

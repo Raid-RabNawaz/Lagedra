@@ -16,7 +16,9 @@ public sealed class BackgroundCheckReportConfiguration : IEntityTypeConfiguratio
         builder.Property(r => r.UserId).IsRequired();
         builder.HasIndex(r => r.UserId);
 
-        builder.Property(r => r.PersonaReportId).HasMaxLength(200);
+        builder.Property(r => r.ExternalReportId)
+            .HasColumnName("PersonaReportId")
+            .HasMaxLength(200);
 
         builder.Property(r => r.Result)
             .HasConversion<string>()

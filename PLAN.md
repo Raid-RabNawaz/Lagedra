@@ -830,10 +830,10 @@
 - [x] `Domain/Events/VerificationClassChangedEvent.cs`
 
 #### Application
-- [x] `Application/Commands/StartKycCommand.cs` + handler — calls `IPersonaClient.CreateInquiry`
-- [x] `Application/Commands/CompleteKycCommand.cs` + handler — processes Persona webhook; updates status
-- [x] `Application/Commands/SubmitBackgroundCheckConsentCommand.cs` + handler — FCRA consent flow; calls Persona background check API
-- [x] `Application/Commands/IngestBackgroundCheckResultCommand.cs` + handler — Persona webhook ingestion
+- [x] `Application/Commands/StartKycCommand.cs` + handler — calls `IKycProvider.CreateInquiryAsync` (provider-agnostic)
+- [x] `Application/Commands/CompleteKycCommand.cs` + handler — processes KYC webhook via `IKycProvider`; updates status
+- [x] `Application/Commands/SubmitBackgroundCheckConsentCommand.cs` + handler — FCRA consent flow; calls `IKycProvider.InitiateBackgroundCheckAsync`
+- [x] `Application/Commands/IngestBackgroundCheckResultCommand.cs` + handler — KYC provider webhook ingestion
 - [x] `Application/Commands/VerifyInstitutionAffiliationCommand.cs` + handler — OAuth/domain-email gating; unverified claims discarded + flagged
 - [x] `Application/Commands/CreateFraudFlagCommand.cs` + handler
 - [x] `Application/Commands/SaveHostPaymentDetailsCommand.cs` + handler — encrypts payment info via `IEncryptionService.Encrypt()`; upserts `HostPaymentDetails`
@@ -845,7 +845,7 @@
 #### Presentation
 - [x] `Presentation/Endpoints/IdentityEndpoints.cs`
 - [x] `Presentation/Endpoints/VerificationEndpoints.cs`
-- [x] `Presentation/Endpoints/PersonaWebhookEndpoints.cs`
+- [x] `Presentation/Endpoints/KycWebhookEndpoints.cs` (renamed from PersonaWebhookEndpoints — provider-agnostic)
 - [x] `Presentation/Endpoints/HostPaymentEndpoints.cs` — `MapHostPaymentEndpoints()`:
   - `PUT /v1/hosts/payment-details` — host saves/updates their payment details (encrypted at rest)
   - `GET /v1/hosts/payment-details` — host views their own (decrypted) payment details
@@ -863,7 +863,7 @@
 - [x] `Infrastructure/Configurations/VerificationCaseConfiguration.cs`
 - [x] `Infrastructure/Configurations/HostPaymentDetailsConfiguration.cs` — table `host_payment_details` in schema `identity`; `HostUserId` unique index
 - [x] `Infrastructure/Services/HostPaymentDetailsProvider.cs` — implements `IHostPaymentDetailsProvider` (from SharedKernel); fetches `HostPaymentDetails` by userId, decrypts via `IEncryptionService`, returns `HostPaymentDetailsDto`
-- [x] `Infrastructure/Handlers/PersonaWebhookHandler.cs` — validates Persona HMAC signature; dispatches complete/fail commands
+- [x] `Infrastructure/Handlers/KycWebhookHandler.cs` — validates provider webhook signature (HMAC); dispatches complete/fail commands (provider-agnostic)
 - [x] `Infrastructure/Jobs/FraudFlagSlaMonitorJob.cs` — every 15 min: escalate unresolved High-severity flags past 24h
 - [x] EF Core migrations (identity_profiles, verification_cases, background_check_reports, affiliation_verifications)
 - [x] EF Core migration: `AddHostPaymentDetails` — adds `host_payment_details` table
@@ -1633,7 +1633,7 @@
 
 ### 5.9 JurisdictionPacks
 
-> Dual-control approval. Version-locked to each active deal. California / LA is the v1 jurisdiction.
+> Dual-control approval. Version-locked to each active deal. Each country or state gets its own jurisdiction pack encoding local rental laws (deposit caps, notice periods, evidence schedules, field gating rules). California / LA is the v1 jurisdiction; the module is designed for multi-jurisdiction expansion.
 
 #### Project & References
 - [x] `JurisdictionPacks.csproj`
@@ -2910,7 +2910,201 @@
 
 ---
 
+## Known Gaps & Fixes (Audit 2026-02-28)
+
+> Comprehensive module audit identified the following issues. Items are ordered by severity.
+> Fix each item, mark `[x]`, and re-run `dotnet build` after each batch.
+
+### GAP-1: Compliance Module — Endpoints, Events & User Association
+
+> The Compliance module has no API endpoints, fires no domain events, and cannot associate violations with individual users.
+
+- [x] Add `TargetUserId` (Guid) to `Violation` entity — the user the violation is about (distinct from `ReportedByUserId`)
+- [ ] EF Core migration: `AddTargetUserIdToViolation`
+- [x] Add domain events: `ViolationCreatedEvent`, `ViolationResolvedEvent`, `ViolationEscalatedEvent` — fire from `Violation.Record()`, `.Resolve()`, `.Escalate()` respectively
+- [x] Promote `Violation` from `Entity<Guid>` to `AggregateRoot<Guid>` — needed for domain events
+- [x] Create `Presentation/Endpoints/ComplianceEndpoints.cs`:
+  - `POST /v1/compliance/violations` — record a violation (RequireLandlord)
+  - `GET /v1/compliance/violations?dealId={guid}` — list violations for a deal
+  - `PUT /v1/compliance/violations/{id}/resolve` — resolve violation (RequirePlatformAdmin)
+  - `PUT /v1/compliance/violations/{id}/dismiss` — dismiss violation (RequirePlatformAdmin)
+  - `PUT /v1/compliance/violations/{id}/escalate` — escalate violation (RequireLandlord)
+  - `GET /v1/compliance/ledger/user/{userId}` — public trust ledger for a user
+  - `GET /v1/compliance/ledger/deal/{dealId}` — full ledger for a deal
+- [x] Create `Presentation/Contracts/RecordViolationRequest.cs`
+- [x] Create `Application/Commands/ResolveViolationCommand.cs` + handler
+- [x] Create `Application/Commands/DismissViolationCommand.cs` + handler
+- [x] Create `Application/Commands/EscalateViolationCommand.cs` + handler
+- [x] Create `Application/Queries/GetViolationsForDealQuery.cs` + handler
+- [x] Update `RecordViolationCommand` — add `TargetUserId` parameter
+- [x] Update `ViolationDto` — add `TargetUserId` field
+- [x] Update `ViolationConfiguration` — add `TargetUserId` column + index
+- [x] Update `GetFullLedgerForDealQuery` — include both `ReportedByUserId` and `TargetUserId` for ledger entries
+- [x] Update `UserViolationCountProvider` — real implementation: count violations by `TargetUserId` where status is `Open` or `Escalated`
+- [x] Register `ComplianceEndpoints` in `Program.cs` (`app.MapComplianceEndpoints()`)
+- [ ] Update `ComplianceModuleRegistration` — register event handlers if any cross-module reactions needed
+- [ ] Add `ComplianceSignalProcessor` — background job or handler to process unprocessed `ComplianceSignal` records
+
+### GAP-2: ActivationAndBilling — CancelBookingCommand Bug
+
+> Operator precedence bug: `??` has lower precedence than `+`, so `a ?? 0 + b` evaluates as `a ?? (0 + b)`.
+
+- [x] Fix `CancelBookingCommand.cs:52` — change `application.FirstMonthRentCents ?? 0 + (application.DepositAmountCents ?? 0)` to `(application.FirstMonthRentCents ?? 0) + (application.DepositAmountCents ?? 0)`
+
+### GAP-3: ActivationAndBilling — Damage Claim Resolution
+
+> `DamageClaim` aggregate has `Approve()`, `PartiallyApprove()`, `Reject()`, `MarkUnderReview()` methods but no commands or endpoints to invoke them.
+
+- [x] `Application/Commands/ApproveDamageClaimCommand.cs` + handler
+- [x] `Application/Commands/RejectDamageClaimCommand.cs` + handler
+- [x] `Application/Commands/PartiallyApproveDamageClaimCommand.cs` + handler
+- [x] Create `DamageClaimEndpoints.cs` + `DamageClaimResolutionRequest.cs`:
+  - `PUT /v1/deals/{dealId}/damage-claims/{claimId}/approve` (RequirePlatformAdmin)
+  - `PUT /v1/deals/{dealId}/damage-claims/{claimId}/reject` (RequirePlatformAdmin)
+  - `PUT /v1/deals/{dealId}/damage-claims/{claimId}/partial-approve` (RequirePlatformAdmin)
+- [x] Register `DamageClaimEndpoints` in `Program.cs` (`app.MapDamageClaimEndpoints()`)
+- [x] Domain events: `DamageClaimApprovedEvent`, `DamageClaimRejectedEvent` — fire from aggregate methods
+
+### GAP-4: ActivationAndBilling — DealFinancials Not Used
+
+> `DealFinancials` value object exists but is never instantiated. Financial calculations are done inline.
+
+- [x] Refactor `OnTruthSurfaceConfirmedCreatePaymentConfirmationHandler` to use `DealFinancials.Create()` for total calculations
+- [ ] Refactor `DealPaymentConfirmation` to store or accept `DealFinancials` instead of individual cent fields
+
+### GAP-5: ActivationAndBilling — Stripe Integration Stubbed
+
+> `Stripe.net 47.3.0` is referenced but no actual Stripe API calls exist. `CreateStripeCustomerCommand` only stores an ID.
+
+- [x] `Infrastructure/External/Payments/IStripeService.cs` — already exists: `GetOrCreateCustomerAsync`, `CreateSubscriptionAsync`, `CancelSubscriptionAsync`, `CreateProratedInvoiceAsync`, `HandleWebhookAsync`
+- [x] `Infrastructure/External/Payments/StripeService.cs` — already exists: full Stripe.net SDK implementation
+- [x] Wire `IStripeService` into `StopBillingCommand` — cancels Stripe subscription before closing billing account
+- [x] Create `Application/Commands/ProcessStripeWebhookCommand.cs` + handler — processes `payment_intent.succeeded`, `payment_intent.payment_failed`, `customer.subscription.deleted`
+- [x] Create `Presentation/Endpoints/StripeWebhookEndpoints.cs` — `POST /v1/webhooks/stripe` (AllowAnonymous, reads raw body + Stripe-Signature header)
+- [x] Register `StripeWebhookEndpoints` in `Program.cs` (`app.MapStripeWebhookEndpoints()`)
+
+### GAP-6: TruthSurface — Deal Approval Gating
+
+> `CreateSnapshotCommand` accepts any `DealId` without verifying the application was approved.
+
+- [x] Create `SharedKernel/Integration/IDealApplicationStatusProvider.cs` — cross-module interface with `IsApprovedAsync` and `GetParticipantsAsync`
+- [x] Create `DealApplicationStatusProvider` in ActivationAndBilling — implements `IDealApplicationStatusProvider`
+- [x] Register `IDealApplicationStatusProvider` in `ActivationAndBillingModuleRegistration`
+- [x] Add validation in `CreateSnapshotCommandHandler`: inject `IDealApplicationStatusProvider`, verify deal is approved
+- [x] Return `Result.Failure("TruthSurface.DealNotApproved")` if deal not approved
+
+### GAP-7: TruthSurface — Missing Event Handler Registrations
+
+> `TruthSurfaceConfirmedEvent` and `TruthSurfaceSupersededEvent` fire but no handlers are registered in `TruthSurfaceModuleRegistration`.
+
+- [x] Add `TruthSurfaceInitiatedEvent` — fire from `TruthSnapshot.SubmitForConfirmation()`
+- [x] Add Notifications project reference to `Lagedra.TruthSurface.csproj`
+- [x] Create `TruthSurfaceNotificationHandlers.cs` — `OnTruthSurfaceInitiatedNotify`, `OnTruthSurfaceConfirmedNotify`, `OnTruthSurfaceSupersededNotify`
+- [x] Register all three event handlers in `TruthSurfaceModuleRegistration` via `AddDomainEventHandler`
+
+### GAP-8: Evidence — MinIO Upload Returns Fake URL
+
+> `RequestUploadUrlCommand` returns `"/storage/upload/{storageKey}"` instead of a real presigned URL.
+
+- [x] Inject `IObjectStorageService` into `RequestUploadUrlCommandHandler`
+- [x] Call `EnsureBucketExistsAsync` + `GeneratePresignedUploadUrlAsync()` to return a real MinIO presigned URL
+- [x] Inject `IObjectStorageService` into `CompleteUploadCommandHandler`, validate file exists via `ObjectExistsAsync`
+
+### GAP-9: Evidence — ClamAV Scanning Placeholder
+
+> `MalwareScanPollingJob` marks all scans as clean without scanning.
+
+- [x] Inject `IAntivirusService` and `IObjectStorageService` into `MalwareScanPollingJob`
+- [x] Add `GetObjectStreamAsync` and `MoveObjectAsync` to `IObjectStorageService` + `MinioStorageService`
+- [x] Download each pending upload from MinIO, scan via `IAntivirusService.ScanAsync()`
+- [x] Handle infected files: move to `lagedra-quarantine` bucket, mark scan as infected
+- [x] Resolve type-alias conflicts between `Lagedra.Infrastructure.External.Antivirus.ScanStatus` and `Evidence.Domain.Enums.ScanStatus`
+
+### GAP-10: IdentityAndVerification — Provider-Agnostic KYC
+
+> Current code is tightly coupled to Persona. Refactor to a provider-agnostic design so any KYC/identity verification provider can be plugged in.
+
+- [x] Create `SharedKernel/Integration/IKycProvider.cs` — provider-agnostic interface with `CreateInquiryAsync`, `GetInquiryStatusAsync`, `InitiateBackgroundCheckAsync`, `HandleWebhookAsync`
+- [x] Create provider-neutral DTOs: `KycInquiryRequest`, `KycInquiryResult`, `KycInquiryStatusResult`, `KycInquiryStatus`, `KycBackgroundCheckRequest`, `KycBackgroundCheckResult`, `KycBackgroundCheckOutcome`
+- [x] Create `Infrastructure/External/Kyc/PersonaKycProvider.cs` — wraps `IPersonaClient` to implement `IKycProvider`
+- [x] Create `Infrastructure/External/Kyc/NoOpKycProvider.cs` — auto-approves for development/testing
+- [x] Update `StartKycCommand` handler — inject `IKycProvider` + `IUserEmailResolver`, call `CreateInquiryAsync()`, pass `ExternalInquiryId` to `VerificationCase`
+- [x] Update `CompleteKycCommand` handler — inject `IKycProvider`, call `GetInquiryStatusAsync()` to verify inquiry is completed before marking profile complete
+- [x] Rename `CompleteKycCommand.PersonaInquiryId` → `ExternalInquiryId`, update endpoint + request DTO
+- [x] Rename `IngestBackgroundCheckResultCommand.PersonaReportId` → `ExternalReportId`
+- [x] Rename `VerificationCase.PersonaInquiryId` → `ExternalInquiryId`, `BackgroundCheckReport.PersonaReportId` → `ExternalReportId`
+- [x] Update EF configurations — map renamed properties to existing column names via `.HasColumnName()` (no migration needed)
+- [x] Register in `InfrastructureServiceRegistration.cs` — conditionally: `PersonaKycProvider` when `Kyc:Provider == "Persona"`, else `NoOpKycProvider`
+- [x] Create `KycWebhookEndpoints.cs` — route `/v1/webhooks/kyc` to `IKycProvider.HandleWebhookAsync()`; register in `Program.cs`
+- [x] Update `VerifyInstitutionAffiliationCommand` — inject `IKycProvider`, call `InitiateBackgroundCheckAsync` when method is `BackgroundCheck`
+- [x] Add `BackgroundCheck` to `VerificationMethod` enum
+
+### GAP-11: Auth — UserRoleChangedEvent Not Handled
+
+> `UpdateRoleCommand` publishes `UserRoleChangedEvent` but no handler is registered.
+
+- [x] Create `OnUserRoleChangedNotify` handler in `AuthNotificationHandlers.cs` — sends Email + InApp notification with old/new role
+- [x] Register `AddDomainEventHandler<UserRoleChangedEvent, OnUserRoleChangedNotify>()` in `AuthModuleRegistration.cs`
+
+### GAP-12: Arbitration — Missing Close & Appeal Commands
+
+> `ArbitrationStatus` enum includes `Appealed` but no command transitions to it. No explicit case closure command exists.
+
+- [x] Add `Closed` to `ArbitrationStatus` enum
+- [x] Add `CloseCase()` method to `ArbitrationCase` — transitions `Decided` → `Closed`, fires `CaseClosedEvent`
+- [x] Add `Appeal(Guid appealedByUserId, string reason)` method — transitions `Decided` → `Appealed`, resets evidence window, fires `CaseAppealedEvent`
+- [x] Allow `AttachEvidence` in `Appealed` status (evidence resubmission on appeal)
+- [x] Create `CaseClosedEvent.cs` and `CaseAppealedEvent.cs` domain events
+- [x] Create `CloseCaseCommand.cs` + handler
+- [x] Create `AppealCaseCommand.cs` + handler
+- [x] Create `AppealCaseRequest.cs` contract
+- [x] Add `PUT /{caseId}/close` (RequireArbitrator) and `POST /{caseId}/appeal` endpoints in `ArbitrationEndpoints.cs`
+- [x] Create `OnCaseClosedNotify` and `OnCaseAppealedNotify` notification handlers
+- [x] Create `OnBacklogEscalationHandler` — logs at `Critical` level for ops alerting
+- [x] Register all three new event handlers in `ArbitrationModuleRegistration.cs`
+
+### GAP-13: Arbitration — Evidence Module Not Integrated
+
+> `AttachEvidenceCommand` accepts raw `FileReference` string instead of using `EvidenceManifest` from the Evidence module.
+
+- [x] Create `SharedKernel/Integration/IEvidenceManifestProvider.cs` — cross-module interface with `ExistsAndIsSealedAsync`
+- [x] Create `EvidenceManifestProvider` in Evidence module — implements `IEvidenceManifestProvider`, checks manifest status
+- [x] Register `IEvidenceManifestProvider` in `EvidenceModuleRegistration.cs`
+- [x] Update `EvidenceSlot` entity — replace `FileReference` (string) with `EvidenceManifestId` (Guid)
+- [x] Update `EvidenceSlotConfiguration.cs` — configure `EvidenceManifestId` column + index
+- [x] Update `ArbitrationCase.AttachEvidence()` — accept `Guid evidenceManifestId` instead of `string fileReference`
+- [x] Update `AttachEvidenceCommand` — accept `EvidenceManifestId`, inject `IEvidenceManifestProvider`, validate manifest is sealed
+- [x] Update `AttachEvidenceRequest.cs` and endpoint handler
+
+### GAP-14: ListingAndLocation — Geocoding Not Used
+
+> `IGeocodingService` and `GoogleMapsGeocodingService` are registered globally but never called in listing operations.
+
+- [x] In `CreateListingCommand` / `UpdateListingCommand`: when address is provided, call `IGeocodingService.GeocodeAsync()` to set `ApproxGeoPoint`
+- [x] In `LockPreciseAddressOnActivationCommand`: call `IGeocodingService.GeocodeAsync()` to validate and refine coordinates, auto-resolve `JurisdictionCode` if not provided
+
+### GAP-15: JurisdictionPacks — Deposit Cap & Multi-Jurisdiction
+
+> JurisdictionPacks currently only contains California/LA rules. The module needs a generalized deposit cap lookup and support for laws in any country or state.
+
+- [x] Add `Domain/Entities/DepositCapRule.cs` — `JurisdictionCode`, `MaxMultiplier` (decimal, e.g. 1.0 for 1× monthly rent), `ExceptionCondition` (string?, e.g. "small-landlord"), `ExceptionMultiplier` (decimal?), `LegalReference` (string, e.g. "CA Civil Code §1950.5")
+- [x] Add `Application/Queries/GetDepositCapQuery.cs` + handler — given `JurisdictionCode` + `MonthlyRentCents` + optional conditions, returns `MaxDepositCents`
+- [x] Add `DepositCapRuleConfiguration.cs` — EF config for the new entity
+- [x] Seed deposit cap rules for CA/LA in v1 pack (`SeedCaliforniaDepositCapCommand`)
+- [x] Update `ComputeDepositBandCommand` in VerificationAndRisk — call `GetDepositCapQuery` for jurisdiction-specific caps
+- [x] Document multi-jurisdiction expansion pattern: each country/state gets its own `JurisdictionCode` (e.g. `US-CA`, `US-NY`, `GB-ENG`, `DE-BE`), own pack with local laws encoded as `FieldGatingRule`, `EffectiveDateRule`, `DepositCapRule`, and `EvidenceSchedule` entries. Validator updated to support `CC-SS` and `CC-SS-CCC` formats.
+
+### GAP-16: StructuredInquiry — No Custom Questions
+
+> `SubmitInquiryQuestionCommand` only accepts `PredefinedQuestionId`. Tenants cannot ask free-form questions.
+
+- [x] Extend `SubmitInquiryQuestionCommand` — add optional `CustomQuestionText` (string?, max 500) as alternative to `PredefinedQuestionId`
+- [x] Update `InquiryQuestion` entity — add `CustomText` field alongside `PredefinedQuestionId?`
+- [x] Validate: at least one of `PredefinedQuestionId` or `CustomQuestionText` must be provided
+
+---
+
 *Last updated: 2026-02-28. Technology stack locked. Update checkboxes as work is completed.*
 *Audit: 239 checkbox corrections applied — backend items verified against codebase; frontend (Phase 8-10.5), testing (Phase 11), documentation (Phase 12), CI/CD (Phase 13.4), Worker (Phase 7), and Beta Gates (Phase 15) correctly marked as pending.*
-*Backend Phases 0–6 (partial), 14, and all module code (Phase 5) are substantially complete. Next: Phase 7 (Worker), Phase 8 (Web Frontend), Phase 11 (Testing).*
+*Backend Phases 0–6 (partial), 14, and all module code (Phase 5) are substantially complete. Next priority: fix GAP-1 through GAP-16, then Phase 7 (Worker), Phase 8 (Web Frontend), Phase 11 (Testing).*
 *Each `[ ]` → `[x]` is a step toward a defensible, enforceable, institution-grade mid-term rental protocol.*

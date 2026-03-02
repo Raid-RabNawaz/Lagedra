@@ -8,7 +8,7 @@ namespace Lagedra.Modules.IdentityAndVerification.Application.Commands;
 
 public sealed record IngestBackgroundCheckResultCommand(
     Guid UserId,
-    string? PersonaReportId,
+    string? ExternalReportId,
     BackgroundCheckResult Result) : IRequest<Result>;
 
 public sealed class IngestBackgroundCheckResultCommandHandler(IdentityDbContext dbContext)
@@ -21,7 +21,7 @@ public sealed class IngestBackgroundCheckResultCommandHandler(IdentityDbContext 
         ArgumentNullException.ThrowIfNull(request);
 
         var report = BackgroundCheckReport.Create(
-            request.UserId, request.PersonaReportId, request.Result);
+            request.UserId, request.ExternalReportId, request.Result);
 
         dbContext.BackgroundCheckReports.Add(report);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);

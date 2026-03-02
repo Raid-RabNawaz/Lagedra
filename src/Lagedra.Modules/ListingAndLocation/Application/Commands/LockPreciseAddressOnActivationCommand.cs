@@ -1,3 +1,4 @@
+using Lagedra.Infrastructure.External.Geocoding;
 using Lagedra.Modules.ListingAndLocation.Application.DTOs;
 using Lagedra.Modules.ListingAndLocation.Domain.ValueObjects;
 using Lagedra.Modules.ListingAndLocation.Infrastructure.Persistence;
@@ -16,7 +17,9 @@ public sealed record LockPreciseAddressOnActivationCommand(
     string Country,
     string? JurisdictionCode) : IRequest<Result<ListingDetailsDto>>;
 
-public sealed class LockPreciseAddressOnActivationCommandHandler(ListingsDbContext dbContext)
+public sealed class LockPreciseAddressOnActivationCommandHandler(
+    ListingsDbContext dbContext,
+    IGeocodingService geocodingService)
     : IRequestHandler<LockPreciseAddressOnActivationCommand, Result<ListingDetailsDto>>
 {
     private static readonly Error NotFound = new("Listing.NotFound", "Listing not found.");
@@ -43,7 +46,27 @@ public sealed class LockPreciseAddressOnActivationCommandHandler(ListingsDbConte
             request.ZipCode,
             request.Country);
 
-        listing.LockPreciseAddress(address, request.JurisdictionCode);
+        var fullAddress = $"{request.Street}, {request.City}, {request.State} {request.ZipCode}, {request.Country}";
+        var geocoded = await geocodingService
+            .GeocodeAddressAsync(fullAddress, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (geocoded is not null)
+        {
+            listing.SetApproxLocation(new GeoPoint(geocoded.Latitude, geocoded.Longitude));
+        }
+
+        var jurisdictionCode = request.JurisdictionCode;
+        if (string.IsNullOrWhiteSpace(jurisdictionCode))
+        {
+            var jurisdiction = await geocodingService
+                .ResolveJurisdictionAsync(fullAddress, cancellationToken)
+                .ConfigureAwait(false);
+
+            jurisdictionCode = jurisdiction?.JurisdictionCode;
+        }
+
+        listing.LockPreciseAddress(address, jurisdictionCode);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return Result<ListingDetailsDto>.Success(ListingMapper.ToDetails(listing));

@@ -1,3 +1,4 @@
+using Lagedra.Compliance.Domain.Events;
 using Lagedra.SharedKernel.Domain;
 
 namespace Lagedra.Compliance.Domain;
@@ -7,10 +8,11 @@ namespace Lagedra.Compliance.Domain;
 /// Once created, violations are never deleted — they may be resolved or dismissed,
 /// but the record persists permanently in the compliance ledger.
 /// </summary>
-public sealed class Violation : Entity<Guid>
+public sealed class Violation : AggregateRoot<Guid>
 {
     public Guid DealId { get; private set; }
     public Guid ReportedByUserId { get; private set; }
+    public Guid TargetUserId { get; private set; }
     public ViolationCategory Category { get; private set; }
     public ViolationStatus Status { get; private set; }
     public string Description { get; private set; } = string.Empty;
@@ -23,23 +25,31 @@ public sealed class Violation : Entity<Guid>
     public static Violation Record(
         Guid dealId,
         Guid reportedByUserId,
+        Guid targetUserId,
         ViolationCategory category,
         string description,
         string? evidenceReference = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(description);
 
-        return new Violation
+        var violation = new Violation
         {
             Id = Guid.NewGuid(),
             DealId = dealId,
             ReportedByUserId = reportedByUserId,
+            TargetUserId = targetUserId,
             Category = category,
             Status = ViolationStatus.Open,
             Description = description,
             EvidenceReference = evidenceReference,
-            DetectedAt = DateTime.UtcNow
+            DetectedAt = DateTime.UtcNow,
+            CreatedAt = DateTime.UtcNow
         };
+
+        violation.AddDomainEvent(new ViolationCreatedEvent(
+            violation.Id, dealId, targetUserId, category, description));
+
+        return violation;
     }
 
     public void MarkUnderReview()
@@ -61,6 +71,8 @@ public sealed class Violation : Entity<Guid>
 
         Status = ViolationStatus.Resolved;
         ResolvedAt = DateTime.UtcNow;
+
+        AddDomainEvent(new ViolationResolvedEvent(Id, DealId, TargetUserId));
     }
 
     public void Dismiss()
@@ -82,5 +94,7 @@ public sealed class Violation : Entity<Guid>
         }
 
         Status = ViolationStatus.Escalated;
+
+        AddDomainEvent(new ViolationEscalatedEvent(Id, DealId, TargetUserId, Category));
     }
 }

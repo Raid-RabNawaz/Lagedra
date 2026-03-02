@@ -16,7 +16,8 @@ public sealed class EvidenceSlotConfiguration : IEntityTypeConfiguration<Evidenc
         builder.Property(e => e.CaseId).IsRequired();
         builder.Property(e => e.SlotType).HasMaxLength(100).IsRequired();
         builder.Property(e => e.SubmittedBy).IsRequired();
-        builder.Property(e => e.FileReference).HasMaxLength(500).IsRequired();
+        builder.Property(e => e.EvidenceManifestId).IsRequired();
+        builder.HasIndex(e => e.EvidenceManifestId);
         builder.Property(e => e.SubmittedAt).IsRequired();
     }
 }

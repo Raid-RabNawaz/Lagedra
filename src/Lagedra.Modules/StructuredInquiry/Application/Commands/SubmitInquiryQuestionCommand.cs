@@ -10,7 +10,8 @@ namespace Lagedra.Modules.StructuredInquiry.Application.Commands;
 public sealed record SubmitInquiryQuestionCommand(
     Guid DealId,
     InquiryCategory Category,
-    Guid PredefinedQuestionId) : IRequest<Result<InquiryQuestionDto>>;
+    Guid? PredefinedQuestionId,
+    string? CustomQuestionText = null) : IRequest<Result<InquiryQuestionDto>>;
 
 public sealed class SubmitInquiryQuestionCommandHandler(
     InquiryDbContext dbContext)
@@ -21,6 +22,13 @@ public sealed class SubmitInquiryQuestionCommandHandler(
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        if (request.PredefinedQuestionId is null && string.IsNullOrWhiteSpace(request.CustomQuestionText))
+        {
+            return Result<InquiryQuestionDto>.Failure(
+                new Error("Inquiry.InvalidQuestion",
+                    "Either a predefined question ID or custom question text must be provided."));
+        }
 
         var session = await dbContext.Sessions
             .Include(s => s.Questions)
@@ -34,11 +42,11 @@ public sealed class SubmitInquiryQuestionCommandHandler(
                 new Error("Inquiry.NotFound", "No open inquiry session found for this deal."));
         }
 
-        var question = session.AddQuestion(request.Category, request.PredefinedQuestionId);
+        var question = session.AddQuestion(request.Category, request.PredefinedQuestionId, request.CustomQuestionText);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return Result<InquiryQuestionDto>.Success(
             new InquiryQuestionDto(question.Id, question.PredefinedQuestionId,
-                question.Category, question.SubmittedAt, null));
+                question.Category, question.SubmittedAt, null, question.CustomText));
     }
 }

@@ -5,6 +5,7 @@
     <ProjectReference Include="..\PartnerNetwork\PartnerNetwork.csproj" />
     <ProjectReference Include="..\IdentityAndVerification\IdentityAndVerification.csproj" />
     <ProjectReference Include="..\InsuranceIntegration\InsuranceIntegration.csproj" />
+    <ProjectReference Include="..\JurisdictionPacks\JurisdictionPacks.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="MediatR" />

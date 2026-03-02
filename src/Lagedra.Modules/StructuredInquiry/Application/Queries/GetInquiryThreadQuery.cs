@@ -45,6 +45,7 @@ public sealed class GetInquiryThreadQueryHandler(InquiryDbContext dbContext)
                 q.Answer is not null
                     ? new InquiryAnswerDto(q.Answer.Id, q.Answer.ResponseType,
                         q.Answer.AnswerValue, q.Answer.AnsweredAt)
-                    : null))
+                    : null,
+                q.CustomText))
             .ToList());
 }

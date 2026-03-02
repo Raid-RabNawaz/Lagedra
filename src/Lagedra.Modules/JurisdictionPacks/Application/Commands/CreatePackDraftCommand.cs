@@ -16,8 +16,8 @@ public sealed class CreatePackDraftCommandValidator : AbstractValidator<CreatePa
     {
         RuleFor(x => x.JurisdictionCode)
             .NotEmpty()
-            .Matches(@"^US-[A-Z]{2}-[A-Z]{2,10}$")
-            .WithMessage("Jurisdiction code must match format US-XX-YYY (e.g. US-CA-LA).");
+            .Matches(@"^[A-Z]{2}(-[A-Z]{2,10}){1,2}$")
+            .WithMessage("Jurisdiction code must match format CC-SS or CC-SS-CCC (e.g. US-CA, US-CA-LA, GB-ENG).");
     }
 }
 

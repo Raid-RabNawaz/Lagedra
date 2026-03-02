@@ -8,6 +8,7 @@ public sealed record UpdatePackDraftRequest(
     DateTime? EffectiveDate,
     IReadOnlyList<EffectiveDateRuleInput>? EffectiveDateRules,
     IReadOnlyList<FieldGatingRuleInput>? FieldGatingRules,
-    IReadOnlyList<EvidenceScheduleInput>? EvidenceSchedules);
+    IReadOnlyList<EvidenceScheduleInput>? EvidenceSchedules,
+    IReadOnlyList<DepositCapRuleInput>? DepositCapRules);
 
 public sealed record ApprovePackVersionRequest(Guid ApproverId);

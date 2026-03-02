@@ -1,3 +1,4 @@
+using Lagedra.Infrastructure.External.Geocoding;
 using Lagedra.Modules.ListingAndLocation.Application.DTOs;
 using Lagedra.Modules.ListingAndLocation.Domain.Entities;
 using Lagedra.Modules.ListingAndLocation.Domain.Enums;
@@ -28,9 +29,12 @@ public sealed record UpdateListingCommand(
     IReadOnlyList<Guid>? SafetyDeviceIds = null,
     IReadOnlyList<Guid>? ConsiderationIds = null,
     bool? InstantBookingEnabled = null,
-    Uri? VirtualTourUrl = null) : IRequest<Result<ListingDetailsDto>>;
+    Uri? VirtualTourUrl = null,
+    string? ApproxAddress = null) : IRequest<Result<ListingDetailsDto>>;
 
-public sealed class UpdateListingCommandHandler(ListingsDbContext dbContext)
+public sealed class UpdateListingCommandHandler(
+    ListingsDbContext dbContext,
+    IGeocodingService geocodingService)
     : IRequestHandler<UpdateListingCommand, Result<ListingDetailsDto>>
 {
     private static readonly Error NotFound = new("Listing.NotFound", "Listing not found.");
@@ -127,6 +131,18 @@ public sealed class UpdateListingCommandHandler(ListingsDbContext dbContext)
         {
             var newRecord = ListingPriceHistory.Create(listing.Id, request.MonthlyRentCents, today);
             dbContext.ListingPriceHistory.Add(newRecord);
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.ApproxAddress))
+        {
+            var geocoded = await geocodingService
+                .GeocodeAddressAsync(request.ApproxAddress, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (geocoded is not null)
+            {
+                listing.SetApproxLocation(new GeoPoint(geocoded.Latitude, geocoded.Longitude));
+            }
         }
 
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);

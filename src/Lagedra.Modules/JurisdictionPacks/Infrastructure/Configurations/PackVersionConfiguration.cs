@@ -43,5 +43,10 @@ public sealed class PackVersionConfiguration : IEntityTypeConfiguration<PackVers
             .WithOne()
             .HasForeignKey(r => r.VersionId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(v => v.DepositCapRules)
+            .WithOne()
+            .HasForeignKey(r => r.VersionId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

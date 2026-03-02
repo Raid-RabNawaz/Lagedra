@@ -112,6 +112,8 @@ public static class AuthModuleRegistration
         // Notification handlers
         services.AddDomainEventHandler<Domain.Events.UserRegisteredEvent,
             Application.EventHandlers.OnUserRegisteredNotify>();
+        services.AddDomainEventHandler<Domain.Events.UserRoleChangedEvent,
+            Application.EventHandlers.OnUserRoleChangedNotify>();
 
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(AuthModuleRegistration).Assembly));

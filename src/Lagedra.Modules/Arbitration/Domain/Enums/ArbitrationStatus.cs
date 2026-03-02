@@ -7,5 +7,6 @@ public enum ArbitrationStatus
     EvidenceComplete,
     UnderReview,
     Decided,
-    Appealed
+    Appealed,
+    Closed
 }

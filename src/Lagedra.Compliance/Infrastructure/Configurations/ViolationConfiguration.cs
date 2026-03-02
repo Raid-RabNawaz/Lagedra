@@ -18,6 +18,9 @@ public sealed class ViolationConfiguration : IEntityTypeConfiguration<Violation>
 
         builder.Property(v => v.ReportedByUserId).IsRequired();
 
+        builder.Property(v => v.TargetUserId).IsRequired();
+        builder.HasIndex(v => v.TargetUserId);
+
         builder.Property(v => v.Category)
             .HasConversion<string>()
             .HasMaxLength(50)

@@ -1,3 +1,4 @@
+using Lagedra.Infrastructure.External.Storage;
 using Lagedra.Modules.Evidence.Application.DTOs;
 using Lagedra.SharedKernel.Results;
 using MediatR;
@@ -9,10 +10,14 @@ public sealed record RequestUploadUrlCommand(
     string FileName,
     string MimeType) : IRequest<Result<UploadUrlDto>>;
 
-public sealed class RequestUploadUrlCommandHandler
+public sealed class RequestUploadUrlCommandHandler(
+    IObjectStorageService storageService)
     : IRequestHandler<RequestUploadUrlCommand, Result<UploadUrlDto>>
 {
-    public Task<Result<UploadUrlDto>> Handle(
+    private const string EvidenceBucket = "lagedra-evidence";
+    private static readonly TimeSpan UploadUrlExpiry = TimeSpan.FromMinutes(30);
+
+    public async Task<Result<UploadUrlDto>> Handle(
         RequestUploadUrlCommand request,
         CancellationToken cancellationToken)
     {
@@ -21,10 +26,14 @@ public sealed class RequestUploadUrlCommandHandler
         var storageKey = $"evidence/{request.ManifestId}/{Guid.NewGuid()}/{request.FileName}";
         var uploadId = Guid.NewGuid();
 
-        var presignedUrl = $"/storage/upload/{storageKey}";
-        var uri = new Uri(presignedUrl, UriKind.Absolute);
+        await storageService.EnsureBucketExistsAsync(EvidenceBucket, cancellationToken)
+            .ConfigureAwait(false);
 
-        var dto = new UploadUrlDto(uploadId, uri, storageKey);
-        return Task.FromResult(Result<UploadUrlDto>.Success(dto));
+        var presignedUrl = await storageService
+            .GeneratePresignedUploadUrlAsync(EvidenceBucket, storageKey, UploadUrlExpiry, cancellationToken)
+            .ConfigureAwait(false);
+
+        var dto = new UploadUrlDto(uploadId, presignedUrl, storageKey);
+        return Result<UploadUrlDto>.Success(dto);
     }
 }

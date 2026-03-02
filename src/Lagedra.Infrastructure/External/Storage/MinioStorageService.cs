@@ -59,6 +59,26 @@ public sealed partial class MinioStorageService : IObjectStorageService, IAsyncD
         return new Uri(url);
     }
 
+    public async Task<Stream> GetObjectStreamAsync(string bucket, string key, CancellationToken ct = default)
+    {
+        var response = await _client.GetObjectAsync(bucket, key, ct).ConfigureAwait(false);
+        return response.ResponseStream;
+    }
+
+    public async Task MoveObjectAsync(string sourceBucket, string sourceKey, string destBucket, string destKey, CancellationToken ct = default)
+    {
+        await _client.CopyObjectAsync(new Amazon.S3.Model.CopyObjectRequest
+        {
+            SourceBucket = sourceBucket,
+            SourceKey = sourceKey,
+            DestinationBucket = destBucket,
+            DestinationKey = destKey
+        }, ct).ConfigureAwait(false);
+
+        await _client.DeleteObjectAsync(sourceBucket, sourceKey, ct).ConfigureAwait(false);
+        LogObjectMoved(_logger, sourceBucket, sourceKey, destBucket, destKey);
+    }
+
     public async Task DeleteObjectAsync(string bucket, string key, CancellationToken ct = default)
     {
         await _client.DeleteObjectAsync(bucket, key, ct).ConfigureAwait(false);
@@ -101,6 +121,9 @@ public sealed partial class MinioStorageService : IObjectStorageService, IAsyncD
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Object deleted from {Bucket}/{Key}")]
     private static partial void LogObjectDeleted(ILogger logger, string bucket, string key);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Object moved from {SourceBucket}/{SourceKey} to {DestBucket}/{DestKey}")]
+    private static partial void LogObjectMoved(ILogger logger, string sourceBucket, string sourceKey, string destBucket, string destKey);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Bucket '{Bucket}' created in MinIO")]
     private static partial void LogBucketCreated(ILogger logger, string bucket);

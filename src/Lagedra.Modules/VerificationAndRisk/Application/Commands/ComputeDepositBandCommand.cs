@@ -1,3 +1,4 @@
+using Lagedra.Modules.JurisdictionPacks.Application.Queries;
 using Lagedra.SharedKernel.Results;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -10,10 +11,13 @@ namespace Lagedra.Modules.VerificationAndRisk.Application.Commands;
 public sealed record ComputeDepositBandCommand(
     Guid TenantUserId,
     InsuranceStatus InsuranceStatus,
-    long JurisdictionCapCents) : IRequest<Result<DepositBandDto>>;
+    long JurisdictionCapCents,
+    string? JurisdictionCode = null,
+    long? MonthlyRentCents = null) : IRequest<Result<DepositBandDto>>;
 
 public sealed class ComputeDepositBandCommandHandler(
-    RiskDbContext dbContext)
+    RiskDbContext dbContext,
+    IMediator mediator)
     : IRequestHandler<ComputeDepositBandCommand, Result<DepositBandDto>>
 {
     public async Task<Result<DepositBandDto>> Handle(
@@ -32,7 +36,21 @@ public sealed class ComputeDepositBandCommandHandler(
                 new Error("Risk.NotFound", "Risk profile not found for tenant."));
         }
 
-        profile.UpdateDepositBand(request.InsuranceStatus, request.JurisdictionCapCents);
+        var capCents = request.JurisdictionCapCents;
+
+        if (!string.IsNullOrWhiteSpace(request.JurisdictionCode) && request.MonthlyRentCents.HasValue)
+        {
+            var capResult = await mediator
+                .Send(new GetDepositCapQuery(request.JurisdictionCode, request.MonthlyRentCents.Value), cancellationToken)
+                .ConfigureAwait(false);
+
+            if (capResult.IsSuccess)
+            {
+                capCents = capResult.Value.MaxDepositCents;
+            }
+        }
+
+        profile.UpdateDepositBand(request.InsuranceStatus, capCents);
 
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 

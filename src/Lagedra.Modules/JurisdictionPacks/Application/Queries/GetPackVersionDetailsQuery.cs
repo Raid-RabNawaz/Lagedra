@@ -36,6 +36,7 @@ public sealed class GetPackVersionDetailsQueryHandler(JurisdictionPackRepository
                 version.EffectiveDate, version.ApprovedAt, version.ApprovedBy, version.SecondApproverId,
                 version.EffectiveDateRules.Select(r => new EffectiveDateRuleDto(r.Id, r.FieldName, r.EffectiveDate)).ToList(),
                 version.FieldGatingRules.Select(r => new FieldGatingRuleDto(r.Id, r.FieldName, r.GatingType, r.Value, r.Condition)).ToList(),
-                version.EvidenceSchedules.Select(r => new EvidenceScheduleDto(r.Id, r.Category, r.MinimumRequirements)).ToList()));
+                version.EvidenceSchedules.Select(r => new EvidenceScheduleDto(r.Id, r.Category, r.MinimumRequirements)).ToList(),
+                version.DepositCapRules.Select(r => new DepositCapRuleDto(r.Id, r.JurisdictionCode, r.MaxMultiplier, r.ExceptionCondition, r.ExceptionMultiplier, r.LegalReference)).ToList()));
     }
 }

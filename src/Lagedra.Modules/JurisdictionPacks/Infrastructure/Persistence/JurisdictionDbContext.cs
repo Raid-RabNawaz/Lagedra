@@ -18,6 +18,7 @@ public sealed class JurisdictionDbContext(
     public DbSet<EffectiveDateRule> EffectiveDateRules => Set<EffectiveDateRule>();
     public DbSet<FieldGatingRule> FieldGatingRules => Set<FieldGatingRule>();
     public DbSet<EvidenceSchedule> EvidenceSchedules => Set<EvidenceSchedule>();
+    public DbSet<DepositCapRule> DepositCapRules => Set<DepositCapRule>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

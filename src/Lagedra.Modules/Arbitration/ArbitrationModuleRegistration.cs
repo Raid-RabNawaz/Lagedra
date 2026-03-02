@@ -31,6 +31,9 @@ public static class ArbitrationModuleRegistration
         services.AddDomainEventHandler<CaseFiledEvent, OnCaseFiledNotify>();
         services.AddDomainEventHandler<DecisionIssuedEvent, OnDecisionIssuedNotify>();
         services.AddDomainEventHandler<EvidenceCompleteEvent, OnEvidenceCompleteNotify>();
+        services.AddDomainEventHandler<CaseClosedEvent, OnCaseClosedNotify>();
+        services.AddDomainEventHandler<CaseAppealedEvent, OnCaseAppealedNotify>();
+        services.AddDomainEventHandler<ArbitrationBacklogEscalationEvent, OnBacklogEscalationHandler>();
 
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(ArbitrationModuleRegistration).Assembly));

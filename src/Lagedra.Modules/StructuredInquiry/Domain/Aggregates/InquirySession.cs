@@ -39,14 +39,14 @@ public sealed class InquirySession : AggregateRoot<Guid>
         UnlockedByLandlordAt = DateTime.UtcNow;
     }
 
-    public InquiryQuestion AddQuestion(InquiryCategory category, Guid predefinedQuestionId)
+    public InquiryQuestion AddQuestion(InquiryCategory category, Guid? predefinedQuestionId, string? customText = null)
     {
         if (Status != InquirySessionStatus.Open)
         {
             throw new InvalidOperationException($"Cannot add questions to session in status '{Status}'.");
         }
 
-        var question = InquiryQuestion.Create(Id, category, predefinedQuestionId);
+        var question = InquiryQuestion.Create(Id, category, predefinedQuestionId, customText);
         _questions.Add(question);
         return question;
     }

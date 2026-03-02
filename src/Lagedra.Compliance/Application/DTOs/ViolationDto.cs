@@ -6,6 +6,7 @@ public sealed record ViolationDto(
     Guid Id,
     Guid DealId,
     Guid ReportedByUserId,
+    Guid TargetUserId,
     ViolationCategory Category,
     ViolationStatus Status,
     string Description,

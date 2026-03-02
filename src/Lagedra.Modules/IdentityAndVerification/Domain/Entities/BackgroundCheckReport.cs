@@ -9,7 +9,7 @@ public sealed class BackgroundCheckReport : Entity<Guid>
     private static readonly TimeSpan RetentionPeriod = TimeSpan.FromDays(7 * 365);
 
     public Guid UserId { get; private set; }
-    public string? PersonaReportId { get; private set; }
+    public string? ExternalReportId { get; private set; }
     public BackgroundCheckResult Result { get; private set; }
     public DateTime ReceivedAt { get; private set; }
     public DateTime ExpiresAt { get; private set; }
@@ -21,7 +21,7 @@ public sealed class BackgroundCheckReport : Entity<Guid>
 
     public static BackgroundCheckReport Create(
         Guid userId,
-        string? personaReportId,
+        string? externalReportId,
         BackgroundCheckResult result)
     {
         var now = DateTime.UtcNow;
@@ -29,7 +29,7 @@ public sealed class BackgroundCheckReport : Entity<Guid>
         {
             Id = Guid.NewGuid(),
             UserId = userId,
-            PersonaReportId = personaReportId,
+            ExternalReportId = externalReportId,
             Result = result,
             ReceivedAt = now,
             ExpiresAt = now.Add(RetentionPeriod),
