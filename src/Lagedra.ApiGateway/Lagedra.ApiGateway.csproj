@@ -1,14 +1,48 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
+  <PropertyGroup>
+    <NoWarn>$(NoWarn);CA1848;CA2007</NoWarn>
+  </PropertyGroup>
+
   <ItemGroup>
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+    <ProjectReference Include="..\Lagedra.Auth\Lagedra.Auth.csproj" />
+    <ProjectReference Include="..\Lagedra.TruthSurface\Lagedra.TruthSurface.csproj" />
+    <ProjectReference Include="..\Lagedra.Compliance\Lagedra.Compliance.csproj" />
+    <ProjectReference Include="..\Lagedra.Infrastructure\Lagedra.Infrastructure.csproj" />
+    <ProjectReference Include="..\Lagedra.SharedKernel\Lagedra.SharedKernel.csproj" />
+    <ProjectReference Include="..\Lagedra.Modules\ActivationAndBilling\ActivationAndBilling.csproj" />
+    <ProjectReference Include="..\Lagedra.Modules\ListingAndLocation\ListingAndLocation.csproj" />
+    <ProjectReference Include="..\Lagedra.Modules\IdentityAndVerification\IdentityAndVerification.csproj" />
+    <ProjectReference Include="..\Lagedra.Modules\InsuranceIntegration\InsuranceIntegration.csproj" />
+    <ProjectReference Include="..\Lagedra.Modules\StructuredInquiry\StructuredInquiry.csproj" />
+    <ProjectReference Include="..\Lagedra.Modules\VerificationAndRisk\VerificationAndRisk.csproj" />
+    <ProjectReference Include="..\Lagedra.Modules\ComplianceMonitoring\ComplianceMonitoring.csproj" />
+    <ProjectReference Include="..\Lagedra.Modules\Arbitration\Arbitration.csproj" />
+    <ProjectReference Include="..\Lagedra.Modules\Evidence\Evidence.csproj" />
+    <ProjectReference Include="..\Lagedra.Modules\JurisdictionPacks\JurisdictionPacks.csproj" />
+    <ProjectReference Include="..\Lagedra.Modules\Notifications\Notifications.csproj" />
+    <ProjectReference Include="..\Lagedra.Modules\Privacy\Privacy.csproj" />
+    <ProjectReference Include="..\Lagedra.Modules\AntiAbuseAndIntegrity\AntiAbuseAndIntegrity.csproj" />
+    <ProjectReference Include="..\Lagedra.Modules\ContentManagement\ContentManagement.csproj" />
+    <ProjectReference Include="..\Lagedra.Modules\PartnerNetwork\PartnerNetwork.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
     <PackageReference Include="Swashbuckle.AspNetCore" />
     <PackageReference Include="Asp.Versioning.Mvc" />
-    <PackageReference Include="Asp.Versioning.ApiExplorer" />
+    <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" />
     <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="Serilog.Sinks.File" />
+    <PackageReference Include="Serilog.Formatting.Compact" />
+    <PackageReference Include="Serilog.Enrichers.Environment" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <PackageReference Include="Quartz.Extensions.Hosting" />
   </ItemGroup>
 
 </Project>

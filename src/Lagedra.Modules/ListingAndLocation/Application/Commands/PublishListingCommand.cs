@@ -1,0 +1,36 @@
+using Lagedra.Modules.ListingAndLocation.Application.DTOs;
+using Lagedra.Modules.ListingAndLocation.Infrastructure.Persistence;
+using Lagedra.SharedKernel.Results;
+using MediatR;
+using Microsoft.EntityFrameworkCore;
+
+namespace Lagedra.Modules.ListingAndLocation.Application.Commands;
+
+public sealed record PublishListingCommand(Guid ListingId) : IRequest<Result<ListingDetailsDto>>;
+
+public sealed class PublishListingCommandHandler(ListingsDbContext dbContext)
+    : IRequestHandler<PublishListingCommand, Result<ListingDetailsDto>>
+{
+    private static readonly Error NotFound = new("Listing.NotFound", "Listing not found.");
+
+    public async Task<Result<ListingDetailsDto>> Handle(
+        PublishListingCommand request,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var listing = await dbContext.Listings
+            .FirstOrDefaultAsync(l => l.Id == request.ListingId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (listing is null)
+        {
+            return Result<ListingDetailsDto>.Failure(NotFound);
+        }
+
+        listing.Publish();
+        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        return Result<ListingDetailsDto>.Success(ListingMapper.ToDetails(listing));
+    }
+}

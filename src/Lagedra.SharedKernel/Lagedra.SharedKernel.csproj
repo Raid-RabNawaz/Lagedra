@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!--
+      Suppress analyzer rules that are intentional design choices in SharedKernel:
+        CA1040  – IAggregateRoot is a marker interface by design (DDD convention)
+        CA1711  – IDomainEventHandler intentionally ends with "EventHandler" for clarity
+        CA1716  – Error type name conflicts with VB.NET keyword; project is C#-only
+        CA1000  – Static factory methods on Result<T> are the standard Result monad pattern
+    -->
+    <NoWarn>$(NoWarn);CA1040;CA1711;CA1716;CA1000</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MediatR.Contracts" />
+    <PackageReference Include="FluentValidation" />
+  </ItemGroup>
+
+</Project>

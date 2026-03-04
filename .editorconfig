@@ -36,7 +36,7 @@ csharp_style_expression_bodied_properties = true:suggestion
 csharp_style_expression_bodied_indexers = true:suggestion
 csharp_style_expression_bodied_accessors = true:suggestion
 
-csharp_prefer_braces = true:warning
+csharp_prefer_braces = false:warning
 csharp_style_throw_expression = true:suggestion
 csharp_style_conditional_delegate_call = true:suggestion
 
@@ -81,3 +81,6 @@ trim_trailing_whitespace = false
 
 [Makefile]
 indent_style = tab
+
+[*.{cs,vb}]
+dotnet_diagnostic.CA1062.severity = none
