@@ -153,13 +153,17 @@ namespace StructuredInquiry.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("CustomText")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
-                    b.Property<Guid>("PredefinedQuestionId")
+                    b.Property<Guid?>("PredefinedQuestionId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("SessionId")
