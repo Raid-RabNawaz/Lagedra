@@ -19,6 +19,10 @@ public sealed class DealPaymentConfirmationConfiguration
 
         builder.Property(c => c.TotalTenantPaymentCents).IsRequired();
         builder.Property(c => c.TotalHostPlatformPaymentCents).IsRequired();
+        builder.Property(c => c.FirstMonthRentCents).IsRequired().HasDefaultValue(0L);
+        builder.Property(c => c.DepositAmountCents).IsRequired().HasDefaultValue(0L);
+        builder.Property(c => c.InsuranceFeeCents).IsRequired().HasDefaultValue(0L);
+        builder.Property(c => c.MonthlyProtocolFeeCents).IsRequired().HasDefaultValue(0L);
         builder.Property(c => c.HostPaidPlatform).IsRequired();
 
         builder.Property(c => c.HostConfirmed).IsRequired();

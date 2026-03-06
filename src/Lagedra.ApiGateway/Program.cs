@@ -1,4 +1,6 @@
 using System.Globalization;
+using Asp.Versioning;
+using FluentValidation;
 using Lagedra.Auth;
 using Lagedra.Auth.Infrastructure.Seed;
 using Lagedra.Auth.Presentation.Endpoints;
@@ -85,6 +87,23 @@ try
     builder.Services.AddPartnerNetwork(builder.Configuration);
     builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
 
+    builder.Services.AddValidatorsFromAssemblies(
+        AppDomain.CurrentDomain.GetAssemblies()
+            .Where(a => a.FullName?.StartsWith("Lagedra", StringComparison.OrdinalIgnoreCase) == true));
+
+    builder.Services.AddLagedraRateLimiting();
+
+    builder.Services.AddApiVersioning(options =>
+    {
+        options.DefaultApiVersion = new ApiVersion(1, 0);
+        options.AssumeDefaultVersionWhenUnspecified = true;
+        options.ReportApiVersions = true;
+    }).AddApiExplorer(options =>
+    {
+        options.GroupNameFormat = "'v'VVV";
+        options.SubstituteApiVersionInUrl = true;
+    });
+
     builder.Services.ConfigureHttpJsonOptions(options =>
         options.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
 
@@ -163,6 +182,9 @@ try
     app.UseCors("Frontend");
     app.UseAuthentication();
     app.UseAuthorization();
+    app.UseAuthEnforcement();
+    app.UseConsentEnforcement();
+    app.UseLagedraRateLimiting();
     app.UseIdempotency();
 
     app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }))

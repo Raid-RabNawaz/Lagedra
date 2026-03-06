@@ -2,6 +2,8 @@ using Lagedra.Infrastructure.Eventing;
 using Lagedra.Modules.Privacy.Infrastructure.Jobs;
 using Lagedra.Modules.Privacy.Infrastructure.Persistence;
 using Lagedra.Modules.Privacy.Infrastructure.Repositories;
+using Lagedra.Modules.Privacy.Infrastructure.Services;
+using Lagedra.SharedKernel.Integration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -25,6 +27,7 @@ public static class PrivacyModuleRegistration
 
         services.AddScoped<ConsentRepository>();
         services.AddScoped<LegalHoldRepository>();
+        services.AddScoped<IConsentChecker, ConsentChecker>();
 
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(PrivacyModuleRegistration).Assembly));

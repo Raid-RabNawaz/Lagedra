@@ -1,0 +1,18 @@
+# Lagedra OpenAPI Specification
+#
+# This file is auto-generated from the Swagger endpoint.
+# Run `tools/openapi/generate-openapi.ps1` with the API running to regenerate.
+#
+# Manual generation:
+#   1. Start the API:    dotnet run --project src/Lagedra.ApiGateway
+#   2. Generate spec:    ./tools/openapi/generate-openapi.ps1 -ApiUrl http://localhost:5000
+#
+openapi: "3.0.1"
+info:
+  title: "Lagedra API"
+  description: "Institution-grade mid-term rental protocol API"
+  version: "v1"
+  contact:
+    name: "Lagedra Platform"
+paths: {}
+# Run generate-openapi.ps1 to populate this file from the live Swagger endpoint.
