@@ -40,7 +40,6 @@ using Lagedra.Modules.ContentManagement.Presentation.Endpoints;
 using Lagedra.Modules.PartnerNetwork;
 using Lagedra.Modules.PartnerNetwork.Presentation.Endpoints;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.OpenApi.Models;
 using Lagedra.Infrastructure.Middleware;
 using Lagedra.Infrastructure.Observability;
@@ -151,6 +150,7 @@ try
             .WithOrigins(
                 builder.Configuration["App:FrontendUrl"] ?? "http://localhost:3000",
                 builder.Configuration["App:AdminUrl"] ?? "http://localhost:3001",
+                "http://localhost:5173",
                 builder.Configuration["App:MarketingUrl"] ?? "http://localhost:3002")
             .AllowAnyHeader()
             .AllowAnyMethod()
