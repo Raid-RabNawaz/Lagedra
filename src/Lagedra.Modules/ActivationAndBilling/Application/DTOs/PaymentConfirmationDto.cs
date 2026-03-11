@@ -14,5 +14,9 @@ public sealed record PaymentConfirmationDto(
     DateTime GracePeriodExpiresAt,
     long TotalTenantPaymentCents,
     long TotalHostPlatformPaymentCents,
+    long FirstMonthRentCents,
+    long DepositAmountCents,
+    long InsuranceFeeCents,
+    long MonthlyProtocolFeeCents,
     bool HostPaidPlatform,
     DateTime? HostPaidPlatformAt);

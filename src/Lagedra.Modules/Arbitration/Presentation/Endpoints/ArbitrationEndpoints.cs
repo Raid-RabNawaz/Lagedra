@@ -3,6 +3,7 @@ using Lagedra.Modules.Arbitration.Application.Commands;
 using Lagedra.Modules.Arbitration.Application.Queries;
 using Lagedra.Modules.Arbitration.Domain.Enums;
 using Lagedra.Modules.Arbitration.Presentation.Contracts;
+using Lagedra.Infrastructure.Middleware;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -21,7 +22,8 @@ public static class ArbitrationEndpoints
             .WithTags("Arbitration")
             .RequireAuthorization();
 
-        group.MapPost("/", FileCase);
+        group.MapPost("/", FileCase)
+            .RequireRateLimiting(RateLimitingSetup.DisputeCapPolicy);
         group.MapPost("/{caseId:guid}/evidence", AttachEvidence);
         group.MapPost("/{caseId:guid}/evidence-complete", MarkEvidenceComplete);
         group.MapPost("/{caseId:guid}/assign", AssignArbitrator);

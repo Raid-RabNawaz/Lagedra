@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text.Json;
+using FluentValidation;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
@@ -26,6 +27,26 @@ public sealed partial class GlobalExceptionHandlerMiddleware(
         try
         {
             await next(context).ConfigureAwait(false);
+        }
+        catch (ValidationException vex)
+        {
+            context.Response.StatusCode = (int)HttpStatusCode.BadRequest;
+            context.Response.ContentType = "application/problem+json";
+
+            var errors = vex.Errors
+                .GroupBy(e => e.PropertyName)
+                .ToDictionary(g => g.Key, g => g.Select(e => e.ErrorMessage).ToArray());
+
+            var problem = new ValidationProblemDetailsResponse
+            {
+                Type = "https://tools.ietf.org/html/rfc9110#section-15.5.1",
+                Title = "One or more validation errors occurred.",
+                Status = (int)HttpStatusCode.BadRequest,
+                Errors = errors
+            };
+
+            await context.Response.WriteAsync(
+                JsonSerializer.Serialize(problem, JsonOptions)).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -78,6 +99,14 @@ internal sealed class ProblemDetailsResponse
     public int Status { get; init; }
     public string Detail { get; init; } = string.Empty;
     public string TraceId { get; init; } = string.Empty;
+}
+
+internal sealed class ValidationProblemDetailsResponse
+{
+    public string Type { get; init; } = string.Empty;
+    public string Title { get; init; } = string.Empty;
+    public int Status { get; init; }
+    public IDictionary<string, string[]> Errors { get; init; } = new Dictionary<string, string[]>();
 }
 
 public static class GlobalExceptionHandlerMiddlewareExtensions

@@ -45,5 +45,7 @@ public sealed class ResolvePaymentDisputeCommandHandler(
         new(c.Id, c.DealId, c.Status, c.HostConfirmed, c.HostConfirmedAt,
             c.TenantDisputed, c.TenantDisputedAt, c.DisputeReason, c.GracePeriodExpiresAt,
             c.TotalTenantPaymentCents, c.TotalHostPlatformPaymentCents,
+            c.FirstMonthRentCents, c.DepositAmountCents,
+            c.InsuranceFeeCents, c.MonthlyProtocolFeeCents,
             c.HostPaidPlatform, c.HostPaidPlatformAt);
 }

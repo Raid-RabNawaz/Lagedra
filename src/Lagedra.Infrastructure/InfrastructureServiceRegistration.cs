@@ -108,7 +108,8 @@ public static class InfrastructureServiceRegistration
         services.AddSignalR();
         services.AddSingleton<INotificationPusher, SignalRNotificationPusher>();
 
-        // MediatR Pipeline Behaviors
+        // MediatR Pipeline Behaviors (order matters: validation → logging → exception handling)
+        services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(UnhandledExceptionBehavior<,>));
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(LoggingBehavior<,>));
 

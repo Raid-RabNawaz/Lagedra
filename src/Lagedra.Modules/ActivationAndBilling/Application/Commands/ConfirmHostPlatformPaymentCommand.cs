@@ -43,6 +43,10 @@ public sealed class ConfirmHostPlatformPaymentCommandHandler(
                 confirmation.DisputeReason, confirmation.GracePeriodExpiresAt,
                 confirmation.TotalTenantPaymentCents,
                 confirmation.TotalHostPlatformPaymentCents,
+                confirmation.FirstMonthRentCents,
+                confirmation.DepositAmountCents,
+                confirmation.InsuranceFeeCents,
+                confirmation.MonthlyProtocolFeeCents,
                 confirmation.HostPaidPlatform, confirmation.HostPaidPlatformAt));
     }
 }

@@ -1,0 +1,716 @@
+{
+  "info": {
+    "_postman_id": "lagedra-api-collection",
+    "name": "Lagedra API",
+    "description": "Institution-grade mid-term rental protocol API — comprehensive endpoint collection.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000"
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"P@ssw0rd!Strong\",\n  \"firstName\": \"Jane\",\n  \"lastName\": \"Doe\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/auth/register", "host": ["{{baseUrl}}"], "path": ["api", "auth", "register"] }
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\",\n  \"password\": \"P@ssw0rd!Strong\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"] }
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/auth/refresh", "host": ["{{baseUrl}}"], "path": ["api", "auth", "refresh"] }
+          }
+        },
+        {
+          "name": "Me (Current User)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/auth/me", "host": ["{{baseUrl}}"], "path": ["api", "auth", "me"] }
+          }
+        },
+        {
+          "name": "Verify Email",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"email-verification-token\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/auth/verify-email", "host": ["{{baseUrl}}"], "path": ["api", "auth", "verify-email"] }
+          }
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"user@example.com\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/auth/forgot-password", "host": ["{{baseUrl}}"], "path": ["api", "auth", "forgot-password"] }
+          }
+        },
+        {
+          "name": "Reset Password",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"reset-token\",\n  \"newPassword\": \"N3wP@ssw0rd!\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/auth/reset-password", "host": ["{{baseUrl}}"], "path": ["api", "auth", "reset-password"] }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/api/auth/logout", "host": ["{{baseUrl}}"], "path": ["api", "auth", "logout"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Listings",
+      "item": [
+        {
+          "name": "Create Listing",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Modern 2BR in Downtown\",\n  \"description\": \"Fully furnished apartment with city views.\",\n  \"propertyType\": \"Apartment\",\n  \"bedrooms\": 2,\n  \"bathrooms\": 1,\n  \"monthlyRent\": 2500.00,\n  \"currency\": \"USD\",\n  \"address\": {\n    \"street\": \"123 Main St\",\n    \"city\": \"Austin\",\n    \"state\": \"TX\",\n    \"zipCode\": \"78701\",\n    \"country\": \"US\"\n  },\n  \"minimumStayMonths\": 3,\n  \"maximumStayMonths\": 12\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/listings", "host": ["{{baseUrl}}"], "path": ["api", "listings"] }
+          }
+        },
+        {
+          "name": "Update Listing",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Updated 2BR in Downtown\",\n  \"monthlyRent\": 2700.00\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/listings/{{listingId}}", "host": ["{{baseUrl}}"], "path": ["api", "listings", "{{listingId}}"] }
+          }
+        },
+        {
+          "name": "Publish Listing",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/api/listings/{{listingId}}/publish", "host": ["{{baseUrl}}"], "path": ["api", "listings", "{{listingId}}", "publish"] }
+          }
+        },
+        {
+          "name": "Search Listings",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/listings?city=Austin&minRent=1000&maxRent=3000&page=1&pageSize=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "listings"],
+              "query": [
+                { "key": "city", "value": "Austin" },
+                { "key": "minRent", "value": "1000" },
+                { "key": "maxRent", "value": "3000" },
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Listing by ID",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/listings/{{listingId}}", "host": ["{{baseUrl}}"], "path": ["api", "listings", "{{listingId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Applications",
+      "item": [
+        {
+          "name": "Submit Application",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"listingId\": \"{{listingId}}\",\n  \"moveInDate\": \"2026-05-01\",\n  \"stayDurationMonths\": 6,\n  \"message\": \"I am interested in renting this property.\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/applications", "host": ["{{baseUrl}}"], "path": ["api", "applications"] }
+          }
+        },
+        {
+          "name": "Approve Application",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/api/applications/{{applicationId}}/approve", "host": ["{{baseUrl}}"], "path": ["api", "applications", "{{applicationId}}", "approve"] }
+          }
+        },
+        {
+          "name": "Reject Application",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Insufficient references provided.\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/applications/{{applicationId}}/reject", "host": ["{{baseUrl}}"], "path": ["api", "applications", "{{applicationId}}", "reject"] }
+          }
+        },
+        {
+          "name": "List Applications",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/applications?page=1&pageSize=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "applications"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Application",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/applications/{{applicationId}}", "host": ["{{baseUrl}}"], "path": ["api", "applications", "{{applicationId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Activation",
+      "item": [
+        {
+          "name": "Activate Deal",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"applicationId\": \"{{applicationId}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/deals/activate", "host": ["{{baseUrl}}"], "path": ["api", "deals", "activate"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payment",
+      "item": [
+        {
+          "name": "Get Payment Status",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/deals/{{dealId}}/payments/status", "host": ["{{baseUrl}}"], "path": ["api", "deals", "{{dealId}}", "payments", "status"] }
+          }
+        },
+        {
+          "name": "Confirm Payment",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dealId\": \"{{dealId}}\",\n  \"paymentIntentId\": \"pi_example_123\",\n  \"amount\": 2500.00,\n  \"currency\": \"USD\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/deals/{{dealId}}/payments/confirm", "host": ["{{baseUrl}}"], "path": ["api", "deals", "{{dealId}}", "payments", "confirm"] }
+          }
+        },
+        {
+          "name": "Dispute Payment",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dealId\": \"{{dealId}}\",\n  \"reason\": \"Amount charged is incorrect.\",\n  \"expectedAmount\": 2500.00\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/deals/{{dealId}}/payments/dispute", "host": ["{{baseUrl}}"], "path": ["api", "deals", "{{dealId}}", "payments", "dispute"] }
+          }
+        },
+        {
+          "name": "Resolve Payment Dispute",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dealId\": \"{{dealId}}\",\n  \"resolution\": \"RefundPartial\",\n  \"refundAmount\": 200.00,\n  \"notes\": \"Partial refund issued for overcharge.\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/deals/{{dealId}}/payments/dispute/resolve", "host": ["{{baseUrl}}"], "path": ["api", "deals", "{{dealId}}", "payments", "dispute", "resolve"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Billing",
+      "item": [
+        {
+          "name": "Get Billing Status",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/deals/{{dealId}}/billing/status", "host": ["{{baseUrl}}"], "path": ["api", "deals", "{{dealId}}", "billing", "status"] }
+          }
+        },
+        {
+          "name": "Get Proration Quote",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/deals/{{dealId}}/billing/proration?effectiveDate=2026-04-15",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "deals", "{{dealId}}", "billing", "proration"],
+              "query": [
+                { "key": "effectiveDate", "value": "2026-04-15" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Identity & KYC",
+      "item": [
+        {
+          "name": "Start KYC",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"documentType\": \"Passport\",\n  \"countryCode\": \"US\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/identity/kyc/start", "host": ["{{baseUrl}}"], "path": ["api", "identity", "kyc", "start"] }
+          }
+        },
+        {
+          "name": "Get KYC Status",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/identity/kyc/status", "host": ["{{baseUrl}}"], "path": ["api", "identity", "kyc", "status"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Insurance",
+      "item": [
+        {
+          "name": "Get Insurance Status",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/deals/{{dealId}}/insurance/status", "host": ["{{baseUrl}}"], "path": ["api", "deals", "{{dealId}}", "insurance", "status"] }
+          }
+        },
+        {
+          "name": "Submit Manual Insurance Proof",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dealId\": \"{{dealId}}\",\n  \"provider\": \"Lemonade\",\n  \"policyNumber\": \"POL-12345\",\n  \"coverageAmount\": 100000.00,\n  \"expirationDate\": \"2027-05-01\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/deals/{{dealId}}/insurance/manual-proof", "host": ["{{baseUrl}}"], "path": ["api", "deals", "{{dealId}}", "insurance", "manual-proof"] }
+          }
+        },
+        {
+          "name": "Get Insurance Quotes",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/deals/{{dealId}}/insurance/quotes", "host": ["{{baseUrl}}"], "path": ["api", "deals", "{{dealId}}", "insurance", "quotes"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Inquiry",
+      "item": [
+        {
+          "name": "Unlock Inquiry",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"listingId\": \"{{listingId}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/inquiries/unlock", "host": ["{{baseUrl}}"], "path": ["api", "inquiries", "unlock"] }
+          }
+        },
+        {
+          "name": "Submit Questions",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"listingId\": \"{{listingId}}\",\n  \"questions\": [\n    \"Is the property pet-friendly?\",\n    \"What utilities are included?\"\n  ]\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/inquiries/questions", "host": ["{{baseUrl}}"], "path": ["api", "inquiries", "questions"] }
+          }
+        },
+        {
+          "name": "Get Responses",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/inquiries/{{listingId}}/responses", "host": ["{{baseUrl}}"], "path": ["api", "inquiries", "{{listingId}}", "responses"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Arbitration",
+      "item": [
+        {
+          "name": "File Arbitration Case",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dealId\": \"{{dealId}}\",\n  \"category\": \"PropertyDamage\",\n  \"description\": \"Significant damage found upon move-out inspection.\",\n  \"requestedResolution\": \"DepositDeduction\",\n  \"amount\": 1500.00\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/arbitration/cases", "host": ["{{baseUrl}}"], "path": ["api", "arbitration", "cases"] }
+          }
+        },
+        {
+          "name": "Submit Evidence",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"caseId\": \"{{caseId}}\",\n  \"evidenceType\": \"Photo\",\n  \"description\": \"Photo of damaged kitchen countertop.\",\n  \"fileUrl\": \"https://storage.example.com/evidence/photo1.jpg\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/arbitration/cases/{{caseId}}/evidence", "host": ["{{baseUrl}}"], "path": ["api", "arbitration", "cases", "{{caseId}}", "evidence"] }
+          }
+        },
+        {
+          "name": "Get Arbitration Case",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/arbitration/cases/{{caseId}}", "host": ["{{baseUrl}}"], "path": ["api", "arbitration", "cases", "{{caseId}}"] }
+          }
+        },
+        {
+          "name": "List Arbitration Cases",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/arbitration/cases?page=1&pageSize=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "arbitration", "cases"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "20" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Evidence",
+      "item": [
+        {
+          "name": "Get Evidence Manifest",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/deals/{{dealId}}/evidence/manifest", "host": ["{{baseUrl}}"], "path": ["api", "deals", "{{dealId}}", "evidence", "manifest"] }
+          }
+        },
+        {
+          "name": "Seal Evidence",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/api/deals/{{dealId}}/evidence/seal", "host": ["{{baseUrl}}"], "path": ["api", "deals", "{{dealId}}", "evidence", "seal"] }
+          }
+        },
+        {
+          "name": "Upload Evidence",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "multipart/form-data" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "file", "type": "file", "src": "" },
+                { "key": "category", "value": "MoveInInspection", "type": "text" },
+                { "key": "description", "value": "Move-in condition photo", "type": "text" }
+              ]
+            },
+            "url": { "raw": "{{baseUrl}}/api/deals/{{dealId}}/evidence/upload", "host": ["{{baseUrl}}"], "path": ["api", "deals", "{{dealId}}", "evidence", "upload"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Compliance",
+      "item": [
+        {
+          "name": "Get Violations",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/compliance/violations?dealId={{dealId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "compliance", "violations"],
+              "query": [
+                { "key": "dealId", "value": "{{dealId}}" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Monitoring Status",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/compliance/monitoring/{{dealId}}", "host": ["{{baseUrl}}"], "path": ["api", "compliance", "monitoring", "{{dealId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Privacy",
+      "item": [
+        {
+          "name": "Get Consent Status",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/privacy/consent", "host": ["{{baseUrl}}"], "path": ["api", "privacy", "consent"] }
+          }
+        },
+        {
+          "name": "Request Data Export",
+          "request": {
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/api/privacy/export", "host": ["{{baseUrl}}"], "path": ["api", "privacy", "export"] }
+          }
+        },
+        {
+          "name": "Request Data Deletion",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"confirmation\": \"DELETE_MY_DATA\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/privacy/deletion", "host": ["{{baseUrl}}"], "path": ["api", "privacy", "deletion"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "Get Notification History",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications?page=1&pageSize=50",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notifications"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "50" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Notification Preferences",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/notifications/preferences", "host": ["{{baseUrl}}"], "path": ["api", "notifications", "preferences"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Jurisdiction Packs",
+      "item": [
+        {
+          "name": "List Jurisdiction Packs",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/jurisdictions", "host": ["{{baseUrl}}"], "path": ["api", "jurisdictions"] }
+          }
+        },
+        {
+          "name": "Get Jurisdiction Pack",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/jurisdictions/US-TX", "host": ["{{baseUrl}}"], "path": ["api", "jurisdictions", "US-TX"] }
+          }
+        },
+        {
+          "name": "Create Jurisdiction Pack (Admin)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"US-CA\",\n  \"name\": \"California\",\n  \"country\": \"US\",\n  \"state\": \"CA\",\n  \"rules\": {\n    \"maxSecurityDeposit\": 2,\n    \"noticePeriodDays\": 30,\n    \"requiresRentersInsurance\": true\n  }\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/admin/jurisdictions", "host": ["{{baseUrl}}"], "path": ["api", "admin", "jurisdictions"] }
+          }
+        },
+        {
+          "name": "Update Jurisdiction Pack (Admin)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"California (Updated)\",\n  \"rules\": {\n    \"maxSecurityDeposit\": 1,\n    \"noticePeriodDays\": 60,\n    \"requiresRentersInsurance\": true\n  }\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/admin/jurisdictions/US-CA", "host": ["{{baseUrl}}"], "path": ["api", "admin", "jurisdictions", "US-CA"] }
+          }
+        },
+        {
+          "name": "Delete Jurisdiction Pack (Admin)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
+            "method": "DELETE",
+            "url": { "raw": "{{baseUrl}}/api/admin/jurisdictions/US-CA", "host": ["{{baseUrl}}"], "path": ["api", "admin", "jurisdictions", "US-CA"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Content",
+      "item": [
+        {
+          "name": "List Blog Posts",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/content/blog?page=1&pageSize=10",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "content", "blog"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get SEO Page",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/content/seo/mid-term-rentals-austin", "host": ["{{baseUrl}}"], "path": ["api", "content", "seo", "mid-term-rentals-austin"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Partners",
+      "item": [
+        {
+          "name": "Register Partner",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"companyName\": \"UrbanStay Property Management\",\n  \"contactEmail\": \"partners@urbanstay.com\",\n  \"partnerType\": \"PropertyManager\",\n  \"website\": \"https://urbanstay.com\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/api/partners/register", "host": ["{{baseUrl}}"], "path": ["api", "partners", "register"] }
+          }
+        },
+        {
+          "name": "List Partner Members",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/api/partners/members", "host": ["{{baseUrl}}"], "path": ["api", "partners", "members"] }
+          }
+        },
+        {
+          "name": "Get Referrals",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/partners/referrals?page=1&pageSize=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "partners", "referrals"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "20" }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

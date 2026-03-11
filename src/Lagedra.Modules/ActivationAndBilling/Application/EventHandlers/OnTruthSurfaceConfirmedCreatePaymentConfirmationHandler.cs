@@ -37,31 +37,22 @@ public sealed partial class OnTruthSurfaceConfirmedCreatePaymentConfirmationHand
             .FirstOrDefaultAsync(a => a.DealId == domainEvent.DealId, ct)
             .ConfigureAwait(false);
 
-        long totalTenantPayment = 0;
-        long totalHostPlatformPayment = 0;
+        var monthlyFee = await settings.GetLongAsync(PlatformSettingKeys.ProtocolFeeMonthly, 7900, ct).ConfigureAwait(false);
+        var pilotDiscount = await settings.GetLongAsync(PlatformSettingKeys.ProtocolFeePilotDiscount, 3900, ct).ConfigureAwait(false);
+        var isPilot = await settings.GetBoolAsync(PlatformSettingKeys.ProtocolFeePilotActive, false, ct).ConfigureAwait(false);
+        var protocolFee = isPilot ? monthlyFee - pilotDiscount : monthlyFee;
 
-        if (application is not null)
-        {
-            var monthlyFee = await settings.GetLongAsync(PlatformSettingKeys.ProtocolFeeMonthly, 7900, ct).ConfigureAwait(false);
-            var pilotDiscount = await settings.GetLongAsync(PlatformSettingKeys.ProtocolFeePilotDiscount, 3900, ct).ConfigureAwait(false);
-            var isPilot = await settings.GetBoolAsync(PlatformSettingKeys.ProtocolFeePilotActive, false, ct).ConfigureAwait(false);
-            var protocolFee = isPilot ? monthlyFee - pilotDiscount : monthlyFee;
-
-            var financials = DealFinancials.Create(
-                application.FirstMonthRentCents ?? 1,
-                application.DepositAmountCents ?? 0,
-                application.InsuranceFeeCents ?? 0,
-                protocolFee);
-
-            totalTenantPayment = financials.TotalTenantPaymentCents;
-            totalHostPlatformPayment = financials.TotalHostPlatformPaymentCents;
-        }
+        var financials = DealFinancials.Create(
+            application?.FirstMonthRentCents ?? 1,
+            application?.DepositAmountCents ?? 0,
+            application?.InsuranceFeeCents ?? 0,
+            protocolFee);
 
         var graceDays = (int)await settings
             .GetLongAsync(PlatformSettingKeys.PaymentGracePeriodDays, 3, ct).ConfigureAwait(false);
 
         var confirmation = DealPaymentConfirmation.Create(
-            domainEvent.DealId, totalTenantPayment, totalHostPlatformPayment, clock, graceDays);
+            domainEvent.DealId, financials, clock, graceDays);
         dbContext.DealPaymentConfirmations.Add(confirmation);
 
         await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);

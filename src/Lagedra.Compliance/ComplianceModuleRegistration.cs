@@ -1,3 +1,5 @@
+using Lagedra.Compliance.Application.EventHandlers;
+using Lagedra.Compliance.Domain.Events;
 using Lagedra.Compliance.Infrastructure.Persistence;
 using Lagedra.Compliance.Infrastructure.Repositories;
 using Lagedra.Compliance.Infrastructure.Services;
@@ -29,6 +31,10 @@ public static class ComplianceModuleRegistration
 
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(ComplianceModuleRegistration).Assembly));
+
+        services.AddDomainEventHandler<ViolationCreatedEvent, OnViolationCreatedNotify>();
+        services.AddDomainEventHandler<ViolationResolvedEvent, OnViolationResolvedNotify>();
+        services.AddDomainEventHandler<ViolationEscalatedEvent, OnViolationEscalatedNotify>();
 
         return services;
     }

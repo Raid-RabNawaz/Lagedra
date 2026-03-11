@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Lagedra.Modules.ActivationAndBilling.Application.Commands;
 using Lagedra.Modules.ActivationAndBilling.Application.Queries;
 using Lagedra.Modules.ActivationAndBilling.Presentation.Contracts;
+using Lagedra.Infrastructure.Middleware;
 using Lagedra.SharedKernel.Settings;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
@@ -25,7 +26,8 @@ public static class PaymentConfirmationEndpoints
         group.MapGet("/status", GetPaymentStatus);
         group.MapPost("/confirm", ConfirmPayment);
         group.MapPost("/confirm-platform-payment", ConfirmHostPlatformPayment);
-        group.MapPost("/dispute", DisputePayment);
+        group.MapPost("/dispute", DisputePayment)
+            .RequireRateLimiting(RateLimitingSetup.DisputeCapPolicy);
         group.MapPost("/cancel", CancelBooking);
         group.MapPost("/damage-claim", FileDamageClaim);
 

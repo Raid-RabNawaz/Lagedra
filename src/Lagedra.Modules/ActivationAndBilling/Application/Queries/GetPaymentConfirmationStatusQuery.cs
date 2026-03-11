@@ -44,6 +44,10 @@ public sealed class GetPaymentConfirmationStatusQueryHandler(
                 confirmation.GracePeriodExpiresAt,
                 confirmation.TotalTenantPaymentCents,
                 confirmation.TotalHostPlatformPaymentCents,
+                confirmation.FirstMonthRentCents,
+                confirmation.DepositAmountCents,
+                confirmation.InsuranceFeeCents,
+                confirmation.MonthlyProtocolFeeCents,
                 confirmation.HostPaidPlatform,
                 confirmation.HostPaidPlatformAt));
     }

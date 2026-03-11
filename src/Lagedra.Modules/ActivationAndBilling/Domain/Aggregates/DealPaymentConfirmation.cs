@@ -1,5 +1,6 @@
 using Lagedra.Modules.ActivationAndBilling.Domain.Enums;
 using Lagedra.Modules.ActivationAndBilling.Domain.Events;
+using Lagedra.Modules.ActivationAndBilling.Domain.ValueObjects;
 using Lagedra.SharedKernel.Domain;
 using Lagedra.SharedKernel.Time;
 
@@ -10,6 +11,10 @@ public sealed class DealPaymentConfirmation : AggregateRoot<Guid>
     public Guid DealId { get; private set; }
     public long TotalTenantPaymentCents { get; private set; }
     public long TotalHostPlatformPaymentCents { get; private set; }
+    public long FirstMonthRentCents { get; private set; }
+    public long DepositAmountCents { get; private set; }
+    public long InsuranceFeeCents { get; private set; }
+    public long MonthlyProtocolFeeCents { get; private set; }
     public bool HostPaidPlatform { get; private set; }
     public DateTime? HostPaidPlatformAt { get; private set; }
     public bool HostConfirmed { get; private set; }
@@ -29,11 +34,11 @@ public sealed class DealPaymentConfirmation : AggregateRoot<Guid>
 
     public static DealPaymentConfirmation Create(
         Guid dealId,
-        long totalTenantPaymentCents,
-        long totalHostPlatformPaymentCents,
+        DealFinancials financials,
         IClock clock,
         int gracePeriodDays = 3)
     {
+        ArgumentNullException.ThrowIfNull(financials);
         ArgumentNullException.ThrowIfNull(clock);
 
         var now = clock.UtcNow;
@@ -41,8 +46,12 @@ public sealed class DealPaymentConfirmation : AggregateRoot<Guid>
         {
             Id = Guid.NewGuid(),
             DealId = dealId,
-            TotalTenantPaymentCents = totalTenantPaymentCents,
-            TotalHostPlatformPaymentCents = totalHostPlatformPaymentCents,
+            FirstMonthRentCents = financials.FirstMonthRentCents,
+            DepositAmountCents = financials.DepositAmountCents,
+            InsuranceFeeCents = financials.InsuranceFeeCents,
+            MonthlyProtocolFeeCents = financials.MonthlyProtocolFeeCents,
+            TotalTenantPaymentCents = financials.TotalTenantPaymentCents,
+            TotalHostPlatformPaymentCents = financials.TotalHostPlatformPaymentCents,
             Status = PaymentConfirmationStatus.Pending,
             GracePeriodExpiresAt = now.AddDays(gracePeriodDays),
             CreatedAt = now,
