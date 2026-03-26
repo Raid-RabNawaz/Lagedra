@@ -2224,61 +2224,79 @@
 
 ### 8.2 App Shell
 
-- [ ] `src/main.tsx` — providers: `QueryClientProvider`, `AuthProvider`, `RouterProvider`
-- [ ] `src/app/App.tsx` — router outlet, global error boundary
-- [ ] `src/app/routes.tsx` — role-based lazy routes
-- [ ] `src/app/auth/AuthProvider.tsx` — JWT storage (`localStorage`), refresh logic, Zustand slice
-- [ ] `src/app/auth/RequireAuth.tsx` — redirects to login if no valid token
-- [ ] `src/app/auth/roles.ts` — role constants matching backend enums
-- [ ] `src/app/layout/Shell.tsx`, `Nav.tsx`, `Footer.tsx`, `ErrorBoundary.tsx`
-- [ ] `src/app/config.ts` — reads `VITE_*` env vars
+- [x] `src/main.tsx` — providers: `QueryClientProvider`, `AuthProvider`, `RouterProvider`
+- [x] `src/app/App.tsx` — router outlet, global error boundary
+- [x] `src/app/routes.tsx` — role-based lazy routes
+- [x] `src/app/auth/AuthProvider.tsx` — JWT storage (`localStorage`), refresh logic, Zustand slice
+- [x] `src/app/auth/RequireAuth.tsx` — redirects to login if no valid token
+- [x] `src/app/auth/roles.ts` — role constants matching backend enums
+- [x] `src/app/layout/AppShell.tsx` — sidebar-based dashboard shell (collapsible, grouped by role)
+- [x] `src/app/layout/MarketplaceLayout.tsx` — Airbnb-style top bar + mobile bottom tab bar
+- [x] `src/app/layout/ErrorBoundary.tsx`
+- [x] `src/app/auth/permissions.ts` — `NavGroup[]` sidebar groups, `getBottomTabsForRole()`, `getSidebarGroupsForRole()`
+- [x] `src/app/config.ts` — reads `VITE_*` env vars
 
 ### 8.3 API Client
 
-- [ ] `src/api/http.ts` — Axios instance: `Authorization: Bearer`, `X-Correlation-Id`, auto-refresh on 401
-- [ ] `src/api/endpoints.ts` — typed endpoint map
-- [ ] `src/api/types.ts` — DTOs synced with `packages/contracts`
+- [x] `src/api/http.ts` — Axios instance: `Authorization: Bearer`, `X-Correlation-Id`, auto-refresh on 401
+- [x] `src/api/endpoints.ts` — typed endpoint map
+- [x] `src/api/types.ts` — DTOs synced with `packages/contracts`
 
 ### 8.4 UI Primitives (shadcn/ui base)
 
-- [ ] shadcn/ui components initialized: `Button`, `Card`, `Modal/Dialog`, `Table`, `Input`, `Select`, `Checkbox`, `RadioGroup`, `Badge`, `Alert`, `Skeleton`, `Pagination`, `Separator`, `Tabs`
-- [ ] Install `lucide-react` — Lucide icon library (included with shadcn/ui); used for dynamic icon rendering from `iconKey` strings stored in DB; `DynamicIcon` component maps `iconKey` → `<LucideIcon />` with fallback
-- [ ] `src/components/shared/Loader.tsx`
-- [ ] `src/components/shared/EmptyState.tsx`
-- [ ] `src/components/shared/FormError.tsx`
+- [x] shadcn/ui components initialized: `Button`, `Card`, `Modal/Dialog`, `Table`, `Input`, `Select`, `Badge`, `Alert`, `Skeleton`, `Separator`, `Tabs`, `Label`, `Textarea`, `Avatar`
+- [x] Install `lucide-react` — Lucide icon library (included with shadcn/ui); used for dynamic icon rendering from `iconKey` strings stored in DB; `DynamicIcon` component maps `iconKey` → `<LucideIcon />` with fallback
+- [x] `src/components/shared/Loader.tsx`
+- [x] `src/components/shared/EmptyState.tsx`
+- [x] `src/components/shared/FormError.tsx`
 
 ### 8.5 Feature Modules
 
 #### Auth Pages
-- [ ] `features/auth/pages/LoginPage.tsx` — email + password form; `POST /v1/auth/login`
-- [ ] `features/auth/pages/RegisterPage.tsx` — email + password + role selection (Landlord/Tenant only)
-- [ ] `features/auth/pages/VerifyEmailPage.tsx` — token from URL param
-- [ ] `features/auth/pages/ForgotPasswordPage.tsx`
-- [ ] `features/auth/pages/ResetPasswordPage.tsx`
-- [ ] `features/auth/services/authApi.ts`
+- [x] `features/auth/pages/LoginPage.tsx` — email + password form; `POST /v1/auth/login`
+- [x] `features/auth/pages/RegisterPage.tsx` — email + password + role selection (Landlord/Tenant only)
+- [x] `features/auth/pages/VerifyEmailPage.tsx` — token from URL param
+- [x] `features/auth/pages/ForgotPasswordPage.tsx`
+- [x] `features/auth/pages/ResetPasswordPage.tsx`
+- [x] `features/auth/services/authApi.ts`
 
 #### Listings
-- [ ] `features/listings/pages/SearchPage.tsx` — filter by stay range, price, approx location, amenities (multi-select checkbox); minimal non-promotional
-- [ ] `features/listings/pages/ListingDetailPage.tsx` — structured fields only; Google Map with approx pin pre-activation; precise address post-activation; amenities grid with Lucide icons grouped by category; safety devices list with icons; considerations list with icons; house rules section with icons; cancellation policy summary with type badge
-- [ ] `features/listings/pages/CreateListingPage.tsx` — fully structured form; jurisdiction-gated fields (AB 628 stove/fridge checkboxes for CA); amenity picker (grouped by category, checkbox grid), safety device picker, consideration picker, house rules form (time pickers, toggles), cancellation policy selector (type dropdown with auto-filled defaults, adjustable values)
-- [ ] `features/listings/components/ListingCard.tsx` — shows top 3–5 amenity icons as badges
-- [ ] `features/listings/components/ListingForm.tsx` — uses `react-hook-form` + `zod`; field visibility driven by jurisdiction
-- [ ] `features/listings/components/LocationPicker.tsx` — `@react-google-maps/api` `GoogleMap` + `Marker`; approx vs. precise state toggle
-- [ ] `features/listings/components/AmenityGrid.tsx` — renders amenities grouped by category; each item: Lucide icon + name; responsive grid (2–4 columns)
-- [ ] `features/listings/components/SafetyDeviceList.tsx` — renders safety devices with Lucide icons; check-mark style
-- [ ] `features/listings/components/ConsiderationList.tsx` — renders considerations with Lucide icons; warning style
-- [ ] `features/listings/components/HouseRulesSection.tsx` — structured display: check-in/out times, guest count, pet/smoking/party policies with icons and status (Allowed/Not Allowed)
-- [ ] `features/listings/components/CancellationPolicySummary.tsx` — type badge + refund window summary; tooltip with full details
-- [ ] `features/listings/components/DynamicIcon.tsx` — renders Lucide icon by `iconKey` string; fallback icon for unknown keys; used by all listing attribute displays
-- [ ] `features/listings/hooks/useListings.ts`, `useListingDetail.ts`, `useListingDefinitions.ts` — TanStack Query; `useListingDefinitions` fetches amenity/safety/consideration definitions for forms
-- [ ] `features/listings/services/listingApi.ts`
+- [x] `features/listings/pages/SearchPage.tsx` — filter by stay range, price, approx location, amenities (multi-select checkbox); minimal non-promotional; map-based search with bounds, sort, pagination
+- [x] `features/listings/pages/ListingDetailPage.tsx` — structured fields only; approx pin; amenities grid with Lucide icons grouped by category; safety devices list with icons; considerations list with icons; house rules section with icons; cancellation policy summary with type badge; host profile card; similar listings; virtual tour link; verification badges
+- [x] `features/listings/pages/CreateListingPage.tsx` — fully structured form; amenity picker (grouped by category, checkbox grid), safety device picker, consideration picker, house rules form (time pickers, toggles), cancellation policy selector (type dropdown with auto-filled defaults, adjustable values)
+- [x] `features/listings/pages/EditListingPage.tsx` — edit form reusing ListingForm
+- [x] `features/listings/pages/MyListingsPage.tsx` — landlord's listing management
+- [x] `features/listings/pages/SavedListingsPage.tsx` — saved listings with collections
+- [x] `features/listings/components/ListingCard.tsx` — shows top 3–5 amenity icons as badges
+- [x] `features/listings/components/ListingForm.tsx` — uses `react-hook-form` + `zod`; field visibility driven by jurisdiction
+- [x] `features/listings/components/LocationPickerMap.tsx` — Leaflet map; approx vs. precise state toggle
+- [x] `features/listings/components/ListingMap.tsx` — Leaflet search map with markers and bounds tracking
+- [x] `features/listings/components/ListingMapMarker.tsx` — price-badge map markers
+- [x] `features/listings/components/AmenityGrid.tsx` — renders amenities grouped by category; each item: Lucide icon + name; responsive grid (2–4 columns)
+- [x] `features/listings/components/SafetyDeviceList.tsx` — renders safety devices with Lucide icons; check-mark style
+- [x] `features/listings/components/ConsiderationList.tsx` — renders considerations with Lucide icons; warning style
+- [x] `features/listings/components/HouseRulesSection.tsx` — structured display: check-in/out times, guest count, pet/smoking/party policies with icons and status (Allowed/Not Allowed)
+- [x] `features/listings/components/CancellationPolicySummary.tsx` — type badge + refund window summary; tooltip with full details
+- [x] `features/listings/components/SaveButton.tsx` — heart toggle to save/unsave listing
+- [x] `features/listings/components/DynamicIcon.tsx` — renders Lucide icon by `iconKey` string; fallback icon for unknown keys; used by all listing attribute displays
+- [x] `features/listings/hooks/useListings.ts`, `useListingDefinitions.ts`, `useMyListings.ts` — TanStack Query; `useListingDefinitions` fetches amenity/safety/consideration definitions for forms
+- [x] `features/listings/lib/listingFormSchema.ts`, `mapListingToForm.ts`, `toListingRequests.ts` — Zod schema, form-to-DTO mappers
+- [x] `features/listings/services/listingApi.ts` — full API client: search, CRUD, photos, availability, price history, saved listings, collections, admin definitions
 
 #### Applications
-- [x] `features/applications/pages/ApplicationsPage.tsx` — landlord inbox; shows tenant's Verification Class, insurance state, deposit band
-- [x] `features/applications/pages/ApplicationDetailPage.tsx` — full risk view; approve/reject actions
-- [x] `features/applications/components/ApplicationCard.tsx`
-- [x] `features/applications/components/ApplicationForm.tsx` — Persona KYC consent, document upload, affiliation declaration, military status checkbox
-- [x] `features/applications/services/applicationApi.ts`
+- [x] `features/applications/pages/ApplicationsPage.tsx` — landlord inbox; listing selector, status filter, pending count badge
+- [x] `features/applications/pages/ApplicationDetailPage.tsx` — full application view; approve (with deposit amount) / reject actions; listing info, stay details, financials
+- [x] `features/applications/pages/MyApplicationsPage.tsx` — tenant's submitted applications list
+- [x] `features/applications/components/ApplicationCard.tsx` — summary card with status badge, dates, financials
+- [x] `features/applications/components/ApplicationStatusBadge.tsx` — color-coded status badge
+- [x] `features/applications/components/ApplyDialog.tsx` — modal on listing detail; date picker, stay validation, submit application
+- [x] `features/applications/hooks/useApplications.ts` — TanStack Query hooks for list/detail/submit/approve/reject with cache invalidation
+- [x] `features/applications/services/applicationApi.ts` — full API client for application endpoints
+
+#### Admin
+- [x] `features/admin/pages/UsersPage.tsx` — user management table with search, pagination, role change dialog
+- [x] `features/admin/pages/DefinitionsPage.tsx` — tabbed admin UI for amenities, safety devices, and considerations CRUD; icon preview via DynamicIcon; category filter for amenities; active/inactive toggle on edit
+- [x] `features/admin/components/ChangeRoleDialog.tsx` — dialog for changing user roles
 
 #### Structured Inquiry
 - [ ] `features/inquiry/pages/InquiryThreadPage.tsx` — question/answer history; hard-disabled UI after Truth Surface confirmation
@@ -2327,8 +2345,8 @@
 
 ### 8.6 Utils
 
-- [ ] `src/utils/format.ts` — date (US locale), money (cents → `$XX.XX`), percentage formatters
-- [ ] `src/utils/validation.ts` — shared `zod` schemas (email, password, stay range)
+- [x] `src/utils/format.ts` — date (US locale), money (cents → `$XX.XX`), percentage formatters
+- [x] `src/utils/validation.ts` — shared `zod` schemas (email, password, stay range)
 
 ---
 
@@ -3107,9 +3125,11 @@
 
 ---
 
-*Last updated: 2026-03-05. Technology stack locked. Update checkboxes as work is completed.*
+*Last updated: 2026-03-24. Technology stack locked. Update checkboxes as work is completed.*
 *Audit: All GAP-1 through GAP-16 items resolved. Backend Phases 0–7, 14, and all module code (Phase 5) are fully complete.*
 *Phase 6 (API Gateway) complete: AuthMiddleware, ConsentMiddleware, RateLimitingSetup, API versioning, FluentValidation pipeline, OpenAPI + Postman tooling.*
 *Phase 7 (Worker) complete: 8 files, 21 jobs registered, outbox dispatch, health monitoring, Quartz persistent store.*
-*Next priority: Phase 8 (Web Frontend).*
+*Phase 8 (Web Frontend) in progress: core shell (8.1–8.4) complete with hybrid navigation (sidebar dashboard + Airbnb-style marketplace); Auth pages + Listings module + Applications module + Admin module (8.5) complete; remaining modules: Inquiry, Truth Surface, Activation/Billing, Compliance, Arbitration, Trust Ledger, Evidence, Notifications, Profile.*
+*Navigation architecture: Marketplace uses slim top bar + mobile bottom tabs; Dashboard (/app/*) uses collapsible left sidebar grouped by role.*
+*Next priority: Phase 8.5 remaining feature modules (Inquiry → Truth Surface → Activation/Billing).*
 *Each `[ ]` → `[x]` is a step toward a defensible, enforceable, institution-grade mid-term rental protocol.*

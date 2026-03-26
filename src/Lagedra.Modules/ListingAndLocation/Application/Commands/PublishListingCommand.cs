@@ -20,6 +20,10 @@ public sealed class PublishListingCommandHandler(ListingsDbContext dbContext)
         ArgumentNullException.ThrowIfNull(request);
 
         var listing = await dbContext.Listings
+            .Include(l => l.Amenities).ThenInclude(a => a.AmenityDefinition)
+            .Include(l => l.SafetyDevices).ThenInclude(s => s.SafetyDeviceDefinition)
+            .Include(l => l.Considerations).ThenInclude(c => c.ConsiderationDefinition)
+            .Include(l => l.Photos)
             .FirstOrDefaultAsync(l => l.Id == request.ListingId, cancellationToken)
             .ConfigureAwait(false);
 
@@ -28,7 +32,15 @@ public sealed class PublishListingCommandHandler(ListingsDbContext dbContext)
             return Result<ListingDetailsDto>.Failure(NotFound);
         }
 
-        listing.Publish();
+        try
+        {
+            listing.Publish();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Result<ListingDetailsDto>.Failure(new Error("Listing.PublishFailed", ex.Message));
+        }
+
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return Result<ListingDetailsDto>.Success(ListingMapper.ToDetails(listing));

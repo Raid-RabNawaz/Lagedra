@@ -9,9 +9,18 @@ import {
   ArrowRight,
   CheckCircle2,
   AlertCircle,
+  Users,
+  Home,
+  Building2,
+  Briefcase,
+  Scale,
+  FileCheck,
+  Plus,
 } from "lucide-react";
 import { authApi } from "@/features/auth/services/authApi";
 import { useAuthStore } from "@/app/auth/authStore";
+import { roles, roleLabel } from "@/app/auth/roles";
+import { isAdmin } from "@/app/auth/permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -70,30 +79,28 @@ export const DashboardPage = () => {
     user?.firstName && user?.lastName && user?.phoneNumber && user?.city,
   );
 
+  const currentRole = String(user?.role ?? "");
+
   const stats = [
     {
       label: "Role",
-      value: String(user?.role ?? "N/A"),
+      value: roleLabel(currentRole),
       icon: Shield,
-      accent: false,
     },
     {
       label: "Member since",
       value: memberSince,
       icon: Calendar,
-      accent: false,
     },
     {
       label: "Response rate",
       value: user?.responseRatePercent != null ? `${user.responseRatePercent}%` : "N/A",
       icon: TrendingUp,
-      accent: false,
     },
     {
       label: "Response time",
       value: user?.responseTimeMinutes != null ? `${user.responseTimeMinutes} min` : "N/A",
       icon: Clock,
-      accent: false,
     },
   ];
 
@@ -138,6 +145,8 @@ export const DashboardPage = () => {
           </Card>
         ))}
       </div>
+
+      <RoleQuickActions role={currentRole} />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
@@ -202,6 +211,66 @@ export const DashboardPage = () => {
     </div>
   );
 };
+
+type QuickAction = { label: string; description: string; to: string; icon: typeof Home };
+
+function RoleQuickActions({ role }: { role: string }) {
+  let actions: QuickAction[] = [];
+
+  if (role === roles.tenant) {
+    actions = [
+      { label: "Browse listings", description: "Find your next mid-term rental", to: "/listings", icon: Home },
+      { label: "My applications", description: "Track your rental applications", to: "#", icon: FileCheck },
+    ];
+  } else if (role === roles.landlord) {
+    actions = [
+      { label: "Browse listings", description: "See what's on the market", to: "/listings", icon: Home },
+      { label: "My listings", description: "Manage your rental properties", to: "/app/listings", icon: Building2 },
+      { label: "Create listing", description: "Add a new property", to: "/app/listings/new", icon: Plus },
+      { label: "Applications", description: "Review tenant applications", to: "#", icon: FileCheck },
+    ];
+  } else if (role === roles.arbitrator) {
+    actions = [
+      { label: "Assigned cases", description: "Review and resolve disputes", to: "#", icon: Scale },
+    ];
+  } else if (isAdmin(role)) {
+    actions = [
+      { label: "Manage users", description: "View and manage all platform users", to: "/app/admin/users", icon: Users },
+      { label: "Browse listings", description: "View marketplace listings", to: "/listings", icon: Home },
+    ];
+  } else if (role === roles.insurancePartner) {
+    actions = [
+      { label: "Active policies", description: "View insurance policies", to: "#", icon: Shield },
+    ];
+  } else if (role === roles.institutionPartner) {
+    actions = [
+      { label: "Browse listings", description: "Find rentals for your members", to: "/listings", icon: Home },
+      { label: "Organization", description: "Manage your organization", to: "#", icon: Briefcase },
+    ];
+  }
+
+  if (actions.length === 0) return null;
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {actions.map((action) => (
+        <Link key={action.label} to={action.to}>
+          <Card className="transition-shadow hover:shadow-md h-full">
+            <CardContent className="flex items-start gap-4 p-5">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-accent/10">
+                <action.icon className="h-5 w-5 text-accent" />
+              </div>
+              <div>
+                <p className="font-medium">{action.label}</p>
+                <p className="text-sm text-muted-foreground">{action.description}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+      ))}
+    </div>
+  );
+}
 
 function ProfileCheckItem({ label, done }: { label: string; done: boolean }) {
   return (

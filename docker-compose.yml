@@ -166,6 +166,7 @@ services:
       - lagedra_pnpm_store:/pnpm-store
     environment:
       VITE_API_BASE_URL: "http://localhost:${API_HTTP_PORT:-8080}"
+      VITE_GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-262822188598-915tp2sk0cgsv9sj0c6nifnp661998ba.apps.googleusercontent.com}"
       VITE_GOOGLE_MAPS_API_KEY: "${GOOGLE_MAPS_API_KEY}"
       VITE_STRIPE_PUBLISHABLE_KEY: "${STRIPE_PUBLISHABLE_KEY}"
       CHOKIDAR_USEPOLLING: "true"

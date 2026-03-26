@@ -3,12 +3,18 @@ using Lagedra.SharedKernel.Caching;
 using Lagedra.SharedKernel.Integration;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Lagedra.Infrastructure.Middleware;
 
-public sealed partial class ConsentMiddleware(RequestDelegate next, ILogger<ConsentMiddleware> logger)
+public sealed partial class ConsentMiddleware(
+    RequestDelegate next,
+    ILogger<ConsentMiddleware> logger,
+    IHostEnvironment environment,
+    IConfiguration configuration)
 {
     private static readonly TimeSpan ConsentCacheTtl = TimeSpan.FromMinutes(10);
 
@@ -17,12 +23,20 @@ public sealed partial class ConsentMiddleware(RequestDelegate next, ILogger<Cons
         "/health", "/swagger", "/hubs",
         "/v1/auth", "/v1/webhook",
         "/v1/blog", "/v1/seo",
-        "/v1/listings/search", "/v1/listings/definitions"
+        "/v1/listings/search", "/v1/listings/definitions",
+        "/v1/privacy/consent", "/v1/privacy/consents",
     ];
 
     public async Task InvokeAsync(HttpContext context)
     {
         ArgumentNullException.ThrowIfNull(context);
+
+        var enforced = configuration.GetValue("ConsentEnforcement:Enabled", defaultValue: !environment.IsDevelopment());
+        if (!enforced)
+        {
+            await next(context).ConfigureAwait(false);
+            return;
+        }
 
         if (context.User.Identity?.IsAuthenticated != true)
         {

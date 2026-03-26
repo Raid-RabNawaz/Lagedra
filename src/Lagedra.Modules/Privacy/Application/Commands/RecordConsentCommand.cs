@@ -1,6 +1,7 @@
 using Lagedra.Modules.Privacy.Domain.Aggregates;
 using Lagedra.Modules.Privacy.Domain.Enums;
 using Lagedra.Modules.Privacy.Infrastructure.Persistence;
+using Lagedra.SharedKernel.Caching;
 using Lagedra.SharedKernel.Results;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -13,7 +14,7 @@ public sealed record RecordConsentCommand(
     string IpAddress,
     string UserAgent) : IRequest<Result>;
 
-public sealed class RecordConsentCommandHandler(PrivacyDbContext dbContext)
+public sealed class RecordConsentCommandHandler(PrivacyDbContext dbContext, ICacheService cache)
     : IRequestHandler<RecordConsentCommand, Result>
 {
     public async Task<Result> Handle(RecordConsentCommand request, CancellationToken cancellationToken)
@@ -31,8 +32,11 @@ public sealed class RecordConsentCommandHandler(PrivacyDbContext dbContext)
             dbContext.UserConsents.Add(userConsent);
         }
 
-        userConsent.RecordConsent(request.ConsentType, request.IpAddress, request.UserAgent);
+        var record = userConsent.RecordConsent(request.ConsentType, request.IpAddress, request.UserAgent);
+        dbContext.Entry(record).State = EntityState.Added;
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        await cache.RemoveAsync($"user:consent:{request.UserId}", cancellationToken).ConfigureAwait(false);
 
         return Result.Success();
     }

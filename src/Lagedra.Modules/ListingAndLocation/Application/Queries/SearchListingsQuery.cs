@@ -15,6 +15,10 @@ public sealed record SearchListingsQuery(
     double? Latitude,
     double? Longitude,
     double? RadiusKm,
+    double? SwLat,
+    double? SwLng,
+    double? NeLat,
+    double? NeLng,
     PropertyType? PropertyType,
     int? MinBedrooms,
     int? MinBathrooms,
@@ -115,6 +119,20 @@ public sealed class SearchListingsQueryHandler(ListingsDbContext dbContext)
                 l.ApproxGeoPoint.Latitude <= lat + deltaLat &&
                 l.ApproxGeoPoint.Longitude >= lon - deltaLon &&
                 l.ApproxGeoPoint.Longitude <= lon + deltaLon);
+        }
+        else if (request.SwLat.HasValue && request.SwLng.HasValue &&
+                 request.NeLat.HasValue && request.NeLng.HasValue)
+        {
+            var swLat = request.SwLat.Value;
+            var swLng = request.SwLng.Value;
+            var neLat = request.NeLat.Value;
+            var neLng = request.NeLng.Value;
+            query = query.Where(l =>
+                l.ApproxGeoPoint != null &&
+                l.ApproxGeoPoint.Latitude >= swLat &&
+                l.ApproxGeoPoint.Latitude <= neLat &&
+                l.ApproxGeoPoint.Longitude >= swLng &&
+                l.ApproxGeoPoint.Longitude <= neLng);
         }
 
         if (request.AmenityIds is { Count: > 0 } amenityIds)

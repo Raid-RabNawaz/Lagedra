@@ -35,6 +35,10 @@ public sealed class AddListingPhotoCommandHandler(ListingsDbContext dbContext)
 
         var photo = listing.AddPhoto(request.StorageKey, request.Url, request.Caption);
 
+        // Domain factory sets Id = Guid.NewGuid() before EF tracks the entity,
+        // so DetectChanges mis-identifies it as existing. Force Added state.
+        dbContext.Entry(photo).State = EntityState.Added;
+
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return Result<ListingPhotoDto>.Success(
