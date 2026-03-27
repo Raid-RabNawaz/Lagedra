@@ -53,6 +53,8 @@ public sealed class CompleteUploadCommandHandler(
         var upload = manifest.AddUpload(
             request.OriginalFileName, request.StorageKey, request.MimeType);
 
+        dbContext.Entry(upload).State = EntityState.Added;
+
         upload.SetFileHash(FileHash.Create(request.FileHashHex));
 
         var scanResult = MalwareScanResult.CreatePending(upload.Id);

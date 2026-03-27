@@ -2,6 +2,8 @@ import { endpoints } from "@/api/endpoints";
 import { http } from "@/api/http";
 import type {
   AuthResultDto,
+  ChangePasswordRequest,
+  ExternalLoginRequest,
   ForgotPasswordRequest,
   LoginRequest,
   RefreshTokenRequest,
@@ -9,6 +11,7 @@ import type {
   RegisterResponse,
   ResetPasswordRequest,
   UpdateProfileRequest,
+  UpdateRoleRequest,
   UserProfileDto,
 } from "@/api/types";
 import { useAuthStore } from "@/app/auth/authStore";
@@ -24,6 +27,12 @@ const applyAuthResult = (result: AuthResultDto): void => {
 export const authApi = {
   async login(payload: LoginRequest): Promise<AuthResultDto> {
     const response = await http.post<AuthResultDto>(endpoints.auth.login, payload);
+    applyAuthResult(response.data);
+    return response.data;
+  },
+
+  async externalLogin(payload: ExternalLoginRequest): Promise<AuthResultDto> {
+    const response = await http.post<AuthResultDto>(endpoints.auth.externalLogin, payload);
     applyAuthResult(response.data);
     return response.data;
   },
@@ -50,6 +59,11 @@ export const authApi = {
     return response.data;
   },
 
+  async changePassword(payload: ChangePasswordRequest): Promise<{ message: string }> {
+    const response = await http.post<{ message: string }>(endpoints.auth.changePassword, payload);
+    return response.data;
+  },
+
   async refreshSession(refreshToken: string): Promise<AuthResultDto> {
     const body: RefreshTokenRequest = { refreshToken };
     const response = await http.post<AuthResultDto>(endpoints.auth.refresh, body);
@@ -73,6 +87,18 @@ export const authApi = {
   async updateProfile(payload: UpdateProfileRequest): Promise<UserProfileDto> {
     const response = await http.put<UserProfileDto>(endpoints.auth.me, payload);
     useAuthStore.getState().setUser(response.data);
+    return response.data;
+  },
+
+  async listUsers(page = 1, pageSize = 50): Promise<UserProfileDto[]> {
+    const response = await http.get<UserProfileDto[]>(endpoints.auth.users, {
+      params: { page, pageSize },
+    });
+    return response.data;
+  },
+
+  async updateUserRole(userId: string, payload: UpdateRoleRequest): Promise<{ message: string }> {
+    const response = await http.put<{ message: string }>(endpoints.auth.userRole(userId), payload);
     return response.data;
   },
 };

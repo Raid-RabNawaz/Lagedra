@@ -43,6 +43,7 @@ public sealed class SubmitInquiryQuestionCommandHandler(
         }
 
         var question = session.AddQuestion(request.Category, request.PredefinedQuestionId, request.CustomQuestionText);
+        dbContext.Entry(question).State = EntityState.Added;
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return Result<InquiryQuestionDto>.Success(

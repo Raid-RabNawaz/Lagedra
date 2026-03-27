@@ -43,6 +43,10 @@ public sealed class AttachEvidenceCommandHandler(
         }
 
         arbitrationCase.AttachEvidence(request.SlotType, request.SubmittedBy, request.EvidenceManifestId);
+
+        var newSlot = arbitrationCase.EvidenceSlots[^1];
+        dbContext.Entry(newSlot).State = EntityState.Added;
+
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return Result.Success();

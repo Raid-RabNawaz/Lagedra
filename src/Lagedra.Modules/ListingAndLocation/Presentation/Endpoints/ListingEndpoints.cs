@@ -21,6 +21,7 @@ public static class ListingEndpoints
             .WithTags("Listings");
 
         group.MapPost("/", CreateListing).RequireAuthorization("RequireLandlord");
+        group.MapGet("/mine", GetMyListings).RequireAuthorization("RequireLandlord");
         group.MapPut("/{listingId:guid}", UpdateListing).RequireAuthorization("RequireLandlord");
         group.MapPost("/{listingId:guid}/publish", PublishListing).RequireAuthorization("RequireLandlord");
         group.MapPost("/{listingId:guid}/close", CloseListing).RequireAuthorization("RequireLandlord");
@@ -57,6 +58,21 @@ public static class ListingEndpoints
         collectionsGroup.MapGet("/{collectionId:guid}", GetCollectionListings);
 
         return app;
+    }
+
+    private static async Task<IResult> GetMyListings(
+        HttpContext httpContext,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetUserId(httpContext);
+        var result = await mediator.Send(
+            new GetMyListingsQuery(userId),
+            cancellationToken).ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
     }
 
     private static async Task<IResult> CreateListing(
@@ -170,6 +186,10 @@ public static class ListingEndpoints
         [FromQuery] double? latitude,
         [FromQuery] double? longitude,
         [FromQuery] double? radiusKm,
+        [FromQuery] double? swLat,
+        [FromQuery] double? swLng,
+        [FromQuery] double? neLat,
+        [FromQuery] double? neLng,
         [FromQuery] PropertyType? propertyType,
         [FromQuery] int? minBedrooms,
         [FromQuery] int? minBathrooms,
@@ -192,6 +212,7 @@ public static class ListingEndpoints
             new SearchListingsQuery(
                 keyword,
                 latitude, longitude, radiusKm,
+                swLat, swLng, neLat, neLng,
                 propertyType, minBedrooms, minBathrooms,
                 minStayDays, maxStayDays,
                 minPriceCents, maxPriceCents,

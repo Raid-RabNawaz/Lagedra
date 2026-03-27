@@ -28,6 +28,10 @@ public sealed class AssignArbitratorCommandHandler(ArbitrationDbContext dbContex
         }
 
         arbitrationCase.AssignArbitrator(request.ArbitratorUserId, request.ConcurrentCaseCount);
+
+        var newAssignment = arbitrationCase.ArbitratorAssignments[^1];
+        dbContext.Entry(newAssignment).State = EntityState.Added;
+
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return Result.Success();

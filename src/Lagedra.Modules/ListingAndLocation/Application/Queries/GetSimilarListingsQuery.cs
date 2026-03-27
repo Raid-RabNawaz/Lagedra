@@ -35,15 +35,23 @@ public sealed class GetSimilarListingsQueryHandler(ListingsDbContext dbContext)
 
         var minPrice = (long)(source.MonthlyRentCents * (1 - PriceTolerance));
         var maxPrice = (long)(source.MonthlyRentCents * (1 + PriceTolerance));
+        var sourcePropertyType = source.PropertyType;
+        var sourceJurisdiction = source.JurisdictionCode;
 
-        var similar = await dbContext.Listings
+        var query = dbContext.Listings
             .AsNoTracking()
             .Include(l => l.Photos)
             .Where(l => l.Id != request.ListingId)
             .Where(l => l.Status == Domain.Enums.ListingStatus.Published || l.Status == Domain.Enums.ListingStatus.Activated)
-            .Where(l => l.PropertyType == source.PropertyType)
-            .Where(l => l.MonthlyRentCents >= minPrice && l.MonthlyRentCents <= maxPrice)
-            .Where(l => source.JurisdictionCode == null || l.JurisdictionCode == source.JurisdictionCode)
+            .Where(l => l.PropertyType == sourcePropertyType)
+            .Where(l => l.MonthlyRentCents >= minPrice && l.MonthlyRentCents <= maxPrice);
+
+        if (sourceJurisdiction is not null)
+        {
+            query = query.Where(l => l.JurisdictionCode == sourceJurisdiction);
+        }
+
+        var similar = await query
             .OrderByDescending(l => l.CreatedAt)
             .Take(request.Limit)
             .ToListAsync(cancellationToken)

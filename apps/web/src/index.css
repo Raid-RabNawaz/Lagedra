@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -40,6 +41,7 @@
 
   --animate-spin: spin 1s linear infinite;
   --animate-pulse: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-fade-in: fade-in 150ms ease-out;
 }
 
 :root {
@@ -73,6 +75,10 @@
 @keyframes pulse {
   50% { opacity: 0.5; }
 }
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 
 * {
   border-color: var(--border);
@@ -85,4 +91,18 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+}
+
+.listing-popup .leaflet-popup-content-wrapper {
+  padding: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+.listing-popup .leaflet-popup-content {
+  margin: 0;
+  min-width: 200px;
+}
+.listing-popup .leaflet-popup-tip {
+  display: none;
 }

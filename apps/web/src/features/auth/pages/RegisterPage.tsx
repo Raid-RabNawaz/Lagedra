@@ -1,17 +1,21 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Mail, Lock, ArrowRight, CheckCircle2, Home, Building2 } from "lucide-react";
+import { Mail, Lock, ArrowRight, CheckCircle2, Home, Building2, Briefcase } from "lucide-react";
 import { authApi } from "@/features/auth/services/authApi";
+import { useAuthStore } from "@/app/auth/authStore";
+import { appConfig } from "@/app/config";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { FormError } from "@/components/shared/FormError";
+import { GoogleSignInButton } from "@/components/shared/GoogleSignInButton";
 import { cn } from "@/lib/utils";
+import type { UserRole } from "@/app/auth/roles";
 
 const schema = z.object({
   email: z.string().email("Enter a valid email address"),
@@ -20,7 +24,7 @@ const schema = z.object({
     .min(8, "Password must be at least 8 characters")
     .regex(/[A-Z]/, "Include at least one uppercase letter")
     .regex(/[0-9]/, "Include at least one number"),
-  role: z.enum(["Tenant", "Landlord"]),
+  role: z.enum(["Tenant", "Landlord", "InstitutionPartner"]),
 });
 
 type FormData = z.infer<typeof schema>;
@@ -38,12 +42,21 @@ const roleOptions = [
     description: "Listing a property for rent",
     icon: Building2,
   },
+  {
+    value: "InstitutionPartner" as const,
+    label: "Institution partner",
+    description: "Company managing relocations",
+    icon: Briefcase,
+  },
 ];
 
 export const RegisterPage = () => {
   const [resultMessage, setResultMessage] = useState<string | null>(null);
   const [verificationHint, setVerificationHint] = useState<string | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const setUser = useAuthStore((state) => state.setUser);
+  const navigate = useNavigate();
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -68,6 +81,27 @@ export const RegisterPage = () => {
       setServerError("Registration failed. Try a different email address.");
     }
   });
+
+  const handleGoogleSignUp = async (idToken: string) => {
+    setServerError(null);
+    setGoogleLoading(true);
+    try {
+      await authApi.externalLogin({
+        provider: "Google",
+        idToken,
+        preferredRole: selectedRole as UserRole,
+      });
+      const me = await authApi.getCurrentUser();
+      setUser(me);
+      navigate("/app", { replace: true });
+    } catch {
+      setServerError("Google sign-up failed. Please try again.");
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  const isSubmitting = form.formState.isSubmitting || googleLoading;
 
   if (resultMessage) {
     return (
@@ -110,14 +144,15 @@ export const RegisterPage = () => {
       <form onSubmit={onSubmit} className="space-y-5">
         <div className="space-y-3">
           <Label>I want to join as</Label>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-2">
             {roleOptions.map((option) => (
               <button
                 key={option.value}
                 type="button"
                 onClick={() => form.setValue("role", option.value)}
+                disabled={isSubmitting}
                 className={cn(
-                  "flex flex-col items-center gap-2 rounded-xl border-2 p-4 text-center transition-all cursor-pointer",
+                  "flex flex-col items-center gap-1.5 rounded-xl border-2 p-3 text-center transition-all cursor-pointer",
                   selectedRole === option.value
                     ? "border-foreground bg-secondary"
                     : "border-border hover:border-foreground/30",
@@ -125,18 +160,35 @@ export const RegisterPage = () => {
               >
                 <option.icon
                   className={cn(
-                    "h-6 w-6",
+                    "h-5 w-5",
                     selectedRole === option.value ? "text-foreground" : "text-muted-foreground",
                   )}
                 />
                 <div>
-                  <p className="text-sm font-medium">{option.label}</p>
-                  <p className="text-xs text-muted-foreground">{option.description}</p>
+                  <p className="text-xs font-medium leading-tight">{option.label}</p>
+                  <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{option.description}</p>
                 </div>
               </button>
             ))}
           </div>
         </div>
+
+        {appConfig.googleClientId && (
+          <>
+            <GoogleSignInButton
+              onSuccess={handleGoogleSignUp}
+              onError={() => setServerError("Google sign-up failed.")}
+              text="signup_with"
+            />
+
+            <div className="relative">
+              <Separator />
+              <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-background px-3 text-xs text-muted-foreground">
+                or sign up with email
+              </span>
+            </div>
+          </>
+        )}
 
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
@@ -147,6 +199,7 @@ export const RegisterPage = () => {
               type="email"
               placeholder="you@example.com"
               className="pl-10"
+              disabled={isSubmitting}
               {...form.register("email")}
             />
           </div>
@@ -162,6 +215,7 @@ export const RegisterPage = () => {
               type="password"
               placeholder="Create a strong password"
               className="pl-10"
+              disabled={isSubmitting}
               {...form.register("password")}
             />
           </div>
@@ -178,7 +232,7 @@ export const RegisterPage = () => {
           variant="accent"
           size="lg"
           className="w-full"
-          disabled={form.formState.isSubmitting}
+          disabled={isSubmitting}
         >
           {form.formState.isSubmitting ? (
             "Creating account..."

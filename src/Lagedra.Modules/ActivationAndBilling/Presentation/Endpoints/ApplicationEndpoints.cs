@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Lagedra.Modules.ActivationAndBilling.Application.Commands;
 using Lagedra.Modules.ActivationAndBilling.Application.Queries;
 using Lagedra.Modules.ActivationAndBilling.Presentation.Contracts;
@@ -18,12 +19,27 @@ public static class ApplicationEndpoints
             .RequireAuthorization();
 
         group.MapPost("/", SubmitApplication);
+        group.MapGet("/mine", ListMyApplications);
         group.MapPost("/{id:guid}/approve", ApproveApplication);
         group.MapPost("/{id:guid}/reject", RejectApplication);
         group.MapGet("/{id:guid}", GetApplication);
         group.MapGet("/listing/{listingId:guid}", ListApplicationsForListing);
 
         return app;
+    }
+
+    private static async Task<IResult> ListMyApplications(
+        ClaimsPrincipal user,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var userId = GetUserId(user);
+        var result = await mediator.Send(new ListMyApplicationsQuery(userId), ct)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
     }
 
     private static async Task<IResult> SubmitApplication(
@@ -95,4 +111,8 @@ public static class ApplicationEndpoints
             ? Results.Ok(result.Value)
             : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
     }
+
+    private static Guid GetUserId(ClaimsPrincipal user) =>
+        Guid.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? throw new InvalidOperationException("User ID claim not found."));
 }
