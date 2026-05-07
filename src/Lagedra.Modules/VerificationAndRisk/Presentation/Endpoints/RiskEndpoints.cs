@@ -66,5 +66,15 @@ public static class RiskEndpoints
             dto.ConfidenceReason,
             dto.DepositBandLowCents,
             dto.DepositBandHighCents,
-            dto.ComputedAt);
+            dto.ComputedAt,
+            dto.ProtectionTier.ToString(),
+            dto.EndorsedBy
+                .Select(e => new EndorsementSummaryResponse(
+                    e.EndorsementId,
+                    e.OrganizationId,
+                    e.OrganizationName,
+                    e.ApprovedAt,
+                    e.ExpiresAt))
+                .ToList()
+                .AsReadOnly());
 }

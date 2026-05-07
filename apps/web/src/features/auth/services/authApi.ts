@@ -49,6 +49,14 @@ export const authApi = {
     return response.data;
   },
 
+  async resendVerification(email: string): Promise<{ message: string }> {
+    const response = await http.post<{ message: string }>(
+      endpoints.auth.resendVerification,
+      { email },
+    );
+    return response.data;
+  },
+
   async forgotPassword(payload: ForgotPasswordRequest): Promise<{ message: string }> {
     const response = await http.post<{ message: string }>(endpoints.auth.forgotPassword, payload);
     return response.data;
@@ -86,6 +94,22 @@ export const authApi = {
 
   async updateProfile(payload: UpdateProfileRequest): Promise<UserProfileDto> {
     const response = await http.put<UserProfileDto>(endpoints.auth.me, payload);
+    useAuthStore.getState().setUser(response.data);
+    return response.data;
+  },
+
+  async uploadProfilePhoto(file: File): Promise<UserProfileDto> {
+    const form = new FormData();
+    form.append("file", file, file.name);
+    const response = await http.post<UserProfileDto>(endpoints.auth.profilePhoto, form, {
+      timeout: 60_000,
+    });
+    useAuthStore.getState().setUser(response.data);
+    return response.data;
+  },
+
+  async removeProfilePhoto(): Promise<UserProfileDto> {
+    const response = await http.delete<UserProfileDto>(endpoints.auth.profilePhoto);
     useAuthStore.getState().setUser(response.data);
     return response.data;
   },

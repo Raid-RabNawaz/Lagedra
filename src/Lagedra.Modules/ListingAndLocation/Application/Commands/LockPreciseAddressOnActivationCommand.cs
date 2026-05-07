@@ -10,6 +10,7 @@ namespace Lagedra.Modules.ListingAndLocation.Application.Commands;
 
 public sealed record LockPreciseAddressOnActivationCommand(
     Guid ListingId,
+    Guid CallerUserId,
     string Street,
     string City,
     string State,
@@ -23,6 +24,7 @@ public sealed class LockPreciseAddressOnActivationCommandHandler(
     : IRequestHandler<LockPreciseAddressOnActivationCommand, Result<ListingDetailsDto>>
 {
     private static readonly Error NotFound = new("Listing.NotFound", "Listing not found.");
+    private static readonly Error Forbidden = new("Listing.Forbidden", "You do not own this listing.");
 
     public async Task<Result<ListingDetailsDto>> Handle(
         LockPreciseAddressOnActivationCommand request,
@@ -41,6 +43,11 @@ public sealed class LockPreciseAddressOnActivationCommandHandler(
         if (listing is null)
         {
             return Result<ListingDetailsDto>.Failure(NotFound);
+        }
+
+        if (listing.LandlordUserId != request.CallerUserId)
+        {
+            return Result<ListingDetailsDto>.Failure(Forbidden);
         }
 
         var address = new Address(

@@ -69,7 +69,16 @@ public sealed partial class OutboxProcessor(
 
             await using var scope = serviceProvider.CreateAsyncScope();
             var eventBus = scope.ServiceProvider.GetRequiredService<IEventBus>();
-            await eventBus.Publish(domainEvent, ct).ConfigureAwait(false);
+
+            // Must invoke Publish<TConcreteEvent> via reflection so the
+            // generic parameter matches the actual event type (e.g.
+            // TruthSurfaceConfirmedEvent) rather than IDomainEvent.
+            // Otherwise GetServices<IDomainEventHandler<IDomainEvent>>()
+            // resolves zero handlers and events are silently swallowed.
+            var publishMethod = typeof(IEventBus)
+                .GetMethod(nameof(IEventBus.Publish))!
+                .MakeGenericMethod(type);
+            await ((Task)publishMethod.Invoke(eventBus, [domainEvent, ct])!).ConfigureAwait(false);
 
             message.ProcessedAt = DateTime.UtcNow;
             message.Error = null;

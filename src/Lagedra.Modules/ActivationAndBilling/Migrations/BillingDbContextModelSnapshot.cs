@@ -241,6 +241,11 @@ namespace ActivationAndBilling.Migrations
                     b.Property<DateOnly>("RequestedCheckOut")
                         .HasColumnType("date");
 
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -255,6 +260,9 @@ namespace ActivationAndBilling.Migrations
                     b.Property<Guid>("TenantUserId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid?>("TruthSurfaceSnapshotId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -265,6 +273,10 @@ namespace ActivationAndBilling.Migrations
                         .HasFilter("\"DealId\" IS NOT NULL");
 
                     b.HasIndex("ListingId");
+
+                    b.HasIndex("Source");
+
+                    b.HasIndex("TruthSurfaceSnapshotId");
 
                     b.ToTable("deal_applications", "activation_billing");
                 });
@@ -290,12 +302,22 @@ namespace ActivationAndBilling.Migrations
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<long>("DepositAmountCents")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L);
+
                     b.Property<Guid?>("DisputeEvidenceManifestId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("DisputeReason")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
+
+                    b.Property<long>("FirstMonthRentCents")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L);
 
                     b.Property<DateTime>("GracePeriodExpiresAt")
                         .HasColumnType("timestamp with time zone");
@@ -315,8 +337,18 @@ namespace ActivationAndBilling.Migrations
                     b.Property<DateTime?>("HostPlatformReminderSentAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<long>("InsuranceFeeCents")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L);
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
+
+                    b.Property<long>("MonthlyProtocolFeeCents")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L);
 
                     b.Property<DateTime?>("ReminderSentAt")
                         .HasColumnType("timestamp with time zone");
@@ -325,6 +357,14 @@ namespace ActivationAndBilling.Migrations
                         .IsRequired()
                         .HasMaxLength(30)
                         .HasColumnType("character varying(30)");
+
+                    b.Property<string>("StripePaymentIntentId")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("StripePaymentStatus")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<bool>("TenantDisputed")
                         .HasColumnType("boolean");
@@ -338,6 +378,9 @@ namespace ActivationAndBilling.Migrations
                     b.Property<long>("TotalTenantPaymentCents")
                         .HasColumnType("bigint");
 
+                    b.Property<Guid?>("TruthSurfaceSnapshotId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -347,6 +390,10 @@ namespace ActivationAndBilling.Migrations
                         .IsUnique();
 
                     b.HasIndex("Status");
+
+                    b.HasIndex("StripePaymentIntentId");
+
+                    b.HasIndex("TruthSurfaceSnapshotId");
 
                     b.ToTable("deal_payment_confirmations", "activation_billing");
                 });

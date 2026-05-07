@@ -34,10 +34,14 @@ public static class InfrastructureHealthChecks
             failureStatus: HealthStatus.Degraded,
             tags: ["storage", "infrastructure"]);
 
-        builder.AddCheck<ClamAvHealthCheck>(
-            "clamav",
-            failureStatus: HealthStatus.Degraded,
-            tags: ["antivirus", "infrastructure"]);
+        var clamAvEnabled = configuration.GetValue<bool?>("ClamAV:Enabled") ?? true;
+        if (clamAvEnabled)
+        {
+            builder.AddCheck<ClamAvHealthCheck>(
+                "clamav",
+                failureStatus: HealthStatus.Degraded,
+                tags: ["antivirus", "infrastructure"]);
+        }
 
         builder.AddCheck<StripeHealthCheck>(
             "stripe",
@@ -103,7 +107,7 @@ public sealed class StripeHealthCheck(IStripeService stripe) : IHealthCheck
     {
         try
         {
-            await stripe.GetOrCreateCustomerAsync(Guid.Empty, "healthcheck@lagedra.internal", cancellationToken).ConfigureAwait(false);
+            await stripe.CheckConnectivityAsync(cancellationToken).ConfigureAwait(false);
             return HealthCheckResult.Healthy("Stripe API is reachable.");
         }
 #pragma warning disable CA1031 // intentional: health check must not throw

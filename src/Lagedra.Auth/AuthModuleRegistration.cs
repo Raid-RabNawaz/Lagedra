@@ -109,6 +109,8 @@ public static class AuthModuleRegistration
         services.AddScoped<IHostProfileProvider, HostProfileProvider>();
         services.AddScoped<IUserVerificationFlagUpdater, UserVerificationFlagUpdater>();
         services.AddScoped<IUserStatusProvider, UserStatusProvider>();
+        services.AddScoped<IIdentityInvitationService, IdentityInvitationService>();
+        services.AddScoped<IUserLookupService, UserLookupService>();
 
         // Notification handlers
         services.AddDomainEventHandler<Domain.Events.UserRegisteredEvent,

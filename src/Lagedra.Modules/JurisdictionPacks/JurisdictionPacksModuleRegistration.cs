@@ -2,6 +2,8 @@ using Lagedra.Infrastructure.Eventing;
 using Lagedra.Modules.JurisdictionPacks.Infrastructure.Jobs;
 using Lagedra.Modules.JurisdictionPacks.Infrastructure.Persistence;
 using Lagedra.Modules.JurisdictionPacks.Infrastructure.Repositories;
+using Lagedra.Modules.JurisdictionPacks.Infrastructure.Services;
+using Lagedra.SharedKernel.Integration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,6 +26,7 @@ public static class JurisdictionPacksModuleRegistration
         services.AddOutboxContext<JurisdictionDbContext>();
 
         services.AddScoped<JurisdictionPackRepository>();
+        services.AddScoped<IJurisdictionPackProvider, JurisdictionPackProvider>();
 
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(JurisdictionPacksModuleRegistration).Assembly));

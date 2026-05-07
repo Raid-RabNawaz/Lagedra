@@ -3,7 +3,6 @@ using Lagedra.Modules.ActivationAndBilling.Application.Commands;
 using Lagedra.Modules.ActivationAndBilling.Application.Queries;
 using Lagedra.Modules.ActivationAndBilling.Presentation.Contracts;
 using Lagedra.Infrastructure.Middleware;
-using Lagedra.SharedKernel.Settings;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -158,17 +157,12 @@ public static class PaymentConfirmationEndpoints
         [FromBody] CancelBookingRequest request,
         ClaimsPrincipal user,
         IMediator mediator,
-        IPlatformSettingsService settings,
         CancellationToken ct)
     {
         var userId = GetUserId(user);
 
         var result = await mediator
-            .Send(new CancelBookingCommand(
-                dealId, userId, request.Reason,
-                FreeCancellationDays: 14,
-                PartialRefundPercent: 50,
-                PartialRefundDays: 7), ct)
+            .Send(new CancelBookingCommand(dealId, userId, request.Reason), ct)
             .ConfigureAwait(false);
 
         return result.IsSuccess

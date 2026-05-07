@@ -3,7 +3,7 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0 AS restore
 WORKDIR /src
 
 # Copy only the files needed for restore (layer cache optimisation)
-COPY Directory.Build.props Directory.Build.targets Directory.Packages.props ./
+COPY Directory.Build.props Directory.Build.targets Directory.Packages.props .editorconfig ./
 COPY Lagedra.sln ./
 
 # Copy all .csproj files in their correct relative paths
@@ -30,6 +30,9 @@ COPY src/Lagedra.Modules/Privacy/Privacy.csproj                                 
 COPY src/Lagedra.Modules/Notifications/Notifications.csproj                       src/Lagedra.Modules/Notifications/
 COPY src/Lagedra.Modules/AntiAbuseAndIntegrity/AntiAbuseAndIntegrity.csproj       src/Lagedra.Modules/AntiAbuseAndIntegrity/
 COPY src/Lagedra.Modules/ContentManagement/ContentManagement.csproj               src/Lagedra.Modules/ContentManagement/
+COPY src/Lagedra.Modules/PartnerNetwork/PartnerNetwork.csproj                   src/Lagedra.Modules/PartnerNetwork/
+COPY src/Lagedra.Modules/AuditLog/AuditLog.csproj                               src/Lagedra.Modules/AuditLog/
+COPY src/Lagedra.Modules/Analytics/Analytics.csproj                             src/Lagedra.Modules/Analytics/
 
 RUN dotnet restore Lagedra.sln
 
@@ -48,17 +51,32 @@ FROM build AS publish-worker
 RUN dotnet publish src/Lagedra.Worker/Lagedra.Worker.csproj \
     -c Release --no-build -o /publish/worker
 
-# ── Stage 5: runtime image ────────────────────────────────────────────────────
+# ── Stage 5: API runtime image ────────────────────────────────────────────────
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
-# Non-root user for security
-RUN addgroup --system --gid 1001 appgroup && \
-    adduser  --system --uid 1001 --ingroup appgroup appuser
+RUN groupadd --system --gid 1001 appgroup && \
+    useradd  --system --uid 1001 --gid appgroup --no-create-home appuser && \
+    mkdir -p /app/data-protection-keys && \
+    chown appuser:appgroup /app/data-protection-keys
 
-# Copy published output (api by default; override entrypoint for worker)
 COPY --from=publish-api --chown=appuser:appgroup /publish/api ./
 
 USER appuser
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "Lagedra.ApiGateway.dll"]
+
+# ── Stage 6: Worker runtime image ────────────────────────────────────────────
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime-worker
+WORKDIR /app
+
+RUN groupadd --system --gid 1001 appgroup && \
+    useradd  --system --uid 1001 --gid appgroup --no-create-home appuser && \
+    mkdir -p /app/data-protection-keys && \
+    chown appuser:appgroup /app/data-protection-keys
+
+COPY --from=publish-worker --chown=appuser:appgroup /publish/worker ./
+
+USER appuser
+EXPOSE 5100
+ENTRYPOINT ["dotnet", "Lagedra.Worker.dll"]

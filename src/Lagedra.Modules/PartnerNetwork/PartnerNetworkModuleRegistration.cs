@@ -1,4 +1,6 @@
 using Lagedra.Infrastructure.Eventing;
+using Lagedra.Modules.PartnerNetwork.Application.Authorization;
+using Lagedra.Modules.PartnerNetwork.Infrastructure.Authorization;
 using Lagedra.Modules.PartnerNetwork.Infrastructure.Persistence;
 using Lagedra.Modules.PartnerNetwork.Infrastructure.Services;
 using Lagedra.SharedKernel.Integration;
@@ -23,6 +25,8 @@ public static class PartnerNetworkModuleRegistration
         services.AddOutboxContext<PartnerDbContext>();
 
         services.AddScoped<IPartnerMembershipProvider, PartnerMembershipProvider>();
+        services.AddScoped<IPartnerEndorsementProvider, PartnerEndorsementProvider>();
+        services.AddScoped<IPartnerAccessService, PartnerAccessService>();
 
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(PartnerNetworkModuleRegistration).Assembly));

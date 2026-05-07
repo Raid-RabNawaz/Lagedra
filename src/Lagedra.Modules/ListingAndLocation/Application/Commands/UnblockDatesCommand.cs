@@ -8,12 +8,14 @@ namespace Lagedra.Modules.ListingAndLocation.Application.Commands;
 
 public sealed record UnblockDatesCommand(
     Guid ListingId,
+    Guid CallerUserId,
     Guid BlockId) : IRequest<Result>;
 
 public sealed class UnblockDatesCommandHandler(ListingsDbContext dbContext)
     : IRequestHandler<UnblockDatesCommand, Result>
 {
     private static readonly Error NotFound = new("Block.NotFound", "Availability block not found.");
+    private static readonly Error Forbidden = new("Listing.Forbidden", "You do not own this listing.");
     private static readonly Error CannotRemoveBooked = new("Block.CannotRemove", "Cannot remove a block created by an active deal.");
 
     public async Task<Result> Handle(
@@ -21,6 +23,20 @@ public sealed class UnblockDatesCommandHandler(ListingsDbContext dbContext)
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        var listing = await dbContext.Listings
+            .FirstOrDefaultAsync(l => l.Id == request.ListingId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (listing is null)
+        {
+            return Result.Failure(new Error("Listing.NotFound", "Listing not found."));
+        }
+
+        if (listing.LandlordUserId != request.CallerUserId)
+        {
+            return Result.Failure(Forbidden);
+        }
 
         var block = await dbContext.ListingAvailabilityBlocks
             .FirstOrDefaultAsync(b => b.Id == request.BlockId && b.ListingId == request.ListingId, cancellationToken)

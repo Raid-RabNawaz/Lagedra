@@ -8,6 +8,7 @@ namespace Lagedra.Modules.ListingAndLocation.Application.Commands;
 
 public sealed record AddListingPhotoCommand(
     Guid ListingId,
+    Guid CallerUserId,
     string StorageKey,
     Uri Url,
     string? Caption) : IRequest<Result<ListingPhotoDto>>;
@@ -16,6 +17,7 @@ public sealed class AddListingPhotoCommandHandler(ListingsDbContext dbContext)
     : IRequestHandler<AddListingPhotoCommand, Result<ListingPhotoDto>>
 {
     private static readonly Error NotFound = new("Listing.NotFound", "Listing not found.");
+    private static readonly Error Forbidden = new("Listing.Forbidden", "You do not own this listing.");
 
     public async Task<Result<ListingPhotoDto>> Handle(
         AddListingPhotoCommand request,
@@ -31,6 +33,11 @@ public sealed class AddListingPhotoCommandHandler(ListingsDbContext dbContext)
         if (listing is null)
         {
             return Result<ListingPhotoDto>.Failure(NotFound);
+        }
+
+        if (listing.LandlordUserId != request.CallerUserId)
+        {
+            return Result<ListingPhotoDto>.Failure(Forbidden);
         }
 
         var photo = listing.AddPhoto(request.StorageKey, request.Url, request.Caption);

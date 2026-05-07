@@ -16,6 +16,8 @@ public sealed partial class LoggingBehavior<TRequest, TResponse>(
         RequestHandlerDelegate<TResponse> next,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(next);
+
         LogHandlingStarted(logger, RequestName);
 
         var stopwatch = Stopwatch.StartNew();

@@ -1,4 +1,4 @@
-using Lagedra.Modules.JurisdictionPacks.Application.Queries;
+using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Results;
 using MediatR;
 using Microsoft.EntityFrameworkCore;

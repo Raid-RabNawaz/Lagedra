@@ -19,6 +19,7 @@ public sealed class IdentityDbContext(
     public DbSet<AffiliationVerification> AffiliationVerifications => Set<AffiliationVerification>();
     public DbSet<FraudFlag> FraudFlags => Set<FraudFlag>();
     public DbSet<HostPaymentDetails> HostPaymentDetails => Set<HostPaymentDetails>();
+    public DbSet<HostStripeAccount> HostStripeAccounts => Set<HostStripeAccount>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

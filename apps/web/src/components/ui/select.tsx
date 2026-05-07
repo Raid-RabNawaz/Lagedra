@@ -10,6 +10,7 @@ const Select = React.forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<HT
           className,
         )}
         ref={ref}
+        {...props}
       >
         {children}
       </select>

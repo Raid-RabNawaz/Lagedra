@@ -8,7 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Loader } from "@/components/shared/Loader";
 import { ChangeRoleDialog } from "@/features/admin/components/ChangeRoleDialog";
@@ -58,7 +57,7 @@ export const UsersPage = () => {
 
   const roleBadgeVariant = (role: string | number) => {
     if (role === "PlatformAdmin") return "default" as const;
-    if (role === "Landlord") return "accent" as const;
+    if (role === "Member") return "accent" as const;
     return "secondary" as const;
   };
 

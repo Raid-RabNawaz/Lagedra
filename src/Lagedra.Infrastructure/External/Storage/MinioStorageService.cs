@@ -1,3 +1,4 @@
+using Amazon;
 using Amazon.S3;
 using Amazon.S3.Model;
 using Microsoft.Extensions.Logging;
@@ -17,15 +18,25 @@ public sealed partial class MinioStorageService : IObjectStorageService, IAsyncD
         _settings = settings.Value;
         _logger = logger;
 
-        var config = new AmazonS3Config
+        if (_settings.UseIamRole)
         {
-            ServiceURL = _settings.UseHttps
-                ? $"https://{_settings.Endpoint}"
-                : $"http://{_settings.Endpoint}",
-            ForcePathStyle = true
-        };
-
-        _client = new AmazonS3Client(_settings.AccessKey, _settings.SecretKey, config);
+            var region = RegionEndpoint.GetBySystemName(
+                _settings.Endpoint
+                    .Replace("s3.", "", StringComparison.Ordinal)
+                    .Replace(".amazonaws.com", "", StringComparison.Ordinal));
+            _client = new AmazonS3Client(region);
+        }
+        else
+        {
+            var config = new AmazonS3Config
+            {
+                ServiceURL = _settings.UseHttps
+                    ? $"https://{_settings.Endpoint}"
+                    : $"http://{_settings.Endpoint}",
+                ForcePathStyle = true
+            };
+            _client = new AmazonS3Client(_settings.AccessKey, _settings.SecretKey, config);
+        }
     }
 
     public async Task<Uri> GeneratePresignedUploadUrlAsync(string bucket, string key, TimeSpan expiry, CancellationToken ct = default)
@@ -110,6 +121,82 @@ public sealed partial class MinioStorageService : IObjectStorageService, IAsyncD
         LogBucketCreated(_logger, bucket);
     }
 
+    public async Task UploadObjectAsync(
+        string bucket,
+        string key,
+        Stream content,
+        string contentType,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(content);
+
+        var request = new PutObjectRequest
+        {
+            BucketName = bucket,
+            Key = key,
+            InputStream = content,
+            ContentType = string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType,
+            AutoCloseStream = false,
+            // The AWS SDK requires HTTPS when payload signing is disabled
+            // (signing is what guarantees body integrity in transit). Only
+            // skip signing when we're talking to the bucket over TLS.
+            DisablePayloadSigning = _settings.UseHttps,
+        };
+
+        await _client.PutObjectAsync(request, ct).ConfigureAwait(false);
+        LogObjectUploaded(_logger, bucket, key);
+    }
+
+    public Uri GetPublicObjectUrl(string bucket, string key)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(bucket);
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+
+        var encodedKey = string.Join('/', key.Split('/').Select(Uri.EscapeDataString));
+
+        if (!string.IsNullOrWhiteSpace(_settings.PublicBaseUrl))
+        {
+            var trimmed = _settings.PublicBaseUrl.TrimEnd('/');
+            return new Uri($"{trimmed}/{bucket}/{encodedKey}");
+        }
+
+        var scheme = _settings.UseHttps ? "https" : "http";
+        return new Uri($"{scheme}://{_settings.Endpoint}/{bucket}/{encodedKey}");
+    }
+
+    public async Task EnsurePublicReadPolicyAsync(string bucket, CancellationToken ct = default)
+    {
+        var policy = $$"""
+        {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": ["s3:GetObject"],
+              "Resource": ["arn:aws:s3:::{{bucket}}/*"]
+            }
+          ]
+        }
+        """;
+
+        try
+        {
+            await _client.PutBucketPolicyAsync(new PutBucketPolicyRequest
+            {
+                BucketName = bucket,
+                Policy = policy,
+            }, ct).ConfigureAwait(false);
+        }
+        catch (AmazonS3Exception ex)
+        {
+            // Some managed S3 deployments (e.g. with bucket-level public access
+            // blocks) reject this. We swallow so callers can still proceed using
+            // presigned download URLs as a fallback.
+            LogPublicPolicyFailed(_logger, bucket, ex.Message);
+        }
+    }
+
     public ValueTask DisposeAsync()
     {
         _client.Dispose();
@@ -127,4 +214,10 @@ public sealed partial class MinioStorageService : IObjectStorageService, IAsyncD
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Bucket '{Bucket}' created in MinIO")]
     private static partial void LogBucketCreated(ILogger logger, string bucket);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Object uploaded to {Bucket}/{Key}")]
+    private static partial void LogObjectUploaded(ILogger logger, string bucket, string key);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to set public-read policy on bucket '{Bucket}': {Reason}")]
+    private static partial void LogPublicPolicyFailed(ILogger logger, string bucket, string reason);
 }

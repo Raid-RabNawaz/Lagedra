@@ -36,6 +36,10 @@ public static class ComplianceModuleRegistration
         services.AddDomainEventHandler<ViolationResolvedEvent, OnViolationResolvedNotify>();
         services.AddDomainEventHandler<ViolationEscalatedEvent, OnViolationEscalatedNotify>();
 
+        services.AddDomainEventHandler<SharedKernel.Integration.Events.InsuranceStatusChangedEvent, OnInsuranceStatusChangedCreateSignalHandler>();
+        services.AddDomainEventHandler<SharedKernel.Integration.Events.BillingStoppedEvent, OnBillingStoppedCreateSignalHandler>();
+        services.AddDomainEventHandler<SharedKernel.Integration.Events.DealCompletedEvent, OnDealCompletedCreateSignalHandler>();
+
         return services;
     }
 }

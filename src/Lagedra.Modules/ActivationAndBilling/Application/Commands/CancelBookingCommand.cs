@@ -1,25 +1,28 @@
+using Lagedra.Infrastructure.External.Payments;
 using Lagedra.Modules.ActivationAndBilling.Application.DTOs;
 using Lagedra.Modules.ActivationAndBilling.Domain.Enums;
 using Lagedra.Modules.ActivationAndBilling.Domain.Policies;
 using Lagedra.Modules.ActivationAndBilling.Infrastructure.Persistence;
+using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Results;
 using Lagedra.SharedKernel.Time;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Lagedra.Modules.ActivationAndBilling.Application.Commands;
 
 public sealed record CancelBookingCommand(
     Guid DealId,
     Guid CancelledByUserId,
-    string Reason,
-    int FreeCancellationDays,
-    int? PartialRefundPercent,
-    int? PartialRefundDays) : IRequest<Result<CancellationResultDto>>;
+    string Reason) : IRequest<Result<CancellationResultDto>>;
 
-public sealed class CancelBookingCommandHandler(
+public sealed partial class CancelBookingCommandHandler(
     BillingDbContext dbContext,
-    IClock clock)
+    IListingProvider listingProvider,
+    IStripeService stripeService,
+    IClock clock,
+    ILogger<CancelBookingCommandHandler> logger)
     : IRequestHandler<CancelBookingCommand, Result<CancellationResultDto>>
 {
     public async Task<Result<CancellationResultDto>> Handle(
@@ -44,6 +47,21 @@ public sealed class CancelBookingCommandHandler(
                 new Error("Cancel.AlreadyCancelled", "Booking is already cancelled."));
         }
 
+        var listing = await listingProvider
+            .GetListingDetailsAsync(application.ListingId, cancellationToken)
+            .ConfigureAwait(false);
+
+        int freeCancellationDays = 14;
+        int? partialRefundPercent = 50;
+        int? partialRefundDays = 7;
+
+        if (listing?.CancellationPolicy is { } policy)
+        {
+            freeCancellationDays = policy.FreeCancellationDays;
+            partialRefundPercent = policy.PartialRefundPercent;
+            partialRefundDays = policy.PartialRefundDays;
+        }
+
         var today = DateOnly.FromDateTime(clock.UtcNow);
 
         var refund = CancellationRefundCalculator.Calculate(
@@ -51,9 +69,9 @@ public sealed class CancelBookingCommandHandler(
             today,
             (application.FirstMonthRentCents ?? 0) + (application.DepositAmountCents ?? 0),
             application.InsuranceFeeCents ?? 0,
-            request.FreeCancellationDays,
-            request.PartialRefundPercent,
-            request.PartialRefundDays);
+            freeCancellationDays,
+            partialRefundPercent,
+            partialRefundDays);
 
         application.Cancel(
             request.CancelledByUserId,
@@ -65,6 +83,28 @@ public sealed class CancelBookingCommandHandler(
         var paymentConfirmation = await dbContext.DealPaymentConfirmations
             .FirstOrDefaultAsync(c => c.DealId == request.DealId, cancellationToken)
             .ConfigureAwait(false);
+
+        if (refund.TenantRefundCents > 0
+            && paymentConfirmation is not null
+            && !string.IsNullOrEmpty(paymentConfirmation.StripePaymentIntentId)
+            && paymentConfirmation.StripePaymentStatus == "succeeded")
+        {
+            try
+            {
+                var idempotencyKey = $"refund-deal-{request.DealId}";
+                await stripeService.RefundPaymentIntentAsync(
+                    paymentConfirmation.StripePaymentIntentId,
+                    refund.TenantRefundCents,
+                    idempotencyKey,
+                    cancellationToken).ConfigureAwait(false);
+
+                LogRefundIssued(logger, request.DealId, refund.TenantRefundCents);
+            }
+            catch (Stripe.StripeException ex)
+            {
+                LogRefundFailed(logger, request.DealId, ex);
+            }
+        }
 
         paymentConfirmation?.Cancel($"Booking cancelled: {request.Reason}", clock);
 
@@ -86,4 +126,12 @@ public sealed class CancelBookingCommandHandler(
             refund.InsuranceRefundCents,
             refund.PolicyApplied));
     }
+
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "Stripe refund issued for deal {DealId}: {AmountCents} cents")]
+    private static partial void LogRefundIssued(ILogger logger, Guid dealId, long amountCents);
+
+    [LoggerMessage(Level = LogLevel.Warning,
+        Message = "Failed to issue Stripe refund for deal {DealId}")]
+    private static partial void LogRefundFailed(ILogger logger, Guid dealId, Exception ex);
 }

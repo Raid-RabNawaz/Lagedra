@@ -1,6 +1,7 @@
 using Lagedra.Modules.ActivationAndBilling.Domain.Entities;
 using Lagedra.Modules.ActivationAndBilling.Domain.Enums;
 using Lagedra.Modules.ActivationAndBilling.Domain.Events;
+using Lagedra.SharedKernel.Integration.Events;
 using Lagedra.SharedKernel.Domain;
 
 namespace Lagedra.Modules.ActivationAndBilling.Domain.Aggregates;
@@ -51,7 +52,7 @@ public sealed class BillingAccount : AggregateRoot<Guid>
         AddDomainEvent(new DealActivatedEvent(Id, DealId, LandlordUserId, TenantUserId));
     }
 
-    public void Suspend()
+    public void Suspend(string reason)
     {
         if (Status != BillingAccountStatus.Active)
         {
@@ -59,6 +60,8 @@ public sealed class BillingAccount : AggregateRoot<Guid>
         }
 
         Status = BillingAccountStatus.Suspended;
+
+        AddDomainEvent(new HostSuspendedEvent(DealId, LandlordUserId, reason));
     }
 
     public void Resume()
@@ -69,6 +72,19 @@ public sealed class BillingAccount : AggregateRoot<Guid>
         }
 
         Status = BillingAccountStatus.Active;
+    }
+
+    public void Complete()
+    {
+        if (Status is not (BillingAccountStatus.Active or BillingAccountStatus.Suspended))
+        {
+            throw new InvalidOperationException($"Cannot complete billing account in status '{Status}'.");
+        }
+
+        Status = BillingAccountStatus.Closed;
+        EndDate = DateTime.UtcNow;
+
+        AddDomainEvent(new DealCompletedEvent(Id, DealId, LandlordUserId, TenantUserId));
     }
 
     public void Close()

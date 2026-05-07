@@ -1,5 +1,8 @@
 using Lagedra.Modules.IdentityAndVerification.Application.Commands;
+using Lagedra.Modules.IdentityAndVerification.Application.DTOs;
 using Lagedra.Modules.IdentityAndVerification.Application.Queries;
+using Lagedra.Modules.IdentityAndVerification.Domain.Enums;
+using Lagedra.Modules.IdentityAndVerification.Domain.ValueObjects;
 using Lagedra.Modules.IdentityAndVerification.Presentation.Contracts;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
@@ -66,9 +69,27 @@ public static class IdentityEndpoints
             cancellationToken)
             .ConfigureAwait(false);
 
-        return result.IsSuccess
-            ? Results.Ok(result.Value)
-            : Results.NotFound(new { error = result.Error.Code, detail = result.Error.Description });
+        if (result.IsSuccess)
+        {
+            return Results.Ok(result.Value);
+        }
+
+        if (result.Error.Code == "Identity.NotFound")
+        {
+            var notStarted = new VerificationStatusDto(
+                Guid.Empty,
+                userId,
+                VerificationStatus.NotStarted,
+                VerificationClass.Low,
+                null,
+                null,
+                null,
+                DateTime.UtcNow);
+
+            return Results.Ok(notStarted);
+        }
+
+        return Results.NotFound(new { error = result.Error.Code, detail = result.Error.Description });
     }
 }
 

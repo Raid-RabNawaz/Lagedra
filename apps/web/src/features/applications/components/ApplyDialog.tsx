@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { isAxiosError } from "axios";
 import { Send } from "lucide-react";
 import {
   Dialog,
@@ -13,6 +14,7 @@ import { Label } from "@/components/ui/label";
 import { Alert } from "@/components/ui/alert";
 import { useAuthStore } from "@/app/auth/authStore";
 import { useSubmitApplication } from "@/features/applications/hooks/useApplications";
+import { privacyApi } from "@/features/privacy/services/privacyApi";
 import { formatMoney } from "@/utils/format";
 import type { ListingDetailsDto } from "@/api/types";
 
@@ -27,6 +29,7 @@ export const ApplyDialog = ({ listing }: Props) => {
   const [open, setOpen] = useState(false);
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
+  const [submitErrorMessage, setSubmitErrorMessage] = useState<string | null>(null);
 
   const stayDays =
     checkIn && checkOut
@@ -42,17 +45,28 @@ export const ApplyDialog = ({ listing }: Props) => {
     e.preventDefault();
     if (!user || !canSubmit) return;
 
-    await submitMutation.mutateAsync({
-      listingId: listing.id,
-      tenantUserId: user.userId,
-      landlordUserId: listing.landlordUserId,
-      requestedCheckIn: checkIn,
-      requestedCheckOut: checkOut,
-    });
+    setSubmitErrorMessage(null);
 
-    setOpen(false);
-    setCheckIn("");
-    setCheckOut("");
+    try {
+      await privacyApi.ensureRequiredConsents(user.userId);
+
+      await submitMutation.mutateAsync({
+        listingId: listing.id,
+        requestedCheckIn: checkIn,
+        requestedCheckOut: checkOut,
+      });
+
+      setOpen(false);
+      setCheckIn("");
+      setCheckOut("");
+    } catch (error) {
+      if (isAxiosError(error) && error.response?.status === 451) {
+        setSubmitErrorMessage("Please complete KYC and data-processing consent before submitting an application.");
+        return;
+      }
+
+      setSubmitErrorMessage("Failed to submit application. Please try again.");
+    }
   };
 
   const today = new Date().toISOString().slice(0, 10);
@@ -115,7 +129,7 @@ export const ApplyDialog = ({ listing }: Props) => {
 
           {submitMutation.isError && (
             <Alert variant="destructive">
-              {(submitMutation.error as Error)?.message ?? "Failed to submit application. Please try again."}
+              {submitErrorMessage ?? "Failed to submit application. Please try again."}
             </Alert>
           )}
 

@@ -28,6 +28,15 @@ public sealed class Listing : AggregateRoot<Guid>
     public HouseRules? HouseRules { get; private set; }
     public CancellationPolicy? CancellationPolicy { get; private set; }
     public bool InstantBookingEnabled { get; private set; }
+
+    /// <summary>
+    /// When <c>true</c> (default), verified partner organizations may create direct
+    /// reservations for this listing on behalf of their guests / employees / clients
+    /// (Phase 18.7). When <c>false</c>, the landlord has opted this listing out and
+    /// partner direct-reservation attempts return <c>Listing.PartnerDirectReservationsNotAccepted</c>.
+    /// Tenant self-applications are unaffected.
+    /// </summary>
+    public bool AcceptsPartnerDirectReservations { get; private set; } = true;
     public Uri? VirtualTourUrl { get; private set; }
 
     private readonly List<ListingAmenity> _amenities = [];
@@ -176,6 +185,12 @@ public sealed class Listing : AggregateRoot<Guid>
     {
         EnsureEditable();
         InstantBookingEnabled = enabled;
+    }
+
+    public void SetAcceptsPartnerDirectReservations(bool accepts)
+    {
+        EnsureEditable();
+        AcceptsPartnerDirectReservations = accepts;
     }
 
     public void SetVirtualTourUrl(Uri? url)

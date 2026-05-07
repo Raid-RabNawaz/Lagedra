@@ -8,12 +8,15 @@ using Microsoft.EntityFrameworkCore;
 namespace Lagedra.Modules.ActivationAndBilling.Application.Queries;
 
 public sealed record ListApplicationsForListingQuery(
-    Guid ListingId) : IRequest<Result<IReadOnlyList<DealApplicationDto>>>;
+    Guid ListingId,
+    Guid CallerUserId) : IRequest<Result<IReadOnlyList<DealApplicationDto>>>;
 
 public sealed class ListApplicationsForListingQueryHandler(
     BillingDbContext dbContext)
     : IRequestHandler<ListApplicationsForListingQuery, Result<IReadOnlyList<DealApplicationDto>>>
 {
+    private static readonly Error Forbidden = new("Application.Forbidden", "You do not own this listing.");
+
     public async Task<Result<IReadOnlyList<DealApplicationDto>>> Handle(
         ListApplicationsForListingQuery request,
         CancellationToken cancellationToken)
@@ -27,6 +30,11 @@ public sealed class ListApplicationsForListingQueryHandler(
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
+        if (applications.Count > 0 && applications[0].LandlordUserId != request.CallerUserId)
+        {
+            return Result<IReadOnlyList<DealApplicationDto>>.Failure(Forbidden);
+        }
+
         IReadOnlyList<DealApplicationDto> dtos = applications
             .Select(MapToDto)
             .ToList();
@@ -39,5 +47,5 @@ public sealed class ListApplicationsForListingQueryHandler(
             a.Status, a.DealId, a.SubmittedAt, a.DecidedAt,
             a.RequestedCheckIn, a.RequestedCheckOut, a.StayDurationDays,
             a.DepositAmountCents, a.InsuranceFeeCents, a.FirstMonthRentCents,
-            a.PartnerOrganizationId, a.IsPartnerReferred, a.JurisdictionWarning);
+            a.PartnerOrganizationId, a.IsPartnerReferred, a.JurisdictionWarning, a.Source);
 }

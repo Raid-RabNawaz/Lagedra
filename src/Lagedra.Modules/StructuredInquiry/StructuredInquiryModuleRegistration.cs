@@ -1,7 +1,9 @@
 using Lagedra.Infrastructure.Eventing;
+using Lagedra.Modules.StructuredInquiry.Application.EventHandlers;
 using Lagedra.Modules.StructuredInquiry.Infrastructure.Jobs;
 using Lagedra.Modules.StructuredInquiry.Infrastructure.Persistence;
 using Lagedra.Modules.StructuredInquiry.Infrastructure.Repositories;
+using Lagedra.SharedKernel.Integration.Events;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,6 +26,9 @@ public static class StructuredInquiryModuleRegistration
         services.AddOutboxContext<InquiryDbContext>();
 
         services.AddScoped<InquirySessionRepository>();
+
+        services.AddDomainEventHandler<TruthSurfaceConfirmedEvent,
+            OnTruthSurfaceConfirmedCloseInquiryHandler>();
 
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(StructuredInquiryModuleRegistration).Assembly));

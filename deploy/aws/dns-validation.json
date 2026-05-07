@@ -1,0 +1,15 @@
+{
+  "Changes": [
+    {
+      "Action": "UPSERT",
+      "ResourceRecordSet": {
+        "Name": "_f03568ab7cbbc4a7849e922967294219.lagedra.com.",
+        "Type": "CNAME",
+        "TTL": 300,
+        "ResourceRecords": [
+          { "Value": "_501f2d14012253fd7abbbb61945d1999.jkddzztszm.acm-validations.aws." }
+        ]
+      }
+    }
+  ]
+}

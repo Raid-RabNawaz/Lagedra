@@ -9,6 +9,7 @@ namespace Lagedra.Modules.ListingAndLocation.Application.Commands;
 
 public sealed record SetApproxLocationCommand(
     Guid ListingId,
+    Guid CallerUserId,
     double Latitude,
     double Longitude) : IRequest<Result<ListingDetailsDto>>;
 
@@ -16,6 +17,7 @@ public sealed class SetApproxLocationCommandHandler(ListingsDbContext dbContext)
     : IRequestHandler<SetApproxLocationCommand, Result<ListingDetailsDto>>
 {
     private static readonly Error NotFound = new("Listing.NotFound", "Listing not found.");
+    private static readonly Error Forbidden = new("Listing.Forbidden", "You do not own this listing.");
 
     public async Task<Result<ListingDetailsDto>> Handle(
         SetApproxLocationCommand request,
@@ -34,6 +36,11 @@ public sealed class SetApproxLocationCommandHandler(ListingsDbContext dbContext)
         if (listing is null)
         {
             return Result<ListingDetailsDto>.Failure(NotFound);
+        }
+
+        if (listing.LandlordUserId != request.CallerUserId)
+        {
+            return Result<ListingDetailsDto>.Failure(Forbidden);
         }
 
         var geoPoint = new GeoPoint(request.Latitude, request.Longitude);

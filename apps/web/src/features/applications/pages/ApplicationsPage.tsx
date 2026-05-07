@@ -9,7 +9,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Loader } from "@/components/shared/Loader";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { cn } from "@/lib/utils";
 import type { DealApplicationDto, DealApplicationStatus, ListingSummaryDto } from "@/api/types";
 
 const statusFilters: { value: DealApplicationStatus | ""; label: string }[] = [

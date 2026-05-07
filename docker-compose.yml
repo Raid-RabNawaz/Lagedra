@@ -99,6 +99,8 @@ services:
       Jwt__Audience: "${JWT_AUDIENCE}"
       Stripe__SecretKey: "${STRIPE_SECRET_KEY}"
       Stripe__WebhookSecret: "${STRIPE_WEBHOOK_SECRET}"
+      Stripe__ConnectReturnUrl: "${STRIPE_CONNECT_RETURN_URL:-http://localhost:5173/app/stripe-onboarding}"
+      Stripe__ConnectRefreshUrl: "${STRIPE_CONNECT_REFRESH_URL:-http://localhost:5173/app/stripe-onboarding}"
       GoogleMaps__ApiKey: "${GOOGLE_MAPS_API_KEY}"
       Persona__ApiKey: "${PERSONA_API_KEY}"
       Persona__WebhookSecret: "${PERSONA_WEBHOOK_SECRET}"
@@ -111,7 +113,7 @@ services:
       MinIO__Endpoint: "minio:9000"
       MinIO__AccessKey: "${MINIO_ROOT_USER}"
       MinIO__SecretKey: "${MINIO_ROOT_PASSWORD}"
-      MinIO__BucketName: "${MINIO_BUCKET_NAME:-lagedra-evidence}"
+      MinIO__EvidenceBucket: "${MINIO_BUCKET_NAME:-lagedra-evidence}"
       ClamAv__Host: "clamav"
       ClamAv__Port: "3310"
     ports:
@@ -144,7 +146,7 @@ services:
       MinIO__Endpoint: "minio:9000"
       MinIO__AccessKey: "${MINIO_ROOT_USER}"
       MinIO__SecretKey: "${MINIO_ROOT_PASSWORD}"
-      MinIO__BucketName: "${MINIO_BUCKET_NAME:-lagedra-evidence}"
+      MinIO__EvidenceBucket: "${MINIO_BUCKET_NAME:-lagedra-evidence}"
       ClamAv__Host: "clamav"
       ClamAv__Port: "3310"
     entrypoint: ["dotnet", "Lagedra.Worker.dll"]

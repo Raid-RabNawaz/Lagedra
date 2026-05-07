@@ -27,7 +27,6 @@ public sealed class ConfirmTruthSurfaceCommandHandler(
         ArgumentNullException.ThrowIfNull(request);
 
         var snapshot = await dbContext.Snapshots
-            .Include(s => s.Proof)
             .FirstOrDefaultAsync(s => s.Id == request.SnapshotId, cancellationToken)
             .ConfigureAwait(false);
 
@@ -36,37 +35,49 @@ public sealed class ConfirmTruthSurfaceCommandHandler(
             return Result<TruthSurfaceDto>.Failure(new Error("TruthSurface.NotFound", "Snapshot not found."));
         }
 
-        switch (request.Party)
+        try
         {
-            case ConfirmingParty.Landlord:
-                snapshot.ConfirmByLandlord();
-                break;
-            case ConfirmingParty.Tenant:
-                snapshot.ConfirmByTenant();
-                break;
-            default:
-                return Result<TruthSurfaceDto>.Failure(new Error("TruthSurface.InvalidParty", "Unknown confirming party."));
-        }
+            switch (request.Party)
+            {
+                case ConfirmingParty.Landlord:
+                    snapshot.ConfirmByLandlord();
+                    break;
+                case ConfirmingParty.Tenant:
+                    snapshot.ConfirmByTenant();
+                    break;
+                default:
+                    return Result<TruthSurfaceDto>.Failure(new Error("TruthSurface.InvalidParty", "Unknown confirming party."));
+            }
 
-        // If both parties have confirmed, seal the snapshot
-        if (snapshot.LandlordConfirmed && snapshot.TenantConfirmed)
+            if (snapshot.LandlordConfirmed && snapshot.TenantConfirmed)
+            {
+                if (string.IsNullOrWhiteSpace(snapshot.CanonicalContent))
+                {
+                    return Result<TruthSurfaceDto>.Failure(
+                        new Error("TruthSurface.NoContent", "Cannot seal: snapshot has no canonical content."));
+                }
+
+                var hash = CanonicalHasher.ComputeHash(snapshot.CanonicalContent);
+                var signature = signer.Sign(System.Text.Encoding.UTF8.GetBytes(hash));
+                snapshot.Seal(hash, signature, clock.UtcNow);
+
+                // The CryptographicProof constructor sets Id = Guid.NewGuid(), but
+                // EF Core's ValueGeneratedOnAdd treats non-default keys as existing
+                // entities (Modified), generating an UPDATE instead of INSERT.
+                // Explicitly mark the new proof as Added so EF Core inserts it.
+                if (snapshot.Proof is not null)
+                {
+                    dbContext.Entry(snapshot.Proof).State = EntityState.Added;
+                }
+            }
+
+            await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+            return Result<TruthSurfaceDto>.Success(SnapshotMapper.Map(snapshot, signer));
+        }
+        catch (InvalidOperationException ex)
         {
-            var hash = CanonicalHasher.ComputeHash(snapshot.CanonicalContent ?? string.Empty);
-            var signature = signer.Sign(System.Text.Encoding.UTF8.GetBytes(hash));
-            snapshot.Seal(hash, signature, clock.UtcNow);
+            return Result<TruthSurfaceDto>.Failure(new Error("TruthSurface.InvalidOperation", ex.Message));
         }
-
-        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
-
-        return Result<TruthSurfaceDto>.Success(MapToDto(snapshot));
     }
-
-    private static TruthSurfaceDto MapToDto(TruthSnapshot s) =>
-        new(s.Id, s.DealId, s.Status, s.ProtocolVersion,
-            s.JurisdictionPackVersion, s.InquiryClosed,
-            s.LandlordConfirmed, s.TenantConfirmed,
-            s.CreatedAt, s.SealedAt,
-            s.Proof is not null
-                ? new SnapshotProofDto(s.Proof.Id, s.Proof.Hash, s.Proof.Signature, s.Proof.SignedAt, true)
-                : null);
 }

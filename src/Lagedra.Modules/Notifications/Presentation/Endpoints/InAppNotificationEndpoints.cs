@@ -19,12 +19,24 @@ public static class InAppNotificationEndpoints
             .WithTags("InAppNotifications")
             .RequireAuthorization();
 
+        group.MapGet("/all", GetAll);
         group.MapGet("/unread", GetUnread);
         group.MapGet("/unread/count", GetUnreadCount);
         group.MapPost("/{notificationId:guid}/read", MarkRead);
         group.MapPost("/read-all", MarkAllRead);
 
         return app;
+    }
+
+    private static async Task<IResult> GetAll(
+        ClaimsPrincipal user,
+        IMediator mediator,
+        [FromQuery] int limit = 100,
+        CancellationToken ct = default)
+    {
+        var userId = GetUserId(user);
+        var result = await mediator.Send(new GetAllNotificationsQuery(userId, limit), ct).ConfigureAwait(false);
+        return Results.Ok(result.Value);
     }
 
     private static async Task<IResult> GetUnread(

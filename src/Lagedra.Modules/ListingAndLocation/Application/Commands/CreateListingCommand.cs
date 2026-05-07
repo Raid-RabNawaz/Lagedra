@@ -5,6 +5,7 @@ using Lagedra.Modules.ListingAndLocation.Domain.Entities;
 using Lagedra.Modules.ListingAndLocation.Domain.Enums;
 using Lagedra.Modules.ListingAndLocation.Domain.Policies;
 using Lagedra.Modules.ListingAndLocation.Domain.ValueObjects;
+using CancellationPolicyType = Lagedra.SharedKernel.Integration.CancellationPolicyType;
 using Lagedra.Modules.ListingAndLocation.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Results;
 using MediatR;

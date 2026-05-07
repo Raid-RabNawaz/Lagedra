@@ -16,6 +16,14 @@ public sealed class PartnerOrganization : AggregateRoot<Guid>
     public Guid? VerifiedBy { get; private set; }
     public string? SuspensionReason { get; private set; }
 
+    /// <summary>
+    /// Phase 18.10 — Option A consent: the registering admin must accept the
+    /// "endorsement is a relationship statement, not a financial guarantee" clause
+    /// before the organization can be created. Stored as an audit row at the aggregate level.
+    /// </summary>
+    public DateTime EndorsementTermsAcceptedAt { get; private set; }
+    public Guid EndorsementTermsAcceptedByUserId { get; private set; }
+
     private PartnerOrganization() { }
 
     public static PartnerOrganization Create(
@@ -23,11 +31,19 @@ public sealed class PartnerOrganization : AggregateRoot<Guid>
         PartnerOrganizationType organizationType,
         string contactEmail,
         string? taxId,
+        Guid endorsementTermsAcceptedByUserId,
         IClock clock)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
         ArgumentException.ThrowIfNullOrWhiteSpace(contactEmail);
         ArgumentNullException.ThrowIfNull(clock);
+
+        if (endorsementTermsAcceptedByUserId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "Endorsement terms must be accepted by an identifiable admin user.",
+                nameof(endorsementTermsAcceptedByUserId));
+        }
 
         var now = clock.UtcNow;
         return new PartnerOrganization
@@ -38,6 +54,8 @@ public sealed class PartnerOrganization : AggregateRoot<Guid>
             Status = PartnerOrganizationStatus.PendingVerification,
             ContactEmail = contactEmail,
             TaxId = taxId,
+            EndorsementTermsAcceptedAt = now,
+            EndorsementTermsAcceptedByUserId = endorsementTermsAcceptedByUserId,
             CreatedAt = now,
             UpdatedAt = now
         };

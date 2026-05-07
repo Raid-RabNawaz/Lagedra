@@ -1,4 +1,4 @@
-using Lagedra.Modules.ListingAndLocation.Domain.Enums;
+using Lagedra.SharedKernel.Integration;
 
 namespace Lagedra.Modules.ActivationAndBilling.Domain.Policies;
 

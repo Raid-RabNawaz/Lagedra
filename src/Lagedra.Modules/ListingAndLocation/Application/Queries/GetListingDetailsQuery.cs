@@ -1,5 +1,6 @@
 using Lagedra.Modules.ListingAndLocation.Application.Commands;
 using Lagedra.Modules.ListingAndLocation.Application.DTOs;
+using ListingDetailsDto = Lagedra.Modules.ListingAndLocation.Application.DTOs.ListingDetailsDto;
 using Lagedra.Modules.ListingAndLocation.Domain.Services;
 using Lagedra.Modules.ListingAndLocation.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Integration;

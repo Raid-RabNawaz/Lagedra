@@ -2,7 +2,7 @@ using Lagedra.SharedKernel.Domain;
 
 namespace Lagedra.TruthSurface.Domain;
 
-public sealed class CryptographicProof : Entity<Guid>
+public sealed class CryptographicProof : Entity<Guid>, IAppendOnly
 {
     public Guid SnapshotId { get; private set; }
     public string Hash { get; private set; } = string.Empty;

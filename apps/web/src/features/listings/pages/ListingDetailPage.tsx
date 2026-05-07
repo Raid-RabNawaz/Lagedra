@@ -15,19 +15,21 @@ import {
   ChevronLeft,
   ChevronRight,
   ExternalLink,
+  Maximize2,
+  Images,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { useListingDetail, useSimilarListings } from "@/features/listings/hooks/useListings";
 import { SaveButton } from "@/features/listings/components/SaveButton";
 import { ApplyDialog } from "@/features/applications/components/ApplyDialog";
 import { useAuthStore } from "@/app/auth/authStore";
-import { roles } from "@/app/auth/roles";
 import { AmenityGrid } from "@/features/listings/components/AmenityGrid";
 import { SafetyDeviceList } from "@/features/listings/components/SafetyDeviceList";
 import { ConsiderationList } from "@/features/listings/components/ConsiderationList";
 import { HouseRulesSection } from "@/features/listings/components/HouseRulesSection";
 import { CancellationPolicySummary } from "@/features/listings/components/CancellationPolicySummary";
 import { ListingCard } from "@/features/listings/components/ListingCard";
+import { PhotoLightbox } from "@/features/listings/components/PhotoLightbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -36,6 +38,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Loader } from "@/components/shared/Loader";
 import { formatMoney, formatDate } from "@/utils/format";
 import { cn } from "@/lib/utils";
+
+const ListingApproxMap = lazy(() =>
+  import("@/features/listings/components/ListingApproxMap").then((m) => ({
+    default: m.ListingApproxMap,
+  })),
+);
 
 const propertyTypeLabel: Record<string, string> = {
   Apartment: "Apartment",
@@ -55,9 +63,15 @@ export const ListingDetailPage = () => {
   const { data: listing, isLoading, isError } = useListingDetail(id);
   const { data: similar } = useSimilarListings(id);
   const user = useAuthStore((s) => s.user);
-  const isTenant = user?.role === roles.tenant;
   const [currentPhoto, setCurrentPhoto] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+
+  const openLightbox = (idx: number) => {
+    setLightboxIndex(idx);
+    setLightboxOpen(true);
+  };
 
   if (isLoading) return <Loader fullPage label="Loading listing..." />;
 
@@ -105,49 +119,109 @@ export const ListingDetailPage = () => {
       </Link>
 
       {/* Photo gallery */}
-      <div className="relative overflow-hidden rounded-2xl bg-muted aspect-[16/7] mb-8">
-        {photos.length > 0 ? (
-          <>
-            <img
-              src={photos[currentPhoto]?.url ?? ""}
-              alt={photos[currentPhoto]?.caption ?? listing.title}
-              className="h-full w-full object-cover"
-            />
-            {photos.length > 1 && (
-              <>
-                <button
-                  onClick={() => setCurrentPhoto((i) => (i === 0 ? photos.length - 1 : i - 1))}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-background/80 backdrop-blur hover:bg-background transition-colors cursor-pointer"
+      <div className="mb-8 space-y-2">
+        <div className="relative overflow-hidden rounded-2xl bg-muted aspect-[16/7] group">
+          {photos.length > 0 ? (
+            <>
+              <button
+                type="button"
+                onClick={() => openLightbox(currentPhoto)}
+                aria-label="Open full-screen gallery"
+                className="block h-full w-full cursor-zoom-in"
+              >
+                <img
+                  src={photos[currentPhoto]?.url ?? ""}
+                  alt={photos[currentPhoto]?.caption ?? listing.title}
+                  className="h-full w-full object-cover transition-transform group-hover:scale-[1.01]"
+                />
+              </button>
+              {photos.length > 1 && (
+                <>
+                  <button
+                    onClick={() =>
+                      setCurrentPhoto((i) => (i === 0 ? photos.length - 1 : i - 1))
+                    }
+                    aria-label="Previous photo"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-background/80 backdrop-blur hover:bg-background transition-colors cursor-pointer"
+                  >
+                    <ChevronLeft className="h-5 w-5" />
+                  </button>
+                  <button
+                    onClick={() =>
+                      setCurrentPhoto((i) => (i === photos.length - 1 ? 0 : i + 1))
+                    }
+                    aria-label="Next photo"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-background/80 backdrop-blur hover:bg-background transition-colors cursor-pointer"
+                  >
+                    <ChevronRight className="h-5 w-5" />
+                  </button>
+                </>
+              )}
+              <div className="absolute right-3 bottom-3 flex items-center gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => openLightbox(currentPhoto)}
+                  className="bg-background/85 backdrop-blur hover:bg-background"
                 >
-                  <ChevronLeft className="h-5 w-5" />
-                </button>
-                <button
-                  onClick={() => setCurrentPhoto((i) => (i === photos.length - 1 ? 0 : i + 1))}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-background/80 backdrop-blur hover:bg-background transition-colors cursor-pointer"
-                >
-                  <ChevronRight className="h-5 w-5" />
-                </button>
-                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
-                  {photos.map((_, i) => (
-                    <button
-                      key={i}
-                      onClick={() => setCurrentPhoto(i)}
-                      className={cn(
-                        "h-2 w-2 rounded-full transition-colors cursor-pointer",
-                        i === currentPhoto ? "bg-background" : "bg-background/40",
-                      )}
-                    />
-                  ))}
-                </div>
-              </>
-            )}
-          </>
-        ) : (
-          <div className="flex h-full w-full items-center justify-center">
-            <ImageOff className="h-16 w-16 text-muted-foreground/30" />
+                  <Maximize2 className="h-4 w-4" />
+                  Full screen
+                </Button>
+                {photos.length > 1 && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => openLightbox(0)}
+                    className="bg-background/85 backdrop-blur hover:bg-background"
+                  >
+                    <Images className="h-4 w-4" />
+                    All photos ({photos.length})
+                  </Button>
+                )}
+              </div>
+            </>
+          ) : (
+            <div className="flex h-full w-full items-center justify-center">
+              <ImageOff className="h-16 w-16 text-muted-foreground/30" />
+            </div>
+          )}
+        </div>
+
+        {photos.length > 1 && (
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {photos.map((p, i) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => setCurrentPhoto(i)}
+                aria-label={`Show photo ${i + 1}`}
+                className={cn(
+                  "relative h-16 w-24 shrink-0 overflow-hidden rounded-md border-2 transition-all cursor-pointer",
+                  i === currentPhoto
+                    ? "border-foreground opacity-100"
+                    : "border-transparent opacity-70 hover:opacity-100",
+                )}
+              >
+                {p.url && (
+                  <img
+                    src={p.url}
+                    alt={p.caption ?? ""}
+                    className="h-full w-full object-cover"
+                    loading="lazy"
+                  />
+                )}
+              </button>
+            ))}
           </div>
         )}
       </div>
+
+      <PhotoLightbox
+        open={lightboxOpen}
+        photos={photos}
+        initialIndex={lightboxIndex}
+        onClose={() => setLightboxOpen(false)}
+      />
 
       <div className="grid gap-8 lg:grid-cols-3">
         {/* Main content */}
@@ -287,6 +361,40 @@ export const ListingDetailPage = () => {
               </section>
             </>
           )}
+
+          {/* Where you'll be */}
+          {listing.latitude != null && listing.longitude != null && (
+            <>
+              <Separator />
+              <section>
+                <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                  <MapPin className="h-5 w-5" />
+                  Where you&apos;ll be
+                </h2>
+                <div className="overflow-hidden rounded-xl border aspect-[16/9]">
+                  <Suspense
+                    fallback={
+                      <div className="flex h-full w-full items-center justify-center bg-muted">
+                        <Loader />
+                      </div>
+                    }
+                  >
+                    <ListingApproxMap
+                      latitude={listing.latitude}
+                      longitude={listing.longitude}
+                      privacyRadiusMeters={address ? undefined : 350}
+                      showMarker={Boolean(address)}
+                    />
+                  </Suspense>
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {address
+                    ? "Exact location is shown after your booking is confirmed."
+                    : "Approximate location is shown until the host shares the precise address."}
+                </p>
+              </section>
+            </>
+          )}
         </div>
 
         {/* Sidebar */}
@@ -309,12 +417,22 @@ export const ListingDetailPage = () => {
               )}
 
               <div className="mb-3">
-                {isTenant ? (
-                  <ApplyDialog listing={listing} />
+                {!user ? (
+                  <Link
+                    to={`/auth/login?redirect=/listings/${listing.id}`}
+                    className={cn(buttonVariants({ variant: "accent", size: "lg" }), "w-full")}
+                  >
+                    Sign in to book
+                  </Link>
+                ) : user.userId === listing.landlordUserId ? (
+                  <Link
+                    to={`/app/listings/${listing.id}`}
+                    className={cn(buttonVariants({ variant: "accent", size: "lg" }), "w-full")}
+                  >
+                    Manage your listing
+                  </Link>
                 ) : (
-                  <Button variant="accent" size="lg" className="w-full" disabled={!user}>
-                    {user ? "Sign in as tenant to apply" : "Sign in to apply"}
-                  </Button>
+                  <ApplyDialog listing={listing} />
                 )}
               </div>
               <div className="flex gap-2">

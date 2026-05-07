@@ -6,12 +6,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Lagedra.Modules.ListingAndLocation.Application.Commands;
 
-public sealed record PublishListingCommand(Guid ListingId) : IRequest<Result<ListingDetailsDto>>;
+public sealed record PublishListingCommand(Guid ListingId, Guid CallerUserId) : IRequest<Result<ListingDetailsDto>>;
 
 public sealed class PublishListingCommandHandler(ListingsDbContext dbContext)
     : IRequestHandler<PublishListingCommand, Result<ListingDetailsDto>>
 {
     private static readonly Error NotFound = new("Listing.NotFound", "Listing not found.");
+    private static readonly Error Forbidden = new("Listing.Forbidden", "You do not own this listing.");
 
     public async Task<Result<ListingDetailsDto>> Handle(
         PublishListingCommand request,
@@ -30,6 +31,11 @@ public sealed class PublishListingCommandHandler(ListingsDbContext dbContext)
         if (listing is null)
         {
             return Result<ListingDetailsDto>.Failure(NotFound);
+        }
+
+        if (listing.LandlordUserId != request.CallerUserId)
+        {
+            return Result<ListingDetailsDto>.Failure(Forbidden);
         }
 
         try

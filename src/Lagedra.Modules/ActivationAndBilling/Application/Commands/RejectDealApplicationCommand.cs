@@ -8,12 +8,15 @@ using Microsoft.EntityFrameworkCore;
 namespace Lagedra.Modules.ActivationAndBilling.Application.Commands;
 
 public sealed record RejectDealApplicationCommand(
-    Guid ApplicationId) : IRequest<Result<DealApplicationDto>>;
+    Guid ApplicationId,
+    Guid CallerUserId) : IRequest<Result<DealApplicationDto>>;
 
 public sealed class RejectDealApplicationCommandHandler(
     BillingDbContext dbContext)
     : IRequestHandler<RejectDealApplicationCommand, Result<DealApplicationDto>>
 {
+    private static readonly Error Forbidden = new("Application.Forbidden", "You do not own the listing for this application.");
+
     public async Task<Result<DealApplicationDto>> Handle(
         RejectDealApplicationCommand request,
         CancellationToken cancellationToken)
@@ -30,6 +33,11 @@ public sealed class RejectDealApplicationCommandHandler(
                 new Error("Application.NotFound", "Application not found."));
         }
 
+        if (application.LandlordUserId != request.CallerUserId)
+        {
+            return Result<DealApplicationDto>.Failure(Forbidden);
+        }
+
         application.Reject();
 
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -42,5 +50,5 @@ public sealed class RejectDealApplicationCommandHandler(
             a.Status, a.DealId, a.SubmittedAt, a.DecidedAt,
             a.RequestedCheckIn, a.RequestedCheckOut, a.StayDurationDays,
             a.DepositAmountCents, a.InsuranceFeeCents, a.FirstMonthRentCents,
-            a.PartnerOrganizationId, a.IsPartnerReferred, a.JurisdictionWarning);
+            a.PartnerOrganizationId, a.IsPartnerReferred, a.JurisdictionWarning, a.Source);
 }

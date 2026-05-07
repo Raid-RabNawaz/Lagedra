@@ -30,6 +30,7 @@ public sealed class GetCurrentUserQueryHandler(UserManager<ApplicationUser> user
             Email: user.Email!,
             Role: user.Role,
             IsActive: user.IsActive,
+            EmailConfirmed: user.EmailConfirmed,
             FirstName: user.FirstName,
             LastName: user.LastName,
             DisplayName: user.DisplayName,

@@ -1,4 +1,5 @@
 using Lagedra.Modules.ActivationAndBilling.Domain.Events;
+using Lagedra.SharedKernel.Integration.Events;
 using Lagedra.Modules.ActivationAndBilling.Infrastructure.Persistence;
 using Lagedra.Modules.Notifications.Application.Commands;
 using Lagedra.Modules.Notifications.Domain.Enums;
@@ -207,5 +208,57 @@ public sealed class OnPaymentFailedNotify(BillingDbContext db, IMediator m)
             "A payment has failed. Please check your billing details.",
             new() { ["invoiceId"] = e.InvoiceId.ToString() },
             Channels.InAppOnly, e.BillingAccountId, "BillingAccount"), ct).ConfigureAwait(false);
+    }
+}
+
+public sealed class OnDamageClaimApprovedNotify(BillingDbContext db, IMediator m)
+    : IDomainEventHandler<DamageClaimApprovedEvent>
+{
+    public async Task Handle(DamageClaimApprovedEvent e, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        var app = await db.DealApplications.AsNoTracking()
+            .FirstOrDefaultAsync(a => a.DealId == e.DealId, ct).ConfigureAwait(false);
+        if (app is null) return;
+
+        await m.Send(new NotifyUserCommand(
+            e.TenantUserId, "damage_claim_approved",
+            "Damage Claim Approved",
+            $"A damage claim of \u20ac{e.ApprovedAmountCents / 100m:F2} has been approved. The amount will be deducted from your deposit.",
+            new() { ["dealId"] = e.DealId.ToString(), ["amount"] = $"{e.ApprovedAmountCents / 100m:F2}" },
+            Channels.EmailAndInApp, e.DealId, "Deal"), ct).ConfigureAwait(false);
+
+        await m.Send(new NotifyUserCommand(
+            app.LandlordUserId, "damage_claim_approved",
+            "Damage Claim Approved",
+            $"Your damage claim of \u20ac{e.ApprovedAmountCents / 100m:F2} has been approved.",
+            new() { ["dealId"] = e.DealId.ToString(), ["amount"] = $"{e.ApprovedAmountCents / 100m:F2}" },
+            Channels.EmailAndInApp, e.DealId, "Deal"), ct).ConfigureAwait(false);
+    }
+}
+
+public sealed class OnDamageClaimRejectedNotify(BillingDbContext db, IMediator m)
+    : IDomainEventHandler<DamageClaimRejectedEvent>
+{
+    public async Task Handle(DamageClaimRejectedEvent e, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        var app = await db.DealApplications.AsNoTracking()
+            .FirstOrDefaultAsync(a => a.DealId == e.DealId, ct).ConfigureAwait(false);
+        if (app is null) return;
+
+        await m.Send(new NotifyUserCommand(
+            e.TenantUserId, "damage_claim_rejected",
+            "Damage Claim Rejected",
+            "A damage claim against your deposit has been rejected. Your full deposit will be returned.",
+            new() { ["dealId"] = e.DealId.ToString() },
+            Channels.EmailAndInApp, e.DealId, "Deal"), ct).ConfigureAwait(false);
+
+        await m.Send(new NotifyUserCommand(
+            app.LandlordUserId, "damage_claim_rejected",
+            "Damage Claim Rejected",
+            "Your damage claim has been rejected after review.",
+            new() { ["dealId"] = e.DealId.ToString() },
+            Channels.EmailAndInApp, e.DealId, "Deal"), ct).ConfigureAwait(false);
     }
 }

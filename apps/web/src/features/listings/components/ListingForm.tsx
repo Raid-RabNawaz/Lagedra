@@ -59,11 +59,12 @@ type ListingFormProps = {
 
 export function ListingForm({ defaultValues, onSubmit, submitLabel, definitions }: ListingFormProps) {
   const form = useForm<ListingFormValues>({
-    resolver: zodResolver(listingFormSchema),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    resolver: zodResolver(listingFormSchema) as any,
     defaultValues: { ...defaultListingFormValues, ...defaultValues },
   });
 
-  const handleSubmit = form.handleSubmit(async (data) => {
+  const handleSubmit = form.handleSubmit(async (data: ListingFormValues) => {
     await onSubmit(data);
   });
 

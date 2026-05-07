@@ -33,5 +33,10 @@ public sealed class TruthSnapshotConfiguration : IEntityTypeConfiguration<TruthS
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.Ignore(s => s.DomainEvents);
+
+        // Append-only — soft-delete columns are dropped from the schema and
+        // intentionally not mapped so any code that mutates them fails fast.
+        builder.Ignore(s => s.IsDeleted);
+        builder.Ignore(s => s.DeletedAt);
     }
 }

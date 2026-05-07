@@ -2,8 +2,7 @@ using Lagedra.Modules.ActivationAndBilling.Application.DTOs;
 using Lagedra.Modules.ActivationAndBilling.Domain.Aggregates;
 using Lagedra.Modules.ActivationAndBilling.Domain.Services;
 using Lagedra.Modules.ActivationAndBilling.Infrastructure.Persistence;
-using Lagedra.Modules.ListingAndLocation.Domain.Services;
-using Lagedra.Modules.ListingAndLocation.Infrastructure.Persistence;
+using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Insurance;
 using Lagedra.SharedKernel.Results;
 using MediatR;
@@ -13,16 +12,18 @@ namespace Lagedra.Modules.ActivationAndBilling.Application.Commands;
 
 public sealed record ApproveDealApplicationCommand(
     Guid ApplicationId,
+    Guid CallerUserId,
     long DepositAmountCents) : IRequest<Result<DealApplicationDto>>;
 
 public sealed class ApproveDealApplicationCommandHandler(
     BillingDbContext dbContext,
-    ListingsDbContext listingsDbContext,
+    IListingProvider listingProvider,
     IInsuranceFeeCalculator insuranceFeeCalculator)
     : IRequestHandler<ApproveDealApplicationCommand, Result<DealApplicationDto>>
 {
     private static readonly Error ApplicationNotFound = new("Application.NotFound", "Application not found.");
     private static readonly Error ListingNotFound = new("Listing.NotFound", "Associated listing not found.");
+    private static readonly Error Forbidden = new("Application.Forbidden", "You do not own the listing for this application.");
     private static readonly Error DatesUnavailable = new("Dates.Unavailable", "The requested dates are no longer available.");
 
     public async Task<Result<DealApplicationDto>> Handle(
@@ -40,10 +41,13 @@ public sealed class ApproveDealApplicationCommandHandler(
             return Result<DealApplicationDto>.Failure(ApplicationNotFound);
         }
 
-        var listing = await listingsDbContext.Listings
-            .AsNoTracking()
-            .Include(l => l.AvailabilityBlocks)
-            .FirstOrDefaultAsync(l => l.Id == application.ListingId, cancellationToken)
+        if (application.LandlordUserId != request.CallerUserId)
+        {
+            return Result<DealApplicationDto>.Failure(Forbidden);
+        }
+
+        var listing = await listingProvider
+            .GetListingDetailsAsync(application.ListingId, cancellationToken)
             .ConfigureAwait(false);
 
         if (listing is null)
@@ -51,8 +55,10 @@ public sealed class ApproveDealApplicationCommandHandler(
             return Result<DealApplicationDto>.Failure(ListingNotFound);
         }
 
-        if (!AvailabilityService.IsAvailable(
-                listing.AvailabilityBlocks, application.RequestedCheckIn, application.RequestedCheckOut))
+        var isAvailable = await listingProvider
+            .IsAvailableAsync(application.ListingId, application.RequestedCheckIn, application.RequestedCheckOut, cancellationToken)
+            .ConfigureAwait(false);
+        if (!isAvailable)
         {
             return Result<DealApplicationDto>.Failure(DatesUnavailable);
         }
@@ -87,5 +93,5 @@ public sealed class ApproveDealApplicationCommandHandler(
             a.Status, a.DealId, a.SubmittedAt, a.DecidedAt,
             a.RequestedCheckIn, a.RequestedCheckOut, a.StayDurationDays,
             a.DepositAmountCents, a.InsuranceFeeCents, a.FirstMonthRentCents,
-            a.PartnerOrganizationId, a.IsPartnerReferred, a.JurisdictionWarning);
+            a.PartnerOrganizationId, a.IsPartnerReferred, a.JurisdictionWarning, a.Source);
 }

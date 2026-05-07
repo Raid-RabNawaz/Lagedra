@@ -65,15 +65,23 @@ export const ApplicationDetailPage = () => {
 
   const handleApprove = async () => {
     if (!isValidDeposit) return;
-    await approveMutation.mutateAsync({
-      id: application.applicationId,
-      payload: { depositAmountCents: depositCents },
-    });
-    setApproveOpen(false);
+    try {
+      await approveMutation.mutateAsync({
+        id: application.applicationId,
+        payload: { depositAmountCents: depositCents },
+      });
+      setApproveOpen(false);
+    } catch {
+      // Error is surfaced by mutation state in the dialog.
+    }
   };
 
   const handleReject = async () => {
-    await rejectMutation.mutateAsync(application.applicationId);
+    try {
+      await rejectMutation.mutateAsync(application.applicationId);
+    } catch {
+      // Error is surfaced by mutation state below the actions.
+    }
   };
 
   return (
@@ -273,9 +281,16 @@ export const ApplicationDetailPage = () => {
           <Alert>
             <CheckCircle2 className="h-4 w-4 text-success" />
             <span className="ml-2">
-              Application approved. Deal ID: <code className="text-xs">{application.dealId}</code>
+              Application approved.
             </span>
           </Alert>
+          <Link
+            to={`/app/deals/${application.dealId}`}
+            className={cn(buttonVariants({ variant: "accent" }), "mt-3 gap-2")}
+          >
+            Go to Deal
+            <ArrowLeft className="h-4 w-4 rotate-180" />
+          </Link>
         </>
       )}
     </div>

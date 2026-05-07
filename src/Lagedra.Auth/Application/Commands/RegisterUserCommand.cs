@@ -32,10 +32,9 @@ public sealed class RegisterUserCommandHandler(
             return AuthErrors.EmailAlreadyExists;
         }
 
-        if (request.Role is UserRole.Arbitrator or UserRole.PlatformAdmin
-            or UserRole.InsurancePartner)
+        if (request.Role is not (UserRole.Member or UserRole.InstitutionPartner))
         {
-            return AuthErrors.IdentityError("Self-registration is only available for Tenant, Landlord, and InstitutionPartner roles.");
+            return AuthErrors.IdentityError("Self-registration is only available for Member and InstitutionPartner roles.");
         }
 
         var user = new ApplicationUser

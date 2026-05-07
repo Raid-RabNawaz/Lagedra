@@ -1,6 +1,5 @@
 export const roles = {
-  tenant: "Tenant",
-  landlord: "Landlord",
+  member: "Member",
   arbitrator: "Arbitrator",
   platformAdmin: "PlatformAdmin",
   insurancePartner: "InsurancePartner",
@@ -10,8 +9,7 @@ export const roles = {
 export type UserRole = (typeof roles)[keyof typeof roles];
 
 export const selfRegisterRoles: UserRole[] = [
-  roles.tenant,
-  roles.landlord,
+  roles.member,
   roles.institutionPartner,
 ];
 
@@ -19,8 +17,7 @@ export const allRoles: UserRole[] = Object.values(roles);
 
 export function roleLabel(role: UserRole | string | number): string {
   const labels: Record<string, string> = {
-    Tenant: "Tenant",
-    Landlord: "Landlord",
+    Member: "Member",
     Arbitrator: "Arbitrator",
     PlatformAdmin: "Platform Admin",
     InsurancePartner: "Insurance Partner",

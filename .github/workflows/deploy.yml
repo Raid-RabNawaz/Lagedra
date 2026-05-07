@@ -1,0 +1,129 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION || 'eu-west-1' }}
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+
+  # ── Backend: build, push, and deploy ────────────────────────────────────────
+  deploy-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push API image
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build --target runtime \
+            -t $ECR_REGISTRY/lagedra/api:$IMAGE_TAG \
+            -t $ECR_REGISTRY/lagedra/api:latest \
+            -f Dockerfile .
+          docker push $ECR_REGISTRY/lagedra/api:$IMAGE_TAG
+          docker push $ECR_REGISTRY/lagedra/api:latest
+
+      - name: Build and push Worker image
+        env:
+          ECR_REGISTRY: ${{ steps.ecr-login.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build --target runtime-worker \
+            -t $ECR_REGISTRY/lagedra/worker:$IMAGE_TAG \
+            -t $ECR_REGISTRY/lagedra/worker:latest \
+            -f Dockerfile .
+          docker push $ECR_REGISTRY/lagedra/worker:$IMAGE_TAG
+          docker push $ECR_REGISTRY/lagedra/worker:latest
+
+      - name: Deploy API to ECS
+        run: |
+          aws ecs update-service \
+            --cluster lagedra-prod \
+            --service lagedra-api \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Deploy Worker to ECS
+        run: |
+          aws ecs update-service \
+            --cluster lagedra-prod \
+            --service lagedra-worker \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Wait for API deployment
+        run: |
+          aws ecs wait services-stable \
+            --cluster lagedra-prod \
+            --services lagedra-api \
+            --region ${{ env.AWS_REGION }}
+
+  # ── Frontend: build and deploy to S3 + CloudFront ──────────────────────────
+  deploy-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Build frontend
+        working-directory: apps/web
+        env:
+          VITE_API_BASE_URL: ${{ vars.VITE_API_BASE_URL }}
+          VITE_GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          VITE_STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+          VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Deploy to S3
+        run: |
+          aws s3 sync apps/web/dist/ s3://${{ vars.S3_WEB_BUCKET || 'lagedra-web-prod' }} \
+            --delete \
+            --cache-control "public, max-age=31536000, immutable" \
+            --region ${{ env.AWS_REGION }}
+          # index.html should not be cached aggressively
+          aws s3 cp apps/web/dist/index.html s3://${{ vars.S3_WEB_BUCKET || 'lagedra-web-prod' }}/index.html \
+            --cache-control "public, max-age=0, must-revalidate" \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Invalidate CloudFront cache
+        if: vars.CLOUDFRONT_DISTRIBUTION_ID != ''
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }} \
+            --paths "/*"

@@ -1,5 +1,5 @@
-using Lagedra.Modules.InsuranceIntegration.Domain.Enums;
-using Lagedra.Modules.InsuranceIntegration.Domain.Events;
+using Lagedra.SharedKernel.Integration;
+using Lagedra.SharedKernel.Integration.Events;
 using Lagedra.Modules.InsuranceIntegration.Domain.Policies;
 using Lagedra.Modules.InsuranceIntegration.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;

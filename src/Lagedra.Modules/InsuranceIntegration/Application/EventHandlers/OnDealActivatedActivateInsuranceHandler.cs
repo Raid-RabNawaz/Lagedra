@@ -1,8 +1,8 @@
-using Lagedra.Modules.ActivationAndBilling.Domain.Events;
-using Lagedra.Modules.ActivationAndBilling.Infrastructure.Persistence;
+using Lagedra.SharedKernel.Integration.Events;
 using Lagedra.Modules.InsuranceIntegration.Domain.Aggregates;
 using Lagedra.Modules.InsuranceIntegration.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Events;
+using Lagedra.SharedKernel.Integration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -10,7 +10,7 @@ namespace Lagedra.Modules.InsuranceIntegration.Application.EventHandlers;
 
 public sealed partial class OnDealActivatedActivateInsuranceHandler(
     InsuranceDbContext insuranceDb,
-    BillingDbContext billingDb,
+    IDealApplicationStatusProvider dealApplicationProvider,
     ILogger<OnDealActivatedActivateInsuranceHandler> logger)
     : IDomainEventHandler<DealActivatedEvent>
 {
@@ -30,14 +30,13 @@ public sealed partial class OnDealActivatedActivateInsuranceHandler(
             insuranceDb.PolicyRecords.Add(record);
         }
 
-        var application = await billingDb.DealApplications
-            .AsNoTracking()
-            .FirstOrDefaultAsync(a => a.DealId == domainEvent.DealId, ct)
+        var requestedCheckOut = await dealApplicationProvider
+            .GetRequestedCheckOutAsync(domainEvent.DealId, ct)
             .ConfigureAwait(false);
 
-        DateTime? expiresAt = application is not null
+        DateTime? expiresAt = requestedCheckOut.HasValue
             ? DateTime.SpecifyKind(
-                application.RequestedCheckOut.ToDateTime(TimeOnly.MinValue),
+                requestedCheckOut.Value.ToDateTime(TimeOnly.MinValue),
                 DateTimeKind.Utc)
             : null;
 

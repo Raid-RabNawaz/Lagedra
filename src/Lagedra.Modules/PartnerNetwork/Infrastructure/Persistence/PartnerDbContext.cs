@@ -18,6 +18,8 @@ public sealed class PartnerDbContext(
     public DbSet<ReferralLink> ReferralLinks => Set<ReferralLink>();
     public DbSet<ReferralRedemption> ReferralRedemptions => Set<ReferralRedemption>();
     public DbSet<DirectReservation> DirectReservations => Set<DirectReservation>();
+    public DbSet<PartnerEndorsement> Endorsements => Set<PartnerEndorsement>();
+    public DbSet<PartnerGuestInvite> GuestInvites => Set<PartnerGuestInvite>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

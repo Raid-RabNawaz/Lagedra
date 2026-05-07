@@ -3,7 +3,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Lagedra.SharedKernel\Lagedra.SharedKernel.csproj" />
     <ProjectReference Include="..\..\Lagedra.Infrastructure\Lagedra.Infrastructure.csproj" />
-    <ProjectReference Include="..\ActivationAndBilling\ActivationAndBilling.csproj" />
     <ProjectReference Include="..\Notifications\Notifications.csproj" />
   </ItemGroup>
 

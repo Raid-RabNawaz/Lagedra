@@ -1,4 +1,5 @@
 using Lagedra.SharedKernel.Domain;
+using Lagedra.SharedKernel.Integration.Events;
 using Lagedra.TruthSurface.Domain.Events;
 
 namespace Lagedra.TruthSurface.Domain;
@@ -13,7 +14,7 @@ namespace Lagedra.TruthSurface.Domain;
 /// The canonical JSON content, SHA-256 hash, and HMAC-SHA256 signature are sealed
 /// at confirmation time and never modified thereafter.
 /// </summary>
-public sealed class TruthSnapshot : AggregateRoot<Guid>
+public sealed class TruthSnapshot : AggregateRoot<Guid>, IAppendOnly
 {
     public Guid DealId { get; private set; }
     public TruthSurfaceStatus Status { get; private set; }
@@ -41,14 +42,32 @@ public sealed class TruthSnapshot : AggregateRoot<Guid>
         string protocolVersion,
         string jurisdictionPackVersion,
         string canonicalContent)
+        => CreateDraftWithId(Guid.NewGuid(), dealId, protocolVersion, jurisdictionPackVersion, canonicalContent);
+
+    /// <summary>
+    /// Create a draft with a caller-supplied id. Required when the canonical
+    /// JSON itself must embed the snapshot id (so that the hashed payload can
+    /// uniquely reference the row in storage).
+    /// </summary>
+    public static TruthSnapshot CreateDraftWithId(
+        Guid snapshotId,
+        Guid dealId,
+        string protocolVersion,
+        string jurisdictionPackVersion,
+        string canonicalContent)
     {
+        if (snapshotId == Guid.Empty)
+        {
+            throw new ArgumentException("Snapshot id must be non-empty.", nameof(snapshotId));
+        }
+
         ArgumentException.ThrowIfNullOrWhiteSpace(protocolVersion);
         ArgumentException.ThrowIfNullOrWhiteSpace(jurisdictionPackVersion);
         ArgumentException.ThrowIfNullOrWhiteSpace(canonicalContent);
 
         return new TruthSnapshot
         {
-            Id = Guid.NewGuid(),
+            Id = snapshotId,
             DealId = dealId,
             Status = TruthSurfaceStatus.Draft,
             CreatedAt = DateTime.UtcNow,

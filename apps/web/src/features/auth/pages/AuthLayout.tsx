@@ -1,6 +1,6 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
-import { Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
+import logoSvg from "@/assets/logo.svg";
 
 const navLinks = [
   { to: "/auth/login", label: "Log in" },
@@ -13,9 +13,8 @@ export const AuthLayout = () => {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <header className="flex items-center justify-between border-b px-6 py-4 md:px-10">
-        <Link to="/" className="flex items-center gap-2 text-accent hover:opacity-90 transition-opacity">
-          <Shield className="h-7 w-7" />
-          <span className="text-xl font-bold tracking-tight text-foreground">Lagedra</span>
+        <Link to="/" className="flex items-center gap-2 hover:opacity-90 transition-opacity">
+          <img src={logoSvg} alt="Lagedra" className="h-7" />
         </Link>
         <nav className="flex items-center gap-1">
           {navLinks.map((link) => (

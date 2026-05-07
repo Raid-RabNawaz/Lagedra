@@ -1,4 +1,4 @@
-using Lagedra.Modules.IdentityAndVerification.Domain.Events;
+using Lagedra.SharedKernel.Integration.Events;
 using Lagedra.SharedKernel.Events;
 using Lagedra.SharedKernel.Integration;
 using Microsoft.Extensions.Logging;

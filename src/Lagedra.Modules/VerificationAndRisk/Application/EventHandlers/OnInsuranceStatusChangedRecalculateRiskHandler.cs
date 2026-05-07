@@ -1,9 +1,8 @@
-using Lagedra.Modules.InsuranceIntegration.Domain.Enums;
-using Lagedra.Modules.InsuranceIntegration.Domain.Events;
+using Lagedra.SharedKernel.Integration;
+using Lagedra.SharedKernel.Integration.Events;
 using Lagedra.Modules.VerificationAndRisk.Application.Commands;
 using Lagedra.Modules.VerificationAndRisk.Domain.Enums;
 using Lagedra.SharedKernel.Events;
-using Lagedra.SharedKernel.Integration;
 using MediatR;
 using Microsoft.Extensions.Logging;
 

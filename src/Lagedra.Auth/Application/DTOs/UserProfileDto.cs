@@ -7,6 +7,7 @@ public sealed record UserProfileDto(
     string Email,
     UserRole Role,
     bool IsActive,
+    bool EmailConfirmed,
     string? FirstName,
     string? LastName,
     string? DisplayName,

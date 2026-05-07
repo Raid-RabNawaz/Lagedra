@@ -133,4 +133,18 @@ public sealed class DamageClaim : AggregateRoot<Guid>
 
         Status = DamageClaimStatus.UnderReview;
     }
+
+    public void Settle(string? notes)
+    {
+        if (Status is not (DamageClaimStatus.Approved or DamageClaimStatus.PartiallyApproved))
+        {
+            throw new InvalidOperationException($"Cannot settle claim in status '{Status}'.");
+        }
+
+        Status = DamageClaimStatus.Settled;
+        if (notes is not null)
+        {
+            ResolutionNotes = notes;
+        }
+    }
 }

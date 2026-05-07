@@ -2,6 +2,7 @@ using Lagedra.Modules.Notifications.Application.Commands;
 using Lagedra.Modules.Notifications.Domain.Enums;
 using Lagedra.SharedKernel.Events;
 using Lagedra.SharedKernel.Integration;
+using Lagedra.SharedKernel.Integration.Events;
 using Lagedra.TruthSurface.Domain.Events;
 using MediatR;
 

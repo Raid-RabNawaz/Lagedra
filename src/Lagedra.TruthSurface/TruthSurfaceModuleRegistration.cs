@@ -1,13 +1,14 @@
 using Lagedra.Infrastructure.Eventing;
+using Lagedra.SharedKernel.Integration;
 using Lagedra.TruthSurface.Application.EventHandlers;
+using Lagedra.SharedKernel.Integration.Events;
 using Lagedra.TruthSurface.Domain.Events;
-using Lagedra.TruthSurface.Infrastructure.Jobs;
 using Lagedra.TruthSurface.Infrastructure.Persistence;
 using Lagedra.TruthSurface.Infrastructure.Repositories;
+using Lagedra.TruthSurface.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Quartz;
 
 namespace Lagedra.TruthSurface;
 
@@ -26,6 +27,7 @@ public static class TruthSurfaceModuleRegistration
         services.AddOutboxContext<TruthSurfaceDbContext>();
 
         services.AddScoped<SnapshotRepository>();
+        services.AddScoped<ITruthSurfaceStatusProvider, TruthSurfaceStatusProvider>();
 
         services.AddDomainEventHandler<TruthSurfaceInitiatedEvent, OnTruthSurfaceInitiatedNotify>();
         services.AddDomainEventHandler<TruthSurfaceConfirmedEvent, OnTruthSurfaceConfirmedNotify>();
@@ -34,15 +36,8 @@ public static class TruthSurfaceModuleRegistration
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(TruthSurfaceModuleRegistration).Assembly));
 
-        services.AddQuartz(q =>
-        {
-            var jobKey = new JobKey("SnapshotVerification");
-            q.AddJob<SnapshotVerificationJob>(opts => opts.WithIdentity(jobKey));
-            q.AddTrigger(opts => opts
-                .ForJob(jobKey)
-                .WithIdentity("SnapshotVerification-trigger")
-                .WithCronSchedule("0 0 3 ? * SUN"));
-        });
+        // Note: SnapshotVerificationJob is registered centrally in
+        // Lagedra.Worker.Scheduling.JobRegistry to avoid double-scheduling.
 
         return services;
     }

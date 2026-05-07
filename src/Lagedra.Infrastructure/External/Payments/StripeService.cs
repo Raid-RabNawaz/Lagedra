@@ -11,11 +11,14 @@ public sealed partial class StripeService(
 {
     private readonly StripeSettings _settings = settings.Value;
 
+    private RequestOptions NewRequestOptions(string? idempotencyKey = null) =>
+        new() { ApiKey = _settings.SecretKey, IdempotencyKey = idempotencyKey };
+
     public async Task<string> GetOrCreateCustomerAsync(Guid userId, string email, CancellationToken ct = default)
     {
-        StripeConfiguration.ApiKey = _settings.SecretKey;
+        var opts = NewRequestOptions();
         var service = new CustomerService();
-        var existing = await service.ListAsync(new CustomerListOptions { Email = email, Limit = 1 }, cancellationToken: ct).ConfigureAwait(false);
+        var existing = await service.ListAsync(new CustomerListOptions { Email = email, Limit = 1 }, opts, ct).ConfigureAwait(false);
 
         if (existing.Data.Count > 0)
         {
@@ -26,15 +29,15 @@ public sealed partial class StripeService(
         {
             Email = email,
             Metadata = new Dictionary<string, string> { ["userId"] = userId.ToString() }
-        }, cancellationToken: ct).ConfigureAwait(false);
+        }, opts, ct).ConfigureAwait(false);
 
         LogCustomerCreated(logger, userId, created.Id);
         return created.Id;
     }
 
-    public async Task<StripeSubscriptionResult> CreateSubscriptionAsync(string customerId, string priceId, CancellationToken ct = default)
+    public async Task<StripeSubscriptionResult> CreateSubscriptionAsync(string customerId, string priceId, string? idempotencyKey = null, CancellationToken ct = default)
     {
-        StripeConfiguration.ApiKey = _settings.SecretKey;
+        var opts = NewRequestOptions(idempotencyKey);
         var service = new SubscriptionService();
         var subscription = await service.CreateAsync(new SubscriptionCreateOptions
         {
@@ -46,7 +49,7 @@ public sealed partial class StripeService(
                 SaveDefaultPaymentMethod = "on_subscription"
             },
             Expand = ["latest_invoice.payment_intent"]
-        }, cancellationToken: ct).ConfigureAwait(false);
+        }, opts, ct).ConfigureAwait(false);
 
         var clientSecret = subscription.LatestInvoice?.PaymentIntent?.ClientSecret ?? string.Empty;
         LogSubscriptionCreated(logger, customerId, subscription.Id);
@@ -55,20 +58,20 @@ public sealed partial class StripeService(
 
     public async Task CancelSubscriptionAsync(string subscriptionId, CancellationToken ct = default)
     {
-        StripeConfiguration.ApiKey = _settings.SecretKey;
+        var opts = NewRequestOptions();
         var service = new SubscriptionService();
-        await service.CancelAsync(subscriptionId, cancellationToken: ct).ConfigureAwait(false);
+        await service.CancelAsync(subscriptionId, null, opts, ct).ConfigureAwait(false);
         LogSubscriptionCancelled(logger, subscriptionId);
     }
 
     public async Task<StripeInvoiceResult> CreateProratedInvoiceAsync(string subscriptionId, string priceId, CancellationToken ct = default)
     {
-        StripeConfiguration.ApiKey = _settings.SecretKey;
+        var opts = NewRequestOptions();
         var subService = new SubscriptionService();
-        var sub = await subService.GetAsync(subscriptionId, cancellationToken: ct).ConfigureAwait(false);
+        var sub = await subService.GetAsync(subscriptionId, null, opts, ct).ConfigureAwait(false);
 
         var itemService = new SubscriptionItemService();
-        var items = await itemService.ListAsync(new SubscriptionItemListOptions { Subscription = subscriptionId }, cancellationToken: ct).ConfigureAwait(false);
+        var items = await itemService.ListAsync(new SubscriptionItemListOptions { Subscription = subscriptionId }, opts, ct).ConfigureAwait(false);
 
         await subService.UpdateAsync(subscriptionId, new SubscriptionUpdateOptions
         {
@@ -78,24 +81,175 @@ public sealed partial class StripeService(
                 Price = priceId
             }).ToList(),
             ProrationBehavior = "create_prorations"
-        }, cancellationToken: ct).ConfigureAwait(false);
+        }, opts, ct).ConfigureAwait(false);
 
         var invoiceService = new InvoiceService();
         var invoice = await invoiceService.CreateAsync(new InvoiceCreateOptions
         {
             Customer = sub.CustomerId,
             Subscription = subscriptionId
-        }, cancellationToken: ct).ConfigureAwait(false);
+        }, opts, ct).ConfigureAwait(false);
 
         return new StripeInvoiceResult(invoice.Id, invoice.AmountDue, invoice.Currency);
     }
 
-    public Task HandleWebhookAsync(string payload, string signature, CancellationToken ct = default)
+    public Task<Event> VerifyWebhookAsync(string payload, string signature)
     {
-        _ = ct;
         var webhookEvent = EventUtility.ConstructEvent(payload, signature, _settings.WebhookSecret);
         LogWebhookReceived(logger, webhookEvent.Type, webhookEvent.Id);
-        return Task.CompletedTask;
+        return Task.FromResult(webhookEvent);
+    }
+
+    public async Task<StripeConnectedAccountResult> CreateConnectedAccountAsync(Guid hostUserId, string email, CancellationToken ct = default)
+    {
+        var opts = NewRequestOptions();
+        var accountService = new AccountService();
+
+        var account = await accountService.CreateAsync(new AccountCreateOptions
+        {
+            Type = "express",
+            Email = email,
+            Metadata = new Dictionary<string, string> { ["hostUserId"] = hostUserId.ToString() },
+            Capabilities = new AccountCapabilitiesOptions
+            {
+                Transfers = new AccountCapabilitiesTransfersOptions { Requested = true }
+            }
+        }, opts, ct).ConfigureAwait(false);
+
+        var linkService = new AccountLinkService();
+        var link = await linkService.CreateAsync(new AccountLinkCreateOptions
+        {
+            Account = account.Id,
+            RefreshUrl = _settings.ConnectRefreshUrl.ToString(),
+            ReturnUrl = _settings.ConnectReturnUrl.ToString(),
+            Type = "account_onboarding"
+        }, opts, ct).ConfigureAwait(false);
+
+        LogConnectedAccountCreated(logger, hostUserId, account.Id);
+        return new StripeConnectedAccountResult(account.Id, new Uri(link.Url));
+    }
+
+    public async Task<Uri> CreateAccountOnboardingLinkAsync(string accountId, Uri? returnUrl = null, Uri? refreshUrl = null, CancellationToken ct = default)
+    {
+        var opts = NewRequestOptions();
+        var linkService = new AccountLinkService();
+
+        var link = await linkService.CreateAsync(new AccountLinkCreateOptions
+        {
+            Account = accountId,
+            RefreshUrl = (refreshUrl ?? _settings.ConnectRefreshUrl).ToString(),
+            ReturnUrl = (returnUrl ?? _settings.ConnectReturnUrl).ToString(),
+            Type = "account_onboarding"
+        }, opts, ct).ConfigureAwait(false);
+
+        return new Uri(link.Url);
+    }
+
+    public async Task<StripeAccountStatusResult> GetAccountStatusAsync(string accountId, CancellationToken ct = default)
+    {
+        var opts = NewRequestOptions();
+        var accountService = new AccountService();
+
+        var account = await accountService.GetAsync(accountId, null, opts, ct).ConfigureAwait(false);
+
+        return new StripeAccountStatusResult(
+            account.Id,
+            account.ChargesEnabled,
+            account.PayoutsEnabled,
+            account.DetailsSubmitted);
+    }
+
+    public async Task<StripePaymentIntentResult> CreateDestinationPaymentIntentAsync(
+        long amountCents, string currency, string destinationAccountId,
+        long applicationFeeCents, Dictionary<string, string>? metadata = null,
+        string? idempotencyKey = null, CancellationToken ct = default)
+    {
+        var opts = NewRequestOptions(idempotencyKey);
+        var service = new PaymentIntentService();
+
+        var options = new PaymentIntentCreateOptions
+        {
+            Amount = amountCents,
+            Currency = currency,
+            ApplicationFeeAmount = applicationFeeCents,
+            TransferData = new PaymentIntentTransferDataOptions
+            {
+                Destination = destinationAccountId
+            },
+            AutomaticPaymentMethods = new PaymentIntentAutomaticPaymentMethodsOptions
+            {
+                Enabled = true
+            },
+            Metadata = metadata ?? []
+        };
+
+        var pi = await service.CreateAsync(options, opts, ct).ConfigureAwait(false);
+        LogPaymentIntentCreated(logger, pi.Id, amountCents, destinationAccountId);
+        return new StripePaymentIntentResult(pi.Id, pi.ClientSecret, pi.Status, pi.Amount, pi.Currency);
+    }
+
+    public async Task<StripePaymentIntentResult> CreatePlatformPaymentIntentAsync(
+        long amountCents, string currency,
+        Dictionary<string, string>? metadata = null,
+        string? idempotencyKey = null, CancellationToken ct = default)
+    {
+        var opts = NewRequestOptions(idempotencyKey);
+        var service = new PaymentIntentService();
+
+        var options = new PaymentIntentCreateOptions
+        {
+            Amount = amountCents,
+            Currency = currency,
+            AutomaticPaymentMethods = new PaymentIntentAutomaticPaymentMethodsOptions
+            {
+                Enabled = true
+            },
+            Metadata = metadata ?? []
+        };
+
+        var pi = await service.CreateAsync(options, opts, ct).ConfigureAwait(false);
+        LogPaymentIntentCreated(logger, pi.Id, amountCents, "platform");
+        return new StripePaymentIntentResult(pi.Id, pi.ClientSecret, pi.Status, pi.Amount, pi.Currency);
+    }
+
+    public async Task<StripePaymentIntentResult> GetPaymentIntentAsync(string paymentIntentId, CancellationToken ct = default)
+    {
+        var opts = NewRequestOptions();
+        var service = new PaymentIntentService();
+
+        var pi = await service.GetAsync(paymentIntentId, null, opts, ct).ConfigureAwait(false);
+
+        return new StripePaymentIntentResult(pi.Id, pi.ClientSecret, pi.Status, pi.Amount, pi.Currency);
+    }
+
+    public async Task<StripeRefundResult> RefundPaymentIntentAsync(string paymentIntentId, long? amountCents = null, string? idempotencyKey = null, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(paymentIntentId);
+
+        var opts = NewRequestOptions(idempotencyKey);
+        var service = new RefundService();
+
+        var options = new RefundCreateOptions
+        {
+            PaymentIntent = paymentIntentId
+        };
+
+        if (amountCents.HasValue)
+        {
+            options.Amount = amountCents.Value;
+        }
+
+        var refund = await service.CreateAsync(options, opts, ct).ConfigureAwait(false);
+        LogRefundCreated(logger, refund.Id, paymentIntentId, refund.Amount);
+        return new StripeRefundResult(refund.Id, refund.Amount, refund.Status);
+    }
+
+    public async Task<bool> CheckConnectivityAsync(CancellationToken ct = default)
+    {
+        var opts = NewRequestOptions();
+        var service = new BalanceService();
+        var balance = await service.GetAsync(opts, ct).ConfigureAwait(false);
+        return balance is not null;
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Stripe customer created for user {UserId}: {CustomerId}")]
@@ -109,4 +263,13 @@ public sealed partial class StripeService(
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Stripe webhook received: {EventType} ({EventId})")]
     private static partial void LogWebhookReceived(ILogger logger, string eventType, string eventId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Stripe connected account created for host {HostUserId}: {AccountId}")]
+    private static partial void LogConnectedAccountCreated(ILogger logger, Guid hostUserId, string accountId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Stripe PaymentIntent created: {PaymentIntentId}, amount {AmountCents}, destination {DestinationAccountId}")]
+    private static partial void LogPaymentIntentCreated(ILogger logger, string paymentIntentId, long amountCents, string destinationAccountId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Stripe refund created: {RefundId} for PI {PaymentIntentId}, amount {AmountCents}")]
+    private static partial void LogRefundCreated(ILogger logger, string refundId, string paymentIntentId, long amountCents);
 }

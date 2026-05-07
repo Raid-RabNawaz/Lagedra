@@ -64,11 +64,12 @@ public sealed partial class AuthDataSeeder(
 
         var devUsers = new[]
         {
-            ("tenant@lagedra.dev",   "Dev@1234!",  UserRole.Tenant),
-            ("landlord@lagedra.dev", "Dev@1234!",  UserRole.Landlord),
+            ("member@lagedra.dev",     "Dev@1234!", UserRole.Member),
+            ("tenant@lagedra.dev",     "Dev@1234!", UserRole.Member),
+            ("landlord@lagedra.dev",   "Dev@1234!", UserRole.Member),
             ("arbitrator@lagedra.dev", "Dev@1234!", UserRole.Arbitrator),
-            ("insurance@lagedra.dev", "Dev@1234!",  UserRole.InsurancePartner),
-            ("institution@lagedra.dev", "Dev@1234!", UserRole.InstitutionPartner),
+            ("insurance@lagedra.dev",  "Dev@1234!", UserRole.InsurancePartner),
+            ("institution@lagedra.dev","Dev@1234!", UserRole.InstitutionPartner),
         };
 
         foreach (var (email, password, role) in devUsers)

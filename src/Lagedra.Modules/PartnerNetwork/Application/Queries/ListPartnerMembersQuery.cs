@@ -1,3 +1,4 @@
+using Lagedra.Modules.PartnerNetwork.Application.Authorization;
 using Lagedra.Modules.PartnerNetwork.Application.DTOs;
 using Lagedra.Modules.PartnerNetwork.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Results;
@@ -7,9 +8,13 @@ using Microsoft.EntityFrameworkCore;
 namespace Lagedra.Modules.PartnerNetwork.Application.Queries;
 
 public sealed record ListPartnerMembersQuery(
-    Guid OrganizationId) : IRequest<Result<IReadOnlyList<PartnerMemberDto>>>;
+    Guid OrganizationId,
+    Guid CallerUserId,
+    bool CallerIsPlatformAdmin) : IRequest<Result<IReadOnlyList<PartnerMemberDto>>>;
 
-public sealed class ListPartnerMembersQueryHandler(PartnerDbContext dbContext)
+public sealed class ListPartnerMembersQueryHandler(
+    PartnerDbContext dbContext,
+    IPartnerAccessService accessService)
     : IRequestHandler<ListPartnerMembersQuery, Result<IReadOnlyList<PartnerMemberDto>>>
 {
     public async Task<Result<IReadOnlyList<PartnerMemberDto>>> Handle(
@@ -17,6 +22,17 @@ public sealed class ListPartnerMembersQueryHandler(PartnerDbContext dbContext)
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        var authzResult = await accessService.RequireMemberAsync(
+            request.CallerUserId,
+            request.OrganizationId,
+            request.CallerIsPlatformAdmin,
+            cancellationToken).ConfigureAwait(false);
+
+        if (authzResult.IsFailure)
+        {
+            return Result<IReadOnlyList<PartnerMemberDto>>.Failure(authzResult.Error);
+        }
 
         var members = await dbContext.Members
             .AsNoTracking()

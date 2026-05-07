@@ -1,5 +1,5 @@
 using Lagedra.Modules.InsuranceIntegration.Domain.Aggregates;
-using Lagedra.Modules.InsuranceIntegration.Domain.Enums;
+using Lagedra.SharedKernel.Integration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 

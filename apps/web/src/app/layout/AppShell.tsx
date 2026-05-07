@@ -1,6 +1,5 @@
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
-  Shield,
   LogOut,
   Menu,
   X,
@@ -20,7 +19,15 @@ import {
   UserPlus,
   LogIn,
   Settings,
+  CalendarCheck,
+  Handshake,
+  BookOpen,
+  Scale,
+  Link2,
+  Mail,
+  ShieldCheck,
 } from "lucide-react";
+import logoSvg from "@/assets/logo.svg";
 import { useRef, useState, useEffect, useCallback } from "react";
 import { authApi } from "@/features/auth/services/authApi";
 import { useAuthStore } from "@/app/auth/authStore";
@@ -29,6 +36,8 @@ import { roleLabel } from "@/app/auth/roles";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { NotificationBell } from "@/features/notifications/components/NotificationBell";
+import { useNotificationHub } from "@/features/notifications/hooks/useNotificationHub";
 import { cn } from "@/lib/utils";
 
 const SIDEBAR_KEY = "lagedra.sidebar";
@@ -47,6 +56,13 @@ const iconMap: Record<string, typeof LayoutDashboard> = {
   UserPlus,
   LogIn,
   Settings,
+  CalendarCheck,
+  Handshake,
+  BookOpen,
+  Scale,
+  Link2,
+  Mail,
+  ShieldCheck,
 };
 
 function resolveIcon(name: string) {
@@ -68,6 +84,7 @@ export const AppShell = () => {
   const userMenuRef = useRef<HTMLDivElement>(null);
 
   const groups = getSidebarGroupsForRole(user?.role ?? "");
+  useNotificationHub();
 
   const toggleCollapsed = useCallback(() => {
     setCollapsed((v) => {
@@ -149,8 +166,7 @@ export const AppShell = () => {
             </Button>
 
             <Link to="/app" className="flex items-center gap-2">
-              <Shield className="h-6 w-6 text-accent" />
-              <span className="text-lg font-bold tracking-tight">Lagedra</span>
+              <img src={logoSvg} alt="Lagedra" className="h-6" />
             </Link>
           </div>
 
@@ -162,6 +178,8 @@ export const AppShell = () => {
               <Search className="h-4 w-4" />
               Browse listings
             </Link>
+
+            <NotificationBell />
 
             {/* User dropdown */}
             <div className="relative" ref={userMenuRef}>

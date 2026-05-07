@@ -14,4 +14,12 @@ public sealed record CaseDto(
     DateTime? EvidenceCompleteAt,
     DateTime? DecisionDueAt,
     int EvidenceSlotCount,
-    DecisionDto? Decision);
+    DecisionDto? Decision,
+    IReadOnlyList<EvidenceSlotDto>? EvidenceSlots);
+
+public sealed record EvidenceSlotDto(
+    Guid SlotId,
+    string SlotType,
+    Guid SubmittedBy,
+    Guid EvidenceManifestId,
+    DateTime SubmittedAt);

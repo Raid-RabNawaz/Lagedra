@@ -2,6 +2,7 @@ using Lagedra.Modules.IdentityAndVerification.Domain.Enums;
 using Lagedra.Modules.IdentityAndVerification.Domain.Events;
 using Lagedra.Modules.IdentityAndVerification.Domain.ValueObjects;
 using Lagedra.SharedKernel.Domain;
+using Lagedra.SharedKernel.Integration.Events;
 
 namespace Lagedra.Modules.IdentityAndVerification.Domain.Aggregates;
 
@@ -77,6 +78,26 @@ public sealed class IdentityProfile : AggregateRoot<Guid>
         }
 
         Status = VerificationStatus.ManualReviewRequired;
+    }
+
+    public void CompleteManualVerification(bool approved)
+    {
+        if (Status != VerificationStatus.ManualReviewRequired)
+        {
+            throw new InvalidOperationException(
+                $"Cannot complete manual verification from status '{Status}'.");
+        }
+
+        if (approved)
+        {
+            Status = VerificationStatus.Verified;
+            AddDomainEvent(new IdentityVerifiedEvent(Id, UserId, DateTime.UtcNow));
+        }
+        else
+        {
+            Status = VerificationStatus.Failed;
+            AddDomainEvent(new IdentityVerificationFailedEvent(Id, UserId, "Manual verification rejected"));
+        }
     }
 
     public void ChangeVerificationClass(VerificationClass newClass)

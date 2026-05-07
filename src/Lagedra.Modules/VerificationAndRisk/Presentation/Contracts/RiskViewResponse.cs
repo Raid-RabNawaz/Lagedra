@@ -7,4 +7,13 @@ public sealed record RiskViewResponse(
     string ConfidenceReason,
     long DepositBandLowCents,
     long DepositBandHighCents,
-    DateTime ComputedAt);
+    DateTime ComputedAt,
+    string ProtectionTier,
+    IReadOnlyList<EndorsementSummaryResponse> EndorsedBy);
+
+public sealed record EndorsementSummaryResponse(
+    Guid EndorsementId,
+    Guid OrganizationId,
+    string OrganizationName,
+    DateTime ApprovedAt,
+    DateTime ExpiresAt);

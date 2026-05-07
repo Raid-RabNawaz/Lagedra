@@ -1,3 +1,4 @@
+import { isAxiosError } from "axios";
 import { endpoints } from "@/api/endpoints";
 import { http } from "@/api/http";
 import type {
@@ -66,8 +67,17 @@ export const listingApi = {
   },
 
   async getSimilar(id: string): Promise<ListingSummaryDto[]> {
-    const response = await http.get<ListingSummaryDto[]>(endpoints.listings.similar(id));
-    return response.data;
+    try {
+      const response = await http.get<ListingSummaryDto[]>(endpoints.listings.similar(id));
+      return response.data;
+    } catch (error) {
+      if (isAxiosError(error) && (error.response?.status === 400 || error.response?.status === 404)) {
+        // Similar listings are non-critical for the detail page.
+        return [];
+      }
+
+      throw error;
+    }
   },
 
   async create(payload: CreateListingRequest): Promise<ListingDetailsDto> {
@@ -108,6 +118,27 @@ export const listingApi = {
 
   async addPhoto(listingId: string, payload: AddListingPhotoRequest): Promise<ListingPhotoDto> {
     const response = await http.post<ListingPhotoDto>(endpoints.listings.addPhoto(listingId), payload);
+    return response.data;
+  },
+
+  async uploadMedia(
+    listingId: string,
+    file: File,
+    caption?: string | null,
+  ): Promise<{
+    kind: "Photo" | "Video";
+    url: string;
+    storageKey: string;
+    photo: ListingPhotoDto | null;
+  }> {
+    const form = new FormData();
+    form.append("file", file, file.name);
+    if (caption && caption.trim().length > 0) {
+      form.append("caption", caption.trim());
+    }
+    const response = await http.post(endpoints.listings.uploadMedia(listingId), form, {
+      timeout: 180_000,
+    });
     return response.data;
   },
 

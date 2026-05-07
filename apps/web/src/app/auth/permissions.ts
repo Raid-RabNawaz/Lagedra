@@ -22,14 +22,16 @@ const mainGroup: NavGroup = {
   ],
 };
 
-const tenantBookingsGroup: NavGroup = {
+const memberBookingsGroup: NavGroup = {
   label: "Bookings",
   items: [
+    { to: "/app/deals", label: "My reservations", icon: "CalendarCheck" },
     { to: "/app/my-applications", label: "My applications", icon: "FileText" },
+    { to: "/app/arbitration", label: "My cases", icon: "Scale" },
   ],
 };
 
-const landlordListingsGroup: NavGroup = {
+const memberListingsGroup: NavGroup = {
   label: "Listings",
   items: [
     { to: "/app/listings", label: "My listings", icon: "Building2" },
@@ -37,18 +39,70 @@ const landlordListingsGroup: NavGroup = {
   ],
 };
 
-const landlordApplicationsGroup: NavGroup = {
+const memberApplicationsGroup: NavGroup = {
   label: "Applications",
   items: [
     { to: "/app/applications", label: "Inbox", icon: "Inbox" },
   ],
 };
 
-const adminGroup: NavGroup = {
-  label: "Admin",
+const arbitratorCasesGroup: NavGroup = {
+  label: "Arbitration",
+  items: [
+    { to: "/app/arbitration", label: "My cases", icon: "Scale" },
+  ],
+};
+
+const adminOpsGroup: NavGroup = {
+  label: "Operations",
+  items: [
+    { to: "/app/admin/insurance-queue", label: "Insurance Queue", icon: "ShieldAlert" },
+    { to: "/app/admin/fraud-flags", label: "Fraud Flags", icon: "Flag" },
+    { to: "/app/admin/arbitration-backlog", label: "Arbitration Backlog", icon: "Scale" },
+    { to: "/app/admin/evidence-review", label: "Evidence Review", icon: "FileSearch" },
+    { to: "/app/admin/manual-verification", label: "Manual Verification", icon: "UserCheck" },
+    { to: "/app/admin/compliance-violations", label: "Violations", icon: "AlertTriangle" },
+    { to: "/app/admin/restrictions", label: "Restrictions", icon: "Ban" },
+  ],
+};
+
+const adminConfigGroup: NavGroup = {
+  label: "Configuration",
   items: [
     { to: "/app/admin/users", label: "Users", icon: "Users" },
+    { to: "/app/admin/partners", label: "Partner Orgs", icon: "Building2" },
     { to: "/app/admin/definitions", label: "Definitions", icon: "Settings" },
+    { to: "/app/admin/jurisdiction-packs", label: "Jurisdiction Packs", icon: "BookOpen" },
+    { to: "/app/admin/dual-control", label: "Dual Control", icon: "ShieldCheck" },
+  ],
+};
+
+const partnerGroup: NavGroup = {
+  label: "Partner portal",
+  items: [
+    { to: "/app/partner", label: "Dashboard", icon: "Building2", end: true },
+    { to: "/app/partner/members", label: "Members", icon: "Users" },
+    { to: "/app/partner/referrals", label: "Referral links", icon: "Link2" },
+    { to: "/app/partner/reservations", label: "Reservations", icon: "CalendarCheck" },
+    { to: "/app/partner/guests", label: "Invite guests", icon: "Mail" },
+    { to: "/app/partner/endorsements", label: "Endorsements", icon: "ShieldCheck" },
+  ],
+};
+
+const adminContentGroup: NavGroup = {
+  label: "Content",
+  items: [
+    { to: "/app/admin/blog", label: "Blog Posts", icon: "FileText" },
+    { to: "/app/admin/seo", label: "SEO Pages", icon: "Globe" },
+  ],
+};
+
+const adminInsightsGroup: NavGroup = {
+  label: "Insights",
+  items: [
+    { to: "/app/admin/analytics", label: "Dashboard", icon: "BarChart3" },
+    { to: "/app/admin/listing-analytics", label: "Listing Analytics", icon: "TrendingUp" },
+    { to: "/app/admin/audit", label: "Audit Log", icon: "ScrollText" },
   ],
 };
 
@@ -57,16 +111,34 @@ const accountGroup: NavGroup = {
   items: [
     { to: "/app/profile", label: "Profile", icon: "User" },
     { to: "/app/saved", label: "Saved listings", icon: "Heart" },
+    { to: "/app/trust-ledger", label: "Trust Ledger", icon: "BookOpen" },
   ],
 };
 
+const memberAccountGroup: NavGroup = {
+  label: "Account",
+  items: [
+    { to: "/app/profile", label: "Profile", icon: "User" },
+    { to: "/app/payout-setup", label: "Payout setup", icon: "Wallet" },
+    { to: "/app/saved", label: "Saved listings", icon: "Heart" },
+    { to: "/app/trust-ledger", label: "Trust Ledger", icon: "BookOpen" },
+  ],
+};
+
+const memberSidebarGroups: NavGroup[] = [
+  mainGroup,
+  memberBookingsGroup,
+  memberListingsGroup,
+  memberApplicationsGroup,
+  memberAccountGroup,
+];
+
 const roleSidebarGroups: Record<UserRole, NavGroup[]> = {
-  [roles.tenant]: [mainGroup, tenantBookingsGroup, accountGroup],
-  [roles.landlord]: [mainGroup, landlordListingsGroup, landlordApplicationsGroup, accountGroup],
-  [roles.arbitrator]: [mainGroup, accountGroup],
-  [roles.platformAdmin]: [mainGroup, landlordListingsGroup, landlordApplicationsGroup, adminGroup, accountGroup],
+  [roles.member]: memberSidebarGroups,
+  [roles.arbitrator]: [mainGroup, arbitratorCasesGroup, accountGroup],
+  [roles.platformAdmin]: [...memberSidebarGroups, adminOpsGroup, adminConfigGroup, adminContentGroup, adminInsightsGroup],
   [roles.insurancePartner]: [mainGroup, accountGroup],
-  [roles.institutionPartner]: [mainGroup, accountGroup],
+  [roles.institutionPartner]: [mainGroup, partnerGroup, accountGroup],
 };
 
 export function getSidebarGroupsForRole(role: UserRole | string | number): NavGroup[] {
@@ -80,28 +152,21 @@ const sharedBottomTabs: NavItem[] = [
   { to: "/app/saved", label: "Saved", icon: "Heart" },
 ];
 
+const memberBottomTabs: NavItem[] = [
+  ...sharedBottomTabs,
+  { to: "/app/deals", label: "Reservations", icon: "CalendarCheck" },
+  { to: "/app/applications", label: "Inbox", icon: "Inbox" },
+  { to: "/app", label: "Dashboard", icon: "LayoutDashboard", end: true },
+  { to: "/app/profile", label: "Profile", icon: "User" },
+];
+
 const roleBottomTabs: Record<UserRole, NavItem[]> = {
-  [roles.tenant]: [
-    ...sharedBottomTabs,
-    { to: "/app/my-applications", label: "Applications", icon: "FileText" },
-    { to: "/app/profile", label: "Profile", icon: "User" },
-  ],
-  [roles.landlord]: [
-    ...sharedBottomTabs,
-    { to: "/app/applications", label: "Inbox", icon: "Inbox" },
-    { to: "/app", label: "Dashboard", icon: "LayoutDashboard", end: true },
-    { to: "/app/profile", label: "Profile", icon: "User" },
-  ],
+  [roles.member]: memberBottomTabs,
   [roles.arbitrator]: [
     ...sharedBottomTabs,
     { to: "/app/profile", label: "Profile", icon: "User" },
   ],
-  [roles.platformAdmin]: [
-    ...sharedBottomTabs,
-    { to: "/app/applications", label: "Inbox", icon: "Inbox" },
-    { to: "/app", label: "Dashboard", icon: "LayoutDashboard", end: true },
-    { to: "/app/profile", label: "Profile", icon: "User" },
-  ],
+  [roles.platformAdmin]: memberBottomTabs,
   [roles.insurancePartner]: [
     ...sharedBottomTabs,
     { to: "/app/profile", label: "Profile", icon: "User" },

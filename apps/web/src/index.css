@@ -5,11 +5,12 @@
 
 /*
  * Lagedra Design Tokens
- * Airbnb-inspired: clean whites, near-black primary, warm rose accent,
- * generous spacing, 12px radius, Inter typeface.
+ * Brand: vibrant indigo/violet (#4141E5 — matches the Lagedra mark),
+ * cool slate neutrals, generous radius, Plus Jakarta Sans typography.
  */
 @theme inline {
-  --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-sans: "Plus Jakarta Sans", "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-display: "Plus Jakarta Sans", "Inter", "Segoe UI", system-ui, sans-serif;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -32,41 +33,52 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-surface: var(--surface);
+  --color-surface-foreground: var(--surface-foreground);
+  --color-brand-deep: var(--brand-deep);
 
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 6px);
+  --radius-md: calc(var(--radius) - 4px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 16px);
+
+  --shadow-soft: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.06);
+  --shadow-pop: 0 4px 12px rgba(65, 65, 229, 0.18), 0 16px 40px rgba(65, 65, 229, 0.12);
 
   --animate-spin: spin 1s linear infinite;
   --animate-pulse: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-  --animate-fade-in: fade-in 150ms ease-out;
+  --animate-fade-in: fade-in 200ms ease-out;
+  --animate-rise: rise 400ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 :root {
   --background: #ffffff;
-  --foreground: #222222;
+  --foreground: #0f1729;
   --card: #ffffff;
-  --card-foreground: #222222;
+  --card-foreground: #0f1729;
   --popover: #ffffff;
-  --popover-foreground: #222222;
-  --primary: #222222;
+  --popover-foreground: #0f1729;
+  --primary: #4141e5;
   --primary-foreground: #ffffff;
-  --secondary: #f7f7f7;
-  --secondary-foreground: #222222;
-  --muted: #f7f7f7;
-  --muted-foreground: #717171;
-  --accent: #e31c5f;
+  --secondary: #f4f5fb;
+  --secondary-foreground: #0f1729;
+  --muted: #f4f5fb;
+  --muted-foreground: #64748b;
+  --accent: #4141e5;
   --accent-foreground: #ffffff;
-  --destructive: #c13515;
+  --destructive: #dc2626;
   --destructive-foreground: #ffffff;
-  --success: #008a05;
+  --success: #10b981;
   --success-foreground: #ffffff;
-  --border: #ebebeb;
-  --input: #dddddd;
-  --ring: #222222;
-  --radius: 0.75rem;
+  --border: #e5e7eb;
+  --input: #d1d5db;
+  --ring: #4141e5;
+  --surface: #f7f8fc;
+  --surface-foreground: #0f1729;
+  --brand-deep: #1c1b54;
+  --radius: 1rem;
 }
 
 @keyframes spin {
@@ -78,6 +90,10 @@
 @keyframes fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 * {
@@ -93,11 +109,15 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+/* Hide scrollbar utility for horizontal carousels */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
 .listing-popup .leaflet-popup-content-wrapper {
   padding: 0;
-  border-radius: 12px;
+  border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.18);
 }
 .listing-popup .leaflet-popup-content {
   margin: 0;

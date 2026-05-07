@@ -1,5 +1,5 @@
-using Lagedra.Modules.ListingAndLocation.Domain.Enums;
 using Lagedra.Modules.ListingAndLocation.Domain.ValueObjects;
+using Lagedra.SharedKernel.Integration;
 
 namespace Lagedra.Modules.ListingAndLocation.Domain.Policies;
 

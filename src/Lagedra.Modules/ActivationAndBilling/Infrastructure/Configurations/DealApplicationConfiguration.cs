@@ -34,7 +34,15 @@ public sealed class DealApplicationConfiguration : IEntityTypeConfiguration<Deal
         builder.Property(a => a.FirstMonthRentCents);
         builder.Property(a => a.PartnerOrganizationId);
         builder.Property(a => a.IsPartnerReferred).IsRequired();
+        builder.Property(a => a.Source)
+            .HasConversion<string>()
+            .HasMaxLength(50)
+            .IsRequired();
+        builder.HasIndex(a => a.Source);
         builder.Property(a => a.JurisdictionWarning).HasMaxLength(2000);
+
+        builder.Property(a => a.TruthSurfaceSnapshotId);
+        builder.HasIndex(a => a.TruthSurfaceSnapshotId);
 
         builder.HasIndex(a => a.DealId)
             .HasFilter("\"DealId\" IS NOT NULL")

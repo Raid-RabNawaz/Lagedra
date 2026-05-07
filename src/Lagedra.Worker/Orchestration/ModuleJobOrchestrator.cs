@@ -19,7 +19,7 @@ internal sealed partial class ModuleJobOrchestrator(ILogger<ModuleJobOrchestrato
         LogJobAlreadyRunning(logger, jobName);
         return false;
     }
-
+    
     public void CompleteJob(string jobName)
     {
         ArgumentNullException.ThrowIfNull(jobName);

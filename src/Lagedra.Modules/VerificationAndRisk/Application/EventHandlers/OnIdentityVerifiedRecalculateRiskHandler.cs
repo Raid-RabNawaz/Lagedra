@@ -1,4 +1,4 @@
-using Lagedra.Modules.IdentityAndVerification.Domain.Events;
+using Lagedra.SharedKernel.Integration.Events;
 using Lagedra.Modules.VerificationAndRisk.Application.Commands;
 using Lagedra.Modules.VerificationAndRisk.Domain.Enums;
 using Lagedra.SharedKernel.Events;

@@ -1,5 +1,6 @@
 using Lagedra.Compliance.Application.Commands;
 using Lagedra.Compliance.Infrastructure.Persistence;
+using Lagedra.SharedKernel.Integration;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -15,6 +16,7 @@ namespace Lagedra.Compliance.Infrastructure.Jobs;
 [DisallowConcurrentExecution]
 public sealed partial class ComplianceSignalProcessorJob(
     ComplianceDbContext dbContext,
+    IDealApplicationStatusProvider dealProvider,
     IMediator mediator,
     ILogger<ComplianceSignalProcessorJob> logger) : IJob
 {
@@ -45,7 +47,7 @@ public sealed partial class ComplianceSignalProcessorJob(
         {
             try
             {
-                await ProcessSignalAsync(signal.DealId, signal.SignalType, signal.Payload, mediator, cancellationToken)
+                await ProcessSignalAsync(signal.DealId, signal.SignalType, signal.Payload, cancellationToken)
                     .ConfigureAwait(false);
 
                 signal.MarkProcessed();
@@ -63,47 +65,86 @@ public sealed partial class ComplianceSignalProcessorJob(
         LogProcessingComplete(logger, unprocessed.Count);
     }
 
-    private static async Task ProcessSignalAsync(
+    private async Task ProcessSignalAsync(
         Guid dealId,
         string signalType,
         string? payload,
-        IMediator mediator,
         CancellationToken ct)
     {
+        var participants = await dealProvider
+            .GetParticipantsAsync(dealId, ct)
+            .ConfigureAwait(false);
+
+        var landlordId = participants?.LandlordUserId ?? Guid.Empty;
+        var tenantId = participants?.TenantUserId ?? Guid.Empty;
+
         switch (signalType)
         {
             case "InsuranceLapse":
-                await mediator.Send(new RecordViolationCommand(
-                    dealId, Guid.Empty, Guid.Empty,
+                var insuranceViolation = await mediator.Send(new RecordViolationCommand(
+                    dealId, landlordId, tenantId,
                     Domain.ViolationCategory.InsuranceLapse,
                     payload ?? "Insurance lapse detected via compliance signal",
                     null), ct)
                     .ConfigureAwait(false);
+
+                if (insuranceViolation.IsSuccess)
+                {
+                    await mediator.Send(new RecordLedgerEntryCommand(
+                        tenantId,
+                        Domain.TrustLedgerEntryType.ViolationRecorded,
+                        insuranceViolation.Value.Id,
+                        "Insurance lapse violation recorded for deal",
+                        false), ct)
+                        .ConfigureAwait(false);
+                }
+
                 break;
 
             case "PaymentDefault":
-                await mediator.Send(new RecordViolationCommand(
-                    dealId, Guid.Empty, Guid.Empty,
+                var paymentViolation = await mediator.Send(new RecordViolationCommand(
+                    dealId, landlordId, tenantId,
                     Domain.ViolationCategory.NonPayment,
                     payload ?? "Payment default detected via compliance signal",
                     null), ct)
                     .ConfigureAwait(false);
+
+                if (paymentViolation.IsSuccess)
+                {
+                    await mediator.Send(new RecordLedgerEntryCommand(
+                        tenantId,
+                        Domain.TrustLedgerEntryType.PaymentDefault,
+                        paymentViolation.Value.Id,
+                        "Payment default violation recorded for deal",
+                        false), ct)
+                        .ConfigureAwait(false);
+                }
+
                 break;
 
             case "DealCompleted":
-            case "PositiveReview":
                 await mediator.Send(new RecordLedgerEntryCommand(
-                    Guid.Empty,
+                    tenantId,
                     Domain.TrustLedgerEntryType.DealCompleted,
                     dealId,
-                    payload ?? $"Deal completed — {signalType}",
+                    payload ?? "Deal completed successfully",
+                    true), ct)
+                    .ConfigureAwait(false);
+                break;
+
+            case "PositiveReview":
+                await mediator.Send(new RecordLedgerEntryCommand(
+                    tenantId,
+                    Domain.TrustLedgerEntryType.PositiveReview,
+                    dealId,
+                    payload ?? "Positive review received",
                     true), ct)
                     .ConfigureAwait(false);
                 break;
 
             default:
                 await mediator.Send(new RecordLedgerEntryCommand(
-                    Guid.Empty,
+                    tenantId,
                     Domain.TrustLedgerEntryType.ViolationRecorded,
                     dealId,
                     payload ?? $"Compliance signal: {signalType}",
