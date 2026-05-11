@@ -1,4 +1,5 @@
 using Lagedra.Modules.ListingAndLocation.Application.DTOs;
+using ListingDetailsDto = Lagedra.Modules.ListingAndLocation.Application.DTOs.ListingDetailsDto;
 using Lagedra.Modules.ListingAndLocation.Domain.Aggregates;
 using Lagedra.SharedKernel.Integration;
 
@@ -83,7 +84,10 @@ internal static class ListingMapper
             hostProfile,
             qualityScore,
             listing.CreatedAt,
-            listing.UpdatedAt);
+            listing.UpdatedAt,
+            listing.RejectionReason,
+            listing.SubmittedForReviewAt,
+            listing.ReviewedAt);
     }
 
     public static ListingSummaryDto ToSummary(Listing listing, int? qualityScore = null)

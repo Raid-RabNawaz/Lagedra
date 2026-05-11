@@ -66,7 +66,7 @@ public sealed partial class HostPlatformPaymentEnforcementJob(
                 && b.Status == BillingAccountStatus.Active, ct)
             .ConfigureAwait(false);
 
-        billingAccount?.Suspend();
+        billingAccount?.Suspend("Platform fee not paid within enforcement window");
     }
 
     [LoggerMessage(Level = LogLevel.Warning,

@@ -1,4 +1,6 @@
+using System.Data.Common;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using Lagedra.Modules.IdentityAndVerification.Application.Commands;
 using Lagedra.Modules.IdentityAndVerification.Infrastructure.Persistence;
 using Lagedra.Modules.IdentityAndVerification.Presentation.Contracts;
@@ -52,18 +54,45 @@ public static class HostPaymentEndpoints
     {
         var userId = GetUserId(user);
 
-        var details = await dbContext.HostPaymentDetails
-            .AsNoTracking()
-            .FirstOrDefaultAsync(h => h.HostUserId == userId, ct)
-            .ConfigureAwait(false);
-
-        if (details is null)
+        try
         {
-            return Results.NotFound(new { error = "PaymentDetails.NotFound", detail = "No payment details configured." });
-        }
+            var details = await dbContext.HostPaymentDetails
+                .AsNoTracking()
+                .FirstOrDefaultAsync(h => h.HostUserId == userId, ct)
+                .ConfigureAwait(false);
 
-        var decrypted = encryptionService.Decrypt(details.EncryptedPaymentInfo);
-        return Results.Ok(new { paymentInfo = decrypted });
+            if (details is null)
+            {
+                // Return empty details instead of an error so host onboarding UI can render cleanly.
+                return Results.Ok(new { paymentInfo = string.Empty });
+            }
+
+            try
+            {
+                var decrypted = encryptionService.Decrypt(details.EncryptedPaymentInfo);
+                return Results.Ok(new { paymentInfo = decrypted });
+            }
+            catch (FormatException)
+            {
+                return Results.Ok(new { paymentInfo = string.Empty });
+            }
+            catch (CryptographicException)
+            {
+                return Results.Ok(new { paymentInfo = string.Empty });
+            }
+            catch (ArgumentException)
+            {
+                return Results.Ok(new { paymentInfo = string.Empty });
+            }
+        }
+        catch (DbException)
+        {
+            return Results.Ok(new { paymentInfo = string.Empty });
+        }
+        catch (InvalidOperationException)
+        {
+            return Results.Ok(new { paymentInfo = string.Empty });
+        }
     }
 
     private static Guid GetUserId(ClaimsPrincipal user) =>

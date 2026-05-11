@@ -65,6 +65,14 @@ public abstract class BaseDbContext(DbContextOptions options, IClock clock)
                 continue;
             }
 
+            // Append-only aggregates (e.g. Truth Surface snapshots) opt out of
+            // the soft-delete filter so that historical sealed records are
+            // always visible regardless of any stray IsDeleted flag.
+            if (typeof(IAppendOnly).IsAssignableFrom(entityType.ClrType))
+            {
+                continue;
+            }
+
             var parameter = Expression.Parameter(entityType.ClrType, "e");
             var property = Expression.Property(parameter, nameof(ISoftDeletable.IsDeleted));
             var filter = Expression.Lambda(Expression.Not(property), parameter);

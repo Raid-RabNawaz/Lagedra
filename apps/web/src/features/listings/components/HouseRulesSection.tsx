@@ -3,8 +3,6 @@ import {
   LogOut,
   Users,
   Dog,
-  Cigarette,
-  PartyPopper,
   VolumeOff,
   FileText,
 } from "lucide-react";

@@ -25,9 +25,12 @@ public static class ArbitrationEndpoints
         group.MapPost("/", FileCase)
             .RequireRateLimiting(RateLimitingSetup.DisputeCapPolicy);
         group.MapPost("/{caseId:guid}/evidence", AttachEvidence);
-        group.MapPost("/{caseId:guid}/evidence-complete", MarkEvidenceComplete);
-        group.MapPost("/{caseId:guid}/assign", AssignArbitrator);
-        group.MapPost("/{caseId:guid}/decision", IssueDecision);
+        group.MapPost("/{caseId:guid}/evidence-complete", MarkEvidenceComplete)
+            .RequireAuthorization("RequirePlatformAdmin");
+        group.MapPost("/{caseId:guid}/assign", AssignArbitrator)
+            .RequireAuthorization("RequirePlatformAdmin");
+        group.MapPost("/{caseId:guid}/decision", IssueDecision)
+            .RequireAuthorization("RequireArbitrator");
         group.MapPut("/{caseId:guid}/close", CloseCase)
             .RequireAuthorization("RequireArbitrator");
         group.MapPost("/{caseId:guid}/appeal", AppealCase);

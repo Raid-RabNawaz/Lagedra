@@ -37,6 +37,13 @@ public sealed class DealPaymentConfirmationConfiguration
 
         builder.Property(c => c.GracePeriodExpiresAt).IsRequired();
 
+        builder.Property(c => c.StripePaymentIntentId).HasMaxLength(255);
+        builder.HasIndex(c => c.StripePaymentIntentId);
+        builder.Property(c => c.StripePaymentStatus).HasMaxLength(50);
+
+        builder.Property(c => c.TruthSurfaceSnapshotId);
+        builder.HasIndex(c => c.TruthSurfaceSnapshotId);
+
         builder.HasIndex(c => c.Status);
 
         builder.Ignore(c => c.DomainEvents);

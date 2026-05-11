@@ -64,6 +64,11 @@ namespace ListingAndLocation.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("AcceptsPartnerDirectReservations")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
                     b.Property<decimal>("Bathrooms")
                         .HasColumnType("decimal(3,1)");
 
@@ -110,6 +115,16 @@ namespace ListingAndLocation.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ReviewedByUserId")
+                        .HasColumnType("uuid");
+
                     b.Property<int?>("SquareFootage")
                         .HasColumnType("integer");
 
@@ -117,6 +132,9 @@ namespace ListingAndLocation.Migrations
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime?>("SubmittedForReviewAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<long?>("SuggestedDepositHighCents")
                         .HasColumnType("bigint");
@@ -519,18 +537,40 @@ namespace ListingAndLocation.Migrations
 
             modelBuilder.Entity("Lagedra.Modules.ListingAndLocation.Domain.Aggregates.Listing", b =>
                 {
-                    b.OwnsOne("Lagedra.Modules.ListingAndLocation.Domain.ValueObjects.GeoPoint", "ApproxGeoPoint", b1 =>
+                    b.OwnsOne("Lagedra.Modules.ListingAndLocation.Domain.ValueObjects.Address", "PreciseAddress", b1 =>
                         {
                             b1.Property<Guid>("ListingId")
                                 .HasColumnType("uuid");
 
-                            b1.Property<double>("Latitude")
-                                .HasColumnType("double precision")
-                                .HasColumnName("approx_latitude");
+                            b1.Property<string>("City")
+                                .IsRequired()
+                                .HasMaxLength(200)
+                                .HasColumnType("character varying(200)")
+                                .HasColumnName("precise_city");
 
-                            b1.Property<double>("Longitude")
-                                .HasColumnType("double precision")
-                                .HasColumnName("approx_longitude");
+                            b1.Property<string>("Country")
+                                .IsRequired()
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)")
+                                .HasColumnName("precise_country");
+
+                            b1.Property<string>("State")
+                                .IsRequired()
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)")
+                                .HasColumnName("precise_state");
+
+                            b1.Property<string>("Street")
+                                .IsRequired()
+                                .HasMaxLength(500)
+                                .HasColumnType("character varying(500)")
+                                .HasColumnName("precise_street");
+
+                            b1.Property<string>("ZipCode")
+                                .IsRequired()
+                                .HasMaxLength(20)
+                                .HasColumnType("character varying(20)")
+                                .HasColumnName("precise_zip_code");
 
                             b1.HasKey("ListingId");
 
@@ -567,6 +607,27 @@ namespace ListingAndLocation.Migrations
                                 .HasMaxLength(50)
                                 .HasColumnType("character varying(50)")
                                 .HasColumnName("cancellation_policy_type");
+
+                            b1.HasKey("ListingId");
+
+                            b1.ToTable("listings", "listings");
+
+                            b1.WithOwner()
+                                .HasForeignKey("ListingId");
+                        });
+
+                    b.OwnsOne("Lagedra.Modules.ListingAndLocation.Domain.ValueObjects.GeoPoint", "ApproxGeoPoint", b1 =>
+                        {
+                            b1.Property<Guid>("ListingId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<double>("Latitude")
+                                .HasColumnType("double precision")
+                                .HasColumnName("approx_latitude");
+
+                            b1.Property<double>("Longitude")
+                                .HasColumnType("double precision")
+                                .HasColumnName("approx_longitude");
 
                             b1.HasKey("ListingId");
 
@@ -627,49 +688,6 @@ namespace ListingAndLocation.Migrations
                             b1.Property<bool>("SmokingAllowed")
                                 .HasColumnType("boolean")
                                 .HasColumnName("house_rules_smoking_allowed");
-
-                            b1.HasKey("ListingId");
-
-                            b1.ToTable("listings", "listings");
-
-                            b1.WithOwner()
-                                .HasForeignKey("ListingId");
-                        });
-
-                    b.OwnsOne("Lagedra.Modules.ListingAndLocation.Domain.ValueObjects.Address", "PreciseAddress", b1 =>
-                        {
-                            b1.Property<Guid>("ListingId")
-                                .HasColumnType("uuid");
-
-                            b1.Property<string>("City")
-                                .IsRequired()
-                                .HasMaxLength(200)
-                                .HasColumnType("character varying(200)")
-                                .HasColumnName("precise_city");
-
-                            b1.Property<string>("Country")
-                                .IsRequired()
-                                .HasMaxLength(100)
-                                .HasColumnType("character varying(100)")
-                                .HasColumnName("precise_country");
-
-                            b1.Property<string>("State")
-                                .IsRequired()
-                                .HasMaxLength(100)
-                                .HasColumnType("character varying(100)")
-                                .HasColumnName("precise_state");
-
-                            b1.Property<string>("Street")
-                                .IsRequired()
-                                .HasMaxLength(500)
-                                .HasColumnType("character varying(500)")
-                                .HasColumnName("precise_street");
-
-                            b1.Property<string>("ZipCode")
-                                .IsRequired()
-                                .HasMaxLength(20)
-                                .HasColumnType("character varying(20)")
-                                .HasColumnName("precise_zip_code");
 
                             b1.HasKey("ListingId");
 

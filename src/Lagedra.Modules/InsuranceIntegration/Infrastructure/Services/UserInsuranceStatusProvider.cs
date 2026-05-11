@@ -1,4 +1,3 @@
-using Lagedra.Modules.InsuranceIntegration.Domain.Enums;
 using Lagedra.Modules.InsuranceIntegration.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Integration;
 using Microsoft.EntityFrameworkCore;

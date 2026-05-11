@@ -21,21 +21,23 @@
 | Email (library) | MailKit + MimeKit | .NET SMTP client |
 | Email (relay) | Brevo (Sendinblue) SMTP | Configured via `SmtpClient` settings in `appsettings` |
 | SMS | **None in v1** | Email-only; SMS deferred to v2 |
-| Payments | Stripe (NuGet: `Stripe.net`) | Protocol fee only; no rent/deposit handling |
+| Payments | Stripe Connect (NuGet: `Stripe.net`) | Destination charges (activation payment) + platform fee subscriptions; Express accounts for hosts |
 | Maps / Geocoding (backend) | Google Maps Platform — Geocoding API + Address Validation API | HttpClient adapter; REST calls |
 | Maps (frontend) | `@react-google-maps/api` npm package | Google Maps JavaScript API |
-| KYC / Identity | Persona | Liveness, document auth, synthetic ID detection |
-| Background Check | Persona | Combined with KYC — single vendor |
+| KYC / Identity | Provider-agnostic (`IKycProvider`) | Persona adapter + `NoOpKycProvider` fallback for dev; liveness, document auth, synthetic ID detection |
+| Background Check | Provider-agnostic (`IKycProvider`) | Combined with KYC — single vendor; Persona adapter or NoOp |
 | Background Jobs | Quartz.NET 3.x | Persistent job store: PostgreSQL |
 | Object Storage | MinIO (self-hosted, Docker, S3-compatible) | Evidence files, data exports |
 | Antivirus | ClamAV (self-hosted, Docker) | REST via `clamav/clamav` Docker image |
+| Real-Time | SignalR (`Microsoft.AspNetCore.SignalR`) | In-app notification push via WebSocket; JWT auth from query string |
 | Observability | Serilog + OpenTelemetry | Structured logs → file/console; OTEL traces |
 | Frontend Framework | React 19 + Vite + TypeScript | Strict mode, path aliases |
 | UI Components | Tailwind CSS + shadcn/ui | No extra component library |
 | State Management | Zustand | Lightweight, minimal boilerplate |
 | Data Fetching | TanStack Query (React Query) | Server state, caching |
 | Frontend Router | React Router v6 | Lazy-loaded routes |
-| Payments (frontend) | `@stripe/stripe-js` + `@stripe/react-stripe-js` | Stripe Elements for payment method capture |
+| Payments (frontend) | `@stripe/stripe-js` + `@stripe/react-stripe-js` | Stripe Elements (`PaymentElement`) for checkout + payment method capture |
+| Real-Time (frontend) | `@microsoft/signalr` | SignalR client for real-time notification push |
 | Testing (.NET) | xUnit + FluentAssertions + NSubstitute + Bogus + TestContainers | |
 | Testing (frontend) | Vitest + React Testing Library + MSW | |
 | Deployment | Docker Compose + Nginx (VPS) | Primary; K8s/Terraform = optional Phase 2 |
@@ -116,30 +118,61 @@
 > 1. Tenant applies to a listing → `DealApplication` aggregate created in `ActivationAndBilling`
 > 2. Landlord approves application → `DealId` (Guid) is generated and emitted via `ApplicationApprovedEvent`
 > 3. All other modules (`TruthSurface`, `InsuranceIntegration`, `ComplianceMonitoring`, etc.) reference this `DealId`
-> 4. Once Truth Surface confirmed → system reveals host payment details to tenant → tenant pays host directly (off-platform, total = first month rent + deposit + insurance fee) → host confirms receipt via platform → host pays platform fees (insurance + activation fee) → `ActivateDealCommand` runs → `BillingAccount` activated
+> 4. Once Truth Surface confirmed → tenant is directed to checkout page → tenant pays via Stripe (total = first month rent + deposit + insurance fee) → Stripe destination charge splits funds (platform keeps insurance + activation fee, host receives remainder via connected account) → `payment_intent.succeeded` webhook fires → `ActivateDealCommand` runs → `BillingAccount` activated → host charged monthly platform fee via Stripe subscription
 > 5. Deal status: `ApplicationPending → ApplicationApproved → TruthSurfacePending → TruthSurfaceConfirmed → AwaitingPaymentConfirmation → Active → Closed`
 >
 > There is **no separate Deal module** and **no separate Application module**.
 
 ---
 
-## Architecture Note: Direct Payment & Payment Confirmation Flow
+## Architecture Note: Custodial Payment via Stripe Connect
 
-> **Decision:** The platform stays **out of the money flow**. Tenants pay hosts directly. The platform provides a verifiable confirmation/dispute mechanism.
+> **Decision:** The platform collects activation payments from tenants via Stripe Connect destination charges. This ensures the platform fee is collected upfront and prevents hosts from bypassing the platform.
 >
 > Flow:
 > 1. Both parties confirm the Truth Surface → `TruthSurfaceConfirmedEvent` fires
 > 2. `OnTruthSurfaceConfirmedCreatePaymentConfirmationHandler` creates a `DealPaymentConfirmation` (Pending) in `ActivationAndBilling`
-> 3. System reveals the host's payment details to the tenant (fetched from `IdentityAndVerification` via `IHostPaymentDetailsProvider` interface in SharedKernel, decrypted server-side using `IEncryptionService`)
-> 4. Tenant pays host directly (bank transfer, etc.) — **off-platform**
-> 5. Host confirms receipt via `POST /v1/deals/{dealId}/payment/confirm` → deal activates (protections, billing start)
-> 6. If host doesn't confirm within 72h grace period, tenant can dispute via `POST /v1/deals/{dealId}/payment/dispute` with proof of payment (uploaded to Evidence module)
-> 7. Ops/admin reviews dispute evidence and resolves via `POST /v1/admin/deals/{dealId}/resolve-payment-dispute`
-> 8. `PaymentConfirmationTimeoutJob` (Quartz, hourly) escalates pending confirmations past 72h
+> 3. Tenant navigates to checkout page → `POST /v1/deals/{dealId}/checkout` creates a Stripe PaymentIntent with `transfer_data.destination` (host's connected account) and `application_fee_amount` (platform's cut: insurance fee + activation fee)
+> 4. Tenant completes payment via Stripe Elements (PaymentElement)
+> 5. `payment_intent.succeeded` webhook fires → `ProcessStripeWebhookCommand` calls `ConfirmByStripe()` on `DealPaymentConfirmation`, then dispatches `ActivateDealCommand` → deal activates
+> 6. Stripe automatically transfers the remaining amount (rent + deposit) to the host's connected Express account
+> 7. Post-activation: `OnDealActivatedCreateHostSubscriptionHandler` creates a Stripe subscription for the host's monthly platform fee
+> 8. For months 2+, rent is paid directly by tenant to host (off-platform, using host's bank details from `HostPaymentDetails`)
+> 9. Disputes against the Stripe charge are still supported via the existing dispute flow
 >
-> **TruthSurface is NOT modified** — it seals the immutable agreement when both parties confirm. Payment confirmation is a Deal lifecycle concern owned by `ActivationAndBilling`.
+> **Host Stripe Connect Onboarding:**
+> - Hosts must complete Stripe Express onboarding before accepting deals
+> - `HostStripeAccount` entity in `IdentityAndVerification` tracks onboarding status (Pending/Completed/Restricted)
+> - `IHostStripeAccountProvider` interface in SharedKernel enables cross-module resolution of host's connected account ID
+> - `account.updated` webhooks sync onboarding status via `SyncHostStripeStatusCommand`
 >
-> **Cross-module data access:** `IHostPaymentDetailsProvider` interface lives in SharedKernel, implemented by `IdentityAndVerification`, consumed by `ActivationAndBilling` query handler. No direct module-to-module reference.
+> **TruthSurface is NOT modified** — it seals the immutable agreement when both parties confirm. Payment is a Deal lifecycle concern owned by `ActivationAndBilling`.
+>
+> **Cross-module data access:** `IHostStripeAccountProvider` and `IHostPaymentDetailsProvider` interfaces live in SharedKernel, implemented by `IdentityAndVerification`, consumed by `ActivationAndBilling`.
+>
+> **Airbnb-style Host Payout UX (planned):**
+> - Hosts should see **"Set up payouts"** (not provider-specific wording such as "Create Stripe account")
+> - Stripe Connect remains the payout rail under the hood; provider complexity is abstracted in product UI
+> - Host readiness is shown as one checklist: `Identity/KYC`, `Background check`, `Payout setup`, `Listing/deal eligibility`
+> - `ActivationAndBilling` should gate tenant checkout on unified host readiness instead of surfacing processor-specific errors
+> - `IdentityAndVerification` remains system of record for host payout capability (`charges_enabled`, `payouts_enabled`) and emits normalized readiness status
+>
+> **Planned unified state model (HostOnboardingReadiness):**
+> - `hostUserId: Guid`
+> - `kycStatus: NotStarted | Pending | Verified | Failed | ManualReviewRequired`
+> - `backgroundCheckStatus: NotStarted | Pending | Passed | Review | Failed`
+> - `payoutStatus: NotStarted | Pending | Completed | Restricted`
+> - `chargesEnabled: bool`
+> - `payoutsEnabled: bool`
+> - `isCheckoutEligible: bool` (true only when trust + payout requirements are satisfied)
+> - `blockingReasons: string[]` (UI-friendly reasons shown to host/tenant)
+>
+> **Planned API surface (provider-agnostic UX):**
+> - `GET /v1/hosts/onboarding/readiness` → returns `HostOnboardingReadinessDto`
+> - `POST /v1/hosts/payouts/start` → starts/continues payout onboarding (internally Stripe Connect onboarding link)
+> - `POST /v1/hosts/payouts/refresh-link` → refreshes payout onboarding continuation link
+> - `GET /v1/hosts/payouts/status` → normalized payout capability state for UI
+> - Existing Stripe-specific endpoints remain as compatibility layer until migration is complete
 
 ---
 
@@ -154,13 +187,15 @@
 > 4. `IPartnerMembershipProvider` (SharedKernel interface, implemented by PartnerNetwork) provides cross-module access to partner organization membership
 > 5. `JwtTokenService.GenerateAccessTokenAsync()` adds `partner_org_id` claim to JWT if the user belongs to a partner organization
 >
-> **Financial Structure (Initial Payment):**
-> - Tenant pays host directly: **First month's rent + Deposit amount + Insurance fee** = `TotalTenantPaymentCents`
-> - Host pays platform at activation: **Insurance fee + Activation fee** = `TotalHostPlatformPaymentCents`
+> **Financial Structure (Initial Payment via Stripe Connect):**
+> - Tenant pays via Stripe checkout: **First month's rent + Deposit amount + Insurance fee** = `TotalTenantPaymentCents`
+> - Platform retains via `application_fee_amount`: **Insurance fee + Activation fee** = `applicationFeeCents`
+> - Host receives via destination charge: **First month's rent + Deposit amount** (minus Stripe processing fees)
 > - Deposit amount is set by host when approving application (cannot exceed listing's `MaxDepositCents`)
 > - Insurance fee is a one-time amount depending on stay duration, calculated via `IInsuranceFeeCalculator`
 > - `DealFinancials` value object encapsulates the full breakdown
-> - `ActivateDealCommand` gates on `DealPaymentConfirmation.HostPaidPlatform == true`
+> - `ActivateDealCommand` gates on `DealPaymentConfirmation.Status == Confirmed` (set by Stripe webhook)
+> - Monthly platform fee charged to host via Stripe subscription (configured via `stripe.platform_fee_price_id` setting)
 >
 > **Jurisdiction Warning (AB 1482):**
 > - `JurisdictionWarningService.CheckForWarnings()` returns a warning string if stay > 175 days in Los Angeles jurisdiction (`US-CA-LA`)
@@ -426,6 +461,21 @@
 - [x] `Integration/IHostPaymentDetailsProvider.cs` — `GetDecryptedPaymentDetailsAsync(Guid hostUserId, CancellationToken): Task<HostPaymentDetailsDto?>` — implemented by `IdentityAndVerification`, consumed by `ActivationAndBilling`
 - [x] `Integration/HostPaymentDetailsDto.cs` — `HostUserId`, `PaymentInfo` (plaintext after decryption)
 - [x] `Integration/IPartnerMembershipProvider.cs` — `GetPartnerOrganizationIdAsync(Guid userId, CancellationToken): Task<Guid?>` — implemented by `PartnerNetwork`, consumed by `Auth` (JWT claims)
+- [x] `Integration/IHostStripeAccountProvider.cs` — `GetStripeAccountIdAsync(Guid hostUserId, CancellationToken): Task<string?>` — implemented by `IdentityAndVerification`, consumed by `ActivationAndBilling` (checkout)
+- [x] `Integration/IListingProvider.cs` — cross-module listing data provider; implemented by `ListingAndLocation`, consumed by `ActivationAndBilling`
+- [x] `Integration/IDealApplicationStatusProvider.cs` — `IsApprovedAsync`, `GetParticipantsAsync` — implemented by `ActivationAndBilling`, consumed by `TruthSurface`
+- [x] `Integration/IEvidenceManifestProvider.cs` — `ExistsAndIsSealedAsync` — implemented by `Evidence`, consumed by `Arbitration`
+- [x] `Integration/BackgroundCheckResult.cs` — shared enum (Pass/Review/Fail); moved from `IdentityAndVerification` to SharedKernel for cross-module use
+- [x] `Integration/CancellationPolicyType.cs` — shared enum; moved from `ListingAndLocation` to SharedKernel for cross-module use
+- [x] `Integration/InsuranceState.cs` — shared enum (NotActive/Active/InstitutionBacked/Unknown); moved from `InsuranceIntegration` to SharedKernel
+- [x] `Integration/StripeAccountUpdatedEvent.cs` — cross-module event consumed by `IdentityAndVerification`
+- [x] `Integration/GetDepositCapQuery.cs` — cross-module query for jurisdiction deposit caps
+- [x] `Integration/Events/` — shared domain events moved from individual modules to SharedKernel for cross-module consumption:
+  - `BookingCancelledEvent`, `BillingStoppedEvent`, `DealActivatedEvent` (from ActivationAndBilling)
+  - `TruthSurfaceConfirmedEvent` (from TruthSurface)
+  - `IdentityVerifiedEvent`, `BackgroundCheckReceivedEvent` (from IdentityAndVerification)
+  - `InsuranceStatusChangedEvent` (from InsuranceIntegration)
+  - `ReferralRedeemedEvent` (from PartnerNetwork)
 
 ### 2.6.2 Insurance Contracts
 
@@ -490,9 +540,9 @@
 - [x] `External/Email/BrevoSmtpSettings.cs` — typed config: `Host = smtp-relay.brevo.com`, `Port = 587`, `Username`, `ApiKey`
 - [x] Email templates: inline string templates (no Razor dependency)
 
-**Payments — Stripe**
-- [x] `External/Payments/IStripeService.cs` — `CreateSubscription`, `CancelSubscription`, `CreateProratedInvoice`, `HandleWebhookEvent`
-- [x] `External/Payments/StripeService.cs` — implements using `Stripe.net`; validates webhook signature via `Stripe.EventUtility.ConstructEvent`
+**Payments — Stripe Connect**
+- [x] `External/Payments/IStripeService.cs` — `CreateDestinationPaymentIntentAsync`, `CreateExpressAccountAsync`, `CreateAccountLinkAsync`, `GetOrCreateCustomerAsync`, `CreateSubscriptionAsync`, `CancelSubscriptionAsync`, `CreateProratedInvoiceAsync`, `HandleWebhookAsync`
+- [x] `External/Payments/StripeService.cs` — implements using `Stripe.net`; validates webhook signature via `Stripe.EventUtility.ConstructEvent`; supports Connect destination charges + Express account onboarding
 - [x] `External/Payments/StripeSettings.cs` — `PublishableKey`, `SecretKey`, `WebhookSecret`
 
 **Geocoding — Google Maps**
@@ -801,9 +851,20 @@
 - [x] EF Core migrations
 - [x] EF Core migration: `AddPaymentConfirmation` — adds `deal_payment_confirmations` table
 
+#### Application — Stripe Connect Checkout
+- [x] `Application/Commands/CreateCheckoutPaymentIntentCommand.cs` + handler — creates Stripe PaymentIntent via `IStripeService.CreateDestinationPaymentIntentAsync`; destination = host's connected Express account (via `IHostStripeAccountProvider`); `application_fee_amount` = insurance fee + activation fee; idempotency key `pi-deal-{dealId}`; currency `usd`; updates `DealPaymentConfirmation` with Stripe `PaymentIntentId` + `ClientSecret`
+- [x] `Application/Queries/GetCheckoutStatusQuery.cs` + handler — returns `CheckoutDto` with payment intent status, client secret, and financial breakdown; fetches from `DealPaymentConfirmation` + Stripe API
+- [x] `Application/DTOs/CheckoutDto.cs` — `DealId`, `Status`, `ClientSecret`, `TotalAmountCents`, `DepositAmountCents`, `InsuranceFeeCents`, `ApplicationFeeCents`, `Currency`
+- [x] `Application/EventHandlers/OnDealActivatedCreateHostSubscriptionHandler.cs` — listens to `DealActivatedEvent`; creates Stripe subscription for host's monthly platform fee via `IStripeService.CreateSubscriptionAsync`; price ID from `PlatformSettingKeys.StripePlatformFeePriceId`
+- [x] `Presentation/Endpoints/CheckoutEndpoints.cs` — `MapCheckoutEndpoints()`:
+  - `POST /v1/deals/{dealId}/checkout` — creates or retrieves PaymentIntent (RequireAuth)
+  - `GET /v1/deals/{dealId}/checkout/status` — returns checkout status + breakdown (RequireAuth)
+- [x] EF Core migration: `AddStripePaymentTracking` — adds `StripePaymentIntentId`, `StripeClientSecret` columns to `deal_payment_confirmations`
+
 #### Module Registration
 - [x] `ActivationAndBillingModuleRegistration.cs`
 - [x] Update registration: add `IDealPaymentConfirmationRepository`, `PaymentConfirmationTimeoutJob` (hourly Quartz), `IHostPaymentDetailsProvider` (resolved from DI), event handlers for `TruthSurfaceConfirmedEvent`, `PaymentConfirmedEvent`, `PaymentDisputeResolvedEvent`
+- [x] Update registration: add `OnDealActivatedCreateHostSubscriptionHandler` event handler, `CheckoutEndpoints`
 
 ---
 
@@ -868,10 +929,42 @@
 - [x] EF Core migrations (identity_profiles, verification_cases, background_check_reports, affiliation_verifications)
 - [x] EF Core migration: `AddHostPaymentDetails` — adds `host_payment_details` table
 
+#### Domain — Host Stripe Connect Account
+- [x] `Domain/Entities/HostStripeAccount.cs` — `Entity<Guid>`: `HostUserId` (unique index), `StripeAccountId`, `OnboardingStatus` (StripeOnboardingStatus), `OnboardingUrl?`, `CreatedAt`, `UpdatedAt`; methods: `Create()`, `UpdateStatus()`, `SetOnboardingUrl()`
+- [x] `Domain/Enums/StripeOnboardingStatus.cs` — enum: Pending, Completed, Restricted
+
+#### Application — Host Stripe Connect
+- [x] `Application/Commands/CreateHostStripeAccountCommand.cs` + handler — creates Stripe Express account via `IStripeService`; stores `HostStripeAccount` with onboarding URL
+- [x] `Application/Commands/RefreshHostOnboardingLinkCommand.cs` + handler — generates fresh Stripe onboarding link for hosts who need to resume or complete onboarding
+- [x] `Application/Commands/SyncHostStripeStatusCommand.cs` + handler — syncs onboarding status from Stripe `account.updated` webhook
+- [x] `Application/DTOs/HostStripeStatusDto.cs` — `StripeAccountId`, `OnboardingStatus`, `OnboardingUrl?`
+- [x] `Application/EventHandlers/OnStripeAccountUpdatedSyncHandler.cs` — listens to `StripeAccountUpdatedEvent`; dispatches `SyncHostStripeStatusCommand`
+- [ ] `Application/Queries/GetHostOnboardingReadinessQuery.cs` + handler — aggregates KYC, background, payout capability into one `HostOnboardingReadinessDto`
+- [ ] `Application/DTOs/HostOnboardingReadinessDto.cs` — unified host onboarding/check-out eligibility projection with blocking reasons
+- [ ] `Application/Services/IHostReadinessPolicy.cs` + implementation — centralized rules for `isCheckoutEligible` and user-facing blocking reasons
+
+#### Presentation — Host Stripe Connect
+- [x] `Presentation/Endpoints/HostStripeEndpoints.cs` — `MapHostStripeEndpoints()`:
+  - `POST /v1/hosts/stripe/account` — create Express account (RequireLandlord)
+  - `GET /v1/hosts/stripe/status` — get onboarding status (RequireLandlord)
+  - `POST /v1/hosts/stripe/refresh-link` — refresh onboarding URL (RequireLandlord)
+- [ ] `Presentation/Endpoints/HostOnboardingEndpoints.cs` — provider-agnostic UX endpoints:
+  - `GET /v1/hosts/onboarding/readiness`
+  - `POST /v1/hosts/payouts/start`
+  - `POST /v1/hosts/payouts/refresh-link`
+  - `GET /v1/hosts/payouts/status`
+- [ ] Keep existing `/v1/hosts/stripe/*` endpoints as backward-compatible aliases during migration
+
+#### Infrastructure — Host Stripe Connect
+- [x] `Infrastructure/Configurations/HostStripeAccountConfiguration.cs` — table `host_stripe_accounts` in schema `identity`; `HostUserId` unique index
+- [x] `Infrastructure/Services/HostStripeAccountProvider.cs` — implements `IHostStripeAccountProvider` (from SharedKernel); resolves host's Stripe connected account ID
+- [x] EF Core migration: `AddHostStripeAccounts` — adds `host_stripe_accounts` table
+
 #### Module Registration
 - [x] `IdentityVerificationModuleRegistration.cs`
 - [x] Update registration: add `HostPaymentDetailsRepository`, `IHostPaymentDetailsProvider` → `HostPaymentDetailsProvider`
 - [x] Update registration: add `IVerificationSignalProvider` → `VerificationSignalProvider`; add `OnIdentityVerifiedSyncAuthHandler` event handler
+- [x] Update registration: add `IHostStripeAccountProvider` → `HostStripeAccountProvider`; add `OnStripeAccountUpdatedSyncHandler` event handler; add `HostStripeEndpoints`
 
 ---
 
@@ -1122,6 +1215,7 @@
 
 #### Module Registration
 - [x] `ListingAndLocationModuleRegistration.cs` — registers definition repositories and new endpoint groups
+- [x] `Infrastructure/Services/ListingProvider.cs` — implements `IListingProvider` (from SharedKernel) for cross-module listing data access
 
 #### Part A — Property Details (PropertyType, Bedrooms, Bathrooms, Area)
 
@@ -1818,9 +1912,10 @@
 - [x] `Application/Commands/MarkNotificationReadCommand.cs` — marks single or all notifications as read
 - [x] `Application/Queries/GetUnreadNotificationsQuery.cs` — returns unread InApp notifications for user
 - [x] `Application/Queries/GetUnreadCountQuery.cs` — returns unread count
+- [x] `Application/Queries/GetAllNotificationsQuery.cs` — returns all InApp notifications for user (read + unread)
 
 ##### Presentation
-- [x] `Presentation/Endpoints/InAppNotificationEndpoints.cs` — `GET /v1/notifications/unread`, `GET /v1/notifications/unread/count`, `POST /v1/notifications/{id}/read`, `POST /v1/notifications/read-all`
+- [x] `Presentation/Endpoints/InAppNotificationEndpoints.cs` — `GET /v1/notifications/unread`, `GET /v1/notifications/unread/count`, `GET /v1/notifications/all`, `POST /v1/notifications/{id}/read`, `POST /v1/notifications/read-all`
 
 ##### Infrastructure (Persistence)
 - [x] `Infrastructure/Configurations/InAppNotificationConfiguration.cs` — table `in_app_notifications`, indexes on `(RecipientUserId, IsRead)` and `CreatedAt`
@@ -2219,6 +2314,7 @@
 - [x] Install: `tailwindcss`, `@tailwindcss/forms`, `@tailwindcss/typography`, `shadcn/ui` (CLI init)
 - [x] Install: `@react-google-maps/api` — Google Maps JavaScript API wrapper
 - [x] Install: `@stripe/stripe-js`, `@stripe/react-stripe-js` — Stripe Elements
+- [x] Install: `@microsoft/signalr` — SignalR client for real-time notifications
 - [x] Install: `react-hook-form`, `zod`, `@hookform/resolvers` — form validation
 - [x] `.env.example`: `VITE_API_BASE_URL`, `VITE_GOOGLE_MAPS_API_KEY`, `VITE_STRIPE_PUBLISHABLE_KEY`
 
@@ -2226,11 +2322,11 @@
 
 - [x] `src/main.tsx` — providers: `QueryClientProvider`, `AuthProvider`, `RouterProvider`
 - [x] `src/app/App.tsx` — router outlet, global error boundary
-- [x] `src/app/routes.tsx` — role-based lazy routes
+- [x] `src/app/routes.tsx` — role-based lazy routes; routes: marketplace (`/listings`, `/listings/:id`), auth (`/auth/*`), dashboard (`/app/*`) with profile, verification, notifications, notification-preferences, saved, applications, inquiry, truth-surface, billing, checkout, payment-method, host stripe-onboarding, admin (users, definitions)
 - [x] `src/app/auth/AuthProvider.tsx` — JWT storage (`localStorage`), refresh logic, Zustand slice
 - [x] `src/app/auth/RequireAuth.tsx` — redirects to login if no valid token
 - [x] `src/app/auth/roles.ts` — role constants matching backend enums
-- [x] `src/app/layout/AppShell.tsx` — sidebar-based dashboard shell (collapsible, grouped by role)
+- [x] `src/app/layout/AppShell.tsx` — sidebar-based dashboard shell (collapsible, grouped by role); `NotificationBell` in header; `useNotificationHub()` for real-time connection
 - [x] `src/app/layout/MarketplaceLayout.tsx` — Airbnb-style top bar + mobile bottom tab bar
 - [x] `src/app/layout/ErrorBoundary.tsx`
 - [x] `src/app/auth/permissions.ts` — `NavGroup[]` sidebar groups, `getBottomTabsForRole()`, `getSidebarGroupsForRole()`
@@ -2239,12 +2335,12 @@
 ### 8.3 API Client
 
 - [x] `src/api/http.ts` — Axios instance: `Authorization: Bearer`, `X-Correlation-Id`, auto-refresh on 401
-- [x] `src/api/endpoints.ts` — typed endpoint map
-- [x] `src/api/types.ts` — DTOs synced with `packages/contracts`
+- [x] `src/api/endpoints.ts` — typed endpoint map; groups: auth, listings, applications, admin, identity, verification, risk, hostStripe, hostPayment, checkout, billing, notifications, inquiry, truthSurface
+- [x] `src/api/types.ts` — DTOs synced with backend contracts; includes: auth, listing, application, verification, billing, checkout, notification, inquiry, truth-surface, host-stripe types
 
 ### 8.4 UI Primitives (shadcn/ui base)
 
-- [x] shadcn/ui components initialized: `Button`, `Card`, `Modal/Dialog`, `Table`, `Input`, `Select`, `Badge`, `Alert`, `Skeleton`, `Separator`, `Tabs`, `Label`, `Textarea`, `Avatar`
+- [x] shadcn/ui components initialized: `Button`, `Card`, `Modal/Dialog`, `Table`, `Input`, `Select`, `Badge`, `Alert`, `Skeleton`, `Separator`, `Tabs`, `Label`, `Textarea`, `Avatar`, `Checkbox`
 - [x] Install `lucide-react` — Lucide icon library (included with shadcn/ui); used for dynamic icon rendering from `iconKey` strings stored in DB; `DynamicIcon` component maps `iconKey` → `<LucideIcon />` with fallback
 - [x] `src/components/shared/Loader.tsx`
 - [x] `src/components/shared/EmptyState.tsx`
@@ -2299,49 +2395,85 @@
 - [x] `features/admin/components/ChangeRoleDialog.tsx` — dialog for changing user roles
 
 #### Structured Inquiry
-- [ ] `features/inquiry/pages/InquiryThreadPage.tsx` — question/answer history; hard-disabled UI after Truth Surface confirmation
-- [ ] `features/inquiry/components/InquiryQuestion.tsx` — predefined question dropdown only
-- [ ] `features/inquiry/components/InquiryResponseForm.tsx` — structured Yes/No / multi-choice / numeric
-- [ ] `features/inquiry/services/inquiryApi.ts`
+- [x] `features/inquiry/pages/InquiryThreadPage.tsx` — question/answer history; hard-disabled UI after Truth Surface confirmation
+- [x] `features/inquiry/components/InquiryQuestion.tsx` — predefined question dropdown + custom text
+- [x] `features/inquiry/components/InquiryResponseForm.tsx` — structured Yes/No / multi-choice / numeric
+- [x] `features/inquiry/components/InquiryStatusBadge.tsx` — color-coded status badge for inquiry state
+- [x] `features/inquiry/hooks/useInquiry.ts` — TanStack Query hooks for inquiry operations
+- [x] `features/inquiry/services/inquiryApi.ts` — API client for inquiry endpoints
 
 #### Truth Surface
-- [ ] `features/truth-surface/pages/TruthSurfaceConfirmationPage.tsx` — line-by-line display; per-line confirm checkboxes; Platform Disclaimers acknowledgement (required before submit)
-- [ ] `features/truth-surface/components/TruthSnapshotViewer.tsx` — immutable snapshot; cryptographic proof display
-- [ ] `features/truth-surface/components/ConfirmButton.tsx` — disabled until all checkboxes ticked
-- [ ] Hard-coded system notice: "The Inquiry Service is now closed. All confirmed details are recorded in the Truth Surface" — displayed in-page after confirmation
-- [ ] `features/truth-surface/services/truthSurfaceApi.ts`
+- [x] `features/truth-surface/pages/TruthSurfaceConfirmationPage.tsx` — line-by-line display; per-line confirm checkboxes; Platform Disclaimers acknowledgement (required before submit)
+- [x] `features/truth-surface/components/TruthSnapshotViewer.tsx` — immutable snapshot; cryptographic proof display
+- [x] `features/truth-surface/components/ConfirmButton.tsx` — disabled until all checkboxes ticked
+- [x] Hard-coded system notice: "The Inquiry Service is now closed. All confirmed details are recorded in the Truth Surface" — displayed in-page after confirmation
+- [x] `features/truth-surface/components/TruthSurfaceStatusBadge.tsx` — color-coded status badge
+- [x] `features/truth-surface/hooks/useTruthSurface.ts` — TanStack Query hooks for Truth Surface operations
+- [x] `features/truth-surface/services/truthSurfaceApi.ts` — API client for Truth Surface endpoints
 
 #### Activation & Billing
-- [ ] `features/activation-billing/pages/BillingPage.tsx` — current invoice, prorated amount, Stripe Elements payment method card
-- [ ] `features/activation-billing/pages/PaymentMethodPage.tsx` — `@stripe/react-stripe-js` `CardElement` or `PaymentElement`
-- [ ] Non-custodial disclaimer displayed: "Lagedra does not receive, transmit, or hold these funds. These instructions are provided solely to facilitate your direct settlement."
-- [ ] `features/activation-billing/services/billingApi.ts`
+- [x] `features/activation-billing/pages/BillingPage.tsx` — billing account status, Stripe-tracked payment status, checkout prompt, host/tenant action buttons (Confirm Payment, Dispute Payment, Cancel Booking, File Damage Claim, Stop Billing), payment details section for tenants, Stripe 3DS redirect handling
+- [x] `features/activation-billing/pages/CheckoutPage.tsx` — Stripe Connect destination charge checkout with `PaymentElement`, payment breakdown (rent, deposit, insurance, platform fee), and auto-activation on payment success
+- [x] `features/activation-billing/pages/PaymentMethodPage.tsx` — Stripe Elements payment method setup page; currency `usd`; `SetupIntent` flow for saved payment methods
+- [x] `features/activation-billing/components/DisputePaymentDialog.tsx` — tenant dispute dialog with reason input; integrates `useDisputePayment` hook
+- [x] `features/activation-billing/components/CancelBookingDialog.tsx` — cancellation dialog with refund calculation display; integrates `useCancelBooking` hook
+- [x] `features/activation-billing/components/FileDamageClaimDialog.tsx` — host damage claim dialog with amount input (USD); integrates `useFileDamageClaim` hook
+- [x] `features/activation-billing/components/ConfirmStopBillingDialog.tsx` — confirmation dialog before stopping billing
+- [x] `features/activation-billing/components/PaymentStatusBadge.tsx` — color-coded payment status badge
+- [x] `features/activation-billing/components/BillingStatusBadge.tsx` — color-coded billing status badge
+- [x] `features/activation-billing/components/NonCustodialDisclaimer.tsx` — payment disclaimer notice
+- [x] Payment security notice displayed: "All payments are securely processed through Stripe. Lagedra collects the activation payment, deducts the platform fee and insurance premium, and transfers the remainder to the host."
+- [x] `features/activation-billing/hooks/useCheckout.ts` — TanStack Query hooks for checkout operations (create intent, get status)
+- [x] `features/activation-billing/hooks/useBilling.ts` — TanStack Query hooks for billing operations (status, confirm, dispute, cancel, damage claim, stop billing)
+- [x] `features/activation-billing/services/checkoutApi.ts` — API client for checkout endpoints
+- [x] `features/activation-billing/services/billingApi.ts` — API client for billing endpoints
 
 #### Compliance
-- [ ] `features/compliance/pages/ComplianceStatusPage.tsx` — violations list, cure windows, insurance lapse alerts
+- [x] `features/compliance/pages/DealCompliancePage.tsx` — deal-scoped compliance status; violations list with status badges; violation detection, cure, and escalation actions; insurance/payment compliance indicators
+- [x] `features/compliance/pages/TrustLedgerPage.tsx` — deal-scoped and user-scoped trust ledger views; positive/negative entry counts; entry type badges with icons; sorted by date
+- [x] `features/compliance/hooks/useCompliance.ts` — TanStack Query hooks for compliance operations (deal compliance, violations, ledger queries)
+- [x] `features/compliance/services/complianceApi.ts` — API client for compliance and trust ledger endpoints
 
 #### Arbitration
-- [ ] `features/arbitration/pages/CaseListPage.tsx` — case list with status/tier
-- [ ] `features/arbitration/pages/CaseDetailPage.tsx` — evidence slots, timeline, decision display
-- [ ] `features/arbitration/components/EvidenceUpload.tsx` — structured slot upload; calls presigned URL; file hash displayed
-- [ ] `features/arbitration/components/CaseTimeline.tsx`
-- [ ] `features/arbitration/services/arbitrationApi.ts`
+- [x] `features/arbitration/pages/CaseListPage.tsx` — case list with status filter tabs; "File a Case" button with deal picker dialog; status/tier/category badges; filing fee and evidence slot count
+- [x] `features/arbitration/pages/CaseDetailPage.tsx` — evidence slots with manifest IDs, timeline, decision display/form, appeal section, admin actions (assign arbitrator, mark evidence complete, close case)
+- [x] `features/arbitration/components/EvidenceUpload.tsx` — manifest creation, structured file upload via presigned URLs; SHA-256 hash computation; malware scan status polling; seal manifest action
+- [x] `features/arbitration/components/CaseTimeline.tsx` — visual status progression (Filed → Decided/Closed) with Appealed handling
+- [x] `features/arbitration/components/FileArbitrationDialog.tsx` — filing dialog with category and tier selectors; navigates to new case on success
+- [x] `features/arbitration/services/arbitrationApi.ts` — full API client: file case, get/list cases, attach evidence, mark complete, assign arbitrator, issue decision, close, appeal
+- [x] `features/arbitration/hooks/useArbitration.ts` — TanStack Query hooks for all arbitration operations with cache invalidation
 
 #### Trust Ledger
-- [ ] `features/trust-ledger/pages/TrustLedgerPage.tsx` — public pseudonymized view; full detail for involved parties only
-- [ ] `features/trust-ledger/components/LedgerEntryList.tsx`
+- [x] `features/compliance/pages/TrustLedgerPage.tsx` — deal-scoped and user-scoped trust ledger; public pseudonymized view; full detail for involved parties; positive/negative entry categorization
+- [x] Trust ledger entry list integrated into `TrustLedgerPage` — sorted entries with type-specific icons and color coding
 
 #### Evidence
-- [ ] `features/evidence/services/evidenceApi.ts` — presigned URL request, upload completion
+- [x] `features/evidence/services/evidenceApi.ts` — presigned URL request, upload completion, scan status polling, manifest CRUD, download URL generation
+- [x] `features/evidence/hooks/useEvidence.ts` — TanStack Query hooks: `useManifest`, `useCreateManifest`, `useSealManifest`, `useRequestUploadUrl`, `useCompleteUpload`, `useScanStatus`, `useDownloadUrl`
 
-#### Notifications (In-App)
-- [ ] `features/notifications/pages/NotificationsPage.tsx` — in-app notification history (email sent = shown here too)
-- [ ] `features/notifications/services/notificationApi.ts`
+#### Notifications (In-App + Real-Time)
+- [x] `features/notifications/pages/NotificationsPage.tsx` — full notification history (read + unread); filters by read/unread; mark-all-read button; click-to-navigate to related entity
+- [x] `features/notifications/pages/NotificationPreferencesPage.tsx` — user notification preference toggles for each event type (email opt-in/out)
+- [x] `features/notifications/components/NotificationBell.tsx` — header bell icon with unread count badge; toggles `NotificationPanel`
+- [x] `features/notifications/components/NotificationPanel.tsx` — dropdown panel displaying unread notifications; "Mark all read" button; "See all notifications" link to `/app/notifications`; click-to-navigate based on `relatedEntityType` and `category`
+- [x] `features/notifications/hooks/useNotifications.ts` — TanStack Query hooks: `useUnreadNotifications`, `useUnreadCount`, `useAllNotifications`, `useMarkRead`, `useMarkAllRead`, `useNotificationPreferences`, `useUpdatePreferences`
+- [x] `features/notifications/hooks/useNotificationHub.ts` — SignalR client hook; connects to `/hubs/notifications`; JWT auth via access token; listens for `ReceiveNotification` events; optimistically updates React Query cache; auto-reconnect logic
+- [x] `features/notifications/services/notificationApi.ts` — API client for all notification endpoints (unread, count, all, markRead, markAllRead, preferences, history)
 
-#### Profile
-- [ ] `features/profile/pages/ProfilePage.tsx` — identity status, affiliation, insurance status, Verification Class
-- [ ] `features/profile/pages/VerificationStatusPage.tsx` — Persona KYC progress, background check status
-- [ ] `features/profile/services/profileApi.ts`
+#### Profile & Verification
+- [x] `features/auth/pages/ProfilePage.tsx` — identity status, affiliation, insurance status, Verification Class; "Manage verification" link navigating to `/app/verification`
+- [x] `features/verification/pages/VerificationPage.tsx` — multi-step verification flow: progress bar, KYC start/complete, background check consent, risk view (deposit range, confidence); status badges; leverages `NoOpKycProvider` for auto-approval in dev
+- [x] `features/verification/hooks/useVerification.ts` — TanStack Query hooks: `useVerificationStatus`, `useStartKyc`, `useCompleteKyc`, `useSubmitBackgroundCheckConsent`, `useRiskView`
+- [x] `features/verification/services/verificationApi.ts` — API client for identity, verification, and risk endpoints
+
+#### Host Onboarding (Stripe Connect)
+- [x] `features/host-onboarding/pages/HostStripeOnboardingPage.tsx` — Stripe Express onboarding flow with status display; "Direct Payment Details" card for hosts to enter bank/Zelle details for post-activation direct payments
+- [x] `features/host-onboarding/hooks/useHostStripe.ts` — TanStack Query hooks: `useHostStripeStatus`, `useCreateStripeAccount`, `useRefreshOnboardingLink`, `useHostPaymentDetails`, `useSaveHostPaymentDetails`
+- [x] `features/host-onboarding/services/hostStripeApi.ts` — API client for host Stripe and payment details endpoints
+- [ ] Rename host-facing labels from "Stripe" to neutral "Payout setup" wording while keeping Stripe rails internal
+- [ ] Add `HostOnboardingChecklistCard` (dashboard + profile) showing: Identity, Background check, Payout setup, Checkout eligibility
+- [ ] Add pre-checkout host-readiness guard UI: actionable tenant message + host deep link to `/app/stripe-onboarding` / future `/app/payout-setup`
+- [ ] Add reminder banners for landlords with `payoutStatus != Completed`
 
 ### 8.6 Utils
 
@@ -2656,15 +2788,18 @@
 
 > All integrations read-only or webhook-based. Platform never holds/transmits/guarantees funds.
 
-### 14.1 Stripe (Protocol Fee Billing)
+### 14.1 Stripe (Connect + Activation Payments + Platform Fees)
 
 - [x] `Stripe.net` NuGet integrated in `Lagedra.Infrastructure`
+- [x] Stripe Connect: Express accounts for hosts; onboarding via `HostStripeAccount` entity in IdentityAndVerification
 - [x] Stripe products/prices configured: "Protocol Fee - Standard" ($79/month), "Protocol Fee - Institutional Partner" ($39/month)
+- [x] Destination charges: `CreateCheckoutPaymentIntentCommand` creates PaymentIntent with `transfer_data.destination` (host's connected account) + `application_fee_amount` (insurance + activation fee); idempotency keys
 - [x] `CreateStripeCustomerCommand` — creates Stripe Customer for landlord on first deal
-- [x] `ActivateDealCommand` — creates Stripe Subscription (prorated from activation date)
+- [x] `OnDealActivatedCreateHostSubscriptionHandler` — creates Stripe Subscription for host's monthly platform fee after deal activation
 - [x] `StopBillingCommand` — cancels Stripe Subscription at period end
-- [x] Webhook endpoint (no auth): validates `Stripe-Signature`; dispatches `invoice.paid`, `invoice.payment_failed`, `charge.dispute.created`
-- [x] Frontend: Stripe Elements (`PaymentElement`) for payment method capture; publishable key from `VITE_STRIPE_PUBLISHABLE_KEY`
+- [x] Webhook endpoints (no auth): validates `Stripe-Signature`; dispatches `payment_intent.succeeded`, `payment_intent.payment_failed`, `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`, `charge.dispute.created`, `account.updated`
+- [x] `IStripeService` — full interface: `CreateDestinationPaymentIntentAsync`, `CreateExpressAccountAsync`, `CreateAccountLinkAsync`, `GetOrCreateCustomerAsync`, `CreateSubscriptionAsync`, `CancelSubscriptionAsync`, `CreateProratedInvoiceAsync`, `HandleWebhookAsync`
+- [x] Frontend: Stripe Elements (`PaymentElement`) for checkout; `SetupIntent` for payment method capture; publishable key from `VITE_STRIPE_PUBLISHABLE_KEY`; 3DS redirect handling; host Stripe Connect onboarding page
 
 ### 14.2 Google Maps Platform (Geocoding + Maps)
 
@@ -2672,13 +2807,16 @@
 - [x] **Frontend**: `@react-google-maps/api`; `GoogleMap` component; `Marker` for approx pin; `useJsApiLoader` with API key from `VITE_GOOGLE_MAPS_API_KEY`; Maps JavaScript API enabled in Google Cloud Console
 - [x] Google Cloud Console: enable Geocoding API, Address Validation API, Maps JavaScript API; restrict API key by domain
 
-### 14.3 Persona (KYC + Background Check)
+### 14.3 KYC + Background Check (Provider-Agnostic)
 
-- [x] `PersonaClient` — `HttpClient` to `https://withpersona.com/api/v1/`; `Authorization: Bearer {PERSONA_API_KEY}`; Polly retry
+- [x] `IKycProvider` — provider-agnostic interface: `CreateInquiryAsync`, `GetInquiryStatusAsync`, `InitiateBackgroundCheckAsync`, `HandleWebhookAsync`
+- [x] `PersonaKycProvider` — Persona adapter: `HttpClient` to `https://withpersona.com/api/v1/`; `Authorization: Bearer {PERSONA_API_KEY}`; Polly retry
+- [x] `NoOpKycProvider` — auto-approves for development/testing when `Kyc:Provider != "Persona"`
 - [x] KYC Inquiry Template configured in Persona dashboard: liveness check + government ID + selfie
 - [x] Background Check Report configured in Persona: FCRA-compliant; criminal, sex offender, global watchlist
-- [x] Webhook endpoint: validates `Persona-Signature` header (HMAC-SHA256); dispatches Complete/Fail commands
+- [x] Webhook endpoint: `/v1/webhooks/kyc` routes to `IKycProvider.HandleWebhookAsync()` (provider-agnostic)
 - [x] Manual review queue: high-risk flags → ops dashboard (admin `ManualVerification.tsx` page)
+- [x] Frontend: `VerificationPage.tsx` — multi-step KYC flow + background check consent + risk view
 
 ### 14.4 MailKit + Brevo SMTP (Email)
 
@@ -3125,11 +3263,443 @@
 
 ---
 
-*Last updated: 2026-03-24. Technology stack locked. Update checkboxes as work is completed.*
+## Phase 16 — Booking Flow Optimization
+
+> **Goal:** compress the guest journey from `~7 navigations + 4 wait cycles` to `2–3 navigations + 0–1 wait cycles` without compromising the Truth Surface cryptographic anchor or audit posture. Truth Surface remains a dual-party signed seal; we only streamline UI and collapse host workflow.
+
+### Locked scope decisions
+
+- Truth Surface stays a hard gate (sealed snapshot, both-party confirmation). UI streamlining only.
+- Inquiry sessions default to `Open`. Existing Locked-by-default flow remains opt-in via host action.
+- `DealPhase` rename: backend `ComputeDealPhase` emits `Checkout` instead of `AwaitingPayment` (matches existing TS enum).
+- `Listing.DefaultDepositCents` (nullable) added; falls back to `MaxDepositCents`.
+- All flow changes behind feature flag `BookingFlow.V2`.
+
+### Before vs after (guest happy path)
+
+```mermaid
+flowchart LR
+    subgraph Today
+      A1[Listing] --> A2[Apply dialog] --> A3[Wait approval] --> A4[Inquiry unlock dance] --> A5[Truth Surface page] --> A6[Wait host confirm] --> A7[Checkout] --> A8[Billing] --> A9[Active]
+    end
+    subgraph After
+      B1[Listing with date+price+KYC banner] --> B2[Apply / Book] --> B3{Instant?}
+      B3 -->|yes| B4[Checkout w/ inline terms] --> B5[Active]
+      B3 -->|no| B6[Pending - card on file] --> B7[Host one-tap approve] --> B5
+    end
+```
+
+### 16.1 Listing Detail — live availability, price quote, KYC pre-flight
+
+- [ ] Range-aware availability: extend [`GetListingAvailabilityQuery.cs`](src/Lagedra.Modules/ListingAndLocation/Application/Queries/GetListingAvailabilityQuery.cs) and [`ListingEndpoints.cs:291`](src/Lagedra.Modules/ListingAndLocation/Presentation/Endpoints/ListingEndpoints.cs) to accept `from`/`to` and return `{available: bool, blocks: [...]}`.
+- [ ] New `POST /v1/listings/{id}/quote` endpoint + `GetListingQuoteQuery` — composes `MonthlyRentCents`, computed `DepositCents` (default or band midpoint), `IInsuranceFeeCalculator.CalculateFeeAsync` ([`IInsuranceFeeCalculator.cs:3`](src/Lagedra.SharedKernel/Insurance/IInsuranceFeeCalculator.cs)), and protocol fee from `IPlatformSettingsProvider`. Returns `QuoteDto { rentCents, depositCents, insuranceFeeCents, protocolFeeCents, totalCents }`.
+- [ ] Pre-flight consent status: new `GET /v1/privacy/consents/me/status` returning `{hasRequired: bool, missing: ConsentTypeDto[]}` backed by `IConsentChecker.HasRequiredConsentsAsync` ([`IConsentChecker.cs:3`](src/Lagedra.SharedKernel/Integration/IConsentChecker.cs)). Bypass `ConsentMiddleware` for this read endpoint.
+- [ ] Frontend [`ListingDetailPage.tsx`](apps/web/src/features/listings/pages/ListingDetailPage.tsx): inline date picker hits `/availability?from=&to=`, then `/quote`. Shows itemized total. KYC banner replaces apply CTA when `hasRequired === false`, deep-linking to [`VerificationPage.tsx`](apps/web/src/features/verification/pages/VerificationPage.tsx) with return URL.
+
+### 16.2 Listing aggregate — `DefaultDepositCents`
+
+- [ ] Add `long? DefaultDepositCents` to [`Listing.cs`](src/Lagedra.Modules/ListingAndLocation/Domain/Aggregates/Listing.cs) with `SetDefaultDeposit(long?)` method (must be `<= MaxDepositCents` if set).
+- [ ] EF mapping in [`ListingConfiguration.cs:37`](src/Lagedra.Modules/ListingAndLocation/Infrastructure/Configurations/ListingConfiguration.cs); migration with backfill (leave NULL on existing rows; quote endpoint falls back to `MaxDepositCents`).
+- [ ] Extend `CreateListingCommand`, `UpdateListingCommand`, contract DTOs, frontend `listingFormSchema`, `ListingForm`/`ListingWizard` with new optional field "Default deposit (used for instant book)".
+
+### 16.3 Real instant booking
+
+- [ ] In [`SubmitApplicationCommand.cs`](src/Lagedra.Modules/ActivationAndBilling/Application/Commands/SubmitApplicationCommand.cs): if `listing.InstantBookingEnabled`, after `Submit(...)` immediately invoke the same logic as `ApproveDealApplicationCommandHandler` (deposit = `listing.DefaultDepositCents ?? listing.MaxDepositCents`) inside the same transaction.
+- [ ] Pre-condition (instant book only): host must have completed payout setup (`IHostPaymentDetailsProvider` reachable + Connect charges enabled, mirroring [`CreateCheckoutPaymentIntentCommand.cs:96-133`](src/Lagedra.Modules/ActivationAndBilling/Application/Commands/CreateCheckoutPaymentIntentCommand.cs)). If not, force-disable the listing's instant-book flag in API responses and the toggle in the wizard until payouts are set up.
+- [ ] `SubmitApplicationResponse` returns `{ applicationId, dealId?, nextUrl }` so the frontend can route to `/app/deals/{dealId}/checkout` for instant-book or `/app/applications/{id}` for request-to-book.
+- [ ] Frontend [`ApplyDialog.tsx`](apps/web/src/features/applications/components/ApplyDialog.tsx) follows `nextUrl` instead of always closing.
+
+### 16.4 Collapse host's three actions into one
+
+- [ ] [`ApproveDealApplicationCommand.cs:13`](src/Lagedra.Modules/ActivationAndBilling/Application/Commands/ApproveDealApplicationCommand.cs) handler: after approving, dispatch `CreateTruthSurfaceForDealCommand` then `ConfirmTruthSurfaceCommand(Party=Landlord)` in the same UoW (both already require only `DealId` + caller; see [`CreateTruthSurfaceForDealCommand.cs:13`](src/Lagedra.TruthSurface/Application/Commands/CreateTruthSurfaceForDealCommand.cs) and [`ConfirmTruthSurfaceCommand.cs:15`](src/Lagedra.TruthSurface/Application/Commands/ConfirmTruthSurfaceCommand.cs)).
+- [ ] Remove the standalone "Create Truth Surface" host UI page from the funnel (kept as read-only "View terms" link from `DealDetailPage`). Existing route still resolves for legacy direct links.
+- [ ] Tenant's confirmation moves inline into checkout (see 16.5). The dedicated `TruthSurfaceConfirmationPage` becomes a fallback / re-confirm UI only.
+
+### 16.5 Inline Truth Surface confirmation in checkout
+
+- [ ] [`CheckoutPage.tsx`](apps/web/src/features/activation-billing/pages/CheckoutPage.tsx) adds a "Booking terms" panel rendering `snapshot.canonicalContent` (already structured JSON) above the Stripe Payment Element.
+- [ ] Single mandatory checkbox: "I agree to the booking terms" → on submit, calls `ConfirmTruthSurfaceCommand(Party=Tenant)` then `confirmPayment`. Server-side seal still happens when both parties confirmed (preserves cryptographic anchor).
+- [ ] Submit button disabled until checkbox is ticked.
+
+### 16.6 Single money surface
+
+- [ ] Change `return_url` in [`CheckoutPage.tsx:89-94`](apps/web/src/features/activation-billing/pages/CheckoutPage.tsx) to `${origin}/app/deals/${dealId}/checkout?status=...`. CheckoutPage handles spinner/success/failure inline.
+- [ ] Remove `redirect_status` handling and "Go to Checkout" nudge from [`BillingPage.tsx:68-76`](apps/web/src/features/activation-billing/pages/BillingPage.tsx) and [`BillingPage.tsx:124-174`](apps/web/src/features/activation-billing/pages/BillingPage.tsx). BillingPage strictly post-active.
+- [ ] Anywhere a deal-detail action would currently route to `/billing` for an unpaid deal (see [`DealDetailPage.tsx:103-117`](apps/web/src/features/deals/pages/DealDetailPage.tsx)), redirect to `/checkout` instead.
+
+### 16.7 Phase enum cleanup
+
+- [ ] [`ListMyDealsQuery.cs:146-160`](src/Lagedra.Modules/ActivationAndBilling/Application/Queries/ListMyDealsQuery.cs) emits `"Checkout"` (not `"AwaitingPayment"`).
+- [ ] Remove the `"AwaitingPayment"` member from `DealPhase` in [`apps/web/src/api/types.ts`](apps/web/src/api/types.ts).
+- [ ] Update [`DealTimeline.tsx:5-20`](apps/web/src/features/deals/components/DealTimeline.tsx) and any switch statements (`DealDetailPage`, `DealCard`) to drop the dead branch.
+
+### 16.8 Inquiry defaults to Open
+
+- [ ] [`InquirySession.cs:21-58`](src/Lagedra.Modules/StructuredInquiry/Domain/Aggregates/InquirySession.cs) — `Create(...)` factory sets `Status = Open` (was `Locked`).
+- [ ] New `LockInquirySessionCommand` (host-only) for the rare opt-in lock case.
+- [ ] [`RequestDetailUnlockCommand.cs:21-24`](src/Lagedra.Modules/StructuredInquiry/Application/Commands/RequestDetailUnlockCommand.cs) becomes a no-op for sessions already Open (returns success). Existing Locked sessions still go through `ApproveInquiryUnlockCommand`.
+- [ ] [`InquiryThreadPage.tsx:123-191`](apps/web/src/features/inquiry/pages/InquiryThreadPage.tsx) — drop the unlock UI when session is already Open. Add a host-only "Lock thread" affordance.
+
+### 16.9 Save card on file (request-to-book)
+
+- [ ] [`IStripeService.cs`](src/Lagedra.Infrastructure/External/Payments/IStripeService.cs) adds:
+  - `Task<SetupIntentDto> CreateSetupIntentAsync(string customerId, ...)`
+  - `Task<PaymentIntentDto> ChargeOffSessionAsync(string customerId, string paymentMethodId, long amountCents, ...)`
+  - `Task<string> EnsureCustomerAsync(Guid userId, string email)` (idempotent).
+- [ ] Persist `StripeCustomerId` on `ApplicationUser` (Auth migration).
+- [ ] Persist `StripePaymentMethodId` on `DealApplication` (set when SetupIntent confirmed).
+- [ ] [`SubmitApplicationCommand.cs`](src/Lagedra.Modules/ActivationAndBilling/Application/Commands/SubmitApplicationCommand.cs) (non-instant path): create SetupIntent, return `clientSecret` in response.
+- [ ] [`ApplyDialog.tsx`](apps/web/src/features/applications/components/ApplyDialog.tsx) gains a Stripe Elements step (SetupIntent) before final submit.
+- [ ] [`ApproveDealApplicationCommand.cs`](src/Lagedra.Modules/ActivationAndBilling/Application/Commands/ApproveDealApplicationCommand.cs): after the collapsed Truth Surface dual-confirm (16.4), attempt `ChargeOffSessionAsync`. On `succeeded` → `ActivateDealCommand`; on `requires_action` (SCA) → leave deal in `Checkout` phase + email tenant the existing `/checkout` link as fallback.
+- [ ] Webhook ([`ProcessStripeWebhookCommand.cs:88-99`](src/Lagedra.Modules/ActivationAndBilling/Application/Commands/ProcessStripeWebhookCommand.cs)) already idempotent for `payment_intent.succeeded`; add a path for off-session intents triggered by 16.9.
+
+### 16.10 One-tap host approve from email
+
+- [ ] New `IActionTokenService` in `Lagedra.Infrastructure/Security/`: `CreateAsync(purpose, resourceId, userId, ttl)` returns HMAC-SHA256-signed opaque token; `ValidateAndConsumeAsync(token)` checks signature, expiry, and one-time-use via cache (`IDistributedCache`).
+- [ ] New endpoint group `/v1/actions/` in API gateway, **excluded** from JWT auth and consent middleware. First endpoint: `POST /v1/actions/approve-application` body `{ token, depositOverrideCents? }`.
+- [ ] Endpoint validates token (purpose=`approve_application`, scope=`{applicationId}`), consumes it, then dispatches `ApproveDealApplicationCommand` with the embedded host user id and deposit (override or `listing.DefaultDepositCents`).
+- [ ] [`OnApplicationSubmittedNotify`](src/Lagedra.Modules/ActivationAndBilling/Application/EventHandlers/BookingNotificationHandlers.cs) enriches the email with a deep link `${appBase}/host/approve?token=...`.
+- [ ] New thin frontend page `/host/approve` shows a confirmation modal pre-filled with deposit, single "Approve" button, calls the new `/v1/actions/approve-application` endpoint.
+- [ ] Token TTL 24h, one-time-use; rejection paths log with reason.
+
+### 16.11 Inline approve / reject from inbox
+
+- [ ] [`ApplicationsPage.tsx`](apps/web/src/features/applications/pages/ApplicationsPage.tsx) (host inbox): each row gets inline "Approve (default deposit)" + "Reject" buttons. "Customize deposit" expands a small inline input.
+- [ ] No backend change — reuses `ApproveDealApplicationCommand` / `RejectDealApplicationCommand`.
+
+### 16.12 Feature flag, migration, rollout
+
+- [ ] Add `BookingFlow.V2` feature flag (env var + `IFeatureFlags` accessor; default off).
+- [ ] All branching points (16.3, 16.4, 16.5, 16.6, 16.8, 16.9) check the flag; when off, fall back to current behavior.
+- [ ] EF migrations: `AddDefaultDepositCentsToListings`, `AddStripeCustomerIdToUsers`, `AddStripePaymentMethodIdToApplications`, plus action-token cache key prefix doc.
+- [ ] Rollout sequence: deploy → run migrations → enable flag in staging → smoke (16.13 checklist) → enable in prod with kill-switch.
+
+### 16.13 Verification checklist
+
+- [ ] Instant book: signed-in member with KYC + payouts OK on host can go from listing detail → checkout → Active in a single screen flow (≤ 60s end-to-end).
+- [ ] Request-to-book with card on file: tenant submits with card; host one-taps from email; deal goes Active without tenant returning to the app (when SCA not required).
+- [ ] Request-to-book with SCA challenge: tenant gets the existing `/checkout` link and can complete; no double charge.
+- [ ] Truth Surface: snapshot is still sealed with both-party confirmation; HMAC + canonical hash match `SnapshotVerificationJob` expectations.
+- [ ] Inquiry: new session created defaults to `Open`; existing Locked sessions still flow through unlock; `LockInquirySessionCommand` switches `Open → Locked` when invoked.
+- [ ] BillingPage no longer shows "Go to Checkout"; CheckoutPage handles all redirect statuses inline.
+- [ ] `DealPhase = "AwaitingPayment"` no longer appears anywhere in API responses or UI labels.
+- [ ] Magic-link approval token: cannot be replayed (consumed); rejected after 24h; rejected if tampered.
+- [ ] Feature flag off → entire current behavior preserved (regression-safe).
+
+---
+
+## Phase 17 — Truth Surface Hardening
+
+> **Goal:** make the Truth Surface a defensible legal anchor in fact, not just in claim. Audit found the canonical content was missing critical legal data (full address, house rules, party identities, jurisdiction pack version, snapshot id), `Proof.isValid` was reported as `true` on read without re-verification, snapshot endpoints had no per-deal authorization, the aggregate was documented "append-only" while implementing `ISoftDeletable`, the `JurisdictionPackVersion` column actually stored the jurisdiction code, dead `MerkleTreeBuilder` code lived alongside production crypto, and `SnapshotVerificationJob` was double-registered. This phase closes those gaps.
+
+### 17.1 Append-only enforcement at the application boundary
+
+- [x] New `IAppendOnly` marker interface in `Lagedra.SharedKernel.Domain/IAppendOnly.cs`. Any entity that implements it is excluded from the soft-delete query filter and rejected by `SoftDeleteInterceptor` if a delete is attempted.
+- [x] [`BaseDbContext.cs`](src/Lagedra.Infrastructure/Persistence/BaseDbContext.cs) skips the soft-delete filter for `IAppendOnly` types so historical sealed records are never silently hidden.
+- [x] [`SoftDeleteInterceptor.cs`](src/Lagedra.Infrastructure/Persistence/Interceptors/SoftDeleteInterceptor.cs) throws `InvalidOperationException` for `IAppendOnly` deletes (the only legal mutation is `Supersede`).
+- [x] [`TruthSnapshot`](src/Lagedra.TruthSurface/Domain/TruthSnapshot.cs) and [`CryptographicProof`](src/Lagedra.TruthSurface/Domain/CryptographicProof.cs) implement `IAppendOnly`.
+- [x] EF mapping ignores `IsDeleted` / `DeletedAt` on both entities so the columns can disappear from storage.
+- [x] Migration `DropAppendOnlySoftDeleteColumns` removes `IsDeleted` and `DeletedAt` from `truth_surface.snapshots` and `truth_surface.cryptographic_proofs`.
+
+### 17.2 Canonical content v2 — make the seal self-describing
+
+- [x] Extended [`ListingDetailsDto`](src/Lagedra.SharedKernel/Integration/IListingProvider.cs) with title, property type, beds/baths/square footage, full address (only when listing is `Activated`), structured house rules (`ListingHouseRulesDto`), insurance-required flag, virtual tour URL, and amenity / safety device / consideration **names** (not opaque definition ids).
+- [x] [`ListingProvider.cs`](src/Lagedra.Modules/ListingAndLocation/Infrastructure/Services/ListingProvider.cs) eager-loads amenity / safety / consideration definitions and projects deterministic, alpha-sorted name lists into the DTO so the canonical hash is reproducible across reads.
+- [x] New `IJurisdictionPackProvider` integration interface plus `JurisdictionPackProvider` in `Lagedra.Modules.JurisdictionPacks` returning `JurisdictionPackInfo(PackId, JurisdictionCode, ActiveVersionId, VersionNumber, EffectiveDate)`.
+- [x] [`CreateTruthSurfaceForDealCommandHandler`](src/Lagedra.TruthSurface/Application/Commands/CreateTruthSurfaceForDealCommand.cs) injects `IHostProfileProvider`, `IVerificationSignalProvider`, `IJurisdictionPackProvider`, and `IPlatformSettingsService` to assemble a v2 canonical block containing:
+  - `schemaVersion: 2`, `protocolVersion`, `snapshotId`, `dealId`, `applicationId`
+  - `parties.{landlord,tenant}` — user id + display name + ID/phone/identity verification flags + member-since
+  - `listing` — title, property type, beds/baths/sqft, monthly rent, max deposit, stay range, insurance-required, virtual tour, amenities[], safetyDevices[], considerations[], and locked precise address (when activated)
+  - `dates`, `financials` (now including `monthlyProtocolFeeCents` resolved from platform settings + pilot discount)
+  - `cancellationPolicy` (now includes custom terms)
+  - full structured `houseRules`
+  - `jurisdiction.{code, packVersion, packId, packVersionId, packVersionNumber, packEffectiveDate, warning}`
+- [x] All keys serialized via `SortedDictionary<string, object?>` with `StringComparer.Ordinal` so the SHA-256 hash is stable across machines/runtimes.
+- [x] Snapshot id is generated **before** building canonical content and passed in via new `TruthSnapshot.CreateDraftWithId(...)`, so the hashed payload uniquely references the row in storage.
+
+### 17.3 Honest jurisdiction pack version
+
+- [x] Stops conflating `JurisdictionPackVersion` with the jurisdiction code. The `TruthSnapshot.JurisdictionPackVersion` column now stores `"{code}@v{packVersionNumber}"` (e.g. `US-CA@v3`), and the canonical JSON additionally embeds `packId`, `packVersionId`, `versionNumber`, and `packEffectiveDate` for full traceability. When no active pack exists the snapshot records the explicit fallback `default-v0`.
+
+### 17.4 Stop lying about `Proof.isValid`
+
+- [x] New `SnapshotMapper` ([`Application/DTOs/SnapshotMapper.cs`](src/Lagedra.TruthSurface/Application/DTOs/SnapshotMapper.cs)) recomputes the SHA-256 hash and verifies the HMAC signature on every read. `SnapshotProofDto.IsValid` now reflects the **actual** verification result.
+- [x] [`GetSnapshotQuery`](src/Lagedra.TruthSurface/Application/Queries/GetSnapshotQuery.cs), [`GetSnapshotByDealIdQuery`](src/Lagedra.TruthSurface/Application/Queries/GetSnapshotByDealIdQuery.cs), [`ConfirmTruthSurfaceCommand`](src/Lagedra.TruthSurface/Application/Commands/ConfirmTruthSurfaceCommand.cs), [`ReconfirmTruthSurfaceCommand`](src/Lagedra.TruthSurface/Application/Commands/ReconfirmTruthSurfaceCommand.cs), and [`CreateSnapshotCommand`](src/Lagedra.TruthSurface/Application/Commands/CreateSnapshotCommand.cs) all route through the mapper.
+
+### 17.5 Per-deal participant authorization on the API surface
+
+- [x] New [`TruthSurfaceAccess`](src/Lagedra.TruthSurface/Presentation/Authorization/TruthSurfaceAccess.cs) helper centralises the authorization rule: only the deal's landlord, the deal's tenant, or holders of role `PlatformAdmin` / `Arbitrator` may read or mutate a snapshot.
+- [x] [`TruthSurfaceEndpoints`](src/Lagedra.TruthSurface/Presentation/Endpoints/TruthSurfaceEndpoints.cs) calls the helper on every `/v1/truth-surface/*` route — `GET {id}`, `GET by-deal/{dealId}`, `GET {id}/verify`, `POST {id}/confirm`, `POST {id}/reconfirm`, `POST from-deal/{dealId}`, `POST /` — and returns `404` (deal/snapshot missing) or `403` (caller not a participant) before ever invoking the handler.
+- [x] On `POST {id}/confirm` the endpoint additionally enforces party-binding: a landlord cannot confirm "as Tenant" and vice versa. Admins may act on behalf of either party for support / arbitration.
+
+### 17.6 Cross-module FKs from billing to the seal
+
+- [x] `DealApplication` and `DealPaymentConfirmation` gain a nullable `TruthSurfaceSnapshotId` column + index ([`DealApplicationConfiguration`](src/Lagedra.Modules/ActivationAndBilling/Infrastructure/Configurations/DealApplicationConfiguration.cs), [`DealPaymentConfirmationConfiguration`](src/Lagedra.Modules/ActivationAndBilling/Infrastructure/Configurations/DealPaymentConfirmationConfiguration.cs)).
+- [x] `DealApplication.LinkTruthSurface(snapshotId)` is invariant-checked (idempotent on same id, throws on conflicting id).
+- [x] `DealPaymentConfirmation.Create(...)` accepts an optional `truthSurfaceSnapshotId` so the FK is set at creation time rather than back-patched.
+- [x] [`OnTruthSurfaceConfirmedCreatePaymentConfirmationHandler`](src/Lagedra.Modules/ActivationAndBilling/Application/EventHandlers/OnTruthSurfaceConfirmedCreatePaymentConfirmationHandler.cs) now (a) loads the deal application as tracked and links it to the seal, and (b) stamps the new payment confirmation row with the snapshot id — both writes flushed in the same transaction.
+- [x] Migration `AddTruthSurfaceSnapshotIdLink` adds the columns + indexes.
+
+### 17.7 Party-facing receipt export
+
+- [x] New `GetSnapshotReceiptQuery` ([`Application/Queries/GetSnapshotReceiptQuery.cs`](src/Lagedra.TruthSurface/Application/Queries/GetSnapshotReceiptQuery.cs)) emits a deterministic, indented JSON document `lagedra.truth-surface.receipt.v1` containing the sealed snapshot metadata, both raw and parsed canonical content, the SHA-256 hash, the HMAC signature, and a freshly computed `verifiedAtExport` flag.
+- [x] New endpoint `GET /v1/truth-surface/{snapshotId}/receipt` (auth-gated by `TruthSurfaceAccess`) returns the document with `Content-Disposition: attachment; filename=truth-surface-{id}.json`.
+- [x] Frontend [`TruthSnapshotViewer`](apps/web/src/features/truth-surface/components/TruthSnapshotViewer.tsx) gains a "Download receipt" button (via new `useDownloadSnapshotReceipt` hook) that streams the file straight to disk for the parties to keep.
+
+### 17.8 Frontend honesty pass
+
+- [x] Removed the misleading "Inquiry closed — included in hash" badge from the viewer; replaced with an honest "Inquiry closed (post-seal)" pill that reflects what the flag actually represents (observed metadata, not part of the signed payload).
+- [x] Viewer now shows a "Server-verified at read" / "Tamper detected at read" badge driven by the real `proof.isValid` returned by the API.
+- [x] [`TruthSurfaceConfirmationPage`](apps/web/src/features/truth-surface/pages/TruthSurfaceConfirmationPage.tsx) money-formatter now uses the field key (`*Cents`) instead of guessing from the numeric value, so things like `bedrooms: 3` no longer render as `$0.03`. Empty arrays render as `—` instead of an empty string. The post-seal alert text now correctly distinguishes hashed agreement from post-seal observed metadata.
+
+### 17.9 Drop dead crypto + de-dup the verification job
+
+- [x] Deleted unused `MerkleTreeBuilder.cs` (no production code path imported it).
+- [x] Removed the `SnapshotVerificationJob` Quartz registration from [`TruthSurfaceModuleRegistration`](src/Lagedra.TruthSurface/TruthSurfaceModuleRegistration.cs); the job is now scheduled exactly once, by [`Lagedra.Worker.Scheduling.JobRegistry`](src/Lagedra.Worker/Scheduling/JobRegistry.cs).
+
+### 17.10 Verification checklist
+
+- [x] Solution builds clean (`dotnet build Lagedra.sln`, 0 errors).
+- [x] EF migrations generated for both contexts (`AddTruthSurfaceSnapshotIdLink`, `DropAppendOnlySoftDeleteColumns`); review and apply during the next deploy.
+- [ ] Smoke test: create a snapshot, confirm both parties, download the receipt, then mutate the `CanonicalContent` cell directly in PostgreSQL and re-fetch — `proof.isValid` must flip to `false` on read and `SnapshotVerificationJob` must log a tamper-detected critical event.
+- [ ] Smoke test: an authenticated user who is neither a participant nor admin/arbitrator receives `403` from every `/v1/truth-surface/*` route.
+- [ ] Smoke test: trying to soft-delete a `TruthSnapshot` from any module surface throws `InvalidOperationException` ("Cannot delete append-only entity").
+
+---
+
+## Phase 18 — Partner Portal & Endorsement
+
+> **Goal:** ship a real, end-to-end Institutional Partner experience. Today the `PartnerNetwork` module has domain entities + a few endpoints, but: (a) endpoints have no per-organization authorization (any authenticated user can hit any org's data), (b) `CreateDirectReservation` is a CRM stub that never converts to a `DealApplication`, (c) there is no partner-driven guest invite flow, (d) there is no formal endorsement / sponsored-verification flow — only a self-service URL referral redemption that **dangerously overwrites the redeemer's identity + background-check status with hard-coded `Verified`/`Pass` values**, (e) there is no Lagedra-issued eviction insurance product, and (f) there is no `/app/partner` UI.
+>
+> This phase is **scope-locked**. Anything not listed here is out of scope for the partner release and goes to Phase 19+. The only open design question is 18.10 (Lagedra-issued eviction insurance scope) which must be answered before that sub-phase starts but does not block 18.1–18.9.
+
+### 18.1 P0 hotfix — stop the referral-redemption verification bypass
+
+- [x] [`OnReferralRedeemedRecalculateRiskHandler`](src/Lagedra.Modules/VerificationAndRisk/Application/EventHandlers/OnReferralRedeemedRecalculateRiskHandler.cs) must **not** overwrite Identity / Background / Violation signals. Today it hard-codes `IdentityVerificationStatus.Verified`, `BackgroundCheckStatus.Pass`, `ViolationCount: 0`, which means any URL click flips the redeemer to `VerificationClass.Low` regardless of their real KYC state.
+- [x] Replace with a "channel signal" that reads the current verification signals via `IVerificationSignalProvider`, leaves identity / background / violation counts untouched, and only updates `InsuranceStatus` to `InstitutionBacked` **iff** the user already has `IdentityVerificationStatus.Verified` and `BackgroundCheckStatus` in (`Pass`, `Review`).
+- [x] If pre-conditions are not met, redemption is still recorded in `partner.referral_redemptions` (provenance, written upstream by `RedeemReferralLinkCommandHandler`) and a structured `LogSkippingRecompute` warning fires (capturing user id, org name, identity + background statuses); no risk recompute is triggered.
+- [ ] Backend test: redeeming a referral as an unverified user does **not** change their `VerificationClass`.
+- [ ] Backend test: redeeming a referral as an already-Verified user flips `InsuranceStatus` to `InstitutionBacked` and drops the suggested-deposit band per `DepositRecommendationPolicy`.
+
+### 18.2 Per-organization authorization on every partner endpoint
+
+- [x] New `IPartnerAccessService` (in `Lagedra.Modules.PartnerNetwork.Application.Authorization`) with:
+  - `Task<Result<PartnerAccess>> ResolveAsync(Guid callerUserId, Guid organizationId, bool isPlatformAdmin, CancellationToken)` returning `{IsPlatformAdmin, IsMember, MemberRole?, OrgStatus}` plus computed `IsAdminMember / CanManage / CanRead`.
+  - `RequireMemberAsync(...)`, `RequireAdminMemberAsync(...)`, `RequireVerifiedOrgAdminAsync(...)` helper guards that return `Result.Failure(...)` on miss so handlers stay clean.
+  - Centralised `PartnerAccessErrors` constants (`Partner.NotFound`, `Partner.Forbidden`, `Partner.AdminRequired`, `Partner.OrgNotVerified`, `Partner.OrgSuspended`).
+- [x] Implementation: [`PartnerAccessService`](src/Lagedra.Modules/PartnerNetwork/Infrastructure/Authorization/PartnerAccessService.cs); registered in [`PartnerNetworkModuleRegistration`](src/Lagedra.Modules/PartnerNetwork/PartnerNetworkModuleRegistration.cs).
+- [x] Wire `IPartnerAccessService` into:
+  - [`AddPartnerMemberCommand`](src/Lagedra.Modules/PartnerNetwork/Application/Commands/AddPartnerMemberCommand.cs) — `RequireAdminMemberAsync`.
+  - [`GenerateReferralLinkCommand`](src/Lagedra.Modules/PartnerNetwork/Application/Commands/GenerateReferralLinkCommand.cs) — `RequireVerifiedOrgAdminAsync`; also pre-checks code uniqueness with up to 3 retries.
+  - [`CreateDirectReservationCommand`](src/Lagedra.Modules/PartnerNetwork/Application/Commands/CreateDirectReservationCommand.cs) — `RequireVerifiedOrgAdminAsync` (replaces the standalone `Verified` check).
+  - [`ListPartnerMembersQuery`](src/Lagedra.Modules/PartnerNetwork/Application/Queries/ListPartnerMembersQuery.cs), [`ListReferralLinksQuery`](src/Lagedra.Modules/PartnerNetwork/Application/Queries/ListReferralLinksQuery.cs), new [`ListDirectReservationsQuery`](src/Lagedra.Modules/PartnerNetwork/Application/Queries/ListDirectReservationsQuery.cs), [`GetPartnerOrganizationQuery`](src/Lagedra.Modules/PartnerNetwork/Application/Queries/GetPartnerOrganizationQuery.cs) — `RequireMemberAsync`.
+  - New `DeactivateReferralLinkCommand` — `RequireAdminMemberAsync`.
+  - `GetMyPartnerOrganizationQuery` is intentionally caller-scoped (no org id), so it self-authorizes via the `partner.partner_members` lookup; returns `Partner.NoMembership` (404) if the caller is not a member.
+- [x] [`PartnerEndpoints`](src/Lagedra.Modules/PartnerNetwork/Presentation/Endpoints/PartnerEndpoints.cs) rewritten so every route flows the caller's `userId` + `IsPlatformAdmin` (read from `user.IsInRole("PlatformAdmin")`) into the command/query, and a single `MapErrorToHttpResult` translates `Partner.*` and `Referral.*` errors to `404` / `403` / `400` consistently.
+- [x] The whole `/v1/partners` group now requires the existing `RequireInstitutionPartner` policy (which admits `InstitutionPartner` and `PlatformAdmin`), so tenant / landlord / member roles are blocked before the handler ever runs. Suspended-org guard is enforced by `RequireVerifiedOrgAdminAsync` for write operations.
+- [ ] Authorization tests cover: tenant cannot read members of any org; institution-partner from org A cannot read org B; non-admin member cannot generate referral / invite member / create reservation. *(Deferred to 18.11 verification block.)*
+
+### 18.3 Missing partner endpoints (P0 from `RELEASE_PLAN_2026-05-06.md`)
+
+- [x] `GET /v1/partners/me` → new [`GetMyPartnerOrganizationQuery`](src/Lagedra.Modules/PartnerNetwork/Application/Queries/GetMyPartnerOrganizationQuery.cs) returning `MyPartnerMembershipDto(Organization, MemberRole, JoinedAt)`. Resolution is keyed off `PartnerMember.UserId` (the source of truth); `partner_org_id` JWT claim remains a frontend hint only.
+- [x] `GET /v1/partners/{id}/reservations` → new [`ListDirectReservationsQuery`](src/Lagedra.Modules/PartnerNetwork/Application/Queries/ListDirectReservationsQuery.cs) returning `DirectReservationDto[]` with `skip` / `take` pagination and `status` filter (`pending` / `linked` / all).
+- [x] `POST /v1/partners/{id}/referral-links/{linkId:guid}/deactivate` → new [`DeactivateReferralLinkCommand`](src/Lagedra.Modules/PartnerNetwork/Application/Commands/DeactivateReferralLinkCommand.cs); idempotent (already-deactivated link returns the current state with `200`), admin-member or platform-admin only.
+- [x] `GET /v1/admin/partners` and `GET /v1/admin/partners/pending` — paginated list of partner orgs via new [`ListPartnerOrganizationsQuery`](src/Lagedra.Modules/PartnerNetwork/Application/Queries/ListPartnerOrganizationsQuery.cs), with optional status filter and `EF.Functions.ILike` search across name / contact email / tax id; `PlatformAdmin` only via `RequirePlatformAdmin` policy on the `/v1/admin/partners` group.
+- [x] `POST /v1/admin/partners/{id}/suspend` → new [`SuspendPartnerOrganizationCommand`](src/Lagedra.Modules/PartnerNetwork/Application/Commands/SuspendPartnerOrganizationCommand.cs) (rejects empty reason); the existing `PartnerOrganization.Suspend(reason, clock)` already publishes `PartnerOrganizationSuspendedEvent`. `PlatformAdmin` only.
+- [x] `GenerateReferralLinkCommand` pre-checks code uniqueness with up to 3 retries before save to eliminate the race against the DB unique index; returns `Referral.CodeCollision` (400) if all retries collide.
+- [x] [`RedeemReferralLinkCommandHandler`](src/Lagedra.Modules/PartnerNetwork/Application/Commands/RedeemReferralLinkCommand.cs) now pre-checks `IsActive`, `ExpiresAt`, and `MaxUses` and returns structured `Referral.Inactive` / `Referral.Expired` / `Referral.Exhausted` failures **before** calling `link.Redeem(clock)` — the domain invariants are still enforced as a backstop, but the user-visible path is `Result.Failure`, not `InvalidOperationException`.
+
+### 18.4 Partner-invited guest provisioning (create user + email set-password)
+
+> The partner clicks "Add guest", enters name + email; we create the user account, email a one-time set-password link, and (optionally) auto-create an `Approved` `PartnerEndorsement` for that user.
+
+- [x] New cross-module surface [`IIdentityInvitationService`](src/Lagedra.SharedKernel/Integration/IIdentityInvitationService.cs) in `Lagedra.SharedKernel.Integration` — single method `CreateOrFindInvitedUserAsync(InvitedUserRequest, ct)` returning `Result<InvitedUserDto>` with `WasJustCreated` discriminator. Auth-side implementation [`Lagedra.Auth.Infrastructure.Services.IdentityInvitationService`](src/Lagedra.Auth/Infrastructure/Services/IdentityInvitationService.cs):
+  - Idempotent on email — returns existing user id with `WasJustCreated = false` and no email when account already exists.
+  - Creates `ApplicationUser` with random 24-byte base64 password (never persisted), `EmailConfirmed = true`, `IsActive = true`, role `Member`, parsed `FirstName/LastName/DisplayName` from full name.
+  - Generates 7-day password-set token via `UserManager.GeneratePasswordResetTokenAsync`, builds an absolute `App:FrontendUrl/auth/set-password?userId=...&token=...` URL.
+  - Sends an inline `PartnerGuestInvitation` HTML + plain-text email via `IEmailService` with subject `"{OrgName} invited you to Lagedra"`, partner attribution, set-password link, and expiry.
+  - Token lifetime exposed as `IdentityInvitationService.SetPasswordTokenLifetime` for tests.
+  - Registered in [`AuthModuleRegistration`](src/Lagedra.Auth/AuthModuleRegistration.cs).
+- [x] New command [`InvitePartnerGuestCommand`](src/Lagedra.Modules/PartnerNetwork/Application/Commands/InvitePartnerGuestCommand.cs) in `PartnerNetwork.Application.Commands`. Auth: `RequireVerifiedOrgAdminAsync`. Handler steps:
+  1. Validate inputs (email + full name required).
+  2. Resolve org (404 if missing).
+  3. Call `IIdentityInvitationService.CreateOrFindInvitedUserAsync(...)`.
+  4. If `WithEndorsement = true`, create a `PartnerEndorsement` via `PartnerEndorsement.RequestAndApprove(orgName, ...)` — auto-Approved (the partner is endorsing their own invitee). Reuses an existing active endorsement when one is already on file.
+  5. If `ListingId` provided, also create a `DirectReservation` linking that listing → invited user.
+  6. Always append a `PartnerGuestInvite` audit row (regardless of new vs existing user).
+  7. Returns `PartnerGuestInviteResultDto { InviteId, InvitedUserId, Email, WasUserJustCreated, SetPasswordUrl?, SetPasswordTokenExpiresAt?, EndorsementId?, DirectReservationId? }`.
+- [x] Email template lives inline in `IdentityInvitationService.BuildHtmlBody / BuildPlainTextBody` (one template, no i18n at launch). When the second template lands we'll factor it into the existing `IEmailTemplateRenderer` plumbing — non-blocking follow-up.
+- [x] New entity [`PartnerGuestInvite`](src/Lagedra.Modules/PartnerNetwork/Domain/Entities/PartnerGuestInvite.cs) implementing `IAppendOnly`: `Id`, `OrganizationId`, `InvitedByUserId`, `InvitedUserId`, `Email` (lowercased), `FullName`, `WasUserJustCreated`, `EndorsementId?`, `ListingId?`, `InvitedAt`. EF config [`PartnerGuestInviteConfiguration`](src/Lagedra.Modules/PartnerNetwork/Infrastructure/Configurations/PartnerGuestInviteConfiguration.cs) creates `partner_guest_invites` with indexes on `OrganizationId`, `InvitedUserId`, and `(OrganizationId, InvitedAt)`. Email lowercasing has a `[SuppressMessage("CA1308")]` with RFC 5321 §2.4 justification.
+- [x] Endpoint `POST /v1/partners/{id}/invites` (org admin member, returns `201 Created`).
+- [ ] Backend test: invite creates user, generates token, sends email (assert via fake mailer), and is idempotent on duplicate email per org. *(Deferred to 18.11 verification block.)*
+- [ ] EF migration `AddPartnerGuestInvites` to be generated at the end (per session policy).
+- [ ] **Deferred (acceptance/revocation flows):** the `PartnerGuestInvite` row is currently audit-only (no `Status` lifecycle). The original spec called for `Pending → Accepted → Revoked → Expired` plus a `UserPasswordResetCompletedEvent` to flip rows to `Accepted` and a `POST /v1/partners/{id}/guests/{inviteId}/revoke` endpoint that disables the user. These are **explicitly deferred** because the audit row already gives support full traceability ("who invited whom?"); the lifecycle status was duplicating information already present in the underlying `ApplicationUser.IsActive` + reset-token state. Revisit if the partner UI needs a "pending invites" surface beyond the existing endorsement queue.
+
+### 18.5 Partner endorsement (request → approve → revoke)
+
+> Distinct from referral redemption. An endorsement is a partner-attested claim ("yes, this person is one of ours") with audit trail. It is the only thing that grants `InsuranceStatus.InstitutionBacked` going forward.
+
+- [x] New aggregate [`PartnerEndorsement`](src/Lagedra.Modules/PartnerNetwork/Domain/Aggregates/PartnerEndorsement.cs) in `PartnerNetwork.Domain.Aggregates`:
+  - Fields: `Id`, `OrganizationId`, `TenantUserId`, `Status` ([`PartnerEndorsementStatus`](src/Lagedra.Modules/PartnerNetwork/Domain/Enums/PartnerEndorsementStatus.cs)), `RequestedAt`, `RequestedByUserId` (tenant or partner — partner-initiated via 18.4), `ApprovedAt?`, `ApprovedByUserId?`, `RevokedAt?`, `RevokedByUserId?`, `RevokeReason?`, `Note?`, `ExpiresAt?` (default = `ApprovedAt + 12 months`).
+  - **Design divergence from initial draft:** mutable single-row aggregate (NOT append-only history rows). The append-only pattern conflicted with the partial unique index requirement; cleaner shape is mutable row + domain events for audit + partial unique index for active-row uniqueness. Audit history flows through the existing event pipeline.
+  - Domain / integration events: [`PartnerEndorsementRequestedEvent`](src/Lagedra.Modules/PartnerNetwork/Domain/Events/PartnerEndorsementRequestedEvent.cs) (local), [`PartnerEndorsementApprovedEvent`](src/Lagedra.SharedKernel/Integration/Events/PartnerEndorsementApprovedEvent.cs), [`PartnerEndorsementRevokedEvent`](src/Lagedra.SharedKernel/Integration/Events/PartnerEndorsementRevokedEvent.cs), [`PartnerEndorsementExpiredEvent`](src/Lagedra.SharedKernel/Integration/Events/PartnerEndorsementExpiredEvent.cs) (cross-module).
+  - Convenience factory `PartnerEndorsement.RequestAndApprove(...)` for partner-driven invite flows (18.4): collapses `Request → Approve` into one call while emitting both events.
+- [x] Commands (all return `Result<PartnerEndorsementDto>`, all org-scoped via `IPartnerAccessService`):
+  - [`RequestPartnerEndorsementCommand`](src/Lagedra.Modules/PartnerNetwork/Application/Commands/RequestPartnerEndorsementCommand.cs) — supports `Tenant` (caller-self) and `Partner` (admin-member of verified org) caller kinds; idempotent when an active `Requested`/`Approved` row exists.
+  - [`ApprovePartnerEndorsementCommand`](src/Lagedra.Modules/PartnerNetwork/Application/Commands/ApprovePartnerEndorsementCommand.cs) — admin-member of the org; org must be `Verified`; rejects non-`Requested` rows with `Endorsement.InvalidTransition`.
+  - [`RevokePartnerEndorsementCommand`](src/Lagedra.Modules/PartnerNetwork/Application/Commands/RevokePartnerEndorsementCommand.cs) — admin-member or platform-admin; requires non-empty reason; rejects already-terminal rows.
+  - [`ExpirePartnerEndorsementsJob`](src/Lagedra.Modules/PartnerNetwork/Infrastructure/Jobs/ExpirePartnerEndorsementsJob.cs) (Quartz, daily at 01:00 UTC) — scans `Approved` rows past `ExpiresAt`, transitions to `Expired`, publishes integration events. Registered in [`Lagedra.Worker.Scheduling.JobRegistry`](src/Lagedra.Worker/Scheduling/JobRegistry.cs).
+- [x] Queries:
+  - [`ListPartnerEndorsementsQuery`](src/Lagedra.Modules/PartnerNetwork/Application/Queries/ListPartnerEndorsementsQuery.cs) (`OrganizationId`, status filter, pagination) — partner queue, member-auth.
+  - [`GetTenantEndorsementsQuery`](src/Lagedra.Modules/PartnerNetwork/Application/Queries/GetTenantEndorsementsQuery.cs) (`TenantUserId`) — read-own (tenant) or platform-admin only.
+  - "Is tenant currently endorsed?" lookup is exposed cross-module via the new [`IPartnerEndorsementProvider`](src/Lagedra.SharedKernel/Integration/IPartnerEndorsementProvider.cs) integration interface (`HasActiveEndorsementAsync` / `GetActiveEndorsementsAsync`) instead of an in-module query, so VerificationAndRisk and TruthSurface (18.6 / 18.10) can call it without taking a DbContext dependency.
+- [x] Endpoints (`/v1/partners/{id}/endorsements`):
+  - `POST` → request as partner (auth: org admin member).
+  - `GET` → list with `?status=` filter + pagination (auth: org member).
+  - `POST {endorsementId}/approve` (auth: verified org admin).
+  - `POST {endorsementId}/revoke` (auth: org admin member or platform admin).
+  - Tenant-side group `/v1/me/partner-endorsements`: `POST` → request endorsement from any verified org by `OrganizationId`; `GET` → list own.
+- [x] EF entity configuration ([`PartnerEndorsementConfiguration`](src/Lagedra.Modules/PartnerNetwork/Infrastructure/Configurations/PartnerEndorsementConfiguration.cs)) defines table `partner_endorsements`, indexes on `(OrganizationId, Status)`, `(TenantUserId, Status)`, `ExpiresAt`, and the partial unique index `ix_partner_endorsements_active_per_tenant_per_org` on `(OrganizationId, TenantUserId) WHERE Status IN ('Requested','Approved')`.
+- [ ] Audit log entries (existing `Lagedra.Compliance` audit pipeline): `partner.endorsement.requested`, `partner.endorsement.approved`, `partner.endorsement.revoked`, `partner.endorsement.expired`. *(Deferred to 18.11 — follow-up to wire the four new integration events into the existing `CrossModuleSignalHandlers` pattern.)*
+- [ ] EF migration `AddPartnerEndorsements` to be generated at the end (per session policy: no in-place migrations during implementation).
+
+### 18.6 Endorsement → risk integration (no longer via referral)
+
+- [x] New event handler [`OnPartnerEndorsementApprovedRecalculateRiskHandler`](src/Lagedra.Modules/VerificationAndRisk/Application/EventHandlers/OnPartnerEndorsementApprovedRecalculateRiskHandler.cs):
+  - Reads the tenant's REAL identity / background / violation signals via `IVerificationSignalProvider` + `IUserViolationCountProvider`. Never invents.
+  - Pre-condition gate (mirrors 18.1): only proceeds when identity is `Verified` AND background is `Pass` or `Review`.
+  - When eligible: calls `RecalculateVerificationClassCommand` with the existing identity/background/violation values and `InsuranceStatus.InstitutionBacked`.
+  - When ineligible: structured `LogSkippingRecompute` warning identifying the missing pre-conditions, no command dispatched.
+- [x] Mirror handler [`OnPartnerEndorsementRevokedRecalculateRiskHandler`](src/Lagedra.Modules/VerificationAndRisk/Application/EventHandlers/OnPartnerEndorsementRevokedRecalculateRiskHandler.cs):
+  - Queries `IPartnerEndorsementProvider.HasActiveEndorsementAsync`. If another active endorsement remains, no-op (logged).
+  - Else recomputes with the tenant's **real** insurance status from `IUserInsuranceStatusProvider.GetBestStatusForUserAsync` (mapped via `OnIdentityVerifiedRecalculateRiskHandler.MapInsuranceStatus`), the real identity + background + violation signals, and never assumes `None`.
+- [x] Mirror handler [`OnPartnerEndorsementExpiredRecalculateRiskHandler`](src/Lagedra.Modules/VerificationAndRisk/Application/EventHandlers/OnPartnerEndorsementExpiredRecalculateRiskHandler.cs) for the `ExpirePartnerEndorsementsJob`-emitted event; identical recompute logic to the revoke handler.
+- [x] All three handlers wired in [`VerificationAndRiskModuleRegistration`](src/Lagedra.Modules/VerificationAndRisk/VerificationAndRiskModuleRegistration.cs).
+- [x] **Implementation note (revised from initial plan):** the cross-module lookup lives on a dedicated [`IPartnerEndorsementProvider`](src/Lagedra.SharedKernel/Integration/IPartnerEndorsementProvider.cs) interface (`HasActiveEndorsementAsync` / `GetActiveEndorsementsAsync`) implemented by [`PartnerEndorsementProvider`](src/Lagedra.Modules/PartnerNetwork/Infrastructure/Services/PartnerEndorsementProvider.cs), not bolted onto `IUserInsuranceStatusProvider`. Cleaner separation: insurance-vs-endorsement remain semantically distinct.
+- [x] [`DepositRecommendationPolicy`](src/Lagedra.Modules/VerificationAndRisk/Domain/Policies/DepositRecommendationPolicy.cs) is unchanged in behaviour. Added an XML doc comment noting that `InstitutionBacked` is now sourced from either a third-party binding OR an active partner endorsement, with the same band by deliberate design (no double-discount).
+- [x] [`RiskViewDto`](src/Lagedra.Modules/VerificationAndRisk/Application/DTOs/RiskViewDto.cs) gains `ProtectionTier` enum (`Uninsured | ThirdPartyInsured | PartnerBacked`) + `EndorsedBy: EndorsementSummaryDto[]` (`EndorsementId, OrganizationId, OrganizationName, ApprovedAt, ExpiresAt`). [`GetRiskViewForLandlordQueryHandler`](src/Lagedra.Modules/VerificationAndRisk/Application/Queries/GetRiskViewForLandlordQuery.cs) computes the tier from `(hasActiveEndorsement, insuranceStatus)` so the frontend never has to derive the label.
+- [x] [`RiskViewResponse`](src/Lagedra.Modules/VerificationAndRisk/Presentation/Contracts/RiskViewResponse.cs) and [`RiskEndpoints`](src/Lagedra.Modules/VerificationAndRisk/Presentation/Endpoints/RiskEndpoints.cs) updated to surface the new fields. The wire token follows the canonical naming via [`PartnerEndorsementCopy.ToToken`](src/Lagedra.SharedKernel/Integration/PartnerEndorsementCopy.cs) (also used by Truth Surface in 18.10).
+- [ ] Backend test: an endorsed `VerificationClass.Low` tenant gets `(0%, 50%)` band and an unendorsed `Low` tenant gets `(25%, 75%)`. *(Deferred to 18.11 verification block.)*
+- [ ] Backend test: a tenant with both endorsement and a real third-party `Active` insurance binding is reported as `PartnerBacked` but their deposit band equals the `InstitutionBacked` row (no double-discount). *(Deferred to 18.11 verification block.)*
+
+### 18.7 Direct reservation → real `DealApplication`
+
+> Today `CreateDirectReservationCommand` writes a row and stops. Make it actually book.
+
+- [x] [`CreateDirectReservationCommand`](src/Lagedra.Modules/PartnerNetwork/Application/Commands/CreateDirectReservationCommand.cs) rewritten end-to-end:
+  - Auth: `RequireVerifiedOrgAdminAsync` (verified org admin or platform admin).
+  - Resolves the guest's `TenantUserId` via the new SharedKernel [`IUserLookupService`](src/Lagedra.SharedKernel/Integration/IUserLookupService.cs) (`FindUserIdByEmailAsync`, implemented in [`UserLookupService`](src/Lagedra.Auth/Infrastructure/Services/UserLookupService.cs)).
+  - **If the guest has no Lagedra account**, returns `Reservation.GuestNotInvited` (400) directing the partner to call `POST /v1/partners/{id}/invites` first. This deliberately keeps invite + reservation as two separable responsibilities — the existing `InvitePartnerGuestCommand` already supports passing a `ListingId` for the one-shot path.
+  - Defaults dates when not supplied: 30-day stay starting 7 days from today UTC.
+  - Calls the new SharedKernel [`IPartnerDirectBookingService`](src/Lagedra.SharedKernel/Integration/IPartnerDirectBookingService.cs) (implemented in `ActivationAndBilling` as [`PartnerDirectBookingService`](src/Lagedra.Modules/ActivationAndBilling/Infrastructure/Services/PartnerDirectBookingService.cs)) which dispatches the new [`SubmitPartnerDirectApplicationCommand`](src/Lagedra.Modules/ActivationAndBilling/Application/Commands/SubmitPartnerDirectApplicationCommand.cs). This keeps PartnerNetwork ↔ ActivationAndBilling coupling at the integration boundary, no direct project reference required.
+  - Stamps `DirectReservation.LinkDealApplication(applicationId)` so the partner's reservation row tracks the resulting deal.
+  - Returns `DirectReservationConversionDto { Reservation, DealApplication, TruthSurfacePending: true }`.
+- [x] [`SubmitPartnerDirectApplicationCommand`](src/Lagedra.Modules/ActivationAndBilling/Application/Commands/SubmitPartnerDirectApplicationCommand.cs) (new in `ActivationAndBilling`):
+  1. Loads the listing via `IListingProvider`; rejects with `Listing.NotFound` if missing.
+  2. Rejects with `Listing.PartnerDirectReservationsNotAccepted` if the landlord has opted this listing out.
+  3. Re-validates min/max-stay against `listing.MinStayDays` / `MaxStayDays`.
+  4. Re-validates date availability via `listingProvider.IsAvailableAsync`.
+  5. Calls `DealApplication.Submit(..., partnerOrganizationId, isPartnerReferred: true, source: PartnerDirectReservation)`.
+- [ ] Auto-approve when listing is instant-bookable or org has `AutoApproveDirectReservations = true`. **Deferred** — kept the existing landlord approval gate in place to avoid bypassing the deposit/insurance calculation pipeline. The partner UI will simply show the application as `Pending` until the landlord acts. Revisit if partners report friction.
+- [x] Endpoint contract change: `POST /v1/partners/{id}/reservations` now returns `DirectReservationConversionDto` so the partner UI can deep-link the guest into the Truth Surface confirmation page.
+- [x] [`Listing`](src/Lagedra.Modules/ListingAndLocation/Domain/Aggregates/Listing.cs) aggregate gains `AcceptsPartnerDirectReservations` boolean (default `true`) plus `SetAcceptsPartnerDirectReservations(bool)` setter; EF default value applied in [`ListingConfiguration`](src/Lagedra.Modules/ListingAndLocation/Infrastructure/Configurations/ListingConfiguration.cs); also surfaced on `ListingDetailsDto` (plus a sibling `InstantBookingEnabled`) so any consumer of `IListingProvider` sees both flags.
+- [x] [`DealApplication`](src/Lagedra.Modules/ActivationAndBilling/Domain/Aggregates/DealApplication.cs) gains `Source` ([`DealApplicationSource`](src/Lagedra.Modules/ActivationAndBilling/Domain/Enums/DealApplicationSource.cs)) enum (`TenantSelfApply`, `PartnerDirectReservation`); defaults to `TenantSelfApply` for backward compatibility. EF column added with string conversion + index in [`DealApplicationConfiguration`](src/Lagedra.Modules/ActivationAndBilling/Infrastructure/Configurations/DealApplicationConfiguration.cs); `DealApplicationDto` carries the field through to all 6 query/command map sites.
+- [ ] Domain event `DirectReservationCreatedEvent` is already raised by the aggregate. The dedicated `LinkDirectReservationToApplicationHandler` is no longer needed because linking now happens synchronously inside `CreateDirectReservationCommand`. The event remains for downstream subscribers (analytics, notifications). If audit-log specific handling is needed it will be added in 18.11.
+- [ ] EF migrations `AddListingPartnerDirectReservationFlag` + `AddDealApplicationSourceColumn` to be generated at the end (per session policy).
+- [ ] Backend tests: full "partner books listing for existing user" flow creates reservation → application → linked reservation, all in one transaction; failure at booking-service step rolls back the reservation insertion. *(Deferred to 18.11.)*
+
+### 18.8 Frontend partner portal (`/app/partner`)
+
+- [ ] `apps/web/src/features/partners/` feature folder with services, hooks, components, pages.
+- [ ] `apps/web/src/api/endpoints.ts` gains a `partners` group covering every backend route from 18.3 / 18.4 / 18.5 / 18.7 plus the existing ones.
+- [ ] `apps/web/src/features/partners/services/partnerApi.ts` + `apps/web/src/features/partners/types.ts` (DTOs mirroring backend).
+- [ ] [`apps/web/src/app/auth/permissions.ts`](apps/web/src/app/auth/permissions.ts) — `institutionPartner` role gets a new `partnerGroup` of nav items (Partner Dashboard, Members, Referral Links, Reservations, Endorsements, Guests). `mainGroup` is kept for the marketplace surfaces but the Dashboard tile linking to `/app/partner` becomes the primary CTA on the partner dashboard page.
+- [ ] [`apps/web/src/features/auth/pages/DashboardPage.tsx`](apps/web/src/features/auth/pages/DashboardPage.tsx) — `Organization` action for partner users links to `/app/partner` instead of `#`; for partners with no org yet, links to `/app/partner/onboarding`.
+- [ ] Routes added to [`apps/web/src/app/routes.tsx`](apps/web/src/app/routes.tsx), each wrapped in `RequireRole allowed={[roles.institutionPartner, roles.platformAdmin]}` and lazy-loaded:
+  - `/app/partner` — overview (org status, recent reservations, recent endorsements, referral activity).
+  - `/app/partner/onboarding` — register partner organization (gated to users without an org).
+  - `/app/partner/members` — list/add members.
+  - `/app/partner/referrals` — create/list/copy/deactivate referral links with expiry + max-use validation; show usage counter.
+  - `/app/partner/reservations` — list + new reservation wizard (listing search → guest details → review → submit; deep-links to Truth Surface confirmation on success).
+  - `/app/partner/guests` — list invites with status, "Resend invite" + "Revoke" actions.
+  - `/app/partner/endorsements` — queue of `Requested` rows with Approve / Decline / Note; tab for `Approved` and `Revoked`.
+- [ ] Tenant-side surfaces:
+  - `apps/web/src/features/auth/pages/ProfilePage.tsx` adds an "Institutional endorsements" panel listing approved endorsements + a "Request endorsement from a partner" CTA that opens a search-and-select dialog hitting `GET /v1/partners?search=...` (read-only public name lookup, status = `Verified`).
+  - `apps/web/src/features/verification/pages/VerificationPage.tsx` shows endorsement status alongside identity / background / insurance.
+- [ ] Empty / error / loading states everywhere, friendly errors via `lib/errors.ts`, toast notifications on success.
+- [ ] Status badges for partner orgs: `PendingVerification`, `Verified`, `Suspended` (shared `PartnerStatusBadge` component).
+- [ ] Frontend tests (Vitest + RTL + MSW) cover: onboarding form, member invite, referral create/copy, reservation wizard happy-path, endorsement approve, error states.
+
+### 18.9 Admin partner verification surface (`/app/admin/partners`)
+
+- [ ] New `apps/web/src/features/admin/pages/PartnerVerificationPage.tsx` listing pending partner orgs with `Verify` and `Suspend` actions; reasons captured for `Suspend`.
+- [ ] List page with status tabs (`Pending`, `Verified`, `Suspended`), search by name / contact email / tax id, paginated.
+- [ ] Detail view showing the registering user, members count, recent activity (referral counts, reservation counts) so the admin has context before verifying.
+- [ ] Wired to `GET /v1/admin/partners`, `GET /v1/admin/partners/pending`, `POST /v1/partners/{id}/verify`, `POST /v1/admin/partners/{id}/suspend`.
+
+### 18.10 Lagedra eviction-protection tier — Option A (Partner-Endorsed)
+
+> **Decision (locked 2026-05-05):** Option A — "Partner-Endorsed Insurance Tier." No new insurance product, no underwriting, no third-party carrier integration. An `Approved` `PartnerEndorsement` from a `Verified` partner organization is itself the protection tier; the existing `InsuranceStatus.InstitutionBacked` flag and `DepositRecommendationPolicy` already encode the consumer-visible benefit (lower deposit band). The tenant-and-landlord-facing label is the audit-grade fact "Backed by `{OrganizationName}`," not a Lagedra-issued policy claim.
+>
+> Implementation cost beyond what 18.5 + 18.6 already deliver: **labels, copy, and one read-through on `RiskViewDto`**. Listed explicitly so it gets shipped, not assumed.
+
+- [x] **DECISION:** Option A selected. Options B (brokered) and C (issued) are deferred indefinitely and removed from this release's scope; if they are revisited later they will live in their own phase.
+- [x] **Naming convention (locked):** the user-facing string is **"Partner-Backed Protection"** wherever the tier surfaces in the UI; the internal enum value remains `InsuranceStatus.InstitutionBacked` (no DB migration / event schema change). Single source-of-truth constants live in [`PartnerEndorsementCopy`](src/Lagedra.SharedKernel/Integration/PartnerEndorsementCopy.cs) (`PartnerBackedTierLabel`, `ThirdPartyInsuredTierLabel`, `UninsuredTierLabel`, plus `ToToken` for canonical wire-format). DTO mappers and (in 18.8) frontend i18n keys reference these constants exclusively.
+- [x] [`RiskViewDto`](src/Lagedra.Modules/VerificationAndRisk/Application/DTOs/RiskViewDto.cs) carries computed field `ProtectionTier: ProtectionTier { Uninsured, ThirdPartyInsured, PartnerBacked }` derived from `(hasActiveEndorsement, insuranceStatus)` in [`GetRiskViewForLandlordQueryHandler`](src/Lagedra.Modules/VerificationAndRisk/Application/Queries/GetRiskViewForLandlordQuery.cs) (delivered in 18.6). The frontend never has to recompute the label.
+- [x] [`DepositRecommendationPolicy`](src/Lagedra.Modules/VerificationAndRisk/Domain/Policies/DepositRecommendationPolicy.cs) is **unchanged** — Option A leans on the existing band logic. Added an XML doc comment (delivered in 18.6) noting that `InstitutionBacked` is sourced from either a third-party binding or an active partner endorsement, with the same band by deliberate design.
+- [ ] **Frontend copy** — every place that shows insurance tier today (`apps/web/src/features/verification/pages/VerificationPage.tsx`, `apps/web/src/features/listings/pages/ListingDetailPage.tsx`, `apps/web/src/features/applications/components/ApplicationCard.tsx`, `apps/web/src/features/deals/pages/DealDetailPage.tsx`, `apps/web/src/features/activation-billing/pages/CheckoutPage.tsx`) renders `RiskViewDto.ProtectionTier` via a shared `<ProtectionTierBadge>` component:
+  - `PartnerBacked` → "Partner-Backed Protection · {OrgName}" with a lightweight tooltip: "Your deposit band is reduced because {OrgName}, a verified Lagedra partner, has endorsed you. Endorsement is valid until {ExpiresAt:MMM d, yyyy} or until {OrgName} revokes it."
+  - `ThirdPartyInsured` → "Insured" (existing copy).
+  - `Uninsured` → "Uninsured" (existing copy).
+- [x] **Truth Surface canonical content (v2 → v2.1, additive only):** [`CreateTruthSurfaceForDealCommandHandler`](src/Lagedra.TruthSurface/Application/Commands/CreateTruthSurfaceForDealCommand.cs) now injects `IPartnerEndorsementProvider` + `IUserInsuranceStatusProvider`, computes the tenant's `ProtectionTierKind`, and emits two new fields inside `parties.tenant`:
+  - `protectionTier` (canonical token via `PartnerEndorsementCopy.ToToken` — `"PartnerBacked"` / `"ThirdPartyInsured"` / `"Uninsured"`).
+  - `partnerEndorsements: [{ organizationId, organizationName, approvedAt, expiresAt }]` — sorted by organization id for deterministic hashing across processes.
+  `CanonicalSchemaVersion` bumped from integer `2` to string `"2.1"`. Old v2 snapshots are unaffected because their persisted canonical JSON is verified against the recorded value (the verification job re-hashes the *stored* content, not a regenerated one). New v2.1 snapshots include both fields from the moment they're sealed.
+- [x] **Partner onboarding terms** — [`PartnerOrganization`](src/Lagedra.Modules/PartnerNetwork/Domain/Aggregates/PartnerOrganization.cs) gains `EndorsementTermsAcceptedAt` (DateTime) + `EndorsementTermsAcceptedByUserId` (Guid). The `Create(...)` factory rejects `Guid.Empty` actor ids. [`RegisterPartnerOrganizationCommand`](src/Lagedra.Modules/PartnerNetwork/Application/Commands/RegisterPartnerOrganizationCommand.cs) requires `EndorsementTermsAccepted = true` and returns `Partner.EndorsementTermsRequired` (400) otherwise. The endpoint contract `RegisterPartnerRequest` carries the new flag.
+- [ ] **No tenant-side claim flow.** Make this explicit in the legal copy on `/app/profile` "Institutional endorsements" panel and on the partner-onboarding terms-of-service confirmation: "Partner-Backed Protection is a verification status, not an insurance policy. Lagedra does not pay claims under this tier; eviction-related disputes follow the standard Lagedra arbitration process." *(Frontend copy — delivered in 18.8.)*
+- [ ] EF migration `AddPartnerEndorsementTermsConsent` adds the two columns to `partner.partner_organizations`. *(Generated at the end per session policy.)*
+- [ ] Verification:
+  - [ ] Backend test: a tenant whose only protection signal is a `PartnerEndorsement` returns `ProtectionTier == "PartnerBacked"` from the risk view, and the suggested deposit band matches the existing `(InstitutionBacked)` row in `DepositRecommendationPolicy`.
+  - [ ] Backend test: a tenant with **both** a `PartnerEndorsement` and a real third-party `Active` insurance binding is reported as `"PartnerBacked"` in the tier (partner relationship is the more informative label) but the deposit band is computed from `InstitutionBacked` either way — no double-discount.
+  - [ ] Frontend snapshot test: `<ProtectionTierBadge tier="PartnerBacked" orgName="Acme University" expiresAt="2027-05-05" />` renders the correct label + tooltip.
+  - [ ] Truth Surface regression test: a snapshot sealed before this change still hash-verifies `true` after the schema bump (no retroactive field renames).
+
+### 18.11 Verification & rollout
+
+- [ ] Solution builds clean (`dotnet build Lagedra.sln`, 0 errors).
+- [ ] EF migrations generated and reviewed: `AddPartnerGuestInvites`, `AddPartnerEndorsements`, `AddListingPartnerDirectReservationFlag`, `AddDealApplicationSourceColumn`.
+- [ ] Postman collection updated with every new endpoint under a `Partners` folder.
+- [ ] Manual smoke (sequence):
+  1. Register as `InstitutionPartner` → create org → admin verifies it.
+  2. Partner invites guest → guest receives set-password email → guest sets password → guest can log in.
+  3. Partner approves the auto-created endorsement (or the guest requests one and partner approves).
+  4. Tenant's `RiskViewDto` shows `EndorsedBy[]` and the suggested deposit drops one band.
+  5. Partner creates direct reservation for the same guest → `DealApplication` is auto-created → Truth Surface confirmation page loads for both parties.
+  6. Independent tenant requests endorsement from the verified partner via profile → partner approves it → risk recomputes.
+  7. Partner-org-A user receives `403` trying to read partner-org-B members / referrals / reservations / endorsements.
+  8. Tenant who only **redeemed a referral link** (no endorsement) sees **no** change to identity / background status (regression check on 18.1).
+  9. Admin `Suspend` flips org status; suspended org cannot create referrals / reservations / endorsements.
+- [ ] Production smoke after deploy:
+  - `/app/partner` loads for an institution partner.
+  - `/app/admin/partners` loads for platform admin.
+  - All `/v1/partners/*` and `/v1/admin/partners*` routes return non-`5xx` for valid actors and `401`/`403` for invalid actors.
+  - Existing booking, listing, checkout, verification, Truth Surface, and admin pages still load (no regressions).
+
+---
+
+*Last updated: 2026-05-04. Technology stack locked. Update checkboxes as work is completed.*
 *Audit: All GAP-1 through GAP-16 items resolved. Backend Phases 0–7, 14, and all module code (Phase 5) are fully complete.*
 *Phase 6 (API Gateway) complete: AuthMiddleware, ConsentMiddleware, RateLimitingSetup, API versioning, FluentValidation pipeline, OpenAPI + Postman tooling.*
 *Phase 7 (Worker) complete: 8 files, 21 jobs registered, outbox dispatch, health monitoring, Quartz persistent store.*
-*Phase 8 (Web Frontend) in progress: core shell (8.1–8.4) complete with hybrid navigation (sidebar dashboard + Airbnb-style marketplace); Auth pages + Listings module + Applications module + Admin module (8.5) complete; remaining modules: Inquiry, Truth Surface, Activation/Billing, Compliance, Arbitration, Trust Ledger, Evidence, Notifications, Profile.*
+*Phase 8 (Web Frontend) in progress: core shell (8.1–8.4) complete with hybrid navigation (sidebar dashboard + Airbnb-style marketplace).*
+*Phase 8.5 feature modules — complete: Auth pages, Listings, Applications, Admin, Structured Inquiry, Truth Surface, Activation & Billing (full Stripe Connect checkout + billing management), Notifications (real-time SignalR + bell + panel + all-notifications page + preferences), Profile & Verification (KYC flow + background check consent + risk view), Host Onboarding (Stripe Express + direct payment details).*
+*Phase 8.5 feature modules — remaining frontend: Compliance, Arbitration, Trust Ledger, Evidence.*
 *Navigation architecture: Marketplace uses slim top bar + mobile bottom tabs; Dashboard (/app/*) uses collapsible left sidebar grouped by role.*
-*Next priority: Phase 8.5 remaining feature modules (Inquiry → Truth Surface → Activation/Billing).*
+*Stripe Connect: full destination charge flow (activation payments) + Express host onboarding + platform fee subscriptions + webhook processing; currency USD.*
+*KYC: provider-agnostic via `IKycProvider`; `NoOpKycProvider` for dev, `PersonaKycProvider` for production.*
+*Notifications: dual-channel (Email via MailKit/Brevo + InApp via SignalR); 28 notification handlers across 7 modules; real-time push to frontend.*
+*Next priority: Phase 8.5 remaining frontend modules (Compliance → Arbitration → Trust Ledger → Evidence).*
+*Phase 16 (Booking Flow Optimization) planned: instant-book, collapsed host workflow, inline Truth Surface confirmation in checkout, save-card-on-file, magic-link approval; behind feature flag `BookingFlow.V2`.*
+*Phase 17 (Truth Surface Hardening) implemented: rich v2 canonical content (parties, full address when activated, house rules, amenities, jurisdiction pack version, monthly protocol fee), real read-time hash + signature verification, per-deal participant authorization on every endpoint, append-only enforced at the application boundary (filter + interceptor + DB columns dropped), `SnapshotId` FKs on `DealApplication` + `DealPaymentConfirmation`, party-facing `/receipt` JSON download, dead Merkle code removed, verification job de-duplicated.*
+*Phase 18 (Partner Portal & Endorsement) planned + scope-locked: P0 hotfix on the referral-redemption verification bypass, per-organization authorization via `IPartnerAccessService`, missing partner + admin endpoints (`/me`, list reservations, deactivate referral, admin list/pending/suspend), partner-invited guest provisioning (`InvitePartnerGuestCommand` + set-password email), formal `PartnerEndorsement` aggregate with request → approve → revoke → expire lifecycle, endorsement-driven `InstitutionBacked` insurance status (no longer URL-click), real `DirectReservation` → `DealApplication` conversion, full `/app/partner` portal + admin verification surface, and the "Partner-Backed Protection" tier (Option A — locked 2026-05-05; no Lagedra-issued or brokered insurance product, just label + copy + Truth Surface schema bump v2 → v2.1).*
 *Each `[ ]` → `[x]` is a step toward a defensible, enforceable, institution-grade mid-term rental protocol.*

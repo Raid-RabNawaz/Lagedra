@@ -30,10 +30,8 @@ function cancellationFromForm(v: ListingFormValues): CreateListingRequest["cance
 
 export function toCreateListingRequest(
   v: ListingFormValues,
-  landlordUserId: string,
 ): CreateListingRequest {
   return {
-    landlordUserId,
     propertyType: v.propertyType,
     title: v.title.trim(),
     description: v.description.trim(),

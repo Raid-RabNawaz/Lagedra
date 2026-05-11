@@ -23,7 +23,7 @@ import { roles, roleLabel } from "@/app/auth/roles";
 import { isAdmin } from "@/app/auth/permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { Loader } from "@/components/shared/Loader";
@@ -217,17 +217,13 @@ type QuickAction = { label: string; description: string; to: string; icon: typeo
 function RoleQuickActions({ role }: { role: string }) {
   let actions: QuickAction[] = [];
 
-  if (role === roles.tenant) {
+  if (role === roles.member) {
     actions = [
       { label: "Browse listings", description: "Find your next mid-term rental", to: "/listings", icon: Home },
-      { label: "My applications", description: "Track your rental applications", to: "#", icon: FileCheck },
-    ];
-  } else if (role === roles.landlord) {
-    actions = [
-      { label: "Browse listings", description: "See what's on the market", to: "/listings", icon: Home },
+      { label: "My reservations", description: "Trips you've booked", to: "/app/deals", icon: FileCheck },
+      { label: "Create listing", description: "List a property for rent", to: "/app/listings/new", icon: Plus },
       { label: "My listings", description: "Manage your rental properties", to: "/app/listings", icon: Building2 },
-      { label: "Create listing", description: "Add a new property", to: "/app/listings/new", icon: Plus },
-      { label: "Applications", description: "Review tenant applications", to: "#", icon: FileCheck },
+      { label: "Applications inbox", description: "Review applications on your listings", to: "/app/applications", icon: FileCheck },
     ];
   } else if (role === roles.arbitrator) {
     actions = [
@@ -236,6 +232,7 @@ function RoleQuickActions({ role }: { role: string }) {
   } else if (isAdmin(role)) {
     actions = [
       { label: "Manage users", description: "View and manage all platform users", to: "/app/admin/users", icon: Users },
+      { label: "Verify partners", description: "Approve & suspend partner orgs", to: "/app/admin/partners", icon: Building2 },
       { label: "Browse listings", description: "View marketplace listings", to: "/listings", icon: Home },
     ];
   } else if (role === roles.insurancePartner) {
@@ -244,8 +241,9 @@ function RoleQuickActions({ role }: { role: string }) {
     ];
   } else if (role === roles.institutionPartner) {
     actions = [
+      { label: "Partner portal", description: "Manage your organization", to: "/app/partner", icon: Briefcase },
+      { label: "Invite a guest", description: "Onboard members & book on their behalf", to: "/app/partner/guests", icon: Users },
       { label: "Browse listings", description: "Find rentals for your members", to: "/listings", icon: Home },
-      { label: "Organization", description: "Manage your organization", to: "#", icon: Briefcase },
     ];
   }
 

@@ -25,4 +25,7 @@ public static class PlatformSettingKeys
 
     // Damage claims
     public const string DamageClaimFilingDeadlineDays = "damage_claim.filing_deadline_days";
+
+    // Stripe Connect
+    public const string StripePlatformFeePriceId = "stripe.platform_fee_price_id";
 }

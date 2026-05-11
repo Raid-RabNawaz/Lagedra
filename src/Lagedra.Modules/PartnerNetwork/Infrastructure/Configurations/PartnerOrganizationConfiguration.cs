@@ -31,6 +31,9 @@ public sealed class PartnerOrganizationConfiguration
         builder.Property(o => o.TaxId).HasMaxLength(100);
         builder.Property(o => o.SuspensionReason).HasMaxLength(2000);
 
+        builder.Property(o => o.EndorsementTermsAcceptedAt).IsRequired();
+        builder.Property(o => o.EndorsementTermsAcceptedByUserId).IsRequired();
+
         builder.HasIndex(o => o.Status);
 
         builder.Ignore(o => o.DomainEvents);

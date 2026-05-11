@@ -19,14 +19,14 @@ public static class ComplianceEndpoints
             .RequireAuthorization();
 
         group.MapPost("/violations", RecordViolation)
-            .RequireAuthorization("RequireLandlord");
+            .RequireAuthorization("RequireMember");
         group.MapGet("/violations", GetViolationsForDeal);
         group.MapPut("/violations/{id:guid}/resolve", ResolveViolation)
             .RequireAuthorization("RequirePlatformAdmin");
         group.MapPut("/violations/{id:guid}/dismiss", DismissViolation)
             .RequireAuthorization("RequirePlatformAdmin");
         group.MapPut("/violations/{id:guid}/escalate", EscalateViolation)
-            .RequireAuthorization("RequireLandlord");
+            .RequireAuthorization("RequireMember");
         group.MapGet("/ledger/user/{userId:guid}", GetUserLedger);
         group.MapGet("/ledger/deal/{dealId:guid}", GetDealLedger);
 

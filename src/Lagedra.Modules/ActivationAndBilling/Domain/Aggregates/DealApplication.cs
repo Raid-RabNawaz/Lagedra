@@ -1,5 +1,6 @@
 using Lagedra.Modules.ActivationAndBilling.Domain.Enums;
 using Lagedra.Modules.ActivationAndBilling.Domain.Events;
+using Lagedra.SharedKernel.Integration.Events;
 using Lagedra.SharedKernel.Domain;
 
 namespace Lagedra.Modules.ActivationAndBilling.Domain.Aggregates;
@@ -21,7 +22,14 @@ public sealed class DealApplication : AggregateRoot<Guid>
     public int StayDurationDays { get; private set; }
     public Guid? PartnerOrganizationId { get; private set; }
     public bool IsPartnerReferred { get; private set; }
+    public DealApplicationSource Source { get; private set; }
     public string? JurisdictionWarning { get; private set; }
+
+    /// <summary>
+    /// Set once both parties confirm the Truth Surface. Provides direct
+    /// traceability from the booking record to its sealed legal snapshot.
+    /// </summary>
+    public Guid? TruthSurfaceSnapshotId { get; private set; }
 
     private DealApplication() { }
 
@@ -32,7 +40,8 @@ public sealed class DealApplication : AggregateRoot<Guid>
         DateOnly requestedCheckIn,
         DateOnly requestedCheckOut,
         Guid? partnerOrganizationId = null,
-        bool isPartnerReferred = false)
+        bool isPartnerReferred = false,
+        DealApplicationSource source = DealApplicationSource.TenantSelfApply)
     {
         if (requestedCheckOut <= requestedCheckIn)
         {
@@ -64,7 +73,8 @@ public sealed class DealApplication : AggregateRoot<Guid>
             SubmittedAt = DateTime.UtcNow,
             CreatedAt = DateTime.UtcNow,
             PartnerOrganizationId = partnerOrganizationId,
-            IsPartnerReferred = isPartnerReferred
+            IsPartnerReferred = isPartnerReferred,
+            Source = source
         };
 
         application.AddDomainEvent(new ApplicationSubmittedEvent(
@@ -115,6 +125,22 @@ public sealed class DealApplication : AggregateRoot<Guid>
 
         AddDomainEvent(new ApplicationRejectedEvent(
             Id, ListingId, LandlordUserId, TenantUserId));
+    }
+
+    public void LinkTruthSurface(Guid snapshotId)
+    {
+        if (snapshotId == Guid.Empty)
+        {
+            throw new ArgumentException("Snapshot id must be non-empty.", nameof(snapshotId));
+        }
+
+        if (TruthSurfaceSnapshotId is not null && TruthSurfaceSnapshotId != snapshotId)
+        {
+            throw new InvalidOperationException(
+                $"Application '{Id}' is already linked to a different Truth Surface snapshot.");
+        }
+
+        TruthSurfaceSnapshotId = snapshotId;
     }
 
     public void Cancel(

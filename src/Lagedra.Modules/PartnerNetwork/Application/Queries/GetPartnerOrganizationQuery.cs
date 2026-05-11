@@ -1,3 +1,4 @@
+using Lagedra.Modules.PartnerNetwork.Application.Authorization;
 using Lagedra.Modules.PartnerNetwork.Application.DTOs;
 using Lagedra.Modules.PartnerNetwork.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Results;
@@ -7,9 +8,13 @@ using Microsoft.EntityFrameworkCore;
 namespace Lagedra.Modules.PartnerNetwork.Application.Queries;
 
 public sealed record GetPartnerOrganizationQuery(
-    Guid OrganizationId) : IRequest<Result<PartnerOrganizationDto>>;
+    Guid OrganizationId,
+    Guid CallerUserId,
+    bool CallerIsPlatformAdmin) : IRequest<Result<PartnerOrganizationDto>>;
 
-public sealed class GetPartnerOrganizationQueryHandler(PartnerDbContext dbContext)
+public sealed class GetPartnerOrganizationQueryHandler(
+    PartnerDbContext dbContext,
+    IPartnerAccessService accessService)
     : IRequestHandler<GetPartnerOrganizationQuery, Result<PartnerOrganizationDto>>
 {
     public async Task<Result<PartnerOrganizationDto>> Handle(
@@ -18,6 +23,17 @@ public sealed class GetPartnerOrganizationQueryHandler(PartnerDbContext dbContex
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        var authzResult = await accessService.RequireMemberAsync(
+            request.CallerUserId,
+            request.OrganizationId,
+            request.CallerIsPlatformAdmin,
+            cancellationToken).ConfigureAwait(false);
+
+        if (authzResult.IsFailure)
+        {
+            return Result<PartnerOrganizationDto>.Failure(authzResult.Error);
+        }
+
         var org = await dbContext.Organizations
             .AsNoTracking()
             .FirstOrDefaultAsync(o => o.Id == request.OrganizationId, cancellationToken)
@@ -25,8 +41,7 @@ public sealed class GetPartnerOrganizationQueryHandler(PartnerDbContext dbContex
 
         if (org is null)
         {
-            return Result<PartnerOrganizationDto>.Failure(
-                new Error("Partner.NotFound", "Partner organization not found."));
+            return Result<PartnerOrganizationDto>.Failure(PartnerAccessErrors.NotFound);
         }
 
         return Result<PartnerOrganizationDto>.Success(

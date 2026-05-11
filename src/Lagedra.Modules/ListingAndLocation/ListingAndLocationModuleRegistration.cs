@@ -2,6 +2,8 @@ using Lagedra.Infrastructure.Eventing;
 using Lagedra.Modules.ListingAndLocation.Infrastructure.Jobs;
 using Lagedra.Modules.ListingAndLocation.Infrastructure.Persistence;
 using Lagedra.Modules.ListingAndLocation.Infrastructure.Repositories;
+using Lagedra.Modules.ListingAndLocation.Infrastructure.Services;
+using Lagedra.SharedKernel.Integration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,10 +26,15 @@ public static class ListingAndLocationModuleRegistration
         services.AddOutboxContext<ListingsDbContext>();
 
         services.AddScoped<ListingRepository>();
+        services.AddScoped<IListingProvider, ListingProvider>();
 
         // Notification handlers
+        services.AddDomainEventHandler<Domain.Events.ListingSubmittedForReviewEvent,
+            Application.EventHandlers.OnListingSubmittedForReviewNotify>();
         services.AddDomainEventHandler<Domain.Events.ListingPublishedEvent,
             Application.EventHandlers.OnListingPublishedNotify>();
+        services.AddDomainEventHandler<Domain.Events.ListingDeniedEvent,
+            Application.EventHandlers.OnListingDeniedNotify>();
 
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(ListingAndLocationModuleRegistration).Assembly));

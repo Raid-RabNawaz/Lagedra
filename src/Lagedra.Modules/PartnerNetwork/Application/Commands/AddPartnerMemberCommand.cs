@@ -1,3 +1,4 @@
+using Lagedra.Modules.PartnerNetwork.Application.Authorization;
 using Lagedra.Modules.PartnerNetwork.Application.DTOs;
 using Lagedra.Modules.PartnerNetwork.Domain.Entities;
 using Lagedra.Modules.PartnerNetwork.Domain.Enums;
@@ -13,10 +14,12 @@ public sealed record AddPartnerMemberCommand(
     Guid OrganizationId,
     Guid UserId,
     PartnerMemberRole Role,
-    Guid InvitedByUserId) : IRequest<Result<PartnerMemberDto>>;
+    Guid InvitedByUserId,
+    bool InvitedByIsPlatformAdmin) : IRequest<Result<PartnerMemberDto>>;
 
 public sealed class AddPartnerMemberCommandHandler(
     PartnerDbContext dbContext,
+    IPartnerAccessService accessService,
     IClock clock)
     : IRequestHandler<AddPartnerMemberCommand, Result<PartnerMemberDto>>
 {
@@ -26,14 +29,15 @@ public sealed class AddPartnerMemberCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var orgExists = await dbContext.Organizations
-            .AnyAsync(o => o.Id == request.OrganizationId, cancellationToken)
-            .ConfigureAwait(false);
+        var authzResult = await accessService.RequireAdminMemberAsync(
+            request.InvitedByUserId,
+            request.OrganizationId,
+            request.InvitedByIsPlatformAdmin,
+            cancellationToken).ConfigureAwait(false);
 
-        if (!orgExists)
+        if (authzResult.IsFailure)
         {
-            return Result<PartnerMemberDto>.Failure(
-                new Error("Partner.NotFound", "Partner organization not found."));
+            return Result<PartnerMemberDto>.Failure(authzResult.Error);
         }
 
         var alreadyMember = await dbContext.Members

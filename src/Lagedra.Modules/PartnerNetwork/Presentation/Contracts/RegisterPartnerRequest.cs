@@ -6,4 +6,5 @@ public sealed record RegisterPartnerRequest(
     string Name,
     PartnerOrganizationType OrganizationType,
     string ContactEmail,
-    string? TaxId);
+    string? TaxId,
+    bool EndorsementTermsAccepted);

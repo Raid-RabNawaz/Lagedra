@@ -10,6 +10,7 @@ using Lagedra.Modules.InsuranceIntegration.Infrastructure.Jobs;
 using Lagedra.Modules.JurisdictionPacks.Infrastructure.Jobs;
 using Lagedra.Modules.ListingAndLocation.Infrastructure.Jobs;
 using Lagedra.Modules.Notifications.Infrastructure.Jobs;
+using Lagedra.Modules.PartnerNetwork.Infrastructure.Jobs;
 using Lagedra.Modules.Privacy.Infrastructure.Jobs;
 using Lagedra.Modules.StructuredInquiry.Infrastructure.Jobs;
 using Lagedra.TruthSurface.Infrastructure.Jobs;
@@ -73,6 +74,9 @@ internal static class JobRegistry
 
         // TruthSurface
         Register<SnapshotVerificationJob>(q, "0 0 3 ? * SUN");
+
+        // PartnerNetwork
+        Register<ExpirePartnerEndorsementsJob>(q, "0 0 1 * * ?");
     }
 
     private static void Register<T>(IServiceCollectionQuartzConfigurator q, string cronExpression)

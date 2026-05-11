@@ -9,7 +9,10 @@ using Microsoft.Extensions.Logging;
 
 namespace Lagedra.Modules.ActivationAndBilling.Application.Commands;
 
-public sealed record StopBillingCommand(Guid DealId) : IRequest<Result<BillingStatusDto>>;
+public sealed record StopBillingCommand(
+    Guid DealId,
+    Guid CallerUserId,
+    bool IsAdmin = false) : IRequest<Result<BillingStatusDto>>;
 
 public sealed partial class StopBillingCommandHandler(
     BillingDbContext dbContext,
@@ -32,6 +35,16 @@ public sealed partial class StopBillingCommandHandler(
         {
             return Result<BillingStatusDto>.Failure(
                 new Error("BillingAccount.NotFound", "Billing account not found for this deal."));
+        }
+
+        // Stopping the recurring platform fee subscription is a host-only action.
+        // After the role merge, restrict by the actual landlord on the billing
+        // account; platform admins retain access for support scenarios.
+        if (!request.IsAdmin && account.LandlordUserId != request.CallerUserId)
+        {
+            return Result<BillingStatusDto>.Failure(
+                new Error("BillingAccount.Forbidden",
+                    "Only the listing host can stop billing for this deal."));
         }
 
         if (!string.IsNullOrEmpty(account.StripeSubscriptionId))

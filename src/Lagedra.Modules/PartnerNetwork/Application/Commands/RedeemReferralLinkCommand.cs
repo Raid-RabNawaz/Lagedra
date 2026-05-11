@@ -1,7 +1,7 @@
 using Lagedra.Modules.PartnerNetwork.Domain.Entities;
-using Lagedra.Modules.PartnerNetwork.Domain.Events;
 using Lagedra.Modules.PartnerNetwork.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Events;
+using Lagedra.SharedKernel.Integration.Events;
 using Lagedra.SharedKernel.Results;
 using Lagedra.SharedKernel.Time;
 using MediatR;
@@ -26,7 +26,6 @@ public sealed class RedeemReferralLinkCommandHandler(
         ArgumentNullException.ThrowIfNull(request);
 
         var link = await dbContext.ReferralLinks
-            .Include(l => l) // load the full entity
             .FirstOrDefaultAsync(l => l.Code == request.Code, cancellationToken)
             .ConfigureAwait(false);
 
@@ -38,6 +37,17 @@ public sealed class RedeemReferralLinkCommandHandler(
         if (!link.IsActive)
         {
             return Result.Failure(new Error("Referral.Inactive", "Referral link is no longer active."));
+        }
+
+        if (link.ExpiresAt.HasValue && clock.UtcNow > link.ExpiresAt.Value)
+        {
+            return Result.Failure(new Error("Referral.Expired", "Referral link has expired."));
+        }
+
+        if (link.MaxUses.HasValue && link.UsageCount >= link.MaxUses.Value)
+        {
+            return Result.Failure(new Error("Referral.Exhausted",
+                "Referral link has reached maximum uses."));
         }
 
         var org = await dbContext.Organizations

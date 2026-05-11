@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Mail, Lock, ArrowRight, CheckCircle2, Home, Building2, Briefcase } from "lucide-react";
+import { Mail, Lock, ArrowRight, CheckCircle2, User, Briefcase } from "lucide-react";
 import { authApi } from "@/features/auth/services/authApi";
 import { useAuthStore } from "@/app/auth/authStore";
 import { appConfig } from "@/app/config";
@@ -24,23 +24,17 @@ const schema = z.object({
     .min(8, "Password must be at least 8 characters")
     .regex(/[A-Z]/, "Include at least one uppercase letter")
     .regex(/[0-9]/, "Include at least one number"),
-  role: z.enum(["Tenant", "Landlord", "InstitutionPartner"]),
+  role: z.enum(["Member", "InstitutionPartner"]),
 });
 
 type FormData = z.infer<typeof schema>;
 
 const roleOptions = [
   {
-    value: "Tenant" as const,
-    label: "I'm a tenant",
-    description: "Looking for a mid-term rental",
-    icon: Home,
-  },
-  {
-    value: "Landlord" as const,
-    label: "I'm a landlord",
-    description: "Listing a property for rent",
-    icon: Building2,
+    value: "Member" as const,
+    label: "Personal account",
+    description: "Browse and book stays, or list your place",
+    icon: User,
   },
   {
     value: "InstitutionPartner" as const,
@@ -60,7 +54,7 @@ export const RegisterPage = () => {
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { email: "", password: "", role: "Tenant" },
+    defaultValues: { email: "", password: "", role: "Member" },
   });
 
   const selectedRole = form.watch("role");
@@ -76,7 +70,7 @@ export const RegisterPage = () => {
       if (result.dev_verificationUrl) {
         setVerificationHint(result.dev_verificationUrl);
       }
-      form.reset({ email: "", password: "", role: "Tenant" });
+      form.reset({ email: "", password: "", role: "Member" });
     } catch {
       setServerError("Registration failed. Try a different email address.");
     }
@@ -144,7 +138,7 @@ export const RegisterPage = () => {
       <form onSubmit={onSubmit} className="space-y-5">
         <div className="space-y-3">
           <Label>I want to join as</Label>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             {roleOptions.map((option) => (
               <button
                 key={option.value}

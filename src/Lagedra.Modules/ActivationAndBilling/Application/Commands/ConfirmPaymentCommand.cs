@@ -17,6 +17,10 @@ public sealed class ConfirmPaymentCommandHandler(
     IClock clock)
     : IRequestHandler<ConfirmPaymentCommand, Result<PaymentConfirmationDto>>
 {
+    private static readonly Error Forbidden = new(
+        "PaymentConfirmation.Forbidden",
+        "Only the listing host can confirm payment receipt for this deal.");
+
     public async Task<Result<PaymentConfirmationDto>> Handle(
         ConfirmPaymentCommand request,
         CancellationToken cancellationToken)
@@ -32,6 +36,16 @@ public sealed class ConfirmPaymentCommandHandler(
             return Result<PaymentConfirmationDto>.Failure(
                 new Error("PaymentConfirmation.NotFound",
                     "No payment confirmation record found for this deal."));
+        }
+
+        var application = await dbContext.DealApplications
+            .AsNoTracking()
+            .FirstOrDefaultAsync(a => a.DealId == request.DealId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (application is null || application.LandlordUserId != request.HostUserId)
+        {
+            return Result<PaymentConfirmationDto>.Failure(Forbidden);
         }
 
         if (confirmation.Status == PaymentConfirmationStatus.Confirmed)

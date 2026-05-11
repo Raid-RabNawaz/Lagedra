@@ -1,3 +1,4 @@
+using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Results;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -9,12 +10,14 @@ namespace Lagedra.Modules.StructuredInquiry.Application.Commands;
 
 public sealed record SubmitLandlordResponseCommand(
     Guid DealId,
+    Guid CallerUserId,
     Guid QuestionId,
     ResponseType ResponseType,
     string AnswerValue) : IRequest<Result<InquiryAnswerDto>>;
 
 public sealed class SubmitLandlordResponseCommandHandler(
-    InquiryDbContext dbContext)
+    InquiryDbContext dbContext,
+    IDealApplicationStatusProvider dealStatusProvider)
     : IRequestHandler<SubmitLandlordResponseCommand, Result<InquiryAnswerDto>>
 {
     public async Task<Result<InquiryAnswerDto>> Handle(
@@ -22,6 +25,23 @@ public sealed class SubmitLandlordResponseCommandHandler(
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        var participants = await dealStatusProvider
+            .GetParticipantsAsync(request.DealId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (participants is null)
+        {
+            return Result<InquiryAnswerDto>.Failure(
+                new Error("Inquiry.DealNotFound", "Deal not found."));
+        }
+
+        if (participants.LandlordUserId != request.CallerUserId)
+        {
+            return Result<InquiryAnswerDto>.Failure(
+                new Error("Inquiry.Forbidden",
+                    "Only the deal's host can submit a landlord response."));
+        }
 
         var session = await dbContext.Sessions
             .Include(s => s.Questions)

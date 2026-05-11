@@ -8,7 +8,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Lagedra.Modules.ActivationAndBilling.Application.Commands;
 
 public sealed record ConfirmHostPlatformPaymentCommand(
-    Guid DealId) : IRequest<Result<PaymentConfirmationDto>>;
+    Guid DealId,
+    Guid HostUserId) : IRequest<Result<PaymentConfirmationDto>>;
 
 public sealed class ConfirmHostPlatformPaymentCommandHandler(
     BillingDbContext dbContext,
@@ -20,6 +21,18 @@ public sealed class ConfirmHostPlatformPaymentCommandHandler(
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        var application = await dbContext.DealApplications
+            .AsNoTracking()
+            .FirstOrDefaultAsync(a => a.DealId == request.DealId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (application is null || application.LandlordUserId != request.HostUserId)
+        {
+            return Result<PaymentConfirmationDto>.Failure(
+                new Error("PaymentConfirmation.Forbidden",
+                    "Only the listing host can confirm the platform fee for this deal."));
+        }
 
         var confirmation = await dbContext.DealPaymentConfirmations
             .FirstOrDefaultAsync(c => c.DealId == request.DealId, cancellationToken)

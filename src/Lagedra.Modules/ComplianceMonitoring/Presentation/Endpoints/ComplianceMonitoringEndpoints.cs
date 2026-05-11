@@ -22,6 +22,8 @@ public static class ComplianceMonitoringEndpoints
         group.MapGet("/", GetDealComplianceStatus);
         group.MapGet("/violations", ListViolations);
         group.MapPost("/signal", RecordSignal);
+        group.MapPost("/violations", DetectViolation).RequireAuthorization("RequirePlatformAdmin");
+        group.MapPut("/violations/{violationId:guid}/cure", CureViolation).RequireAuthorization("RequirePlatformAdmin");
 
         return app;
     }
@@ -73,6 +75,36 @@ public static class ComplianceMonitoringEndpoints
 
         return result.IsSuccess
             ? Results.Created($"/v1/deals/{dealId}/compliance/signal/{result.Value}", new { signalId = result.Value })
+            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+    }
+
+    private static async Task<IResult> DetectViolation(
+        [FromRoute] Guid dealId,
+        [FromBody] DetectViolationRequest request,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(
+            new DetectViolationCommand(dealId, request.Category, request.CureDeadline), ct)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Created($"/v1/deals/{dealId}/compliance/violations/{result.Value.ViolationId}", result.Value)
+            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+    }
+
+    private static async Task<IResult> CureViolation(
+        [FromRoute] Guid dealId,
+        [FromRoute] Guid violationId,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(
+            new CureViolationCommand(dealId, violationId), ct)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
             : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
     }
 }

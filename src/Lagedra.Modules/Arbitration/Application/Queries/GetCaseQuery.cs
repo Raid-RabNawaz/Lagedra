@@ -36,5 +36,7 @@ public sealed class GetCaseQueryHandler(ArbitrationDbContext dbContext)
             c.EvidenceSlots.Count,
             c.DecidedAt.HasValue
                 ? new DecisionDto(c.DecisionSummary!, c.AwardAmount, c.DecidedAt.Value)
-                : null);
+                : null,
+            c.EvidenceSlots.Select(s => new EvidenceSlotDto(
+                s.Id, s.SlotType, s.SubmittedBy, s.EvidenceManifestId, s.SubmittedAt)).ToList());
 }

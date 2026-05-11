@@ -1,4 +1,5 @@
 using Lagedra.SharedKernel.Results;
+using Lagedra.SharedKernel.Security;
 using Lagedra.TruthSurface.Application.DTOs;
 using Lagedra.TruthSurface.Domain;
 using Lagedra.TruthSurface.Infrastructure.Persistence;
@@ -14,7 +15,8 @@ public sealed record ReconfirmTruthSurfaceCommand(
     string Reason) : IRequest<Result<TruthSurfaceDto>>;
 
 public sealed class ReconfirmTruthSurfaceCommandHandler(
-    TruthSurfaceDbContext dbContext)
+    TruthSurfaceDbContext dbContext,
+    ICryptographicSigner signer)
     : IRequestHandler<ReconfirmTruthSurfaceCommand, Result<TruthSurfaceDto>>
 {
     public async Task<Result<TruthSurfaceDto>> Handle(ReconfirmTruthSurfaceCommand request, CancellationToken cancellationToken)
@@ -48,10 +50,6 @@ public sealed class ReconfirmTruthSurfaceCommandHandler(
         dbContext.Snapshots.Add(superseding);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        return Result<TruthSurfaceDto>.Success(new TruthSurfaceDto(
-            superseding.Id, superseding.DealId, superseding.Status,
-            superseding.ProtocolVersion, superseding.JurisdictionPackVersion,
-            superseding.InquiryClosed, superseding.LandlordConfirmed,
-            superseding.TenantConfirmed, superseding.CreatedAt, superseding.SealedAt, null));
+        return Result<TruthSurfaceDto>.Success(SnapshotMapper.Map(superseding, signer));
     }
 }

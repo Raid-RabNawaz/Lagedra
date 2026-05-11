@@ -23,7 +23,12 @@ type ListingMapProps = {
 };
 
 const DEFAULT_CENTER: [number, number] = [39.8, -98.5];
-const DEFAULT_ZOOM = 4;
+const DEFAULT_ZOOM = 5;
+const CITY_ZOOM = 11;
+// If the visible listings span more than this many degrees of lat/lng, we
+// avoid `fitBounds` (which would zoom out to country-level) and instead anchor
+// the map at the result centroid at city zoom. Users can pan/zoom from there.
+const FIT_MAX_SPAN_DEG = 1.5;
 
 function extractBounds(map: LeafletMap): MapBounds {
   const b = map.getBounds();
@@ -45,11 +50,19 @@ function MapEvents({
   onBoundsChange: (bounds: MapBounds) => void;
   searchOnMove: boolean;
 }) {
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const onBoundsRef = useRef(onBoundsChange);
   const searchOnMoveRef = useRef(searchOnMove);
-  onBoundsRef.current = onBoundsChange;
-  searchOnMoveRef.current = searchOnMove;
+  const initialDispatched = useRef(false);
+
+  // Keep callback refs in sync with the latest props without re-subscribing
+  // to the leaflet event handlers below.
+  useEffect(() => {
+    onBoundsRef.current = onBoundsChange;
+  }, [onBoundsChange]);
+  useEffect(() => {
+    searchOnMoveRef.current = searchOnMove;
+  }, [searchOnMove]);
 
   const map = useMapEvents({
     moveend: () => {
@@ -67,6 +80,16 @@ function MapEvents({
       }, 400);
     },
   });
+
+  useEffect(() => {
+    if (initialDispatched.current) return;
+    initialDispatched.current = true;
+    // Defer to next tick so the map has settled its size/zoom.
+    const handle = setTimeout(() => {
+      onBoundsRef.current(extractBounds(map));
+    }, 50);
+    return () => clearTimeout(handle);
+  }, [map]);
 
   return null;
 }
@@ -88,12 +111,24 @@ function FlyToHandler({ flyTo }: { flyTo: ListingMapProps["flyTo"] }) {
   return null;
 }
 
-function FitListings({ listings }: { listings: ListingSummaryDto[] }) {
+function FitListings({
+  listings,
+  hasFlyTo,
+}: {
+  listings: ListingSummaryDto[];
+  hasFlyTo: boolean;
+}) {
   const map = useMap();
   const fitted = useRef(false);
 
   useEffect(() => {
     if (fitted.current) return;
+    // An explicit flyTo (e.g. geocoded search city) wins — don't fight it by
+    // refitting to the listing bounding box.
+    if (hasFlyTo) {
+      fitted.current = true;
+      return;
+    }
     const withCoords = listings.filter(
       (l) => l.latitude != null && l.longitude != null,
     );
@@ -106,11 +141,21 @@ function FitListings({ listings }: { listings: ListingSummaryDto[] }) {
     const ne: [number, number] = [Math.max(...lats), Math.max(...lngs)];
 
     if (sw[0] === ne[0] && sw[1] === ne[1]) {
-      map.setView(sw, 13);
-    } else {
-      map.fitBounds([sw, ne], { padding: [40, 40], maxZoom: 15 });
+      map.setView(sw, 14);
+      return;
     }
-  }, [listings, map]);
+
+    const latSpan = ne[0] - sw[0];
+    const lngSpan = ne[1] - sw[1];
+    if (latSpan > FIT_MAX_SPAN_DEG || lngSpan > FIT_MAX_SPAN_DEG) {
+      // Results are scattered across regions — anchor at the centroid at city
+      // zoom so the user lands on a recognisable map view, not a country.
+      const center: [number, number] = [(sw[0] + ne[0]) / 2, (sw[1] + ne[1]) / 2];
+      map.setView(center, CITY_ZOOM);
+    } else {
+      map.fitBounds([sw, ne], { padding: [40, 40], maxZoom: 14 });
+    }
+  }, [listings, map, hasFlyTo]);
 
   return null;
 }
@@ -137,7 +182,7 @@ export function ListingMap({
       />
       <MapEvents onBoundsChange={onBoundsChange} searchOnMove={searchOnMove} />
       <FlyToHandler flyTo={flyTo} />
-      <FitListings listings={listings} />
+      <FitListings listings={listings} hasFlyTo={Boolean(flyTo)} />
       {listings.map((listing) =>
         listing.latitude != null && listing.longitude != null ? (
           <ListingMapMarker

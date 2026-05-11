@@ -1,6 +1,6 @@
 using Lagedra.Modules.InsuranceIntegration.Domain.Entities;
-using Lagedra.Modules.InsuranceIntegration.Domain.Enums;
-using Lagedra.Modules.InsuranceIntegration.Domain.Events;
+using Lagedra.SharedKernel.Integration;
+using Lagedra.SharedKernel.Integration.Events;
 using Lagedra.SharedKernel.Domain;
 
 namespace Lagedra.Modules.InsuranceIntegration.Domain.Aggregates;

@@ -12,6 +12,7 @@ namespace Lagedra.Modules.ListingAndLocation.Application.Commands;
 
 public sealed record UpdateListingCommand(
     Guid ListingId,
+    Guid CallerUserId,
     PropertyType PropertyType,
     string Title,
     string Description,
@@ -38,6 +39,7 @@ public sealed class UpdateListingCommandHandler(
     : IRequestHandler<UpdateListingCommand, Result<ListingDetailsDto>>
 {
     private static readonly Error NotFound = new("Listing.NotFound", "Listing not found.");
+    private static readonly Error Forbidden = new("Listing.Forbidden", "You do not own this listing.");
 
     public async Task<Result<ListingDetailsDto>> Handle(
         UpdateListingCommand request,
@@ -56,6 +58,11 @@ public sealed class UpdateListingCommandHandler(
         if (listing is null)
         {
             return Result<ListingDetailsDto>.Failure(NotFound);
+        }
+
+        if (listing.LandlordUserId != request.CallerUserId)
+        {
+            return Result<ListingDetailsDto>.Failure(Forbidden);
         }
 
         var rentChanged = listing.MonthlyRentCents != request.MonthlyRentCents;

@@ -39,7 +39,13 @@ public sealed class ListingConfiguration : IEntityTypeConfiguration<Listing>
         builder.Property(l => l.SuggestedDepositHighCents);
         builder.Property(l => l.JurisdictionCode).HasMaxLength(50);
         builder.Property(l => l.InstantBookingEnabled).HasDefaultValue(false);
+        builder.Property(l => l.AcceptsPartnerDirectReservations).HasDefaultValue(true);
         builder.Property(l => l.VirtualTourUrl).HasMaxLength(2000);
+
+        builder.Property(l => l.RejectionReason).HasMaxLength(2000);
+        builder.Property(l => l.ReviewedAt);
+        builder.Property(l => l.ReviewedByUserId);
+        builder.Property(l => l.SubmittedForReviewAt);
 
         builder.OwnsOne(l => l.StayRange, stay =>
         {

@@ -24,6 +24,8 @@ public sealed partial class ConsentMiddleware(
         "/v1/auth", "/v1/webhook",
         "/v1/blog", "/v1/seo",
         "/v1/listings/search", "/v1/listings/definitions",
+        "/v1/identity/kyc",
+        "/v1/verification/background-check/consent",
         "/v1/privacy/consent", "/v1/privacy/consents",
     ];
 

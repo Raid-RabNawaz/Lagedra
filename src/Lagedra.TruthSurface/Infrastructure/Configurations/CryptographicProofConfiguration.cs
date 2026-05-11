@@ -16,5 +16,8 @@ public sealed class CryptographicProofConfiguration : IEntityTypeConfiguration<C
         builder.Property(p => p.SnapshotId).IsRequired();
         builder.Property(p => p.Hash).HasMaxLength(128).IsRequired();
         builder.Property(p => p.Signature).HasMaxLength(256).IsRequired();
+
+        builder.Ignore(p => p.IsDeleted);
+        builder.Ignore(p => p.DeletedAt);
     }
 }

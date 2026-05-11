@@ -1,5 +1,5 @@
 using Lagedra.Modules.InsuranceIntegration.Application.DTOs;
-using Lagedra.Modules.InsuranceIntegration.Domain.Enums;
+using Lagedra.SharedKernel.Integration;
 using Lagedra.Modules.InsuranceIntegration.Domain.Policies;
 using Lagedra.Modules.InsuranceIntegration.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Results;

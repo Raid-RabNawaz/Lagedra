@@ -6,6 +6,7 @@ using Lagedra.Modules.IdentityAndVerification.Infrastructure.Repositories;
 using Lagedra.Modules.IdentityAndVerification.Infrastructure.Services;
 using Lagedra.Infrastructure.Eventing;
 using Lagedra.SharedKernel.Integration;
+using Lagedra.SharedKernel.Integration.Events;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -31,6 +32,7 @@ public static class IdentityVerificationModuleRegistration
         services.AddScoped<VerificationCaseRepository>();
         services.AddScoped<HostPaymentDetailsRepository>();
         services.AddScoped<IHostPaymentDetailsProvider, HostPaymentDetailsProvider>();
+        services.AddScoped<IHostStripeAccountProvider, HostStripeAccountProvider>();
         services.AddScoped<IHostVerificationProvider, HostVerificationProvider>();
         services.AddScoped<IVerificationSignalProvider, VerificationSignalProvider>();
 
@@ -39,6 +41,10 @@ public static class IdentityVerificationModuleRegistration
 
         // Sync IsGovernmentIdVerified flag to Auth
         services.AddDomainEventHandler<IdentityVerifiedEvent, OnIdentityVerifiedSyncAuthHandler>();
+
+        // Sync Stripe connected account status when Stripe sends account.updated webhook
+        services.AddDomainEventHandler<SharedKernel.Integration.StripeAccountUpdatedEvent,
+            OnStripeAccountUpdatedSyncHandler>();
         services.AddDomainEventHandler<IdentityVerificationFailedEvent, OnIdentityVerificationFailedNotify>();
         services.AddDomainEventHandler<VerificationClassChangedEvent, OnVerificationClassChangedNotify>();
 

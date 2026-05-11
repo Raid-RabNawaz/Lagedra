@@ -1,5 +1,6 @@
 using Lagedra.Modules.ActivationAndBilling.Application.EventHandlers;
 using Lagedra.Modules.ActivationAndBilling.Domain.Events;
+using Lagedra.SharedKernel.Integration.Events;
 using Lagedra.Modules.ActivationAndBilling.Domain.Interfaces;
 using Lagedra.Modules.ActivationAndBilling.Infrastructure.Jobs;
 using Lagedra.Modules.ActivationAndBilling.Infrastructure.Persistence;
@@ -11,7 +12,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Quartz;
-using Lagedra.TruthSurface.Domain.Events;
 
 namespace Lagedra.Modules.ActivationAndBilling;
 
@@ -34,6 +34,7 @@ public static class ActivationAndBillingModuleRegistration
         services.AddScoped<InvoiceRepository>();
         services.AddScoped<IDealPaymentConfirmationRepository, DealPaymentConfirmationRepository>();
         services.AddScoped<IDealApplicationStatusProvider, DealApplicationStatusProvider>();
+        services.AddScoped<IPartnerDirectBookingService, PartnerDirectBookingService>();
 
         services.AddDomainEventHandler<TruthSurfaceConfirmedEvent,
             OnTruthSurfaceConfirmedCreatePaymentConfirmationHandler>();
@@ -58,11 +59,17 @@ public static class ActivationAndBillingModuleRegistration
         services.AddDomainEventHandler<PaymentDisputeResolvedEvent,
             OnPaymentDisputeResolvedNotify>();
         services.AddDomainEventHandler<DealActivatedEvent,
+            OnDealActivatedCreateHostSubscriptionHandler>();
+        services.AddDomainEventHandler<DealActivatedEvent,
             OnDealActivatedNotify>();
         services.AddDomainEventHandler<BookingCancelledEvent,
             OnBookingCancelledNotify>();
         services.AddDomainEventHandler<DamageClaimFiledEvent,
             OnDamageClaimFiledNotify>();
+        services.AddDomainEventHandler<DamageClaimApprovedEvent,
+            OnDamageClaimApprovedNotify>();
+        services.AddDomainEventHandler<DamageClaimRejectedEvent,
+            OnDamageClaimRejectedNotify>();
         services.AddDomainEventHandler<PaymentFailedEvent,
             OnPaymentFailedNotify>();
 
@@ -91,6 +98,13 @@ public static class ActivationAndBillingModuleRegistration
                 .ForJob(hostEnforcementKey)
                 .WithIdentity("HostPlatformPaymentEnforcement-trigger")
                 .WithCronSchedule("0 0 8 * * ?"));
+
+            var depositReturnKey = new JobKey("DepositReturn");
+            q.AddJob<DepositReturnJob>(opts => opts.WithIdentity(depositReturnKey));
+            q.AddTrigger(opts => opts
+                .ForJob(depositReturnKey)
+                .WithIdentity("DepositReturn-trigger")
+                .WithCronSchedule("0 0 3 * * ?"));
         });
 
         return services;

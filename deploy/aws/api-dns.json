@@ -1,0 +1,15 @@
+{
+  "Changes": [
+    {
+      "Action": "UPSERT",
+      "ResourceRecordSet": {
+        "Name": "api.lagedra.com",
+        "Type": "CNAME",
+        "TTL": 300,
+        "ResourceRecords": [
+          { "Value": "lagedra-alb-171081817.us-west-1.elb.amazonaws.com" }
+        ]
+      }
+    }
+  ]
+}

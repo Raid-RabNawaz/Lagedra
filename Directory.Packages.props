@@ -36,8 +36,8 @@
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="9.3.0" />
   </ItemGroup>
   <ItemGroup Label="Email">
-    <PackageVersion Include="MailKit" Version="4.15.1" />
-    <PackageVersion Include="MimeKit" Version="4.15.1" />
+    <PackageVersion Include="MailKit" Version="4.16.0" />
+    <PackageVersion Include="MimeKit" Version="4.16.0" />
   </ItemGroup>
   <ItemGroup Label="Payments">
     <PackageVersion Include="Stripe.net" Version="47.3.0" />

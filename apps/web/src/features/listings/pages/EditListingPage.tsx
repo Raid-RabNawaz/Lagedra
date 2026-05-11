@@ -1,6 +1,6 @@
 import { useParams, Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState, lazy, Suspense } from "react";
+import { useCallback, useState, lazy, Suspense } from "react";
 import {
   ArrowLeft,
   MapPin,
@@ -8,13 +8,20 @@ import {
   ImagePlus,
   Trash2,
   Star,
-  Rocket,
+  Send,
   Ban,
   AlertTriangle,
+  Clock,
   GripVertical,
   ChevronUp,
   ChevronDown,
   Search,
+  Upload,
+  Film,
+  Loader2,
+  CheckCircle2,
+  Circle,
+  ArrowRight,
 } from "lucide-react";
 
 const LocationPickerMap = lazy(() =>
@@ -30,6 +37,7 @@ import { useListingDefinitions } from "@/features/listings/hooks/useListingDefin
 import { listingDetailsToFormValues } from "@/features/listings/lib/mapListingToForm";
 import { toUpdateListingRequest } from "@/features/listings/lib/toListingRequests";
 import type { ListingFormValues } from "@/features/listings/lib/listingFormSchema";
+import { getApiErrorMessage } from "@/api/errors";
 import { Loader } from "@/components/shared/Loader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,6 +74,7 @@ export const EditListingPage = () => {
   const [photoUrl, setPhotoUrl] = useState("");
   const [photoCaption, setPhotoCaption] = useState("");
   const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [mediaError, setMediaError] = useState<string | null>(null);
 
   const listing = listingQuery.data;
 
@@ -159,6 +168,22 @@ export const EditListingPage = () => {
     },
   });
 
+  const uploadMediaMutation = useMutation({
+    mutationFn: (params: { file: File; caption?: string | null }) =>
+      listingApi.uploadMedia(id!, params.file, params.caption ?? null),
+    onSuccess: () => {
+      setPhotoCaption("");
+      setMediaError(null);
+      void queryClient.invalidateQueries({ queryKey: ["listing", id] });
+    },
+    onError: (error: unknown) => {
+      const detail =
+        (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+        (error instanceof Error ? error.message : "Upload failed.");
+      setMediaError(detail);
+    },
+  });
+
   const removePhotoMutation = useMutation({
     mutationFn: (photoId: string) => listingApi.removePhoto(id!, photoId),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["listing", id] }),
@@ -174,8 +199,8 @@ export const EditListingPage = () => {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["listing", id] }),
   });
 
-  const publishMutation = useMutation({
-    mutationFn: () => listingApi.publish(id!),
+  const submitMutation = useMutation({
+    mutationFn: () => listingApi.submitForReview(id!),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["listing", id] });
       void queryClient.invalidateQueries({ queryKey: ["listings", "mine"] });
@@ -190,6 +215,46 @@ export const EditListingPage = () => {
     },
   });
 
+  // ── Derived state (safe before early returns; falls back when listing is null) ──
+  const hasLocation = listing ? listing.latitude != null && listing.longitude != null : false;
+  const hasPhotos = listing ? listing.photos.length > 0 : false;
+  const hasDescription = listing ? (listing.description ?? "").trim().length > 0 : false;
+  const hasRent = listing ? (listing.monthlyRentCents ?? 0) > 0 : false;
+  const isDraft = listing?.status === "Draft";
+  const isDenied = listing?.status === "Denied";
+  const isInReview = listing?.status === "InReview";
+  const isEditable = isDraft || isDenied;
+
+  // Mirror server-side rule (Listing.SubmitForReview() requires Draft|Denied + ApproxGeoPoint).
+  const canSubmit = isEditable && hasLocation;
+  const submitLabel = isDenied ? "Resubmit for review" : "Submit for review";
+  const submitBlockedReason = !listing
+    ? ""
+    : !isEditable
+      ? isInReview
+        ? "Listing is being reviewed by an admin."
+        : `Already ${listing.status.toLowerCase()}.`
+      : !hasLocation
+        ? "Set the approximate location below before submitting."
+        : "";
+
+  const scrollToId = useCallback((targetId: string) => {
+    const el = document.getElementById(targetId);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
+  const handleSubmitClick = useCallback(() => {
+    if (!canSubmit) return;
+    if (!hasPhotos) {
+      const ok = window.confirm(
+        "This listing has no photos yet. Listings with photos perform much better — submit for review anyway?",
+      );
+      if (!ok) return;
+    }
+    submitMutation.mutate();
+  }, [canSubmit, hasPhotos, submitMutation]);
+
+  // ── Early returns (after all hooks) ─────────────────────────────────────
   if (!id) {
     return <p className="text-destructive">Missing listing id.</p>;
   }
@@ -244,14 +309,15 @@ export const EditListingPage = () => {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          {listing.status === "Draft" && (
+          {isEditable && (
             <Button
               variant="accent"
-              disabled={publishMutation.isPending}
-              onClick={() => publishMutation.mutate()}
+              disabled={submitMutation.isPending || !canSubmit}
+              onClick={handleSubmitClick}
+              title={canSubmit ? undefined : submitBlockedReason}
             >
-              <Rocket className="h-4 w-4" />
-              {publishMutation.isPending ? "Publishing..." : "Publish"}
+              <Send className="h-4 w-4" />
+              {submitMutation.isPending ? "Submitting..." : submitLabel}
             </Button>
           )}
           {(listing.status === "Published" || listing.status === "Activated") && (
@@ -271,53 +337,150 @@ export const EditListingPage = () => {
         </div>
       </div>
 
+      {isInReview && (
+        <Alert>
+          <Clock className="h-4 w-4" />
+          <AlertDescription>
+            This listing is being reviewed by an admin and is read-only until the review completes.
+            We&apos;ll notify you as soon as it&apos;s approved.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {isDenied && listing.rejectionReason && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            <p className="font-medium">An admin asked you to update this listing before it can go live.</p>
+            <p className="mt-1 text-sm">
+              <span className="font-medium">Reason:</span> {listing.rejectionReason}
+            </p>
+            <p className="mt-2 text-sm">
+              Make the changes below, then click <span className="font-medium">Resubmit for review</span> at the top.
+            </p>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {updateMutation.isError && (
         <Alert variant="destructive">
           <AlertDescription>Failed to save changes. Try again.</AlertDescription>
         </Alert>
       )}
-      {publishMutation.isError && (
+      {submitMutation.isError && (
         <Alert variant="destructive">
           <AlertDescription>
-            {(publishMutation.error as any)?.response?.data?.detail ?? "Failed to publish listing."}
+            {getApiErrorMessage(submitMutation.error, "Failed to submit listing for review.")}
           </AlertDescription>
         </Alert>
       )}
       {closeMutation.isError && (
         <Alert variant="destructive">
           <AlertDescription>
-            {(closeMutation.error as any)?.response?.data?.detail ?? "Failed to close listing."}
+            {getApiErrorMessage(closeMutation.error, "Failed to close listing.")}
           </AlertDescription>
         </Alert>
       )}
       {lockAddressMutation.isError && (
         <Alert variant="destructive">
           <AlertDescription>
-            {(lockAddressMutation.error as any)?.response?.data?.detail ??
-              (lockAddressMutation.error as Error).message ??
-              "Failed to lock address."}
+            {getApiErrorMessage(lockAddressMutation.error, "Failed to lock address.")}
           </AlertDescription>
         </Alert>
       )}
 
-      <ListingForm
-        key={listing.updatedAt}
-        definitions={defs.data}
-        defaultValues={defaultValues}
-        submitLabel="Save changes"
-        onSubmit={async (values) => {
-          await updateMutation.mutateAsync(values);
-        }}
-      />
+      {isEditable && (
+        <Card className="border-accent/40 bg-accent/5">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Send className="h-5 w-5 text-accent" />
+              {isDenied ? "Address admin feedback and resubmit" : "Almost ready to submit for review"}
+            </CardTitle>
+            <CardDescription>
+              {isDenied
+                ? "Make the changes the admin requested, then resubmit. Once approved your listing will go live in the marketplace."
+                : "Tenants can\u2019t see this listing until an admin approves it. Finish the items below, then submit for review."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <ChecklistRow
+              done={hasLocation}
+              required
+              label="Set the approximate location"
+              detail="Drop a pin or look up an address so tenants can see the general area."
+              jumpLabel="Add location"
+              onJump={() => scrollToId("location")}
+            />
+            <ChecklistRow
+              done={hasPhotos}
+              required={false}
+              label={`Add at least one photo${hasPhotos ? ` (${listing.photos.length} added)` : ""}`}
+              detail="Listings with photos get up to 10× more applications. Strongly recommended."
+              jumpLabel="Add photos"
+              onJump={() => scrollToId("photos")}
+            />
+            <ChecklistRow
+              done={hasDescription}
+              required={false}
+              label="Write a short description"
+              detail="A short summary helps tenants understand what makes this place special."
+              jumpLabel="Edit details"
+              onJump={() => scrollToId("details")}
+            />
+            <ChecklistRow
+              done={hasRent}
+              required={false}
+              label="Set the monthly rent"
+              detail="Tenants filter by price — listings with $0 rent are usually hidden."
+              jumpLabel="Edit details"
+              onJump={() => scrollToId("details")}
+            />
 
-      <Separator />
+            <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-muted-foreground">
+                {canSubmit
+                  ? hasPhotos
+                    ? "All set — submit for review whenever you're ready."
+                    : "You can submit without photos, but we'll ask you to confirm."
+                  : submitBlockedReason}
+              </p>
+              <Button
+                variant="accent"
+                disabled={submitMutation.isPending || !canSubmit}
+                onClick={handleSubmitClick}
+                title={canSubmit ? undefined : submitBlockedReason}
+              >
+                <Send className="h-4 w-4" />
+                {submitMutation.isPending ? "Submitting..." : submitLabel}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <section className="space-y-3">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight">Step 1 — Location &amp; photos</h2>
+          <p className="text-sm text-muted-foreground">
+            These live outside the main form because each section saves on its own. Set them first so
+            you don&apos;t hit a publish error later.
+          </p>
+        </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Card className="lg:col-span-2">
+        <Card id="location" className="lg:col-span-2 scroll-mt-24">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <MapPin className="h-5 w-5" />
               Approximate location
+              {hasLocation ? (
+                <Badge variant="secondary" className="ml-2">
+                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                  Set
+                </Badge>
+              ) : (
+                <Badge variant="destructive" className="ml-2">Required</Badge>
+              )}
             </CardTitle>
             <CardDescription>
               Search for an address, click on the map to drop a pin, or enter coordinates manually.
@@ -403,11 +566,17 @@ export const EditListingPage = () => {
         </Card>
 
         {(listing.status === "Published" || listing.preciseAddress) && (
-          <Card>
+          <Card className="lg:col-span-2 scroll-mt-24">
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Lock className="h-5 w-5" />
                 Precise address
+                {listing.preciseAddress && (
+                  <Badge variant="secondary" className="ml-2">
+                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                    Locked
+                  </Badge>
+                )}
               </CardTitle>
               <CardDescription>
                 Lock the full address to proceed toward activation. This is shared only with confirmed tenants.
@@ -463,17 +632,105 @@ export const EditListingPage = () => {
           </Card>
         )}
 
-        <Card>
+        <Card id="photos" className="lg:col-span-2 scroll-mt-24">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <ImagePlus className="h-5 w-5" />
-              Photos
+              Photos &amp; video
+              {hasPhotos ? (
+                <Badge variant="secondary" className="ml-2">
+                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                  {listing.photos.length} added
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="ml-2">Recommended</Badge>
+              )}
             </CardTitle>
-            <CardDescription>Add images via public URL (e.g. CDN). First photo can be set as cover.</CardDescription>
+            <CardDescription>
+              Upload from your device (stored on Lagedra object storage) or add an existing image URL.
+              First photo can be set as cover.
+            </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="photoUrl">Image URL</Label>
+              <Label htmlFor="caption">Caption (optional, applies to next upload)</Label>
+              <Input
+                id="caption"
+                value={photoCaption}
+                onChange={(e) => setPhotoCaption(e.target.value)}
+                placeholder="e.g. Living room"
+              />
+            </div>
+
+            <div className="rounded-lg border border-dashed p-4 space-y-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={uploadMediaMutation.isPending}
+                  className="relative"
+                >
+                  <label className="cursor-pointer flex items-center">
+                    {uploadMediaMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <Upload className="h-4 w-4 mr-2" />
+                    )}
+                    {uploadMediaMutation.isPending ? "Uploading..." : "Upload photo"}
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif"
+                      className="absolute inset-0 opacity-0 cursor-pointer"
+                      disabled={uploadMediaMutation.isPending}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        const inputEl = e.target;
+                        if (file) {
+                          setMediaError(null);
+                          uploadMediaMutation.mutate({ file, caption: photoCaption });
+                        }
+                        inputEl.value = "";
+                      }}
+                    />
+                  </label>
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={uploadMediaMutation.isPending}
+                  className="relative"
+                >
+                  <label className="cursor-pointer flex items-center">
+                    <Film className="h-4 w-4 mr-2" />
+                    Upload virtual tour video
+                    <input
+                      type="file"
+                      accept="video/mp4,video/quicktime,video/webm"
+                      className="absolute inset-0 opacity-0 cursor-pointer"
+                      disabled={uploadMediaMutation.isPending}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        const inputEl = e.target;
+                        if (file) {
+                          setMediaError(null);
+                          uploadMediaMutation.mutate({ file, caption: null });
+                        }
+                        inputEl.value = "";
+                      }}
+                    />
+                  </label>
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Photos: JPEG, PNG, GIF, WebP, HEIC up to 15 MB. Videos: MP4, MOV, WebM up to 100 MB. A video
+                replaces the listing&apos;s virtual tour URL.
+              </p>
+              {mediaError && <p className="text-sm text-destructive">{mediaError}</p>}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="photoUrl">Or add an existing image URL</Label>
               <Input
                 id="photoUrl"
                 value={photoUrl}
@@ -481,20 +738,16 @@ export const EditListingPage = () => {
                 placeholder="https://..."
               />
             </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="caption">Caption (optional)</Label>
-              <Input id="caption" value={photoCaption} onChange={(e) => setPhotoCaption(e.target.value)} />
-            </div>
             {addPhotoMutation.isError && (
               <p className="text-sm text-destructive">{(addPhotoMutation.error as Error).message}</p>
             )}
             <Button
               type="button"
-              variant="secondary"
-              disabled={addPhotoMutation.isPending}
+              variant="ghost"
+              disabled={addPhotoMutation.isPending || !photoUrl.trim()}
               onClick={() => addPhotoMutation.mutate()}
             >
-              {addPhotoMutation.isPending ? "Adding..." : "Add photo"}
+              {addPhotoMutation.isPending ? "Adding..." : "Add photo from URL"}
             </Button>
 
             {(() => {
@@ -606,6 +859,78 @@ export const EditListingPage = () => {
           </CardContent>
         </Card>
       </div>
+      </section>
+
+      <Separator />
+
+      <section id="details" className="space-y-3 scroll-mt-24">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight">Step 2 — Listing details</h2>
+          <p className="text-sm text-muted-foreground">
+            Title, description, pricing, amenities and house rules. Save changes when you&apos;re done
+            editing this section.
+          </p>
+        </div>
+
+        <ListingForm
+          key={listing.updatedAt}
+          definitions={defs.data}
+          defaultValues={defaultValues}
+          submitLabel="Save changes"
+          onSubmit={async (values) => {
+            await updateMutation.mutateAsync(values);
+          }}
+        />
+      </section>
+    </div>
+  );
+};
+
+type ChecklistRowProps = {
+  done: boolean;
+  required: boolean;
+  label: string;
+  detail: string;
+  jumpLabel: string;
+  onJump: () => void;
+};
+
+const ChecklistRow = ({ done, required, label, detail, jumpLabel, onJump }: ChecklistRowProps) => {
+  return (
+    <div className="flex items-start gap-3 rounded-md border bg-background p-3">
+      {done ? (
+        <CheckCircle2 className="h-5 w-5 shrink-0 text-emerald-600 mt-0.5" />
+      ) : required ? (
+        <AlertTriangle className="h-5 w-5 shrink-0 text-destructive mt-0.5" />
+      ) : (
+        <Circle className="h-5 w-5 shrink-0 text-muted-foreground mt-0.5" />
+      )}
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className={cn("text-sm font-medium", done && "line-through text-muted-foreground")}>
+            {label}
+          </span>
+          {!done &&
+            (required ? (
+              <Badge variant="destructive" className="text-[10px]">Required</Badge>
+            ) : (
+              <Badge variant="outline" className="text-[10px]">Recommended</Badge>
+            ))}
+        </div>
+        <p className="text-xs text-muted-foreground mt-0.5">{detail}</p>
+      </div>
+      {!done && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onJump}
+          className="shrink-0 h-8 px-2 text-xs"
+        >
+          {jumpLabel}
+          <ArrowRight className="h-3.5 w-3.5 ml-1" />
+        </Button>
+      )}
     </div>
   );
 };

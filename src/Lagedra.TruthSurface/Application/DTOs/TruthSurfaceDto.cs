@@ -8,6 +8,7 @@ public sealed record TruthSurfaceDto(
     TruthSurfaceStatus Status,
     string ProtocolVersion,
     string JurisdictionPackVersion,
+    string? CanonicalContent,
     bool InquiryClosed,
     bool LandlordConfirmed,
     bool TenantConfirmed,

@@ -8,4 +8,6 @@ public sealed class StripeSettings
     public required string SecretKey { get; init; }
     public required string WebhookSecret { get; init; }
     public string ApiVersion { get; init; } = "2024-12-18.acacia";
+    public required Uri ConnectReturnUrl { get; init; }
+    public required Uri ConnectRefreshUrl { get; init; }
 }

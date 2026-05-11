@@ -5,6 +5,7 @@ using Lagedra.Modules.Evidence.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Results;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 
 namespace Lagedra.Modules.Evidence.Application.Commands;
 
@@ -18,10 +19,11 @@ public sealed record CompleteUploadCommand(
 
 public sealed class CompleteUploadCommandHandler(
     EvidenceDbContext dbContext,
-    IObjectStorageService storageService)
+    IObjectStorageService storageService,
+    IOptions<MinioSettings> storageOptions)
     : IRequestHandler<CompleteUploadCommand, Result>
 {
-    private const string EvidenceBucket = "lagedra-evidence";
+    private readonly string _bucket = storageOptions.Value.EvidenceBucket;
 
     public async Task<Result> Handle(
         CompleteUploadCommand request,
@@ -41,7 +43,7 @@ public sealed class CompleteUploadCommandHandler(
         }
 
         var exists = await storageService
-            .ObjectExistsAsync(EvidenceBucket, request.StorageKey, cancellationToken)
+            .ObjectExistsAsync(_bucket, request.StorageKey, cancellationToken)
             .ConfigureAwait(false);
 
         if (!exists)

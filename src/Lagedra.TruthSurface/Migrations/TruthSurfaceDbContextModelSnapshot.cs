@@ -67,16 +67,10 @@ namespace Lagedra.TruthSurface.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<string>("Hash")
                         .IsRequired()
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
 
                     b.Property<string>("Signature")
                         .IsRequired()
@@ -115,17 +109,11 @@ namespace Lagedra.TruthSurface.Migrations
                     b.Property<Guid>("DealId")
                         .HasColumnType("uuid");
 
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<string>("Hash")
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
                     b.Property<bool>("InquiryClosed")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
                     b.Property<string>("JurisdictionPackVersion")

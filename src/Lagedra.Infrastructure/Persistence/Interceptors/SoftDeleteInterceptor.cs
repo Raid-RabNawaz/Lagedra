@@ -28,6 +28,16 @@ public sealed class SoftDeleteInterceptor(IClock? clock = null) : SaveChangesInt
                 continue;
             }
 
+            // Append-only aggregates must never be deleted (hard or soft).
+            // Refusing here makes the immutability claim enforceable, not
+            // just documented on the aggregate.
+            if (entry.Entity is IAppendOnly)
+            {
+                throw new InvalidOperationException(
+                    $"Cannot delete append-only entity '{entry.Entity.GetType().Name}'. " +
+                    "Use a supersession workflow instead.");
+            }
+
             entry.State = EntityState.Modified;
             entry.Entity.IsDeleted = true;
             entry.Entity.DeletedAt = now;

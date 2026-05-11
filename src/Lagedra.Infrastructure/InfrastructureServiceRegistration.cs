@@ -87,10 +87,19 @@ public static class InfrastructureServiceRegistration
             configuration.GetSection(MinioSettings.SectionName));
         services.AddScoped<IObjectStorageService, MinioStorageService>();
 
-        // ClamAV (Antivirus)
+        // ClamAV (Antivirus) — disabled in production when ClamAV daemon is unavailable
         services.Configure<ClamAvSettings>(
             configuration.GetSection(ClamAvSettings.SectionName));
-        services.AddScoped<IAntivirusService, ClamAvService>();
+
+        var clamAvEnabled = configuration.GetValue<bool?>($"{ClamAvSettings.SectionName}:Enabled") ?? true;
+        if (clamAvEnabled)
+        {
+            services.AddScoped<IAntivirusService, ClamAvService>();
+        }
+        else
+        {
+            services.AddSingleton<IAntivirusService, NoOpAntivirusService>();
+        }
 
         // Insurance (stub — replace when MGA partner is confirmed)
         services.AddScoped<IInsuranceApiClient, InsuranceApiClient>();

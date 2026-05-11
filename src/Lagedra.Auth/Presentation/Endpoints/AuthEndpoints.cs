@@ -31,6 +31,11 @@ public static class AuthEndpoints
         group.MapPost("/reset-password", ResetPassword).AllowAnonymous();
         group.MapGet("/me", GetMe).RequireAuthorization();
         group.MapPut("/me", UpdateProfile).RequireAuthorization();
+        group.MapPost("/me/profile-photo", UploadProfilePhoto)
+            .RequireAuthorization()
+            .DisableAntiforgery()
+            .WithMetadata(new RequestSizeLimitAttribute(6L * 1024 * 1024));
+        group.MapDelete("/me/profile-photo", RemoveProfilePhoto).RequireAuthorization();
         group.MapPost("/change-password", ChangePassword).RequireAuthorization();
         group.MapPut("/users/{userId:guid}/role", UpdateRole).RequireAuthorization("RequirePlatformAdmin");
         group.MapGet("/users", ListUsers).RequireAuthorization("RequirePlatformAdmin");
@@ -247,6 +252,59 @@ public static class AuthEndpoints
                 request.EmergencyContactName,
                 request.EmergencyContactPhone),
             ct).ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+    }
+
+    private static async Task<IResult> UploadProfilePhoto(
+        IFormFile file,
+        ClaimsPrincipal principal,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var userId = GetUserId(principal);
+        if (userId is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        if (file is null || file.Length == 0)
+        {
+            return Results.BadRequest(new
+            {
+                error = "Profile.Photo.EmptyFile",
+                detail = "No file was uploaded.",
+            });
+        }
+
+        var command = new UploadProfilePhotoCommand(
+            userId.Value,
+            file.FileName,
+            file.ContentType,
+            file.Length,
+            _ => Task.FromResult(file.OpenReadStream()));
+
+        var result = await mediator.Send(command, ct).ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+    }
+
+    private static async Task<IResult> RemoveProfilePhoto(
+        ClaimsPrincipal principal,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var userId = GetUserId(principal);
+        if (userId is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        var result = await mediator.Send(new RemoveProfilePhotoCommand(userId.Value), ct).ConfigureAwait(true);
 
         return result.IsSuccess
             ? Results.Ok(result.Value)

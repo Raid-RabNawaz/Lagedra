@@ -1,4 +1,4 @@
-using Lagedra.Modules.ActivationAndBilling.Domain.Events;
+using Lagedra.SharedKernel.Integration.Events;
 using Lagedra.Modules.InsuranceIntegration.Application.EventHandlers;
 using Lagedra.Modules.InsuranceIntegration.Application.Services;
 using Lagedra.Modules.InsuranceIntegration.Infrastructure.Jobs;
@@ -47,16 +47,16 @@ public static class InsuranceIntegrationModuleRegistration
             OnDealActivatedActivateInsuranceHandler>();
 
         services.AddDomainEventHandler<
-            Lagedra.Modules.ActivationAndBilling.Domain.Events.BookingCancelledEvent,
+            Lagedra.SharedKernel.Integration.Events.BookingCancelledEvent,
             OnBookingCancelledCancelInsuranceHandler>();
 
         services.AddDomainEventHandler<
-            Lagedra.Modules.ActivationAndBilling.Domain.Events.BillingStoppedEvent,
+            Lagedra.SharedKernel.Integration.Events.BillingStoppedEvent,
             OnBillingStoppedCancelInsuranceHandler>();
 
         // Notification handlers
         services.AddDomainEventHandler<
-            Lagedra.Modules.InsuranceIntegration.Domain.Events.InsuranceStatusChangedEvent,
+            Lagedra.SharedKernel.Integration.Events.InsuranceStatusChangedEvent,
             OnInsuranceStatusChangedNotify>();
 
         services.AddMediatR(cfg =>

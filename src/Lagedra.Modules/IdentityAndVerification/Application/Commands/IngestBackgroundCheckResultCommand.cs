@@ -1,5 +1,5 @@
 using Lagedra.Modules.IdentityAndVerification.Domain.Entities;
-using Lagedra.Modules.IdentityAndVerification.Domain.Enums;
+using Lagedra.SharedKernel.Integration;
 using Lagedra.Modules.IdentityAndVerification.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Results;
 using MediatR;

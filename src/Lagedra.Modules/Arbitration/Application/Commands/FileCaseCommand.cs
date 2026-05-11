@@ -2,6 +2,7 @@ using Lagedra.Modules.Arbitration.Application.DTOs;
 using Lagedra.Modules.Arbitration.Domain.Aggregates;
 using Lagedra.Modules.Arbitration.Domain.Enums;
 using Lagedra.Modules.Arbitration.Infrastructure.Persistence;
+using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Results;
 using Lagedra.SharedKernel.Settings;
 using MediatR;
@@ -16,12 +17,30 @@ public sealed record FileCaseCommand(
 
 public sealed class FileCaseCommandHandler(
     ArbitrationDbContext dbContext,
-    IPlatformSettingsService settings)
+    IPlatformSettingsService settings,
+    IDealApplicationStatusProvider dealProvider)
     : IRequestHandler<FileCaseCommand, Result<CaseDto>>
 {
     public async Task<Result<CaseDto>> Handle(FileCaseCommand request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        var participants = await dealProvider
+            .GetParticipantsAsync(request.DealId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (participants is null)
+        {
+            return Result<CaseDto>.Failure(
+                new Error("Arbitration.DealNotFound", "Deal not found."));
+        }
+
+        if (request.FiledByUserId != participants.LandlordUserId
+            && request.FiledByUserId != participants.TenantUserId)
+        {
+            return Result<CaseDto>.Failure(
+                new Error("Arbitration.NotAParticipant", "Only deal participants can file arbitration cases."));
+        }
 
         var filingFee = await GetFilingFeeAsync(request.Tier, cancellationToken).ConfigureAwait(false);
 
@@ -51,5 +70,5 @@ public sealed class FileCaseCommandHandler(
     private static CaseDto MapToDto(ArbitrationCase c) =>
         new(c.Id, c.DealId, c.FiledByUserId, c.Tier, c.Category, c.Status,
             c.FilingFeeCents, c.FiledAt, c.EvidenceCompleteAt, c.DecisionDueAt,
-            c.EvidenceSlots.Count, null);
+            c.EvidenceSlots.Count, null, null);
 }

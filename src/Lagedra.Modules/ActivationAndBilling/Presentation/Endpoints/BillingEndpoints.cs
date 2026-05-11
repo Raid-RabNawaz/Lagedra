@@ -1,5 +1,7 @@
+using System.Security.Claims;
 using Lagedra.Modules.ActivationAndBilling.Application.Commands;
 using Lagedra.Modules.ActivationAndBilling.Application.Queries;
+using Lagedra.SharedKernel.Results;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -25,42 +27,72 @@ public static class BillingEndpoints
 
     private static async Task<IResult> GetBillingStatus(
         [FromRoute] Guid dealId,
+        ClaimsPrincipal user,
         IMediator mediator,
         CancellationToken ct)
     {
-        var result = await mediator.Send(new GetDealBillingStatusQuery(dealId), ct)
+        var userId = GetUserId(user);
+        var isAdmin = user.IsInRole("PlatformAdmin");
+        var result = await mediator.Send(new GetDealBillingStatusQuery(dealId, userId, isAdmin), ct)
             .ConfigureAwait(true);
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.NotFound(new { error = result.Error.Code, detail = result.Error.Description });
+            : ToErrorResult(result.Error);
     }
 
     private static async Task<IResult> GetProrationQuote(
         [FromRoute] Guid dealId,
         [FromQuery] DateTime startDate,
         [FromQuery] DateTime endDate,
+        ClaimsPrincipal user,
         IMediator mediator,
         CancellationToken ct)
     {
-        var result = await mediator.Send(new GetProrationQuoteQuery(dealId, startDate, endDate), ct)
+        var userId = GetUserId(user);
+        var isAdmin = user.IsInRole("PlatformAdmin");
+        var result = await mediator.Send(
+            new GetProrationQuoteQuery(dealId, userId, startDate, endDate, isAdmin), ct)
             .ConfigureAwait(true);
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+            : ToErrorResult(result.Error);
     }
 
     private static async Task<IResult> StopBilling(
         [FromRoute] Guid dealId,
+        ClaimsPrincipal user,
         IMediator mediator,
         CancellationToken ct)
     {
-        var result = await mediator.Send(new StopBillingCommand(dealId), ct)
+        var userId = GetUserId(user);
+        var isAdmin = user.IsInRole("PlatformAdmin");
+        var result = await mediator.Send(new StopBillingCommand(dealId, userId, isAdmin), ct)
             .ConfigureAwait(true);
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+            : ToErrorResult(result.Error);
+    }
+
+    private static Guid GetUserId(ClaimsPrincipal user) =>
+        Guid.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? throw new InvalidOperationException("User ID claim not found."));
+
+    private static IResult ToErrorResult(Error error)
+    {
+        var payload = new { error = error.Code, detail = error.Description };
+
+        if (error.Code.EndsWith(".Forbidden", StringComparison.Ordinal))
+        {
+            return Results.Json(payload, statusCode: StatusCodes.Status403Forbidden);
+        }
+
+        return error.Code switch
+        {
+            "BillingAccount.NotFound" => Results.NotFound(payload),
+            _ => Results.BadRequest(payload),
+        };
     }
 }

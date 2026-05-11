@@ -7,12 +7,14 @@ namespace Lagedra.Modules.ListingAndLocation.Application.Commands;
 
 public sealed record ReorderPhotosCommand(
     Guid ListingId,
+    Guid CallerUserId,
     IReadOnlyList<Guid> PhotoIdsInOrder) : IRequest<Result>;
 
 public sealed class ReorderPhotosCommandHandler(ListingsDbContext dbContext)
     : IRequestHandler<ReorderPhotosCommand, Result>
 {
     private static readonly Error NotFound = new("Listing.NotFound", "Listing not found.");
+    private static readonly Error Forbidden = new("Listing.Forbidden", "You do not own this listing.");
 
     public async Task<Result> Handle(
         ReorderPhotosCommand request,
@@ -28,6 +30,11 @@ public sealed class ReorderPhotosCommandHandler(ListingsDbContext dbContext)
         if (listing is null)
         {
             return Result.Failure(NotFound);
+        }
+
+        if (listing.LandlordUserId != request.CallerUserId)
+        {
+            return Result.Failure(Forbidden);
         }
 
         listing.ReorderPhotos(request.PhotoIdsInOrder);

@@ -2,16 +2,20 @@ using Lagedra.Modules.StructuredInquiry.Application.DTOs;
 using Lagedra.Modules.StructuredInquiry.Domain.Aggregates;
 using Lagedra.Modules.StructuredInquiry.Domain.Enums;
 using Lagedra.Modules.StructuredInquiry.Infrastructure.Persistence;
+using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Results;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
 namespace Lagedra.Modules.StructuredInquiry.Application.Commands;
 
-public sealed record ApproveInquiryUnlockCommand(Guid DealId) : IRequest<Result<InquiryDto>>;
+public sealed record ApproveInquiryUnlockCommand(
+    Guid DealId,
+    Guid CallerUserId) : IRequest<Result<InquiryDto>>;
 
 public sealed class ApproveInquiryUnlockCommandHandler(
-    InquiryDbContext dbContext)
+    InquiryDbContext dbContext,
+    IDealApplicationStatusProvider dealStatusProvider)
     : IRequestHandler<ApproveInquiryUnlockCommand, Result<InquiryDto>>
 {
     public async Task<Result<InquiryDto>> Handle(
@@ -19,6 +23,23 @@ public sealed class ApproveInquiryUnlockCommandHandler(
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        var participants = await dealStatusProvider
+            .GetParticipantsAsync(request.DealId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (participants is null)
+        {
+            return Result<InquiryDto>.Failure(
+                new Error("Inquiry.DealNotFound", "Deal not found."));
+        }
+
+        if (participants.LandlordUserId != request.CallerUserId)
+        {
+            return Result<InquiryDto>.Failure(
+                new Error("Inquiry.Forbidden",
+                    "Only the deal's host can approve a detail unlock."));
+        }
 
         var session = await dbContext.Sessions
             .FirstOrDefaultAsync(s => s.DealId == request.DealId

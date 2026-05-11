@@ -2,6 +2,7 @@ using Lagedra.Modules.IdentityAndVerification.Domain.Events;
 using Lagedra.Modules.Notifications.Application.Commands;
 using Lagedra.Modules.Notifications.Domain.Enums;
 using Lagedra.SharedKernel.Events;
+using Lagedra.SharedKernel.Integration.Events;
 using MediatR;
 
 namespace Lagedra.Modules.IdentityAndVerification.Application.EventHandlers;

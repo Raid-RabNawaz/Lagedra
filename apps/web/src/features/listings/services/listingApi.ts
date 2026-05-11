@@ -1,3 +1,4 @@
+import { isAxiosError } from "axios";
 import { endpoints } from "@/api/endpoints";
 import { http } from "@/api/http";
 import type {
@@ -66,8 +67,17 @@ export const listingApi = {
   },
 
   async getSimilar(id: string): Promise<ListingSummaryDto[]> {
-    const response = await http.get<ListingSummaryDto[]>(endpoints.listings.similar(id));
-    return response.data;
+    try {
+      const response = await http.get<ListingSummaryDto[]>(endpoints.listings.similar(id));
+      return response.data;
+    } catch (error) {
+      if (isAxiosError(error) && (error.response?.status === 400 || error.response?.status === 404)) {
+        // Similar listings are non-critical for the detail page.
+        return [];
+      }
+
+      throw error;
+    }
   },
 
   async create(payload: CreateListingRequest): Promise<ListingDetailsDto> {
@@ -80,14 +90,18 @@ export const listingApi = {
     return response.data;
   },
 
-  async publish(id: string): Promise<ListingDetailsDto> {
-    const response = await http.post<ListingDetailsDto>(endpoints.listings.publish(id));
+  async submitForReview(id: string): Promise<ListingDetailsDto> {
+    const response = await http.post<ListingDetailsDto>(endpoints.listings.submitForReview(id));
     return response.data;
   },
 
   async close(id: string): Promise<ListingDetailsDto> {
     const response = await http.post<ListingDetailsDto>(endpoints.listings.close(id));
     return response.data;
+  },
+
+  async delete(id: string): Promise<void> {
+    await http.delete(endpoints.listings.delete(id));
   },
 
   async setApproxLocation(listingId: string, payload: SetApproxLocationRequest): Promise<ListingDetailsDto> {
@@ -108,6 +122,27 @@ export const listingApi = {
 
   async addPhoto(listingId: string, payload: AddListingPhotoRequest): Promise<ListingPhotoDto> {
     const response = await http.post<ListingPhotoDto>(endpoints.listings.addPhoto(listingId), payload);
+    return response.data;
+  },
+
+  async uploadMedia(
+    listingId: string,
+    file: File,
+    caption?: string | null,
+  ): Promise<{
+    kind: "Photo" | "Video";
+    url: string;
+    storageKey: string;
+    photo: ListingPhotoDto | null;
+  }> {
+    const form = new FormData();
+    form.append("file", file, file.name);
+    if (caption && caption.trim().length > 0) {
+      form.append("caption", caption.trim());
+    }
+    const response = await http.post(endpoints.listings.uploadMedia(listingId), form, {
+      timeout: 180_000,
+    });
     return response.data;
   },
 

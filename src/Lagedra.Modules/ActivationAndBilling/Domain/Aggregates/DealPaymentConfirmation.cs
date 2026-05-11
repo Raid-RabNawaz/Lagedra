@@ -29,6 +29,14 @@ public sealed class DealPaymentConfirmation : AggregateRoot<Guid>
     public DateTime? CancelledAt { get; private set; }
     public string? CancellationReason { get; private set; }
     public DateTime? HostPlatformReminderSentAt { get; private set; }
+    public string? StripePaymentIntentId { get; private set; }
+    public string? StripePaymentStatus { get; private set; }
+
+    /// <summary>
+    /// Truth Surface snapshot id this payment row was created from. Lets
+    /// arbitration trace a Stripe payment back to the exact sealed agreement.
+    /// </summary>
+    public Guid? TruthSurfaceSnapshotId { get; private set; }
 
     private DealPaymentConfirmation() { }
 
@@ -36,7 +44,8 @@ public sealed class DealPaymentConfirmation : AggregateRoot<Guid>
         Guid dealId,
         DealFinancials financials,
         IClock clock,
-        int gracePeriodDays = 3)
+        int gracePeriodDays = 3,
+        Guid? truthSurfaceSnapshotId = null)
     {
         ArgumentNullException.ThrowIfNull(financials);
         ArgumentNullException.ThrowIfNull(clock);
@@ -54,9 +63,43 @@ public sealed class DealPaymentConfirmation : AggregateRoot<Guid>
             TotalHostPlatformPaymentCents = financials.TotalHostPlatformPaymentCents,
             Status = PaymentConfirmationStatus.Pending,
             GracePeriodExpiresAt = now.AddDays(gracePeriodDays),
+            TruthSurfaceSnapshotId = truthSurfaceSnapshotId,
             CreatedAt = now,
             UpdatedAt = now
         };
+    }
+
+    public void SetStripePaymentIntent(string paymentIntentId, string status, IClock clock)
+    {
+        ArgumentNullException.ThrowIfNull(clock);
+        ArgumentException.ThrowIfNullOrWhiteSpace(paymentIntentId);
+
+        StripePaymentIntentId = paymentIntentId;
+        StripePaymentStatus = status;
+        UpdatedAt = clock.UtcNow;
+    }
+
+    public void ConfirmByStripe(IClock clock)
+    {
+        ArgumentNullException.ThrowIfNull(clock);
+
+        Status = PaymentConfirmationStatus.Confirmed;
+        StripePaymentStatus = "succeeded";
+        HostConfirmed = true;
+        HostConfirmedAt = clock.UtcNow;
+        HostPaidPlatform = true;
+        HostPaidPlatformAt = clock.UtcNow;
+        UpdatedAt = clock.UtcNow;
+
+        AddDomainEvent(new PaymentConfirmedEvent(DealId, clock.UtcNow));
+    }
+
+    public void FailByStripe(IClock clock)
+    {
+        ArgumentNullException.ThrowIfNull(clock);
+
+        StripePaymentStatus = "failed";
+        UpdatedAt = clock.UtcNow;
     }
 
     public void ConfirmHostPlatformPayment(IClock clock)
@@ -161,6 +204,8 @@ public sealed class DealPaymentConfirmation : AggregateRoot<Guid>
         CancelledAt = clock.UtcNow;
         CancellationReason = reason;
         UpdatedAt = clock.UtcNow;
+
+        AddDomainEvent(new PaymentCancelledEvent(DealId, reason));
     }
 
     public void MarkReminderSent(IClock clock)

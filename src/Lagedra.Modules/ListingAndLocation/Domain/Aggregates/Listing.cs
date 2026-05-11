@@ -28,7 +28,39 @@ public sealed class Listing : AggregateRoot<Guid>
     public HouseRules? HouseRules { get; private set; }
     public CancellationPolicy? CancellationPolicy { get; private set; }
     public bool InstantBookingEnabled { get; private set; }
+
+    /// <summary>
+    /// When <c>true</c> (default), verified partner organizations may create direct
+    /// reservations for this listing on behalf of their guests / employees / clients
+    /// (Phase 18.7). When <c>false</c>, the landlord has opted this listing out and
+    /// partner direct-reservation attempts return <c>Listing.PartnerDirectReservationsNotAccepted</c>.
+    /// Tenant self-applications are unaffected.
+    /// </summary>
+    public bool AcceptsPartnerDirectReservations { get; private set; } = true;
     public Uri? VirtualTourUrl { get; private set; }
+
+    /// <summary>
+    /// Reason supplied by an admin when denying a listing in review. Cleared
+    /// when the listing is re-submitted or approved. Surfaced to the landlord
+    /// so they know what to fix.
+    /// </summary>
+    public string? RejectionReason { get; private set; }
+
+    /// <summary>
+    /// Timestamp of the last admin review decision (approval or denial).
+    /// </summary>
+    public DateTime? ReviewedAt { get; private set; }
+
+    /// <summary>
+    /// User ID of the admin who made the most recent review decision.
+    /// </summary>
+    public Guid? ReviewedByUserId { get; private set; }
+
+    /// <summary>
+    /// Timestamp of the most recent submission for review (set whenever the
+    /// listing transitions Draft/Denied → InReview).
+    /// </summary>
+    public DateTime? SubmittedForReviewAt { get; private set; }
 
     private readonly List<ListingAmenity> _amenities = [];
     private readonly List<ListingSafetyDevice> _safetyDevices = [];
@@ -178,6 +210,12 @@ public sealed class Listing : AggregateRoot<Guid>
         InstantBookingEnabled = enabled;
     }
 
+    public void SetAcceptsPartnerDirectReservations(bool accepts)
+    {
+        EnsureEditable();
+        AcceptsPartnerDirectReservations = accepts;
+    }
+
     public void SetVirtualTourUrl(Uri? url)
     {
         EnsureEditable();
@@ -294,20 +332,65 @@ public sealed class Listing : AggregateRoot<Guid>
         SuggestedDepositHighCents = highCents;
     }
 
-    public void Publish()
+    /// <summary>
+    /// Landlord submits the listing for admin review. Allowed from
+    /// <see cref="ListingStatus.Draft"/> (first submission) and
+    /// <see cref="ListingStatus.Denied"/> (re-submission after fixing issues).
+    /// </summary>
+    public void SubmitForReview()
     {
-        if (Status != ListingStatus.Draft)
+        if (Status is not (ListingStatus.Draft or ListingStatus.Denied))
         {
-            throw new InvalidOperationException($"Cannot publish listing in status '{Status}'.");
+            throw new InvalidOperationException($"Cannot submit listing for review in status '{Status}'.");
         }
 
         if (ApproxGeoPoint is null)
         {
-            throw new InvalidOperationException("Approximate location must be set before publishing.");
+            throw new InvalidOperationException("Approximate location must be set before submitting for review.");
+        }
+
+        Status = ListingStatus.InReview;
+        RejectionReason = null;
+        SubmittedForReviewAt = DateTime.UtcNow;
+        AddDomainEvent(new ListingSubmittedForReviewEvent(Id, LandlordUserId));
+    }
+
+    /// <summary>
+    /// Admin approves the listing and makes it publicly visible.
+    /// Only allowed from <see cref="ListingStatus.InReview"/>.
+    /// </summary>
+    public void ApproveByAdmin(Guid adminUserId)
+    {
+        if (Status != ListingStatus.InReview)
+        {
+            throw new InvalidOperationException($"Cannot approve listing in status '{Status}'.");
         }
 
         Status = ListingStatus.Published;
+        RejectionReason = null;
+        ReviewedAt = DateTime.UtcNow;
+        ReviewedByUserId = adminUserId;
         AddDomainEvent(new ListingPublishedEvent(Id, LandlordUserId));
+    }
+
+    /// <summary>
+    /// Admin denies the listing with a required reason. The landlord can then
+    /// edit and re-submit, or delete the listing.
+    /// </summary>
+    public void DenyByAdmin(Guid adminUserId, string reason)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+
+        if (Status != ListingStatus.InReview)
+        {
+            throw new InvalidOperationException($"Cannot deny listing in status '{Status}'.");
+        }
+
+        Status = ListingStatus.Denied;
+        RejectionReason = reason.Trim();
+        ReviewedAt = DateTime.UtcNow;
+        ReviewedByUserId = adminUserId;
+        AddDomainEvent(new ListingDeniedEvent(Id, LandlordUserId, RejectionReason));
     }
 
     public void Activate()
@@ -328,12 +411,29 @@ public sealed class Listing : AggregateRoot<Guid>
 
     public void Close()
     {
-        if (Status is ListingStatus.Closed or ListingStatus.Draft)
+        if (Status is not (ListingStatus.Published or ListingStatus.Activated or ListingStatus.InReview))
         {
             throw new InvalidOperationException($"Cannot close listing in status '{Status}'.");
         }
 
         Status = ListingStatus.Closed;
+    }
+
+    /// <summary>
+    /// Landlord deletes the listing. Only allowed in <see cref="ListingStatus.Draft"/>
+    /// or <see cref="ListingStatus.Denied"/> — once a listing has been
+    /// published, the landlord must close it instead so historical data
+    /// (deals, audit trail) stays intact.
+    /// </summary>
+    public void DeleteByLandlord()
+    {
+        if (Status is not (ListingStatus.Draft or ListingStatus.Denied))
+        {
+            throw new InvalidOperationException(
+                $"Cannot delete listing in status '{Status}'. Close it first.");
+        }
+
+        AddDomainEvent(new ListingDeletedEvent(Id, LandlordUserId));
     }
 
     public void SetApproxLocation(GeoPoint geoPoint)
@@ -347,7 +447,7 @@ public sealed class Listing : AggregateRoot<Guid>
     {
         ArgumentNullException.ThrowIfNull(address);
 
-        if (Status is not (ListingStatus.Draft or ListingStatus.Published))
+        if (Status is not (ListingStatus.Draft or ListingStatus.Denied or ListingStatus.Published))
         {
             throw new InvalidOperationException($"Cannot lock address in status '{Status}'.");
         }
@@ -359,7 +459,7 @@ public sealed class Listing : AggregateRoot<Guid>
 
     private void EnsureEditable()
     {
-        if (Status != ListingStatus.Draft)
+        if (Status is not (ListingStatus.Draft or ListingStatus.Denied))
         {
             throw new InvalidOperationException($"Listing cannot be edited in status '{Status}'.");
         }

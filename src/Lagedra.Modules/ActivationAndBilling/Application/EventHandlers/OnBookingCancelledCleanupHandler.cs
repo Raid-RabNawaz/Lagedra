@@ -1,4 +1,4 @@
-using Lagedra.Modules.ActivationAndBilling.Domain.Events;
+using Lagedra.SharedKernel.Integration.Events;
 using Lagedra.SharedKernel.Events;
 using MediatR;
 using Microsoft.Extensions.Logging;

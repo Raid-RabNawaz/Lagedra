@@ -40,6 +40,13 @@ public sealed class FileDamageClaimCommandHandler(
                 new Error("DamageClaim.DealNotFound", "Deal not found."));
         }
 
+        if (application.LandlordUserId != request.FiledByUserId)
+        {
+            return Result<DamageClaimDto>.Failure(
+                new Error("DamageClaim.Forbidden",
+                    "Only the listing host can file a damage claim against a tenant for this deal."));
+        }
+
         var deadlineDays = (int)await settings
             .GetLongAsync(PlatformSettingKeys.DamageClaimFilingDeadlineDays, 14, cancellationToken)
             .ConfigureAwait(false);

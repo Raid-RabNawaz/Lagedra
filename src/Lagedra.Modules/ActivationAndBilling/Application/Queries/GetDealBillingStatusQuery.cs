@@ -7,7 +7,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Lagedra.Modules.ActivationAndBilling.Application.Queries;
 
-public sealed record GetDealBillingStatusQuery(Guid DealId) : IRequest<Result<BillingStatusDto>>;
+public sealed record GetDealBillingStatusQuery(
+    Guid DealId,
+    Guid CallerUserId,
+    bool IsAdmin = false) : IRequest<Result<BillingStatusDto>>;
 
 public sealed class GetDealBillingStatusQueryHandler(
     BillingDbContext dbContext)
@@ -29,6 +32,18 @@ public sealed class GetDealBillingStatusQueryHandler(
         {
             return Result<BillingStatusDto>.Failure(
                 new Error("BillingAccount.NotFound", "Billing account not found for this deal."));
+        }
+
+        // The Tenant/Landlord roles were merged into "Member", so participation is
+        // verified per-deal: only the deal's tenant, host, or a platform admin may
+        // view billing details.
+        if (!request.IsAdmin
+            && account.TenantUserId != request.CallerUserId
+            && account.LandlordUserId != request.CallerUserId)
+        {
+            return Result<BillingStatusDto>.Failure(
+                new Error("BillingAccount.Forbidden",
+                    "You do not have access to this deal's billing account."));
         }
 
         return Result<BillingStatusDto>.Success(

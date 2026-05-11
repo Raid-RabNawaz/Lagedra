@@ -77,10 +77,10 @@ public sealed partial class ExternalLoginCommandHandler(
                 .ConfigureAwait(false);
         }
 
-        var role = request.PreferredRole ?? UserRole.Tenant;
-        if (role is UserRole.Arbitrator or UserRole.PlatformAdmin or UserRole.InsurancePartner)
+        var role = request.PreferredRole ?? UserRole.Member;
+        if (role is not (UserRole.Member or UserRole.InstitutionPartner))
         {
-            role = UserRole.Tenant;
+            role = UserRole.Member;
         }
 
         var newUser = new ApplicationUser

@@ -5,6 +5,14 @@ namespace Lagedra.Modules.VerificationAndRisk.Domain.Policies;
 /// <summary>
 /// Deposit band = f(VerificationClass, InsuranceState, JurisdictionCap).
 /// Returns (lowCents, highCents) as a percentage of the jurisdiction cap.
+///
+/// <para>Sourcing of <see cref="InsuranceStatus.InstitutionBacked"/> (Phase 18 — Option A):
+/// the band reduction for <c>InstitutionBacked</c> is awarded when EITHER (a) the tenant
+/// holds a real third-party insurance binding flagged institution-backed, OR (b) at least
+/// one verified partner organization has an Approved+unexpired <c>PartnerEndorsement</c>
+/// for the tenant. The two paths produce the SAME band by deliberate design — there is no
+/// "double discount" for being both endorsed and insured. The user-facing label
+/// distinguishes the two via <c>ProtectionTier</c> on the read model, but pricing does not.</para>
 /// </summary>
 public static class DepositRecommendationPolicy
 {

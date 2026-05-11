@@ -25,6 +25,8 @@
     <ProjectReference Include="..\Lagedra.Modules\AntiAbuseAndIntegrity\AntiAbuseAndIntegrity.csproj" />
     <ProjectReference Include="..\Lagedra.Modules\ContentManagement\ContentManagement.csproj" />
     <ProjectReference Include="..\Lagedra.Modules\PartnerNetwork\PartnerNetwork.csproj" />
+    <ProjectReference Include="..\Lagedra.Modules\AuditLog\AuditLog.csproj" />
+    <ProjectReference Include="..\Lagedra.Modules\Analytics\Analytics.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,9 +1,9 @@
 using Lagedra.Modules.ListingAndLocation.Domain.Enums;
+using Lagedra.SharedKernel.Integration;
 
 namespace Lagedra.Modules.ListingAndLocation.Presentation.Contracts;
 
 public sealed record CreateListingRequest(
-    Guid LandlordUserId,
     PropertyType PropertyType,
     string Title,
     string Description,

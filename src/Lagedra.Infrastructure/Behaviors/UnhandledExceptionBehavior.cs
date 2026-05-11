@@ -15,6 +15,8 @@ public sealed partial class UnhandledExceptionBehavior<TRequest, TResponse>(
         RequestHandlerDelegate<TResponse> next,
         CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(next);
+
         try
         {
             return await next().ConfigureAwait(false);

@@ -1,4 +1,4 @@
-using Lagedra.Modules.InsuranceIntegration.Domain.Enums;
+using Lagedra.SharedKernel.Integration;
 
 namespace Lagedra.Modules.InsuranceIntegration.Application.DTOs;
 

@@ -1,14 +1,14 @@
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { ArrowLeft, AlertTriangle } from "lucide-react";
 import { useAuthStore } from "@/app/auth/authStore";
 import { listingApi } from "@/features/listings/services/listingApi";
-import { ListingForm } from "@/features/listings/components/ListingForm";
+import { ListingWizard } from "@/features/listings/components/ListingWizard";
 import { useListingDefinitions } from "@/features/listings/hooks/useListingDefinitions";
 import { toCreateListingRequest } from "@/features/listings/lib/toListingRequests";
 import type { ListingFormValues } from "@/features/listings/lib/listingFormSchema";
 import { Loader } from "@/components/shared/Loader";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertTriangle } from "lucide-react";
 
 export const CreateListingPage = () => {
   const user = useAuthStore((s) => s.user);
@@ -19,7 +19,7 @@ export const CreateListingPage = () => {
   const mutation = useMutation({
     mutationFn: async (values: ListingFormValues) => {
       if (!user) throw new Error("You must be signed in.");
-      return listingApi.create(toCreateListingRequest(values, user.userId));
+      return listingApi.create(toCreateListingRequest(values));
     },
     onSuccess: (data) => {
       void queryClient.invalidateQueries({ queryKey: ["listings", "mine"] });
@@ -40,9 +40,17 @@ export const CreateListingPage = () => {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Create a listing</h1>
+        <Link
+          to="/app/listings"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to my listings
+        </Link>
+        <h1 className="mt-2 text-3xl font-bold tracking-tight">Create a listing</h1>
         <p className="mt-1 text-muted-foreground">
-          Add details below. You can set the map location and photos on the next step before publishing.
+          We'll walk you through the details step by step. After you create the listing, you'll set
+          the map location and upload photos before publishing.
         </p>
       </div>
 
@@ -56,9 +64,9 @@ export const CreateListingPage = () => {
         </Alert>
       )}
 
-      <ListingForm
+      <ListingWizard
         definitions={defs.data}
-        submitLabel="Save & continue"
+        submitLabel="Create listing"
         onSubmit={async (values) => {
           await mutation.mutateAsync(values);
         }}

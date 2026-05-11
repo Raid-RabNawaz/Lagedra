@@ -1,4 +1,5 @@
 using System.Globalization;
+using Microsoft.EntityFrameworkCore;
 using Asp.Versioning;
 using FluentValidation;
 using Lagedra.Auth;
@@ -39,6 +40,10 @@ using Lagedra.Modules.ContentManagement;
 using Lagedra.Modules.ContentManagement.Presentation.Endpoints;
 using Lagedra.Modules.PartnerNetwork;
 using Lagedra.Modules.PartnerNetwork.Presentation.Endpoints;
+using Lagedra.Modules.AuditLog;
+using Lagedra.Modules.AuditLog.Presentation.Endpoints;
+using Lagedra.Modules.Analytics;
+using Lagedra.Modules.Analytics.Presentation.Endpoints;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.OpenApi.Models;
 using Lagedra.Infrastructure.Middleware;
@@ -84,6 +89,8 @@ try
     builder.Services.AddAntiAbuseAndIntegrity(builder.Configuration);
     builder.Services.AddContentManagement(builder.Configuration);
     builder.Services.AddPartnerNetwork(builder.Configuration);
+    builder.Services.AddAuditLog(builder.Configuration);
+    builder.Services.AddAnalytics(builder.Configuration);
     builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
 
     builder.Services.AddValidatorsFromAssemblies(
@@ -138,8 +145,9 @@ try
     });
 
     builder.Services.AddAuthorizationBuilder()
-        .AddPolicy("RequireLandlord", p => p.RequireRole("Landlord", "PlatformAdmin"))
-        .AddPolicy("RequireTenant", p => p.RequireRole("Tenant", "PlatformAdmin"))
+        // "Landlord" / "Tenant" are accepted transitionally so that JWTs issued before the role merge
+        // continue to authorize until their owners refresh / re-login. Remove after one release.
+        .AddPolicy("RequireMember", p => p.RequireRole("Member", "PlatformAdmin", "Landlord", "Tenant"))
         .AddPolicy("RequireArbitrator", p => p.RequireRole("Arbitrator", "PlatformAdmin"))
         .AddPolicy("RequirePlatformAdmin", p => p.RequireRole("PlatformAdmin"))
         .AddPolicy("RequireInsurancePartner", p => p.RequireRole("InsurancePartner", "PlatformAdmin"))
@@ -158,6 +166,39 @@ try
 
     var app = builder.Build();
 
+    await using (var migrationScope = app.Services.CreateAsyncScope())
+    {
+        var sp = migrationScope.ServiceProvider;
+        var dbContextTypes = new[]
+        {
+            typeof(Lagedra.Auth.Infrastructure.Persistence.AuthDbContext),
+            typeof(Lagedra.Compliance.Infrastructure.Persistence.ComplianceDbContext),
+            typeof(Lagedra.TruthSurface.Infrastructure.Persistence.TruthSurfaceDbContext),
+            typeof(Lagedra.Modules.ListingAndLocation.Infrastructure.Persistence.ListingsDbContext),
+            typeof(Lagedra.Modules.ActivationAndBilling.Infrastructure.Persistence.BillingDbContext),
+            typeof(Lagedra.Modules.IdentityAndVerification.Infrastructure.Persistence.IdentityDbContext),
+            typeof(Lagedra.Modules.InsuranceIntegration.Infrastructure.Persistence.InsuranceDbContext),
+            typeof(Lagedra.Modules.StructuredInquiry.Infrastructure.Persistence.InquiryDbContext),
+            typeof(Lagedra.Modules.Arbitration.Infrastructure.Persistence.ArbitrationDbContext),
+            typeof(Lagedra.Modules.Evidence.Infrastructure.Persistence.EvidenceDbContext),
+            typeof(Lagedra.Modules.JurisdictionPacks.Infrastructure.Persistence.JurisdictionDbContext),
+            typeof(Lagedra.Modules.VerificationAndRisk.Infrastructure.Persistence.RiskDbContext),
+            typeof(Lagedra.Modules.ComplianceMonitoring.Infrastructure.Persistence.ComplianceMonitoringDbContext),
+            typeof(Lagedra.Modules.Notifications.Infrastructure.Persistence.NotificationDbContext),
+            typeof(Lagedra.Modules.Privacy.Infrastructure.Persistence.PrivacyDbContext),
+            typeof(Lagedra.Modules.AntiAbuseAndIntegrity.Infrastructure.Persistence.IntegrityDbContext),
+            typeof(Lagedra.Modules.ContentManagement.Infrastructure.Persistence.ContentDbContext),
+            typeof(Lagedra.Modules.PartnerNetwork.Infrastructure.Persistence.PartnerDbContext),
+            typeof(Lagedra.Infrastructure.Settings.PlatformSettingsDbContext),
+        };
+
+        foreach (var ctxType in dbContextTypes)
+        {
+            if (sp.GetService(ctxType) is Microsoft.EntityFrameworkCore.DbContext ctx)
+                await ctx.Database.MigrateAsync().ConfigureAwait(false);
+        }
+    }
+
     await using var scope = app.Services.CreateAsyncScope();
     var seeder = scope.ServiceProvider.GetRequiredService<AuthDataSeeder>();
     await seeder.SeedAsync().ConfigureAwait(false);
@@ -167,7 +208,7 @@ try
 
     await using var settingsScope = app.Services.CreateAsyncScope();
     var settingsDb = settingsScope.ServiceProvider.GetRequiredService<PlatformSettingsDbContext>();
-    await settingsDb.Database.EnsureCreatedAsync().ConfigureAwait(false);
+    await settingsDb.Database.MigrateAsync().ConfigureAwait(false);
 
     app.UseCorrelationId();
     app.UseGlobalExceptionHandler();
@@ -215,6 +256,8 @@ try
     app.MapTruthSurfaceEndpoints();
     app.MapApplicationEndpoints();
     app.MapActivationEndpoints();
+    app.MapDealEndpoints();
+    app.MapCheckoutEndpoints();
     app.MapBillingEndpoints();
     app.MapPaymentConfirmationEndpoints();
     app.MapDamageClaimEndpoints();
@@ -222,9 +265,11 @@ try
     app.MapListingEndpoints();
     app.MapListingDefinitionsEndpoints();
     app.MapAdminListingDefinitionsEndpoints();
+    app.MapAdminListingReviewEndpoints();
     app.MapLocationEndpoints();
     app.MapIdentityEndpoints();
     app.MapHostPaymentEndpoints();
+    app.MapHostStripeEndpoints();
     app.MapVerificationEndpoints();
     app.MapKycWebhookEndpoints();
     app.MapInsuranceEndpoints();
@@ -247,6 +292,14 @@ try
     app.MapAdminBlogEndpoints();
     app.MapPartnerEndpoints();
     app.MapPlatformSettingsEndpoints();
+    app.MapAdminComplianceEndpoints();
+    app.MapAdminInsuranceEndpoints();
+    app.MapAdminIntegrityEndpoints();
+    app.MapAdminArbitrationEndpoints();
+    app.MapAdminEvidenceEndpoints();
+    app.MapAdminIdentityEndpoints();
+    app.MapAdminAnalyticsEndpoints();
+    app.MapAuditEndpoints();
 
     app.MapHub<NotificationHub>("/hubs/notifications");
 

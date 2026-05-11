@@ -1,5 +1,5 @@
-using Lagedra.Modules.IdentityAndVerification.Domain.Enums;
-using Lagedra.Modules.IdentityAndVerification.Domain.Events;
+using Lagedra.SharedKernel.Integration;
+using Lagedra.SharedKernel.Integration.Events;
 using Lagedra.SharedKernel.Domain;
 
 namespace Lagedra.Modules.IdentityAndVerification.Domain.Entities;

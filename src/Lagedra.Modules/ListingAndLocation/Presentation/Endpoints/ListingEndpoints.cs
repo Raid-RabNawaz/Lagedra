@@ -6,6 +6,7 @@ using Lagedra.Modules.ListingAndLocation.Presentation.Contracts;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
 
@@ -20,24 +21,33 @@ public static class ListingEndpoints
         var group = app.MapGroup("/v1/listings")
             .WithTags("Listings");
 
-        group.MapPost("/", CreateListing).RequireAuthorization("RequireLandlord");
-        group.MapGet("/mine", GetMyListings).RequireAuthorization("RequireLandlord");
-        group.MapPut("/{listingId:guid}", UpdateListing).RequireAuthorization("RequireLandlord");
-        group.MapPost("/{listingId:guid}/publish", PublishListing).RequireAuthorization("RequireLandlord");
-        group.MapPost("/{listingId:guid}/close", CloseListing).RequireAuthorization("RequireLandlord");
+        group.MapPost("/", CreateListing).RequireAuthorization("RequireMember");
+        group.MapGet("/mine", GetMyListings).RequireAuthorization("RequireMember");
+        group.MapPut("/{listingId:guid}", UpdateListing).RequireAuthorization("RequireMember");
+        group.MapDelete("/{listingId:guid}", DeleteListing).RequireAuthorization("RequireMember");
+        // /publish is the legacy URL — semantically it now means "submit for
+        // admin review". /submit-for-review is the modern alias for clarity.
+        group.MapPost("/{listingId:guid}/publish", SubmitListingForReview).RequireAuthorization("RequireMember");
+        group.MapPost("/{listingId:guid}/submit-for-review", SubmitListingForReview).RequireAuthorization("RequireMember");
+        group.MapPost("/{listingId:guid}/close", CloseListing).RequireAuthorization("RequireMember");
         group.MapGet("/{listingId:guid}", GetListingDetails).AllowAnonymous();
         group.MapGet("/", SearchListings).AllowAnonymous();
         group.MapGet("/{listingId:guid}/similar", GetSimilarListings).AllowAnonymous();
         group.MapGet("/{listingId:guid}/share-url", GetShareUrl).AllowAnonymous();
         group.MapGet("/{listingId:guid}/price-history", GetPriceHistory).AllowAnonymous();
         group.MapGet("/{listingId:guid}/availability", GetAvailability).AllowAnonymous();
-        group.MapPost("/{listingId:guid}/block-dates", BlockDates).RequireAuthorization("RequireLandlord");
-        group.MapDelete("/{listingId:guid}/block-dates/{blockId:guid}", UnblockDates).RequireAuthorization("RequireLandlord");
+        group.MapPost("/{listingId:guid}/block-dates", BlockDates).RequireAuthorization("RequireMember");
+        group.MapDelete("/{listingId:guid}/block-dates/{blockId:guid}", UnblockDates).RequireAuthorization("RequireMember");
 
-        group.MapPost("/{listingId:guid}/photos", AddPhoto).RequireAuthorization("RequireLandlord");
-        group.MapDelete("/{listingId:guid}/photos/{photoId:guid}", RemovePhoto).RequireAuthorization("RequireLandlord");
-        group.MapPut("/{listingId:guid}/photos/{photoId:guid}/cover", SetCoverPhoto).RequireAuthorization("RequireLandlord");
-        group.MapPut("/{listingId:guid}/photos/reorder", ReorderPhotos).RequireAuthorization("RequireLandlord");
+        group.MapPost("/{listingId:guid}/photos", AddPhoto).RequireAuthorization("RequireMember");
+        group.MapDelete("/{listingId:guid}/photos/{photoId:guid}", RemovePhoto).RequireAuthorization("RequireMember");
+        group.MapPut("/{listingId:guid}/photos/{photoId:guid}/cover", SetCoverPhoto).RequireAuthorization("RequireMember");
+        group.MapPut("/{listingId:guid}/photos/reorder", ReorderPhotos).RequireAuthorization("RequireMember");
+
+        group.MapPost("/{listingId:guid}/media/upload", UploadMedia)
+            .RequireAuthorization("RequireMember")
+            .DisableAntiforgery()
+            .WithMetadata(new RequestSizeLimitAttribute(105L * 1024 * 1024));
 
         var savedGroup = app.MapGroup("/v1/saved-listings")
             .WithTags("Saved Listings")
@@ -77,12 +87,14 @@ public static class ListingEndpoints
 
     private static async Task<IResult> CreateListing(
         [FromBody] CreateListingRequest request,
+        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        var userId = GetUserId(httpContext);
         var result = await mediator.Send(
             new CreateListingCommand(
-                request.LandlordUserId,
+                userId,
                 request.PropertyType,
                 request.Title,
                 request.Description,
@@ -105,18 +117,21 @@ public static class ListingEndpoints
 
         return result.IsSuccess
             ? Results.Created($"/v1/listings/{result.Value.Id}", result.Value)
-            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+            : ToErrorResult(result.Error);
     }
 
     private static async Task<IResult> UpdateListing(
         [FromRoute] Guid listingId,
         [FromBody] UpdateListingRequest request,
+        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        var userId = GetUserId(httpContext);
         var result = await mediator.Send(
             new UpdateListingCommand(
                 listingId,
+                userId,
                 request.PropertyType,
                 request.Title,
                 request.Description,
@@ -139,42 +154,64 @@ public static class ListingEndpoints
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+            : ToErrorResult(result.Error);
     }
 
-    private static async Task<IResult> PublishListing(
+    private static async Task<IResult> SubmitListingForReview(
         [FromRoute] Guid listingId,
+        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        var userId = GetUserId(httpContext);
         var result = await mediator.Send(
-            new PublishListingCommand(listingId), cancellationToken).ConfigureAwait(true);
+            new SubmitListingForReviewCommand(listingId, userId), cancellationToken).ConfigureAwait(true);
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> DeleteListing(
+        [FromRoute] Guid listingId,
+        HttpContext httpContext,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetUserId(httpContext);
+        var result = await mediator.Send(
+            new DeleteListingCommand(listingId, userId), cancellationToken).ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.NoContent()
+            : ToErrorResult(result.Error);
     }
 
     private static async Task<IResult> CloseListing(
         [FromRoute] Guid listingId,
+        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        var userId = GetUserId(httpContext);
         var result = await mediator.Send(
-            new CloseListingCommand(listingId), cancellationToken).ConfigureAwait(true);
+            new CloseListingCommand(listingId, userId), cancellationToken).ConfigureAwait(true);
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+            : ToErrorResult(result.Error);
     }
 
     private static async Task<IResult> GetListingDetails(
         [FromRoute] Guid listingId,
+        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        var (requesterUserId, isPlatformAdmin) = GetOptionalRequesterContext(httpContext);
         var result = await mediator.Send(
-            new GetListingDetailsQuery(listingId), cancellationToken).ConfigureAwait(true);
+            new GetListingDetailsQuery(listingId, requesterUserId, isPlatformAdmin),
+            cancellationToken).ConfigureAwait(true);
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
@@ -261,11 +298,13 @@ public static class ListingEndpoints
 
     private static async Task<IResult> GetPriceHistory(
         [FromRoute] Guid listingId,
+        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        var (requesterUserId, isPlatformAdmin) = GetOptionalRequesterContext(httpContext);
         var result = await mediator.Send(
-            new GetListingPriceHistoryQuery(listingId),
+            new GetListingPriceHistoryQuery(listingId, requesterUserId, isPlatformAdmin),
             cancellationToken).ConfigureAwait(true);
 
         return result.IsSuccess
@@ -275,11 +314,14 @@ public static class ListingEndpoints
 
     private static async Task<IResult> GetAvailability(
         [FromRoute] Guid listingId,
+        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        var (requesterUserId, isPlatformAdmin) = GetOptionalRequesterContext(httpContext);
         var result = await mediator.Send(
-            new GetListingAvailabilityQuery(listingId), cancellationToken).ConfigureAwait(true);
+            new GetListingAvailabilityQuery(listingId, requesterUserId, isPlatformAdmin),
+            cancellationToken).ConfigureAwait(true);
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
@@ -289,88 +331,134 @@ public static class ListingEndpoints
     private static async Task<IResult> BlockDates(
         [FromRoute] Guid listingId,
         [FromBody] BlockDatesRequest request,
+        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        var userId = GetUserId(httpContext);
         var result = await mediator.Send(
-            new BlockDatesCommand(listingId, request.CheckInDate, request.CheckOutDate),
+            new BlockDatesCommand(listingId, userId, request.CheckInDate, request.CheckOutDate),
             cancellationToken).ConfigureAwait(true);
 
         return result.IsSuccess
             ? Results.Created($"/v1/listings/{listingId}/block-dates/{result.Value.Id}", result.Value)
-            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+            : ToErrorResult(result.Error);
     }
 
     private static async Task<IResult> UnblockDates(
         [FromRoute] Guid listingId,
         [FromRoute] Guid blockId,
+        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        var userId = GetUserId(httpContext);
         var result = await mediator.Send(
-            new UnblockDatesCommand(listingId, blockId), cancellationToken).ConfigureAwait(true);
+            new UnblockDatesCommand(listingId, userId, blockId), cancellationToken).ConfigureAwait(true);
 
         return result.IsSuccess
             ? Results.NoContent()
-            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+            : ToErrorResult(result.Error);
     }
 
     private static async Task<IResult> AddPhoto(
         [FromRoute] Guid listingId,
         [FromBody] AddListingPhotoRequest request,
+        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        var userId = GetUserId(httpContext);
         var result = await mediator.Send(
-            new AddListingPhotoCommand(listingId, request.StorageKey, request.Url, request.Caption),
+            new AddListingPhotoCommand(listingId, userId, request.StorageKey, request.Url, request.Caption),
             cancellationToken).ConfigureAwait(true);
 
         return result.IsSuccess
             ? Results.Created($"/v1/listings/{listingId}/photos/{result.Value.Id}", result.Value)
-            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+            : ToErrorResult(result.Error);
     }
 
     private static async Task<IResult> RemovePhoto(
         [FromRoute] Guid listingId,
         [FromRoute] Guid photoId,
+        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        var userId = GetUserId(httpContext);
         var result = await mediator.Send(
-            new RemoveListingPhotoCommand(listingId, photoId), cancellationToken).ConfigureAwait(true);
+            new RemoveListingPhotoCommand(listingId, userId, photoId), cancellationToken).ConfigureAwait(true);
 
         return result.IsSuccess
             ? Results.NoContent()
-            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+            : ToErrorResult(result.Error);
     }
 
     private static async Task<IResult> SetCoverPhoto(
         [FromRoute] Guid listingId,
         [FromRoute] Guid photoId,
+        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        var userId = GetUserId(httpContext);
         var result = await mediator.Send(
-            new SetCoverPhotoCommand(listingId, photoId), cancellationToken).ConfigureAwait(true);
+            new SetCoverPhotoCommand(listingId, userId, photoId), cancellationToken).ConfigureAwait(true);
 
         return result.IsSuccess
             ? Results.NoContent()
-            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> UploadMedia(
+        [FromRoute] Guid listingId,
+        [FromForm] string? caption,
+        IFormFile file,
+        HttpContext httpContext,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        if (file is null || file.Length == 0)
+        {
+            return Results.BadRequest(new
+            {
+                error = "Listing.Media.EmptyFile",
+                detail = "No file was uploaded.",
+            });
+        }
+
+        var userId = GetUserId(httpContext);
+        var command = new UploadListingMediaCommand(
+            listingId,
+            userId,
+            file.FileName,
+            file.ContentType,
+            file.Length,
+            caption,
+            _ => Task.FromResult(file.OpenReadStream()));
+
+        var result = await mediator.Send(command, cancellationToken).ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
     }
 
     private static async Task<IResult> ReorderPhotos(
         [FromRoute] Guid listingId,
         [FromBody] ReorderPhotosRequest request,
+        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        var userId = GetUserId(httpContext);
         var result = await mediator.Send(
-            new ReorderPhotosCommand(listingId, request.PhotoIdsInOrder),
+            new ReorderPhotosCommand(listingId, userId, request.PhotoIdsInOrder),
             cancellationToken).ConfigureAwait(true);
 
         return result.IsSuccess
             ? Results.NoContent()
-            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+            : ToErrorResult(result.Error);
     }
 
     private static async Task<IResult> SaveListing(
@@ -508,6 +596,41 @@ public static class ListingEndpoints
         var claim = httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)
             ?? throw new InvalidOperationException("User ID claim not found.");
         return Guid.Parse(claim.Value);
+    }
+
+    /// <summary>
+    /// Reads the caller's identity for endpoints that allow anonymous access.
+    /// Returns <c>(null, false)</c> when the caller is unauthenticated, otherwise
+    /// the user's id and whether they hold the PlatformAdmin role. Used by the
+    /// public listing detail endpoints so owners and admins can see drafts /
+    /// in-review listings while everyone else gets a 404.
+    /// </summary>
+    private static (Guid? UserId, bool IsPlatformAdmin) GetOptionalRequesterContext(HttpContext httpContext)
+    {
+        var user = httpContext.User;
+        if (user?.Identity?.IsAuthenticated is not true)
+        {
+            return (null, false);
+        }
+
+        var claim = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+        if (claim is null || !Guid.TryParse(claim.Value, out var userId))
+        {
+            return (null, false);
+        }
+
+        return (userId, user.IsInRole("PlatformAdmin"));
+    }
+
+    private static IResult ToErrorResult(Lagedra.SharedKernel.Results.Error error)
+    {
+        var payload = new { error = error.Code, detail = error.Description };
+        return error.Code switch
+        {
+            "Listing.Forbidden" => Results.Json(payload, statusCode: StatusCodes.Status403Forbidden),
+            "Listing.NotFound" => Results.NotFound(payload),
+            _ => Results.BadRequest(payload),
+        };
     }
 
     private static HouseRulesDto? MapHouseRules(HouseRulesRequest? request)

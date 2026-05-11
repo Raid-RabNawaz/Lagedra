@@ -1,3 +1,4 @@
+using Lagedra.Modules.PartnerNetwork.Application.Authorization;
 using Lagedra.Modules.PartnerNetwork.Application.DTOs;
 using Lagedra.Modules.PartnerNetwork.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Results;
@@ -7,9 +8,13 @@ using Microsoft.EntityFrameworkCore;
 namespace Lagedra.Modules.PartnerNetwork.Application.Queries;
 
 public sealed record ListReferralLinksQuery(
-    Guid OrganizationId) : IRequest<Result<IReadOnlyList<ReferralLinkDto>>>;
+    Guid OrganizationId,
+    Guid CallerUserId,
+    bool CallerIsPlatformAdmin) : IRequest<Result<IReadOnlyList<ReferralLinkDto>>>;
 
-public sealed class ListReferralLinksQueryHandler(PartnerDbContext dbContext)
+public sealed class ListReferralLinksQueryHandler(
+    PartnerDbContext dbContext,
+    IPartnerAccessService accessService)
     : IRequestHandler<ListReferralLinksQuery, Result<IReadOnlyList<ReferralLinkDto>>>
 {
     public async Task<Result<IReadOnlyList<ReferralLinkDto>>> Handle(
@@ -17,6 +22,17 @@ public sealed class ListReferralLinksQueryHandler(PartnerDbContext dbContext)
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        var authzResult = await accessService.RequireMemberAsync(
+            request.CallerUserId,
+            request.OrganizationId,
+            request.CallerIsPlatformAdmin,
+            cancellationToken).ConfigureAwait(false);
+
+        if (authzResult.IsFailure)
+        {
+            return Result<IReadOnlyList<ReferralLinkDto>>.Failure(authzResult.Error);
+        }
 
         var links = await dbContext.ReferralLinks
             .AsNoTracking()

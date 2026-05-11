@@ -1,28 +1,33 @@
-import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { authApi } from "@/features/auth/services/authApi";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 
 export const VerifyEmailPage = () => {
   const [params] = useSearchParams();
-  const [status, setStatus] = useState<"loading" | "ok" | "error">("loading");
+  const userId = params.get("userId");
+  const token = params.get("token");
 
-  useEffect(() => {
-    const userId = params.get("userId");
-    const token = params.get("token");
+  // The verification call is keyed by the URL parameters, so react-query
+  // dedupes accidental re-runs and gives us loading/error state for free.
+  const verification = useQuery({
+    queryKey: ["verify-email", userId, token],
+    queryFn: () => authApi.verifyEmail(userId!, token!),
+    enabled: Boolean(userId && token),
+    retry: false,
+    staleTime: Infinity,
+  });
 
-    if (!userId || !token) {
-      setStatus("error");
-      return;
-    }
-
-    authApi
-      .verifyEmail(userId, token)
-      .then(() => setStatus("ok"))
-      .catch(() => setStatus("error"));
-  }, [params]);
+  const status: "loading" | "ok" | "error" =
+    !userId || !token
+      ? "error"
+      : verification.isLoading
+        ? "loading"
+        : verification.isSuccess
+          ? "ok"
+          : "error";
 
   return (
     <div className="text-center">

@@ -36,7 +36,10 @@ public sealed record ListingDetailsDto(
     HostProfileDto? HostProfile,
     int QualityScore,
     DateTime CreatedAt,
-    DateTime UpdatedAt);
+    DateTime UpdatedAt,
+    string? RejectionReason = null,
+    DateTime? SubmittedForReviewAt = null,
+    DateTime? ReviewedAt = null);
 
 public sealed record AddressDto(
     string Street,

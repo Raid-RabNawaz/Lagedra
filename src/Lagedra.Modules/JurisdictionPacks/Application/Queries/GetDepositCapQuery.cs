@@ -1,19 +1,10 @@
 using Lagedra.Modules.JurisdictionPacks.Infrastructure.Persistence;
+using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Results;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
 namespace Lagedra.Modules.JurisdictionPacks.Application.Queries;
-
-public sealed record GetDepositCapQuery(
-    string JurisdictionCode,
-    long MonthlyRentCents,
-    string? Condition = null) : IRequest<Result<DepositCapResultDto>>;
-
-public sealed record DepositCapResultDto(
-    long MaxDepositCents,
-    decimal MultiplierApplied,
-    string LegalReference);
 
 public sealed class GetDepositCapQueryHandler(JurisdictionDbContext dbContext)
     : IRequestHandler<GetDepositCapQuery, Result<DepositCapResultDto>>

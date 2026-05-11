@@ -7,25 +7,41 @@ namespace Lagedra.Infrastructure.Security;
 
 public sealed class EncryptionService : IEncryptionService
 {
-    private readonly byte[] _key;
+    private readonly IConfiguration _configuration;
+    private byte[]? _key;
 
     public EncryptionService(IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
-        var keyString = configuration["Encryption:Key"]
+        _configuration = configuration;
+    }
+
+    private byte[] GetKey()
+    {
+        if (_key is not null)
+        {
+            return _key;
+        }
+
+        var keyString = _configuration["Encryption:Key"]
             ?? throw new InvalidOperationException("Encryption:Key is not configured.");
 
-        _key = Convert.FromBase64String(keyString);
+        var key = Convert.FromBase64String(keyString);
 
-        if (_key.Length != 32)
+        if (key.Length != 32)
         {
             throw new InvalidOperationException("Encryption:Key must be a 256-bit (32-byte) Base64-encoded key.");
         }
+
+        _key = key;
+        return _key;
     }
 
     public string Encrypt(string plaintext)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(plaintext);
+
+        var key = GetKey();
 
         var nonce = new byte[12];
         RandomNumberGenerator.Fill(nonce);
@@ -34,7 +50,7 @@ public sealed class EncryptionService : IEncryptionService
         var ciphertextData = new byte[plaintextBytes.Length];
         var tag = new byte[16];
 
-        using var aes = new AesGcm(_key, 16);
+        using var aes = new AesGcm(key, 16);
         aes.Encrypt(nonce, plaintextBytes, ciphertextData, tag);
 
         var result = new byte[nonce.Length + tag.Length + ciphertextData.Length];
@@ -49,6 +65,8 @@ public sealed class EncryptionService : IEncryptionService
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ciphertextBase64);
 
+        var key = GetKey();
+
         var combined = Convert.FromBase64String(ciphertextBase64);
 
         var nonce = combined.AsSpan(0, 12);
@@ -57,7 +75,7 @@ public sealed class EncryptionService : IEncryptionService
 
         var plaintext = new byte[ciphertext.Length];
 
-        using var aes = new AesGcm(_key, 16);
+        using var aes = new AesGcm(key, 16);
         aes.Decrypt(nonce, ciphertext, tag, plaintext);
 
         return Encoding.UTF8.GetString(plaintext);

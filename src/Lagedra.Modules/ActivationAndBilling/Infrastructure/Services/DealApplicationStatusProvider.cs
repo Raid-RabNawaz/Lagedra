@@ -26,4 +26,42 @@ public sealed class DealApplicationStatusProvider(BillingDbContext dbContext) : 
 
         return app is null ? null : new DealParticipantsDto(app.LandlordUserId, app.TenantUserId);
     }
+
+    public async Task<DateOnly?> GetRequestedCheckOutAsync(Guid dealId, CancellationToken ct = default)
+    {
+        var application = await dbContext.DealApplications
+            .AsNoTracking()
+            .FirstOrDefaultAsync(a => a.DealId == dealId, ct)
+            .ConfigureAwait(false);
+
+        return application?.RequestedCheckOut;
+    }
+
+    public async Task<DealApplicationDetailsDto?> GetDealDetailsAsync(Guid dealId, CancellationToken ct = default)
+    {
+        var app = await dbContext.DealApplications
+            .AsNoTracking()
+            .FirstOrDefaultAsync(a => a.DealId == dealId
+                                      && a.Status == DealApplicationStatus.Approved, ct)
+            .ConfigureAwait(false);
+
+        if (app is null)
+        {
+            return null;
+        }
+
+        return new DealApplicationDetailsDto(
+            app.Id,
+            dealId,
+            app.ListingId,
+            app.TenantUserId,
+            app.LandlordUserId,
+            app.RequestedCheckIn,
+            app.RequestedCheckOut,
+            app.StayDurationDays,
+            app.FirstMonthRentCents,
+            app.DepositAmountCents,
+            app.InsuranceFeeCents,
+            app.JurisdictionWarning);
+    }
 }

@@ -37,8 +37,7 @@ export function ListingCard({ listing, className }: ListingCardProps) {
       to={`/listings/${listing.id}`}
       className={cn("group block", className)}
     >
-      <div className="overflow-hidden rounded-xl border bg-background transition-shadow hover:shadow-lg">
-        {/* Image */}
+      <div className="overflow-hidden rounded-2xl bg-card ring-1 ring-border/60 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[var(--shadow-soft)] hover:ring-border">
         <div className="relative aspect-[4/3] overflow-hidden bg-muted">
           {listing.coverPhotoUrl ? (
             <img
@@ -52,12 +51,18 @@ export function ListingCard({ listing, className }: ListingCardProps) {
               <ImageOff className="h-10 w-10 text-muted-foreground/40" />
             </div>
           )}
-          <Badge className="absolute left-3 top-3 text-[10px]" variant="secondary">
+          <Badge
+            className="absolute left-3 top-3 rounded-full bg-background text-[10px] font-semibold text-foreground shadow-sm"
+            variant="secondary"
+          >
             {propertyTypeLabels[listing.propertyType] ?? listing.propertyType}
           </Badge>
           <div className="absolute right-3 top-3 flex items-center gap-1.5">
             {listing.insuranceRequired && (
-              <Badge className="text-[10px]" variant="accent">
+              <Badge
+                className="rounded-full bg-primary text-[10px] font-semibold text-primary-foreground shadow-sm"
+                variant="accent"
+              >
                 Insured
               </Badge>
             )}
@@ -68,9 +73,8 @@ export function ListingCard({ listing, className }: ListingCardProps) {
           </div>
         </div>
 
-        {/* Content */}
         <div className="p-4">
-          <h3 className="font-semibold leading-tight line-clamp-1 group-hover:text-accent transition-colors">
+          <h3 className="font-semibold leading-tight line-clamp-1 text-foreground transition-colors group-hover:text-primary">
             {listing.title}
           </h3>
 

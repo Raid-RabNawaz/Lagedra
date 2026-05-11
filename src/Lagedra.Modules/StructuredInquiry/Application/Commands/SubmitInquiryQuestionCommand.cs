@@ -1,3 +1,4 @@
+using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Results;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -9,12 +10,14 @@ namespace Lagedra.Modules.StructuredInquiry.Application.Commands;
 
 public sealed record SubmitInquiryQuestionCommand(
     Guid DealId,
+    Guid CallerUserId,
     InquiryCategory Category,
     Guid? PredefinedQuestionId,
     string? CustomQuestionText = null) : IRequest<Result<InquiryQuestionDto>>;
 
 public sealed class SubmitInquiryQuestionCommandHandler(
-    InquiryDbContext dbContext)
+    InquiryDbContext dbContext,
+    IDealApplicationStatusProvider dealStatusProvider)
     : IRequestHandler<SubmitInquiryQuestionCommand, Result<InquiryQuestionDto>>
 {
     public async Task<Result<InquiryQuestionDto>> Handle(
@@ -28,6 +31,23 @@ public sealed class SubmitInquiryQuestionCommandHandler(
             return Result<InquiryQuestionDto>.Failure(
                 new Error("Inquiry.InvalidQuestion",
                     "Either a predefined question ID or custom question text must be provided."));
+        }
+
+        var participants = await dealStatusProvider
+            .GetParticipantsAsync(request.DealId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (participants is null)
+        {
+            return Result<InquiryQuestionDto>.Failure(
+                new Error("Inquiry.DealNotFound", "Deal not found."));
+        }
+
+        if (participants.TenantUserId != request.CallerUserId)
+        {
+            return Result<InquiryQuestionDto>.Failure(
+                new Error("Inquiry.Forbidden",
+                    "Only the deal's tenant can submit inquiry questions."));
         }
 
         var session = await dbContext.Sessions

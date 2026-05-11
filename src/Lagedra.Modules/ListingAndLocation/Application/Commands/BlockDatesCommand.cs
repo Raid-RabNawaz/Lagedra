@@ -10,6 +10,7 @@ namespace Lagedra.Modules.ListingAndLocation.Application.Commands;
 
 public sealed record BlockDatesCommand(
     Guid ListingId,
+    Guid CallerUserId,
     DateOnly CheckInDate,
     DateOnly CheckOutDate) : IRequest<Result<AvailabilityBlockDto>>;
 
@@ -17,6 +18,7 @@ public sealed class BlockDatesCommandHandler(ListingsDbContext dbContext)
     : IRequestHandler<BlockDatesCommand, Result<AvailabilityBlockDto>>
 {
     private static readonly Error NotFound = new("Listing.NotFound", "Listing not found.");
+    private static readonly Error Forbidden = new("Listing.Forbidden", "You do not own this listing.");
     private static readonly Error Conflict = new("Dates.Conflict", "The requested dates overlap with an existing block.");
 
     public async Task<Result<AvailabilityBlockDto>> Handle(
@@ -33,6 +35,11 @@ public sealed class BlockDatesCommandHandler(ListingsDbContext dbContext)
         if (listing is null)
         {
             return Result<AvailabilityBlockDto>.Failure(NotFound);
+        }
+
+        if (listing.LandlordUserId != request.CallerUserId)
+        {
+            return Result<AvailabilityBlockDto>.Failure(Forbidden);
         }
 
         if (!AvailabilityService.IsAvailable(listing.AvailabilityBlocks, request.CheckInDate, request.CheckOutDate))

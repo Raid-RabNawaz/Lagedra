@@ -19,4 +19,5 @@ public sealed record DealApplicationDto(
     long? FirstMonthRentCents,
     Guid? PartnerOrganizationId,
     bool IsPartnerReferred,
-    string? JurisdictionWarning);
+    string? JurisdictionWarning,
+    DealApplicationSource Source = DealApplicationSource.TenantSelfApply);

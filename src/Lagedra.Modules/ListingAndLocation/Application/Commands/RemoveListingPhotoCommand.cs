@@ -7,12 +7,14 @@ namespace Lagedra.Modules.ListingAndLocation.Application.Commands;
 
 public sealed record RemoveListingPhotoCommand(
     Guid ListingId,
+    Guid CallerUserId,
     Guid PhotoId) : IRequest<Result>;
 
 public sealed class RemoveListingPhotoCommandHandler(ListingsDbContext dbContext)
     : IRequestHandler<RemoveListingPhotoCommand, Result>
 {
     private static readonly Error NotFound = new("Listing.NotFound", "Listing not found.");
+    private static readonly Error Forbidden = new("Listing.Forbidden", "You do not own this listing.");
 
     public async Task<Result> Handle(
         RemoveListingPhotoCommand request,
@@ -28,6 +30,11 @@ public sealed class RemoveListingPhotoCommandHandler(ListingsDbContext dbContext
         if (listing is null)
         {
             return Result.Failure(NotFound);
+        }
+
+        if (listing.LandlordUserId != request.CallerUserId)
+        {
+            return Result.Failure(Forbidden);
         }
 
         listing.RemovePhoto(request.PhotoId);
