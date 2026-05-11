@@ -204,11 +204,14 @@ public static class ListingEndpoints
 
     private static async Task<IResult> GetListingDetails(
         [FromRoute] Guid listingId,
+        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        var (requesterUserId, isPlatformAdmin) = GetOptionalRequesterContext(httpContext);
         var result = await mediator.Send(
-            new GetListingDetailsQuery(listingId), cancellationToken).ConfigureAwait(true);
+            new GetListingDetailsQuery(listingId, requesterUserId, isPlatformAdmin),
+            cancellationToken).ConfigureAwait(true);
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
@@ -295,11 +298,13 @@ public static class ListingEndpoints
 
     private static async Task<IResult> GetPriceHistory(
         [FromRoute] Guid listingId,
+        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        var (requesterUserId, isPlatformAdmin) = GetOptionalRequesterContext(httpContext);
         var result = await mediator.Send(
-            new GetListingPriceHistoryQuery(listingId),
+            new GetListingPriceHistoryQuery(listingId, requesterUserId, isPlatformAdmin),
             cancellationToken).ConfigureAwait(true);
 
         return result.IsSuccess
@@ -309,11 +314,14 @@ public static class ListingEndpoints
 
     private static async Task<IResult> GetAvailability(
         [FromRoute] Guid listingId,
+        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        var (requesterUserId, isPlatformAdmin) = GetOptionalRequesterContext(httpContext);
         var result = await mediator.Send(
-            new GetListingAvailabilityQuery(listingId), cancellationToken).ConfigureAwait(true);
+            new GetListingAvailabilityQuery(listingId, requesterUserId, isPlatformAdmin),
+            cancellationToken).ConfigureAwait(true);
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
@@ -588,6 +596,30 @@ public static class ListingEndpoints
         var claim = httpContext.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)
             ?? throw new InvalidOperationException("User ID claim not found.");
         return Guid.Parse(claim.Value);
+    }
+
+    /// <summary>
+    /// Reads the caller's identity for endpoints that allow anonymous access.
+    /// Returns <c>(null, false)</c> when the caller is unauthenticated, otherwise
+    /// the user's id and whether they hold the PlatformAdmin role. Used by the
+    /// public listing detail endpoints so owners and admins can see drafts /
+    /// in-review listings while everyone else gets a 404.
+    /// </summary>
+    private static (Guid? UserId, bool IsPlatformAdmin) GetOptionalRequesterContext(HttpContext httpContext)
+    {
+        var user = httpContext.User;
+        if (user?.Identity?.IsAuthenticated is not true)
+        {
+            return (null, false);
+        }
+
+        var claim = user.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+        if (claim is null || !Guid.TryParse(claim.Value, out var userId))
+        {
+            return (null, false);
+        }
+
+        return (userId, user.IsInRole("PlatformAdmin"));
     }
 
     private static IResult ToErrorResult(Lagedra.SharedKernel.Results.Error error)

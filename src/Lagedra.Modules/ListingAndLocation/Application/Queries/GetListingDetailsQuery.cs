@@ -1,6 +1,7 @@
 using Lagedra.Modules.ListingAndLocation.Application.Commands;
 using Lagedra.Modules.ListingAndLocation.Application.DTOs;
 using ListingDetailsDto = Lagedra.Modules.ListingAndLocation.Application.DTOs.ListingDetailsDto;
+using Lagedra.Modules.ListingAndLocation.Domain.Enums;
 using Lagedra.Modules.ListingAndLocation.Domain.Services;
 using Lagedra.Modules.ListingAndLocation.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Integration;
@@ -10,7 +11,17 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Lagedra.Modules.ListingAndLocation.Application.Queries;
 
-public sealed record GetListingDetailsQuery(Guid ListingId) : IRequest<Result<ListingDetailsDto>>;
+/// <summary>
+/// Loads a listing for display. Visibility is enforced server-side: anonymous
+/// (or non-owner, non-admin) callers can only see listings whose status is
+/// <see cref="ListingStatus.Published"/> or <see cref="ListingStatus.Activated"/>.
+/// Drafts, in-review and denied listings are hidden (we return NotFound rather
+/// than Forbidden to avoid leaking that the listing exists).
+/// </summary>
+public sealed record GetListingDetailsQuery(
+    Guid ListingId,
+    Guid? RequesterUserId = null,
+    bool RequesterIsPlatformAdmin = false) : IRequest<Result<ListingDetailsDto>>;
 
 public sealed class GetListingDetailsQueryHandler(
     ListingsDbContext dbContext,
@@ -36,6 +47,17 @@ public sealed class GetListingDetailsQueryHandler(
             .ConfigureAwait(false);
 
         if (listing is null)
+        {
+            return Result<ListingDetailsDto>.Failure(NotFound);
+        }
+
+        // Visibility check: only the owner and platform admins can see a
+        // listing that hasn't been admin-approved. Everyone else gets a 404.
+        var isPubliclyVisible =
+            listing.Status == ListingStatus.Published ||
+            listing.Status == ListingStatus.Activated;
+        var isOwner = request.RequesterUserId is Guid uid && uid == listing.LandlordUserId;
+        if (!isPubliclyVisible && !isOwner && !request.RequesterIsPlatformAdmin)
         {
             return Result<ListingDetailsDto>.Failure(NotFound);
         }
