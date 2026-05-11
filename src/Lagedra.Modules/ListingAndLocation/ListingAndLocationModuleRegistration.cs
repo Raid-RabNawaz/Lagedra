@@ -29,8 +29,12 @@ public static class ListingAndLocationModuleRegistration
         services.AddScoped<IListingProvider, ListingProvider>();
 
         // Notification handlers
+        services.AddDomainEventHandler<Domain.Events.ListingSubmittedForReviewEvent,
+            Application.EventHandlers.OnListingSubmittedForReviewNotify>();
         services.AddDomainEventHandler<Domain.Events.ListingPublishedEvent,
             Application.EventHandlers.OnListingPublishedNotify>();
+        services.AddDomainEventHandler<Domain.Events.ListingDeniedEvent,
+            Application.EventHandlers.OnListingDeniedNotify>();
 
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(ListingAndLocationModuleRegistration).Assembly));

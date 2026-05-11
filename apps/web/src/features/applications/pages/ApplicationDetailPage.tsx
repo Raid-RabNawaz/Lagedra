@@ -9,6 +9,7 @@ import {
   CheckCircle2,
   XCircle,
   AlertTriangle,
+  Lock,
 } from "lucide-react";
 import {
   useApplicationDetail,
@@ -17,8 +18,11 @@ import {
 } from "@/features/applications/hooks/useApplications";
 import { useListingDetail } from "@/features/listings/hooks/useListings";
 import { ApplicationStatusBadge } from "@/features/applications/components/ApplicationStatusBadge";
+import { useAuthStore } from "@/app/auth/authStore";
+import { isAdmin } from "@/app/auth/permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert } from "@/components/ui/alert";
@@ -33,23 +37,61 @@ import {
 import { Loader } from "@/components/shared/Loader";
 import { formatDate, formatMoney } from "@/utils/format";
 import { cn } from "@/lib/utils";
+import {
+  getApiErrorMessage,
+  isForbiddenError,
+  isNotFoundError,
+} from "@/api/errors";
 
 export const ApplicationDetailPage = () => {
   const { id } = useParams<{ id: string }>();
-  const { data: application, isLoading, isError } = useApplicationDetail(id);
+  const {
+    data: application,
+    isLoading,
+    isError,
+    error,
+  } = useApplicationDetail(id);
   const { data: listing } = useListingDetail(application?.listingId);
   const approveMutation = useApproveApplication();
   const rejectMutation = useRejectApplication();
+  const user = useAuthStore((s) => s.user);
 
   const [depositInput, setDepositInput] = useState("");
   const [approveOpen, setApproveOpen] = useState(false);
 
   if (isLoading) return <Loader fullPage label="Loading application..." />;
 
+  if (isForbiddenError(error)) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
+        <Link
+          to="/app/applications"
+          className={cn(buttonVariants({ variant: "outline" }), "mb-6")}
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to applications
+        </Link>
+        <Alert variant="destructive">
+          <Lock className="h-4 w-4" />
+          <span className="ml-2">
+            {getApiErrorMessage(
+              error,
+              "You do not have access to this application.",
+            )}
+          </span>
+        </Alert>
+      </div>
+    );
+  }
+
   if (isError || !application) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8 text-center">
-        <p className="text-destructive font-medium">Application not found or failed to load.</p>
+        <p className="text-destructive font-medium">
+          {isNotFoundError(error)
+            ? "Application not found."
+            : getApiErrorMessage(error, "Failed to load application.")}
+        </p>
         <Link to="/app/applications" className={cn(buttonVariants({ variant: "outline" }), "mt-4")}>
           <ArrowLeft className="h-4 w-4" />
           Back to applications
@@ -57,6 +99,14 @@ export const ApplicationDetailPage = () => {
       </div>
     );
   }
+
+  // Tenant and Landlord were merged into a single "Member" role, so we cannot
+  // gate UI by role alone. Authorize per-application: only the host of the
+  // listing (or a platform admin) sees the approve/reject controls.
+  const isApplicationLandlord = !!user && user.userId === application.landlordUserId;
+  const isApplicationTenant = !!user && user.userId === application.tenantUserId;
+  const isPlatformAdmin = !!user && isAdmin(user.role);
+  const canDecide = isApplicationLandlord || isPlatformAdmin;
 
   const isPending = application.status === "Pending";
   const maxDeposit = listing?.maxDepositCents ?? 0;
@@ -202,8 +252,21 @@ export const ApplicationDetailPage = () => {
         )}
       </div>
 
+      {/* Viewer perspective hint for tenants */}
+      {!canDecide && isApplicationTenant && isPending && (
+        <>
+          <Separator className="my-6" />
+          <Alert>
+            <Clock className="h-4 w-4" />
+            <span className="ml-2">
+              Waiting for the host to review your application.
+            </span>
+          </Alert>
+        </>
+      )}
+
       {/* Actions */}
-      {isPending && (
+      {isPending && canDecide && (
         <>
           <Separator className="my-6" />
           <div className="flex gap-3">
@@ -240,7 +303,10 @@ export const ApplicationDetailPage = () => {
 
                   {approveMutation.isError && (
                     <Alert variant="destructive">
-                      {(approveMutation.error as Error)?.message ?? "Failed to approve."}
+                      {getApiErrorMessage(
+                        approveMutation.error,
+                        "Failed to approve.",
+                      )}
                     </Alert>
                   )}
 
@@ -268,7 +334,7 @@ export const ApplicationDetailPage = () => {
 
           {rejectMutation.isError && (
             <Alert variant="destructive" className="mt-3">
-              {(rejectMutation.error as Error)?.message ?? "Failed to reject."}
+              {getApiErrorMessage(rejectMutation.error, "Failed to reject.")}
             </Alert>
           )}
         </>

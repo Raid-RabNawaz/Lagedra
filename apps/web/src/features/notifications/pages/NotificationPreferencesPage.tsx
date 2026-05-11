@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowLeft,
@@ -101,14 +101,14 @@ export const NotificationPreferencesPage = () => {
   const [optIns, setOptIns] = useState<Record<string, boolean>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [initialized, setInitialized] = useState(false);
-
-  useEffect(() => {
-    if (preferences && !initialized) {
-      setOptIns(preferences.eventOptIns);
-      setInitialized(true);
-    }
-  }, [preferences, initialized]);
+  // Seed the form state from the loaded preferences exactly once. Updating
+  // state during render (with a guard) is the React-recommended pattern for
+  // "adjusting state when a prop changes" — no effect required.
+  const [seeded, setSeeded] = useState(false);
+  if (!seeded && preferences) {
+    setSeeded(true);
+    setOptIns(preferences.eventOptIns);
+  }
 
   if (isLoading || !preferences) {
     return <Loader fullPage label="Loading preferences..." />;

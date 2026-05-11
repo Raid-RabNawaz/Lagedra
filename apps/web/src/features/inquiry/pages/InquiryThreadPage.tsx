@@ -27,6 +27,11 @@ import { Loader } from "@/components/shared/Loader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { formatDate } from "@/utils/format";
 import type { InquiryQuestionDto, ResponseType } from "@/api/types";
+import {
+  getApiErrorMessage,
+  isForbiddenError,
+  isNotFoundError,
+} from "@/api/errors";
 
 const categoryLabels: Record<string, string> = {
   UtilitySpecifics: "Utility Specifics",
@@ -60,8 +65,8 @@ export const InquiryThreadPage = () => {
   const requestUnlock = useRequestUnlock();
   const approveUnlock = useApproveUnlock();
 
-  const is404 =
-    (error as { response?: { status?: number } })?.response?.status === 404;
+  const is404 = isNotFoundError(error);
+  const isForbidden = isForbiddenError(error);
   const noSession = isError && is404;
   const isClosed = inquiry?.status === "Closed";
   const isOpen = inquiry?.status === "Open";
@@ -148,18 +153,33 @@ export const InquiryThreadPage = () => {
             )}
             {requestUnlock.isError && (
               <Alert variant="destructive" className="mt-4 max-w-md mx-auto">
-                {(requestUnlock.error as Error)?.message ??
-                  "Failed to request unlock."}
+                {getApiErrorMessage(
+                  requestUnlock.error,
+                  "Failed to request unlock.",
+                )}
               </Alert>
             )}
           </CardContent>
         </Card>
       )}
 
-      {/* Error (non-404) */}
-      {isError && !is404 && (
+      {/* Forbidden — clean access denied UI */}
+      {isForbidden && (
         <Alert variant="destructive">
-          Failed to load inquiry session. Please try again.
+          <Lock className="h-4 w-4" />
+          <span className="ml-2 text-sm">
+            {getApiErrorMessage(
+              error,
+              "You do not have access to this deal's inquiry thread.",
+            )}
+          </span>
+        </Alert>
+      )}
+
+      {/* Error (non-404, non-403) */}
+      {isError && !is404 && !isForbidden && (
+        <Alert variant="destructive">
+          {getApiErrorMessage(error, "Failed to load inquiry session.")}
         </Alert>
       )}
 
@@ -192,8 +212,10 @@ export const InquiryThreadPage = () => {
             )}
             {approveUnlock.isError && (
               <Alert variant="destructive" className="mt-4 max-w-md mx-auto">
-                {(approveUnlock.error as Error)?.message ??
-                  "Failed to approve unlock."}
+                {getApiErrorMessage(
+                  approveUnlock.error,
+                  "Failed to approve unlock.",
+                )}
               </Alert>
             )}
           </CardContent>

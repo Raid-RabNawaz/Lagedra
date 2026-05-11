@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert } from "@/components/ui/alert";
 import { useDisputePayment } from "@/features/activation-billing/hooks/useBilling";
+import { getApiErrorMessage } from "@/api/errors";
 
 type Props = {
   dealId: string;
@@ -35,7 +36,7 @@ export const DisputePaymentDialog = ({ dealId, open, onOpenChange }: Props) => {
       setReason("");
       onOpenChange(false);
     } catch (e) {
-      setError((e as Error)?.message ?? "Failed to submit dispute.");
+      setError(getApiErrorMessage(e, "Failed to submit dispute."));
     }
   };
 

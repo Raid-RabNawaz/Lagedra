@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Alert } from "@/components/ui/alert";
 import { useCancelBooking } from "@/features/activation-billing/hooks/useBilling";
 import { formatMoney } from "@/utils/format";
+import { getApiErrorMessage } from "@/api/errors";
 import type { CancellationResultDto } from "@/api/types";
 
 type Props = {
@@ -40,7 +41,7 @@ export const CancelBookingDialog = ({ dealId, open, onOpenChange }: Props) => {
       });
       setResult(res);
     } catch (e) {
-      setError((e as Error)?.message ?? "Failed to cancel booking.");
+      setError(getApiErrorMessage(e, "Failed to cancel booking."));
     }
   };
 

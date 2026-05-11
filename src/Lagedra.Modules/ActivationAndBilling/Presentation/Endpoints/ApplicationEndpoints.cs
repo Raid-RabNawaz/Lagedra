@@ -95,15 +95,18 @@ public static class ApplicationEndpoints
 
     private static async Task<IResult> GetApplication(
         [FromRoute] Guid id,
+        ClaimsPrincipal user,
         IMediator mediator,
         CancellationToken ct)
     {
-        var result = await mediator.Send(new GetApplicationStatusQuery(id), ct)
+        var userId = GetUserId(user);
+        var isAdmin = user.IsInRole("PlatformAdmin");
+        var result = await mediator.Send(new GetApplicationStatusQuery(id, userId, isAdmin), ct)
             .ConfigureAwait(true);
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.NotFound(new { error = result.Error.Code, detail = result.Error.Description });
+            : ToErrorResult(result.Error);
     }
 
     private static async Task<IResult> ListApplicationsForListing(

@@ -24,7 +24,11 @@ public static class ListingEndpoints
         group.MapPost("/", CreateListing).RequireAuthorization("RequireMember");
         group.MapGet("/mine", GetMyListings).RequireAuthorization("RequireMember");
         group.MapPut("/{listingId:guid}", UpdateListing).RequireAuthorization("RequireMember");
-        group.MapPost("/{listingId:guid}/publish", PublishListing).RequireAuthorization("RequireMember");
+        group.MapDelete("/{listingId:guid}", DeleteListing).RequireAuthorization("RequireMember");
+        // /publish is the legacy URL — semantically it now means "submit for
+        // admin review". /submit-for-review is the modern alias for clarity.
+        group.MapPost("/{listingId:guid}/publish", SubmitListingForReview).RequireAuthorization("RequireMember");
+        group.MapPost("/{listingId:guid}/submit-for-review", SubmitListingForReview).RequireAuthorization("RequireMember");
         group.MapPost("/{listingId:guid}/close", CloseListing).RequireAuthorization("RequireMember");
         group.MapGet("/{listingId:guid}", GetListingDetails).AllowAnonymous();
         group.MapGet("/", SearchListings).AllowAnonymous();
@@ -153,7 +157,7 @@ public static class ListingEndpoints
             : ToErrorResult(result.Error);
     }
 
-    private static async Task<IResult> PublishListing(
+    private static async Task<IResult> SubmitListingForReview(
         [FromRoute] Guid listingId,
         HttpContext httpContext,
         IMediator mediator,
@@ -161,10 +165,25 @@ public static class ListingEndpoints
     {
         var userId = GetUserId(httpContext);
         var result = await mediator.Send(
-            new PublishListingCommand(listingId, userId), cancellationToken).ConfigureAwait(true);
+            new SubmitListingForReviewCommand(listingId, userId), cancellationToken).ConfigureAwait(true);
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> DeleteListing(
+        [FromRoute] Guid listingId,
+        HttpContext httpContext,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetUserId(httpContext);
+        var result = await mediator.Send(
+            new DeleteListingCommand(listingId, userId), cancellationToken).ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.NoContent()
             : ToErrorResult(result.Error);
     }
 

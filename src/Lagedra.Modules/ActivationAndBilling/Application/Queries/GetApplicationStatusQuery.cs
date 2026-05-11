@@ -8,7 +8,9 @@ using Microsoft.EntityFrameworkCore;
 namespace Lagedra.Modules.ActivationAndBilling.Application.Queries;
 
 public sealed record GetApplicationStatusQuery(
-    Guid ApplicationId) : IRequest<Result<DealApplicationDto>>;
+    Guid ApplicationId,
+    Guid CallerUserId,
+    bool IsAdmin = false) : IRequest<Result<DealApplicationDto>>;
 
 public sealed class GetApplicationStatusQueryHandler(
     BillingDbContext dbContext)
@@ -29,6 +31,15 @@ public sealed class GetApplicationStatusQueryHandler(
         {
             return Result<DealApplicationDto>.Failure(
                 new Error("Application.NotFound", "Application not found."));
+        }
+
+        if (!request.IsAdmin
+            && application.TenantUserId != request.CallerUserId
+            && application.LandlordUserId != request.CallerUserId)
+        {
+            return Result<DealApplicationDto>.Failure(
+                new Error("Application.Forbidden",
+                    "You do not have access to this application."));
         }
 
         return Result<DealApplicationDto>.Success(MapToDto(application));

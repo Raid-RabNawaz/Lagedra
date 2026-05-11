@@ -3,6 +3,7 @@ using Lagedra.Modules.ActivationAndBilling.Application.Commands;
 using Lagedra.Modules.ActivationAndBilling.Application.Queries;
 using Lagedra.Modules.ActivationAndBilling.Presentation.Contracts;
 using Lagedra.Infrastructure.Middleware;
+using Lagedra.SharedKernel.Results;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -52,21 +53,24 @@ public static class PaymentConfirmationEndpoints
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+            : ToErrorResult(result.Error);
     }
 
     private static async Task<IResult> GetPaymentStatus(
         [FromRoute] Guid dealId,
+        ClaimsPrincipal user,
         IMediator mediator,
         CancellationToken ct)
     {
+        var userId = GetUserId(user);
+        var isAdmin = user.IsInRole("PlatformAdmin");
         var result = await mediator
-            .Send(new GetPaymentConfirmationStatusQuery(dealId), ct)
+            .Send(new GetPaymentConfirmationStatusQuery(dealId, userId, isAdmin), ct)
             .ConfigureAwait(false);
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.NotFound(new { error = result.Error.Code, detail = result.Error.Description });
+            : ToErrorResult(result.Error);
     }
 
     private static async Task<IResult> ConfirmPayment(
@@ -82,21 +86,23 @@ public static class PaymentConfirmationEndpoints
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+            : ToErrorResult(result.Error);
     }
 
     private static async Task<IResult> ConfirmHostPlatformPayment(
         [FromRoute] Guid dealId,
+        ClaimsPrincipal user,
         IMediator mediator,
         CancellationToken ct)
     {
+        var userId = GetUserId(user);
         var result = await mediator
-            .Send(new ConfirmHostPlatformPaymentCommand(dealId), ct)
+            .Send(new ConfirmHostPlatformPaymentCommand(dealId, userId), ct)
             .ConfigureAwait(false);
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+            : ToErrorResult(result.Error);
     }
 
     private static async Task<IResult> DisputePayment(
@@ -113,7 +119,7 @@ public static class PaymentConfirmationEndpoints
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+            : ToErrorResult(result.Error);
     }
 
     private static async Task<IResult> ResolvePaymentDispute(
@@ -149,7 +155,7 @@ public static class PaymentConfirmationEndpoints
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+            : ToErrorResult(result.Error);
     }
 
     private static async Task<IResult> CancelBooking(
@@ -167,10 +173,28 @@ public static class PaymentConfirmationEndpoints
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+            : ToErrorResult(result.Error);
     }
 
     private static Guid GetUserId(ClaimsPrincipal user) =>
         Guid.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)
             ?? throw new InvalidOperationException("User ID claim not found."));
+
+    private static IResult ToErrorResult(Error error)
+    {
+        var payload = new { error = error.Code, detail = error.Description };
+
+        if (error.Code.EndsWith(".Forbidden", StringComparison.Ordinal))
+        {
+            return Results.Json(payload, statusCode: StatusCodes.Status403Forbidden);
+        }
+
+        return error.Code switch
+        {
+            "PaymentConfirmation.NotFound"
+                or "Cancel.DealNotFound"
+                or "DamageClaim.DealNotFound" => Results.NotFound(payload),
+            _ => Results.BadRequest(payload),
+        };
+    }
 }

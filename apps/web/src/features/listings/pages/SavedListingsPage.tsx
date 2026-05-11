@@ -9,11 +9,12 @@ import {
   savedCollectionListingsKey,
   savedCollectionsKey,
   savedListingsListKey,
-} from "@/features/listings/components/SaveButton";
+} from "@/features/listings/hooks/useSavedListings";
 import { Loader } from "@/components/shared/Loader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { ErrorState } from "@/components/shared/ErrorState";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";

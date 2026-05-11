@@ -27,22 +27,36 @@ import { useAuthStore } from "@/app/auth/authStore";
 import { formatDate, formatMoney } from "@/utils/format";
 import type { DealSummaryDto, DealPhase } from "@/api/types";
 
-function nextStepMessage(phase: DealPhase, isLandlord: boolean): string {
+type PerspectiveProps = {
+  deal: DealSummaryDto;
+  isLandlord: boolean;
+  isTenant: boolean;
+};
+
+function nextStepMessage(
+  phase: DealPhase,
+  isLandlord: boolean,
+  isTenant: boolean,
+): string {
   switch (phase) {
     case "Inquiry":
-      return isLandlord
-        ? "A tenant is asking questions about the listing. Respond to their inquiry."
-        : "Ask the landlord any questions you have before proceeding.";
+      if (isLandlord) {
+        return "A tenant is asking questions about the listing. Respond to their inquiry.";
+      }
+      if (isTenant) {
+        return "Ask the landlord any questions you have before proceeding.";
+      }
+      return "The tenant and landlord are still discussing the listing.";
     case "TruthSurface":
       return "Both parties need to confirm the truth surface to proceed.";
     case "AwaitingPayment":
-      return isLandlord
-        ? "Waiting for the tenant to complete payment."
-        : "Complete your payment to activate this deal.";
+      if (isLandlord) return "Waiting for the tenant to complete payment.";
+      if (isTenant) return "Complete your payment to activate this deal.";
+      return "Waiting for the tenant to complete payment.";
     case "Checkout":
-      return isLandlord
-        ? "The tenant is completing checkout."
-        : "Finish your checkout to proceed.";
+      if (isLandlord) return "The tenant is completing checkout.";
+      if (isTenant) return "Finish your checkout to proceed.";
+      return "The tenant is completing checkout.";
     case "Active":
       return "This deal is active. You can view billing details and invoices.";
     case "Closed":
@@ -54,7 +68,7 @@ function nextStepMessage(phase: DealPhase, isLandlord: boolean): string {
   }
 }
 
-function StatusAndNextSteps({ deal, isLandlord }: { deal: DealSummaryDto; isLandlord: boolean }) {
+function StatusAndNextSteps({ deal, isLandlord, isTenant }: PerspectiveProps) {
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -63,34 +77,42 @@ function StatusAndNextSteps({ deal, isLandlord }: { deal: DealSummaryDto; isLand
       <CardContent className="space-y-4">
         <DealTimeline currentPhase={deal.dealPhase} />
         <p className="text-sm text-muted-foreground">
-          {nextStepMessage(deal.dealPhase, isLandlord)}
+          {nextStepMessage(deal.dealPhase, isLandlord, isTenant)}
         </p>
-        <PrimaryAction deal={deal} isLandlord={isLandlord} />
+        <PrimaryAction deal={deal} isLandlord={isLandlord} isTenant={isTenant} />
       </CardContent>
     </Card>
   );
 }
 
-function PrimaryAction({ deal, isLandlord }: { deal: DealSummaryDto; isLandlord: boolean }) {
+function PrimaryAction({ deal, isLandlord, isTenant }: PerspectiveProps) {
   switch (deal.dealPhase) {
     case "Inquiry":
-      return isLandlord ? (
-        <Link to={`/app/deals/${deal.dealId}/create-truth-surface`}>
-          <Button className="w-full gap-2">
-            <Plus className="h-4 w-4" />
-            Create Truth Surface
-          </Button>
-        </Link>
-      ) : (
+      if (isLandlord) {
+        return (
+          <Link to={`/app/deals/${deal.dealId}/create-truth-surface`}>
+            <Button className="w-full gap-2">
+              <Plus className="h-4 w-4" />
+              Create Truth Surface
+            </Button>
+          </Link>
+        );
+      }
+      return (
         <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
           <Clock className="h-4 w-4 text-amber-600 shrink-0" />
           <p className="text-sm text-amber-800">
-            The landlord will create the truth surface once the inquiry is complete.
+            {isTenant
+              ? "The landlord will create the truth surface once the inquiry is complete."
+              : "Waiting for the landlord to create the truth surface."}
           </p>
         </div>
       );
 
     case "TruthSurface":
+      if (!isLandlord && !isTenant) {
+        return null;
+      }
       return (
         <Link to={`/app/deals/${deal.dealId}/truth-surface`}>
           <Button className="w-full gap-2">
@@ -102,18 +124,21 @@ function PrimaryAction({ deal, isLandlord }: { deal: DealSummaryDto; isLandlord:
 
     case "AwaitingPayment":
     case "Checkout":
-      return isLandlord ? (
+      if (isTenant) {
+        return (
+          <Link to={`/app/deals/${deal.dealId}/checkout`}>
+            <Button className="w-full gap-2">
+              <CreditCard className="h-4 w-4" />
+              Go to Checkout
+            </Button>
+          </Link>
+        );
+      }
+      return (
         <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
           <Clock className="h-4 w-4 text-amber-600 shrink-0" />
           <p className="text-sm text-amber-800">Waiting for the tenant to complete payment.</p>
         </div>
-      ) : (
-        <Link to={`/app/deals/${deal.dealId}/checkout`}>
-          <Button className="w-full gap-2">
-            <CreditCard className="h-4 w-4" />
-            Go to Checkout
-          </Button>
-        </Link>
       );
 
     case "Active":
@@ -168,7 +193,11 @@ export function DealDetailPage() {
   const user = useAuthStore((s) => s.user);
 
   const deal = deals?.find((d) => d.dealId === dealId);
-  const isLandlord = user?.userId === deal?.landlordUserId;
+  // Tenant/Landlord were merged into a single "Member" role; gate per-deal
+  // controls by the actual participant identity. Platform admins or other
+  // non-participants will see neither tenant nor landlord actions.
+  const isLandlord = !!user && !!deal && user.userId === deal.landlordUserId;
+  const isTenant = !!user && !!deal && user.userId === deal.tenantUserId;
 
   if (isLoading) {
     return <Loader label="Loading deal..." />;
@@ -253,7 +282,7 @@ export function DealDetailPage() {
         </div>
       </div>
 
-      <StatusAndNextSteps deal={deal} isLandlord={isLandlord} />
+      <StatusAndNextSteps deal={deal} isLandlord={isLandlord} isTenant={isTenant} />
 
       {/* Section links */}
       <div className="grid gap-3">

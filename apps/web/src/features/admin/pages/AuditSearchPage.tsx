@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { adminApi } from "@/features/admin/services/adminApi";
 import type { AuditSearchParams, AuditSearchResultDto } from "@/api/types";
@@ -23,27 +23,38 @@ export const AuditSearchPage = () => {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
-  const search = async (p: number) => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const params: AuditSearchParams = { page: p, pageSize };
-      if (userId.trim()) params.userId = userId.trim();
-      if (eventType.trim()) params.eventType = eventType.trim();
-      if (entityType.trim()) params.entityType = entityType.trim();
-      if (startDate) params.startDate = startDate;
-      if (endDate) params.endDate = endDate;
-      const data = await adminApi.searchAuditEvents(params);
-      setResult(data);
-    } catch {
-      setError("Failed to search audit events.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // The current set of filter inputs is captured in a stable callback so the
+  // pagination effect can re-fetch when `page` changes without ESLint
+  // demanding a dependency on every individual filter (which would re-run
+  // the search on every keystroke — that's what the explicit "Search" button
+  // is for).
+  const search = useCallback(
+    async (p: number) => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const params: AuditSearchParams = { page: p, pageSize };
+        if (userId.trim()) params.userId = userId.trim();
+        if (eventType.trim()) params.eventType = eventType.trim();
+        if (entityType.trim()) params.entityType = entityType.trim();
+        if (startDate) params.startDate = startDate;
+        if (endDate) params.endDate = endDate;
+        const data = await adminApi.searchAuditEvents(params);
+        setResult(data);
+      } catch {
+        setError("Failed to search audit events.");
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [userId, eventType, entityType, startDate, endDate],
+  );
 
   useEffect(() => {
     void search(page);
+    // We intentionally only auto-search on page changes; filter edits stay
+    // local until the user submits the form via handleSearch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page]);
 
   const handleSearch = () => {

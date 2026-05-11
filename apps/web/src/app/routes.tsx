@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy } from "react";
 import { Navigate, createBrowserRouter } from "react-router-dom";
 import { RequireAuth } from "@/app/auth/RequireAuth";
 import { RequireMember } from "@/app/auth/RequireMember";
@@ -7,9 +7,8 @@ import { roles } from "@/app/auth/roles";
 import { AuthLayout } from "@/features/auth/pages/AuthLayout";
 import { AppShell } from "@/app/layout/AppShell";
 import { MarketplaceLayout } from "@/app/layout/MarketplaceLayout";
-import { PageBoundary } from "@/app/layout/PageBoundary";
+import { LazyPage } from "@/app/layout/LazyPage";
 import { RouteErrorBoundary } from "@/app/layout/RouteErrorBoundary";
-import { Loader } from "@/components/shared/Loader";
 
 const LoginPage = lazy(() => import("@/features/auth/pages/LoginPage").then((m) => ({ default: m.LoginPage })));
 const RegisterPage = lazy(() => import("@/features/auth/pages/RegisterPage").then((m) => ({ default: m.RegisterPage })));
@@ -35,6 +34,7 @@ const SeoPage = lazy(() => import("@/features/admin/pages/SeoPage").then((m) => 
 const AuditSearchPage = lazy(() => import("@/features/admin/pages/AuditSearchPage").then((m) => ({ default: m.AuditSearchPage })));
 const AnalyticsDashboardPage = lazy(() => import("@/features/admin/pages/AnalyticsDashboardPage").then((m) => ({ default: m.AnalyticsDashboardPage })));
 const ListingAnalyticsPage = lazy(() => import("@/features/admin/pages/ListingAnalyticsPage").then((m) => ({ default: m.ListingAnalyticsPage })));
+const ListingReviewPage = lazy(() => import("@/features/admin/pages/ListingReviewPage").then((m) => ({ default: m.ListingReviewPage })));
 const SearchPage = lazy(() => import("@/features/listings/pages/SearchPage").then((m) => ({ default: m.SearchPage })));
 const MarketplaceHomePage = lazy(() => import("@/features/listings/pages/MarketplaceHomePage").then((m) => ({ default: m.MarketplaceHomePage })));
 const ListingDetailPage = lazy(() => import("@/features/listings/pages/ListingDetailPage").then((m) => ({ default: m.ListingDetailPage })));
@@ -73,14 +73,6 @@ const PartnerGuestsPage = lazy(() => import("@/features/partners/pages/PartnerGu
 const PartnerEndorsementsPage = lazy(() => import("@/features/partners/pages/PartnerEndorsementsPage").then((m) => ({ default: m.PartnerEndorsementsPage })));
 const PartnerLayoutGuard = lazy(() => import("@/features/partners/components/PartnerLayoutGuard").then((m) => ({ default: m.PartnerLayoutGuard })));
 const PartnerVerificationPage = lazy(() => import("@/features/admin/pages/PartnerVerificationPage").then((m) => ({ default: m.PartnerVerificationPage })));
-
-function LazyPage({ children }: { children: React.ReactNode }) {
-  return (
-    <PageBoundary>
-      <Suspense fallback={<Loader fullPage label="Loading..." />}>{children}</Suspense>
-    </PageBoundary>
-  );
-}
 
 export const router = createBrowserRouter([
   {
@@ -194,6 +186,7 @@ export const router = createBrowserRouter([
             element: <RequireRole allowed={[roles.platformAdmin]} />,
             children: [
               { path: "users", element: <LazyPage><UsersPage /></LazyPage> },
+              { path: "listing-review", element: <LazyPage><ListingReviewPage /></LazyPage> },
               { path: "partners", element: <LazyPage><PartnerVerificationPage /></LazyPage> },
               { path: "definitions", element: <LazyPage><DefinitionsPage /></LazyPage> },
               { path: "insurance-queue", element: <LazyPage><InsuranceUnknownQueuePage /></LazyPage> },

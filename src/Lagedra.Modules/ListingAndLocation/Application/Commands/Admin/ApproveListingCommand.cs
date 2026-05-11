@@ -4,18 +4,23 @@ using Lagedra.SharedKernel.Results;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
-namespace Lagedra.Modules.ListingAndLocation.Application.Commands;
+namespace Lagedra.Modules.ListingAndLocation.Application.Commands.Admin;
 
-public sealed record PublishListingCommand(Guid ListingId, Guid CallerUserId) : IRequest<Result<ListingDetailsDto>>;
+/// <summary>
+/// Admin approves a listing currently <c>InReview</c>, moving it to
+/// <c>Published</c> so tenants can discover it in search.
+/// </summary>
+public sealed record ApproveListingCommand(
+    Guid ListingId,
+    Guid AdminUserId) : IRequest<Result<ListingDetailsDto>>;
 
-public sealed class PublishListingCommandHandler(ListingsDbContext dbContext)
-    : IRequestHandler<PublishListingCommand, Result<ListingDetailsDto>>
+public sealed class ApproveListingCommandHandler(ListingsDbContext dbContext)
+    : IRequestHandler<ApproveListingCommand, Result<ListingDetailsDto>>
 {
     private static readonly Error NotFound = new("Listing.NotFound", "Listing not found.");
-    private static readonly Error Forbidden = new("Listing.Forbidden", "You do not own this listing.");
 
     public async Task<Result<ListingDetailsDto>> Handle(
-        PublishListingCommand request,
+        ApproveListingCommand request,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -33,18 +38,13 @@ public sealed class PublishListingCommandHandler(ListingsDbContext dbContext)
             return Result<ListingDetailsDto>.Failure(NotFound);
         }
 
-        if (listing.LandlordUserId != request.CallerUserId)
-        {
-            return Result<ListingDetailsDto>.Failure(Forbidden);
-        }
-
         try
         {
-            listing.Publish();
+            listing.ApproveByAdmin(request.AdminUserId);
         }
         catch (InvalidOperationException ex)
         {
-            return Result<ListingDetailsDto>.Failure(new Error("Listing.PublishFailed", ex.Message));
+            return Result<ListingDetailsDto>.Failure(new Error("Listing.ApproveFailed", ex.Message));
         }
 
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);

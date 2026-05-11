@@ -90,14 +90,18 @@ export const listingApi = {
     return response.data;
   },
 
-  async publish(id: string): Promise<ListingDetailsDto> {
-    const response = await http.post<ListingDetailsDto>(endpoints.listings.publish(id));
+  async submitForReview(id: string): Promise<ListingDetailsDto> {
+    const response = await http.post<ListingDetailsDto>(endpoints.listings.submitForReview(id));
     return response.data;
   },
 
   async close(id: string): Promise<ListingDetailsDto> {
     const response = await http.post<ListingDetailsDto>(endpoints.listings.close(id));
     return response.data;
+  },
+
+  async delete(id: string): Promise<void> {
+    await http.delete(endpoints.listings.delete(id));
   },
 
   async setApproxLocation(listingId: string, payload: SetApproxLocationRequest): Promise<ListingDetailsDto> {

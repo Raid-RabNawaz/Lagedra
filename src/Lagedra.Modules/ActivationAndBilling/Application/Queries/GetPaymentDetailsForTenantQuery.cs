@@ -50,7 +50,7 @@ public sealed class GetPaymentDetailsForTenantQueryHandler(
         if (application is null || application.TenantUserId != request.TenantUserId)
         {
             return Result<PaymentDetailsDto>.Failure(
-                new Error("PaymentDetails.Unauthorized",
+                new Error("PaymentDetails.Forbidden",
                     "You are not authorized to view payment details for this deal."));
         }
 

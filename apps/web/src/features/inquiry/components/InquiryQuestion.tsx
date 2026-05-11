@@ -6,6 +6,7 @@ import { Select } from "@/components/ui/select";
 import { Alert } from "@/components/ui/alert";
 import { usePredefinedQuestions, useSubmitQuestion } from "@/features/inquiry/hooks/useInquiry";
 import type { InquiryCategory } from "@/api/types";
+import { getApiErrorMessage } from "@/api/errors";
 
 const categoryLabels: Record<InquiryCategory, string> = {
   UtilitySpecifics: "Utility Specifics",
@@ -37,14 +38,18 @@ export const InquiryQuestion = ({ dealId }: Props) => {
     if (!selectedQuestion || !category) {
       return;
     }
-    await submitMutation.mutateAsync({
-      dealId,
-      payload: {
-        category: category as InquiryCategory,
-        predefinedQuestionId: selectedQuestion.id,
-      },
-    });
-    setSelectedQuestionId("");
+    try {
+      await submitMutation.mutateAsync({
+        dealId,
+        payload: {
+          category: category as InquiryCategory,
+          predefinedQuestionId: selectedQuestion.id,
+        },
+      });
+      setSelectedQuestionId("");
+    } catch {
+      // Error is surfaced by the mutation state below.
+    }
   };
 
   return (
@@ -92,7 +97,10 @@ export const InquiryQuestion = ({ dealId }: Props) => {
 
         {submitMutation.isError && (
           <Alert variant="destructive">
-            {(submitMutation.error as Error)?.message ?? "Failed to submit question."}
+            {getApiErrorMessage(
+              submitMutation.error,
+              "Failed to submit question.",
+            )}
           </Alert>
         )}
 

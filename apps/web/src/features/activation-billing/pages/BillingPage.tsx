@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useParams, Link, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
@@ -13,6 +13,7 @@ import {
   FileWarning,
   Ban,
   Shield,
+  Lock,
 } from "lucide-react";
 import { useAuthStore } from "@/app/auth/authStore";
 import {
@@ -25,6 +26,11 @@ import {
 } from "@/features/activation-billing/hooks/useBilling";
 import { useCheckoutStatus } from "@/features/activation-billing/hooks/useCheckout";
 import { useMyDeals } from "@/features/deals/hooks/useDeals";
+import {
+  getApiErrorMessage,
+  isForbiddenError,
+  isNotFoundError,
+} from "@/api/errors";
 import { BillingStatusBadge } from "@/features/activation-billing/components/BillingStatusBadge";
 import { PaymentStatusBadge } from "@/features/activation-billing/components/PaymentStatusBadge";
 import { PaymentSecurityNotice } from "@/features/activation-billing/components/NonCustodialDisclaimer";
@@ -45,18 +51,38 @@ export const BillingPage = () => {
   const user = useAuthStore((s) => s.user);
   const { data: deals } = useMyDeals("all");
   const deal = deals?.find((d) => d.dealId === dealId);
+  // Tenant/Landlord were merged into a single "Member" role, so participation
+  // must be checked per-deal. Authorize UI controls against the actual deal
+  // participants rather than role; platform admins can read the page but do
+  // not see participant-only actions.
   const isLandlord = !!user && !!deal && user.userId === deal.landlordUserId;
+  const isTenant = !!user && !!deal && user.userId === deal.tenantUserId;
 
-  const { data: billing, isLoading: billingLoading } = useBillingStatus(dealId);
-  const { data: payment, isLoading: paymentLoading } = usePaymentStatus(dealId);
+  const {
+    data: billing,
+    isLoading: billingLoading,
+    error: billingError,
+  } = useBillingStatus(dealId);
+  const {
+    data: payment,
+    isLoading: paymentLoading,
+    error: paymentError,
+  } = usePaymentStatus(dealId);
   const { data: checkout, refetch: refetchCheckout } = useCheckoutStatus(dealId);
   const { data: paymentDetailsData } = usePaymentDetails(
-    !isLandlord && payment?.status === "Pending" ? dealId : undefined,
+    isTenant && payment?.status === "Pending" ? dealId : undefined,
   );
 
   const stopBilling = useStopBilling();
   const confirmPayment = useConfirmPayment();
   const confirmPlatformPayment = useConfirmPlatformPayment();
+
+  const accessError = billingError ?? paymentError;
+  const isAccessDenied = isForbiddenError(accessError);
+  // 404 on /billing simply means the billing account hasn't been created yet
+  // (deal not yet activated). That isn't an access problem, so we ignore it.
+  const isOtherError =
+    !!accessError && !isAccessDenied && !isNotFoundError(accessError);
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
@@ -65,15 +91,20 @@ export const BillingPage = () => {
   const [showDamageClaimDialog, setShowDamageClaimDialog] = useState(false);
   const [showStopBillingDialog, setShowStopBillingDialog] = useState(false);
 
-  useEffect(() => {
-    const redirectStatus = searchParams.get("redirect_status");
+  // Surface Stripe redirect outcome once per URL change. We track the value
+  // we've already reacted to so flipping searchParams later doesn't re-trigger
+  // the toast or refetch.
+  const redirectStatus = searchParams.get("redirect_status");
+  const [seenRedirectStatus, setSeenRedirectStatus] = useState<string | null>(null);
+  if (redirectStatus !== seenRedirectStatus) {
+    setSeenRedirectStatus(redirectStatus);
     if (redirectStatus === "succeeded") {
       setActionSuccess("Payment completed successfully!");
       refetchCheckout();
     } else if (redirectStatus === "failed") {
       setActionError("Payment failed. Please try again.");
     }
-  }, [searchParams, refetchCheckout]);
+  }
 
   if (billingLoading || paymentLoading) {
     return <Loader fullPage label="Loading billing..." />;
@@ -89,7 +120,7 @@ export const BillingPage = () => {
       setShowStopBillingDialog(false);
       setActionSuccess("Billing stopped successfully.");
     } catch (e) {
-      setActionError((e as Error)?.message ?? "Failed to stop billing.");
+      setActionError(getApiErrorMessage(e, "Failed to stop billing."));
     }
   };
 
@@ -102,7 +133,7 @@ export const BillingPage = () => {
       await confirmPayment.mutateAsync(dealId);
       setActionSuccess("Payment confirmed successfully.");
     } catch (e) {
-      setActionError((e as Error)?.message ?? "Failed to confirm payment.");
+      setActionError(getApiErrorMessage(e, "Failed to confirm payment."));
     }
   };
 
@@ -115,15 +146,36 @@ export const BillingPage = () => {
       await confirmPlatformPayment.mutateAsync(dealId);
       setActionSuccess("Platform fee payment confirmed.");
     } catch (e) {
-      setActionError(
-        (e as Error)?.message ?? "Failed to confirm platform payment.",
-      );
+      setActionError(getApiErrorMessage(e, "Failed to confirm platform payment."));
     }
   };
 
   const paymentCompleted = payment?.status === "Confirmed";
   const needsCheckout =
     payment && !paymentCompleted && checkout?.status !== "succeeded";
+
+  if (isAccessDenied) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
+        <Link
+          to="/app/deals"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to deals
+        </Link>
+        <Alert variant="destructive">
+          <Lock className="h-4 w-4" />
+          <span className="ml-2 text-sm">
+            {getApiErrorMessage(
+              accessError,
+              "You do not have access to this deal's billing.",
+            )}
+          </span>
+        </Alert>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
@@ -139,6 +191,15 @@ export const BillingPage = () => {
         Billing & Payments
       </h1>
 
+      {isOtherError && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertTriangle className="h-4 w-4" />
+          <span className="ml-2 text-sm">
+            {getApiErrorMessage(accessError, "Failed to load billing details.")}
+          </span>
+        </Alert>
+      )}
+
       {actionSuccess && (
         <Alert className="border-emerald-200 bg-emerald-50 text-emerald-800 mb-6">
           <CheckCircle2 className="h-4 w-4" />
@@ -153,7 +214,7 @@ export const BillingPage = () => {
         </Alert>
       )}
 
-      {needsCheckout && !isLandlord && (
+      {needsCheckout && isTenant && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 mb-6">
           <div className="flex items-start gap-3">
             <CreditCard className="h-5 w-5 text-amber-600 mt-0.5" />
@@ -327,7 +388,7 @@ export const BillingPage = () => {
               </Alert>
             )}
 
-            {!isLandlord &&
+            {isTenant &&
               paymentDetailsData?.paymentInfoPlain &&
               payment.status === "Pending" && (
                 <div className="rounded-md border p-3 bg-muted/30">
@@ -375,7 +436,7 @@ export const BillingPage = () => {
                   </Button>
                 )}
 
-              {!isLandlord &&
+              {isTenant &&
                 (payment.status === "Pending" ||
                   payment.status === "Rejected") && (
                   <Button
@@ -389,7 +450,8 @@ export const BillingPage = () => {
                   </Button>
                 )}
 
-              {payment.status !== "Cancelled" &&
+              {(isTenant || isLandlord) &&
+                payment.status !== "Cancelled" &&
                 payment.status !== "Confirmed" && (
                   <Button
                     variant="outline"

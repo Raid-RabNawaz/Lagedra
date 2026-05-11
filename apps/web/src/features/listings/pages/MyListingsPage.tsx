@@ -6,7 +6,7 @@ import {
   Pencil,
   Search,
   Eye,
-  Rocket,
+  Send,
   Ban,
   Bed,
   Bath,
@@ -14,11 +14,15 @@ import {
   Calendar,
   Sparkles,
   X,
+  Trash2,
+  Clock,
+  AlertTriangle,
 } from "lucide-react";
 import { useMyListings } from "@/features/listings/hooks/useMyListings";
 import { listingApi } from "@/features/listings/services/listingApi";
 import type { ListingStatus, ListingSummaryDto } from "@/api/types";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -29,11 +33,22 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { formatMoney, formatDate } from "@/utils/format";
 import { cn } from "@/lib/utils";
 
-const statusVariant: Record<string, "secondary" | "success" | "accent" | "outline"> = {
+const statusVariant: Record<string, "secondary" | "success" | "accent" | "outline" | "default" | "destructive"> = {
   Draft: "secondary",
+  InReview: "default",
   Published: "success",
   Activated: "accent",
   Closed: "outline",
+  Denied: "destructive",
+};
+
+const statusLabel: Record<string, string> = {
+  Draft: "Draft",
+  InReview: "In review",
+  Published: "Published",
+  Activated: "Activated",
+  Closed: "Closed",
+  Denied: "Needs changes",
 };
 
 type StatusFilter = "all" | ListingStatus;
@@ -41,6 +56,8 @@ type StatusFilter = "all" | ListingStatus;
 const tabs: { value: StatusFilter; label: string }[] = [
   { value: "all", label: "All" },
   { value: "Draft", label: "Draft" },
+  { value: "InReview", label: "In review" },
+  { value: "Denied", label: "Needs changes" },
   { value: "Published", label: "Published" },
   { value: "Activated", label: "Activated" },
   { value: "Closed", label: "Closed" },
@@ -53,7 +70,9 @@ export const MyListingsPage = () => {
   const [search, setSearch] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const items = data ?? [];
+  // Memoise so identity is stable across renders (otherwise the `useMemo`s
+  // below would recompute every render due to a fresh `[]` reference).
+  const items = useMemo(() => data ?? [], [data]);
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: items.length };
@@ -70,8 +89,8 @@ export const MyListingsPage = () => {
     });
   }, [items, tab, search]);
 
-  const publishMutation = useMutation({
-    mutationFn: (id: string) => listingApi.publish(id),
+  const submitMutation = useMutation({
+    mutationFn: (id: string) => listingApi.submitForReview(id),
     onSuccess: () => {
       setActionError(null);
       void queryClient.invalidateQueries({ queryKey: ["listings", "mine"] });
@@ -79,7 +98,7 @@ export const MyListingsPage = () => {
     onError: (err: unknown) => {
       const detail =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
-        (err instanceof Error ? err.message : "Failed to publish listing.");
+        (err instanceof Error ? err.message : "Failed to submit listing for review.");
       setActionError(detail);
     },
   });
@@ -98,7 +117,21 @@ export const MyListingsPage = () => {
     },
   });
 
-  const isMutating = publishMutation.isPending || closeMutation.isPending;
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => listingApi.delete(id),
+    onSuccess: () => {
+      setActionError(null);
+      void queryClient.invalidateQueries({ queryKey: ["listings", "mine"] });
+    },
+    onError: (err: unknown) => {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+        (err instanceof Error ? err.message : "Failed to delete listing.");
+      setActionError(detail);
+    },
+  });
+
+  const isMutating = submitMutation.isPending || closeMutation.isPending || deleteMutation.isPending;
 
   if (isLoading) return <Loader label="Loading your listings..." />;
   if (isError) {
@@ -188,13 +221,17 @@ export const MyListingsPage = () => {
                       ? "Try a different search term or clear filters."
                       : t.value === "Draft"
                         ? "Drafts will appear here while you finish setting them up."
-                        : t.value === "Published"
-                          ? "Once you publish a draft, it will show up here."
-                          : t.value === "Activated"
-                            ? "Activated listings have an active billing subscription."
-                            : t.value === "Closed"
-                              ? "Listings you close will be moved here."
-                              : "Try adjusting your filter."
+                        : t.value === "InReview"
+                          ? "Listings you submit will sit here while an admin reviews them."
+                          : t.value === "Denied"
+                            ? "Listings the admin asked you to fix will appear here."
+                            : t.value === "Published"
+                              ? "Once an admin approves your submission, it will show up here."
+                              : t.value === "Activated"
+                                ? "Activated listings have an active billing subscription."
+                                : t.value === "Closed"
+                                  ? "Listings you close will be moved here."
+                                  : "Try adjusting your filter."
                   }
                 />
               ) : (
@@ -203,10 +240,15 @@ export const MyListingsPage = () => {
                     <ListingRowCard
                       key={l.id}
                       listing={l}
-                      onPublish={() => publishMutation.mutate(l.id)}
+                      onSubmitForReview={() => submitMutation.mutate(l.id)}
                       onClose={() => {
                         if (window.confirm("Close this listing? It will no longer appear in search.")) {
                           closeMutation.mutate(l.id);
+                        }
+                      }}
+                      onDelete={() => {
+                        if (window.confirm("Delete this listing permanently? This cannot be undone.")) {
+                          deleteMutation.mutate(l.id);
                         }
                       }}
                       isMutating={isMutating}
@@ -224,17 +266,21 @@ export const MyListingsPage = () => {
 
 function ListingRowCard({
   listing,
-  onPublish,
+  onSubmitForReview,
   onClose,
+  onDelete,
   isMutating,
 }: {
   listing: ListingSummaryDto;
-  onPublish: () => void;
+  onSubmitForReview: () => void;
   onClose: () => void;
+  onDelete: () => void;
   isMutating: boolean;
 }) {
-  const canPublish = listing.status === "Draft";
+  const canSubmit = listing.status === "Draft" || listing.status === "Denied";
   const canClose = listing.status === "Published" || listing.status === "Activated";
+  const canDelete = listing.status === "Draft" || listing.status === "Denied";
+  const submitLabel = listing.status === "Denied" ? "Resubmit" : "Submit for review";
 
   return (
     <Card className="overflow-hidden transition-shadow hover:shadow-md">
@@ -256,7 +302,11 @@ function ListingRowCard({
           </div>
         )}
         <div className="absolute left-3 top-3">
-          <Badge variant={statusVariant[listing.status] ?? "secondary"}>{listing.status}</Badge>
+          <Badge variant={statusVariant[listing.status] ?? "secondary"}>
+            {listing.status === "InReview" && <Clock className="h-3 w-3" />}
+            {listing.status === "Denied" && <AlertTriangle className="h-3 w-3" />}
+            {statusLabel[listing.status] ?? listing.status}
+          </Badge>
         </div>
         {listing.qualityScore != null && (
           <div className="absolute right-3 top-3">
@@ -311,16 +361,16 @@ function ListingRowCard({
             <Pencil className="h-4 w-4" />
             Edit
           </Link>
-          {canPublish && (
+          {canSubmit && (
             <Button
               variant="accent"
               size="sm"
-              onClick={onPublish}
+              onClick={onSubmitForReview}
               disabled={isMutating}
-              title="Publish to marketplace"
+              title="Submit to admins for review"
             >
-              <Rocket className="h-4 w-4" />
-              Publish
+              <Send className="h-4 w-4" />
+              {submitLabel}
             </Button>
           )}
           {canClose && (
@@ -333,6 +383,18 @@ function ListingRowCard({
             >
               <Ban className="h-4 w-4" />
               Close
+            </Button>
+          )}
+          {canDelete && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onDelete}
+              disabled={isMutating}
+              title="Delete listing permanently"
+              className="text-destructive hover:text-destructive"
+            >
+              <Trash2 className="h-4 w-4" />
             </Button>
           )}
         </div>

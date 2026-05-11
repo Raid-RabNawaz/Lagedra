@@ -8,9 +8,10 @@ import {
   ImagePlus,
   Trash2,
   Star,
-  Rocket,
+  Send,
   Ban,
   AlertTriangle,
+  Clock,
   GripVertical,
   ChevronUp,
   ChevronDown,
@@ -36,6 +37,7 @@ import { useListingDefinitions } from "@/features/listings/hooks/useListingDefin
 import { listingDetailsToFormValues } from "@/features/listings/lib/mapListingToForm";
 import { toUpdateListingRequest } from "@/features/listings/lib/toListingRequests";
 import type { ListingFormValues } from "@/features/listings/lib/listingFormSchema";
+import { getApiErrorMessage } from "@/api/errors";
 import { Loader } from "@/components/shared/Loader";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -197,8 +199,8 @@ export const EditListingPage = () => {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["listing", id] }),
   });
 
-  const publishMutation = useMutation({
-    mutationFn: () => listingApi.publish(id!),
+  const submitMutation = useMutation({
+    mutationFn: () => listingApi.submitForReview(id!),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["listing", id] });
       void queryClient.invalidateQueries({ queryKey: ["listings", "mine"] });
@@ -213,6 +215,46 @@ export const EditListingPage = () => {
     },
   });
 
+  // ── Derived state (safe before early returns; falls back when listing is null) ──
+  const hasLocation = listing ? listing.latitude != null && listing.longitude != null : false;
+  const hasPhotos = listing ? listing.photos.length > 0 : false;
+  const hasDescription = listing ? (listing.description ?? "").trim().length > 0 : false;
+  const hasRent = listing ? (listing.monthlyRentCents ?? 0) > 0 : false;
+  const isDraft = listing?.status === "Draft";
+  const isDenied = listing?.status === "Denied";
+  const isInReview = listing?.status === "InReview";
+  const isEditable = isDraft || isDenied;
+
+  // Mirror server-side rule (Listing.SubmitForReview() requires Draft|Denied + ApproxGeoPoint).
+  const canSubmit = isEditable && hasLocation;
+  const submitLabel = isDenied ? "Resubmit for review" : "Submit for review";
+  const submitBlockedReason = !listing
+    ? ""
+    : !isEditable
+      ? isInReview
+        ? "Listing is being reviewed by an admin."
+        : `Already ${listing.status.toLowerCase()}.`
+      : !hasLocation
+        ? "Set the approximate location below before submitting."
+        : "";
+
+  const scrollToId = useCallback((targetId: string) => {
+    const el = document.getElementById(targetId);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
+  const handleSubmitClick = useCallback(() => {
+    if (!canSubmit) return;
+    if (!hasPhotos) {
+      const ok = window.confirm(
+        "This listing has no photos yet. Listings with photos perform much better — submit for review anyway?",
+      );
+      if (!ok) return;
+    }
+    submitMutation.mutate();
+  }, [canSubmit, hasPhotos, submitMutation]);
+
+  // ── Early returns (after all hooks) ─────────────────────────────────────
   if (!id) {
     return <p className="text-destructive">Missing listing id.</p>;
   }
@@ -247,36 +289,6 @@ export const EditListingPage = () => {
 
   const defaultValues = listingDetailsToFormValues(listing);
 
-  const hasLocation = listing.latitude != null && listing.longitude != null;
-  const hasPhotos = listing.photos.length > 0;
-  const hasDescription = (listing.description ?? "").trim().length > 0;
-  const hasRent = (listing.monthlyRentCents ?? 0) > 0;
-  const isDraft = listing.status === "Draft";
-
-  // Mirror server-side rule (Listing.Publish() requires Status=Draft + ApproxGeoPoint).
-  const canPublish = isDraft && hasLocation;
-  const publishBlockedReason = !isDraft
-    ? `Already ${listing.status.toLowerCase()}.`
-    : !hasLocation
-      ? "Set the approximate location below before publishing."
-      : "";
-
-  const scrollToId = useCallback((id: string) => {
-    const el = document.getElementById(id);
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, []);
-
-  const handlePublishClick = useCallback(() => {
-    if (!canPublish) return;
-    if (!hasPhotos) {
-      const ok = window.confirm(
-        "This listing has no photos yet. Listings with photos perform much better — publish anyway?",
-      );
-      if (!ok) return;
-    }
-    publishMutation.mutate();
-  }, [canPublish, hasPhotos, publishMutation]);
-
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -297,15 +309,15 @@ export const EditListingPage = () => {
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          {isDraft && (
+          {isEditable && (
             <Button
               variant="accent"
-              disabled={publishMutation.isPending || !canPublish}
-              onClick={handlePublishClick}
-              title={canPublish ? undefined : publishBlockedReason}
+              disabled={submitMutation.isPending || !canSubmit}
+              onClick={handleSubmitClick}
+              title={canSubmit ? undefined : submitBlockedReason}
             >
-              <Rocket className="h-4 w-4" />
-              {publishMutation.isPending ? "Publishing..." : "Publish"}
+              <Send className="h-4 w-4" />
+              {submitMutation.isPending ? "Submitting..." : submitLabel}
             </Button>
           )}
           {(listing.status === "Published" || listing.status === "Activated") && (
@@ -325,45 +337,69 @@ export const EditListingPage = () => {
         </div>
       </div>
 
+      {isInReview && (
+        <Alert>
+          <Clock className="h-4 w-4" />
+          <AlertDescription>
+            This listing is being reviewed by an admin and is read-only until the review completes.
+            We&apos;ll notify you as soon as it&apos;s approved.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {isDenied && listing.rejectionReason && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            <p className="font-medium">An admin asked you to update this listing before it can go live.</p>
+            <p className="mt-1 text-sm">
+              <span className="font-medium">Reason:</span> {listing.rejectionReason}
+            </p>
+            <p className="mt-2 text-sm">
+              Make the changes below, then click <span className="font-medium">Resubmit for review</span> at the top.
+            </p>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {updateMutation.isError && (
         <Alert variant="destructive">
           <AlertDescription>Failed to save changes. Try again.</AlertDescription>
         </Alert>
       )}
-      {publishMutation.isError && (
+      {submitMutation.isError && (
         <Alert variant="destructive">
           <AlertDescription>
-            {(publishMutation.error as any)?.response?.data?.detail ?? "Failed to publish listing."}
+            {getApiErrorMessage(submitMutation.error, "Failed to submit listing for review.")}
           </AlertDescription>
         </Alert>
       )}
       {closeMutation.isError && (
         <Alert variant="destructive">
           <AlertDescription>
-            {(closeMutation.error as any)?.response?.data?.detail ?? "Failed to close listing."}
+            {getApiErrorMessage(closeMutation.error, "Failed to close listing.")}
           </AlertDescription>
         </Alert>
       )}
       {lockAddressMutation.isError && (
         <Alert variant="destructive">
           <AlertDescription>
-            {(lockAddressMutation.error as any)?.response?.data?.detail ??
-              (lockAddressMutation.error as Error).message ??
-              "Failed to lock address."}
+            {getApiErrorMessage(lockAddressMutation.error, "Failed to lock address.")}
           </AlertDescription>
         </Alert>
       )}
 
-      {isDraft && (
+      {isEditable && (
         <Card className="border-accent/40 bg-accent/5">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
-              <Rocket className="h-5 w-5 text-accent" />
-              Almost ready to publish
+              <Send className="h-5 w-5 text-accent" />
+              {isDenied ? "Address admin feedback and resubmit" : "Almost ready to submit for review"}
             </CardTitle>
             <CardDescription>
-              Tenants can&apos;t see this listing until you publish it. Finish the items below, then hit
-              Publish.
+              {isDenied
+                ? "Make the changes the admin requested, then resubmit. Once approved your listing will go live in the marketplace."
+                : "Tenants can\u2019t see this listing until an admin approves it. Finish the items below, then submit for review."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
@@ -402,20 +438,20 @@ export const EditListingPage = () => {
 
             <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="text-xs text-muted-foreground">
-                {canPublish
+                {canSubmit
                   ? hasPhotos
-                    ? "All set — you can publish whenever you're ready."
-                    : "You can publish without photos, but we'll ask you to confirm."
-                  : publishBlockedReason}
+                    ? "All set — submit for review whenever you're ready."
+                    : "You can submit without photos, but we'll ask you to confirm."
+                  : submitBlockedReason}
               </p>
               <Button
                 variant="accent"
-                disabled={publishMutation.isPending || !canPublish}
-                onClick={handlePublishClick}
-                title={canPublish ? undefined : publishBlockedReason}
+                disabled={submitMutation.isPending || !canSubmit}
+                onClick={handleSubmitClick}
+                title={canSubmit ? undefined : submitBlockedReason}
               >
-                <Rocket className="h-4 w-4" />
-                {publishMutation.isPending ? "Publishing..." : "Publish listing"}
+                <Send className="h-4 w-4" />
+                {submitMutation.isPending ? "Submitting..." : submitLabel}
               </Button>
             </div>
           </CardContent>

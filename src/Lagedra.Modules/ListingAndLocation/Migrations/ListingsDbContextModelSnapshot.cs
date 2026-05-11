@@ -115,6 +115,16 @@ namespace ListingAndLocation.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime?>("ReviewedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("ReviewedByUserId")
+                        .HasColumnType("uuid");
+
                     b.Property<int?>("SquareFootage")
                         .HasColumnType("integer");
 
@@ -122,6 +132,9 @@ namespace ListingAndLocation.Migrations
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime?>("SubmittedForReviewAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<long?>("SuggestedDepositHighCents")
                         .HasColumnType("bigint");

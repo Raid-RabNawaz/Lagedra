@@ -140,7 +140,13 @@ export type PropertyType =
   | "Apartment" | "House" | "Condo" | "Townhouse" | "Studio"
   | "Loft" | "Villa" | "Cottage" | "Cabin" | "Other";
 
-export type ListingStatus = "Draft" | "Published" | "Activated" | "Closed";
+export type ListingStatus =
+  | "Draft"
+  | "InReview"
+  | "Published"
+  | "Activated"
+  | "Closed"
+  | "Denied";
 
 export type AmenityCategory =
   | "Kitchen" | "Bathroom" | "Bedroom" | "LivingArea" | "Outdoor"
@@ -276,6 +282,27 @@ export type ListingDetailsDto = {
   qualityScore: number;
   createdAt: string;
   updatedAt: string;
+  rejectionReason?: string | null;
+  submittedForReviewAt?: string | null;
+  reviewedAt?: string | null;
+};
+
+export type ListingReviewItemDto = {
+  id: string;
+  landlordUserId: string;
+  title: string;
+  propertyType: PropertyType;
+  bedrooms: number;
+  bathrooms: number;
+  monthlyRentCents: number;
+  coverPhotoUrl?: string | null;
+  photoCount: number;
+  submittedForReviewAt?: string | null;
+  createdAt: string;
+};
+
+export type DenyListingRequest = {
+  reason: string;
 };
 
 export type SearchListingsResultDto = {

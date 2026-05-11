@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Alert } from "@/components/ui/alert";
 import { useFileDamageClaim } from "@/features/activation-billing/hooks/useBilling";
+import { getApiErrorMessage } from "@/api/errors";
 
 type Props = {
   dealId: string;
@@ -55,7 +56,7 @@ export const FileDamageClaimDialog = ({
       });
       setSuccess(true);
     } catch (e) {
-      setError((e as Error)?.message ?? "Failed to file damage claim.");
+      setError(getApiErrorMessage(e, "Failed to file damage claim."));
     }
   };
 

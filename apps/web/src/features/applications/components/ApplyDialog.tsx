@@ -17,6 +17,7 @@ import { useSubmitApplication } from "@/features/applications/hooks/useApplicati
 import { privacyApi } from "@/features/privacy/services/privacyApi";
 import { formatMoney } from "@/utils/format";
 import type { ListingDetailsDto } from "@/api/types";
+import { getApiErrorMessage } from "@/api/errors";
 
 type Props = {
   listing: ListingDetailsDto;
@@ -65,7 +66,12 @@ export const ApplyDialog = ({ listing }: Props) => {
         return;
       }
 
-      setSubmitErrorMessage("Failed to submit application. Please try again.");
+      setSubmitErrorMessage(
+        getApiErrorMessage(
+          error,
+          "Failed to submit application. Please try again.",
+        ),
+      );
     }
   };
 

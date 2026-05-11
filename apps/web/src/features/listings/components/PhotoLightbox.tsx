@@ -12,10 +12,15 @@ type PhotoLightboxProps = {
 
 export function PhotoLightbox({ open, photos, initialIndex = 0, onClose }: PhotoLightboxProps) {
   const [index, setIndex] = useState(initialIndex);
-
-  useEffect(() => {
-    if (open) setIndex(initialIndex);
-  }, [open, initialIndex]);
+  // Track the "session" the lightbox is in so we re-seed `index` when it
+  // re-opens or the requested initialIndex changes — without an effect.
+  const [seed, setSeed] = useState({ open, initialIndex });
+  if (open && (open !== seed.open || initialIndex !== seed.initialIndex)) {
+    setSeed({ open, initialIndex });
+    setIndex(initialIndex);
+  } else if (!open && seed.open) {
+    setSeed({ open, initialIndex });
+  }
 
   const next = useCallback(() => {
     setIndex((i) => (i === photos.length - 1 ? 0 : i + 1));

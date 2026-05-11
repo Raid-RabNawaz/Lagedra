@@ -28,6 +28,24 @@ public sealed class CreateCheckoutPaymentIntentCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        var application = await dbContext.DealApplications
+            .AsNoTracking()
+            .FirstOrDefaultAsync(a => a.DealId == request.DealId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (application is null)
+        {
+            return Result<CheckoutDto>.Failure(
+                new Error("Checkout.NoApplication", "No approved application found for this deal."));
+        }
+
+        if (application.TenantUserId != request.TenantUserId)
+        {
+            return Result<CheckoutDto>.Failure(
+                new Error("Checkout.Forbidden",
+                    "Only the deal's tenant can initiate checkout."));
+        }
+
         var confirmation = await dbContext.DealPaymentConfirmations
             .FirstOrDefaultAsync(c => c.DealId == request.DealId, cancellationToken)
             .ConfigureAwait(false);
@@ -61,17 +79,6 @@ public sealed class CreateCheckoutPaymentIntentCommandHandler(
             {
                 return Result<CheckoutDto>.Success(BuildDto(existing, confirmation));
             }
-        }
-
-        var application = await dbContext.DealApplications
-            .AsNoTracking()
-            .FirstOrDefaultAsync(a => a.DealId == request.DealId, cancellationToken)
-            .ConfigureAwait(false);
-
-        if (application is null)
-        {
-            return Result<CheckoutDto>.Failure(
-                new Error("Checkout.NoApplication", "No approved application found for this deal."));
         }
 
         var totalAmountCents = confirmation.TotalTenantPaymentCents;

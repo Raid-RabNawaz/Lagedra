@@ -1,11 +1,11 @@
 import { lazy, Suspense, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Pencil,
   ExternalLink,
-  Rocket,
+  Send,
   Ban,
   Bed,
   Bath,
@@ -19,6 +19,9 @@ import {
   Zap,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
+  Clock,
+  Trash2,
   Image as ImageIcon,
   Film,
 } from "lucide-react";
@@ -28,7 +31,8 @@ import { useAuthStore } from "@/app/auth/authStore";
 import { roles } from "@/app/auth/roles";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader } from "@/components/shared/Loader";
@@ -41,22 +45,34 @@ const ListingApproxMap = lazy(() =>
   })),
 );
 
-const statusVariant: Record<string, "secondary" | "success" | "accent" | "outline"> = {
+const statusVariant: Record<string, "secondary" | "success" | "accent" | "outline" | "default" | "destructive"> = {
   Draft: "secondary",
+  InReview: "default",
   Published: "success",
   Activated: "accent",
   Closed: "outline",
+  Denied: "destructive",
+};
+
+const statusLabel: Record<string, string> = {
+  Draft: "Draft",
+  InReview: "In review",
+  Published: "Published",
+  Activated: "Activated",
+  Closed: "Closed",
+  Denied: "Needs changes",
 };
 
 export const LandlordListingDetailPage = () => {
   const { id } = useParams<{ id: string }>();
   const { data: listing, isLoading, isError } = useListingDetail(id);
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const [actionError, setActionError] = useState<string | null>(null);
 
-  const publishMutation = useMutation({
-    mutationFn: () => listingApi.publish(id!),
+  const submitMutation = useMutation({
+    mutationFn: () => listingApi.submitForReview(id!),
     onSuccess: () => {
       setActionError(null);
       void queryClient.invalidateQueries({ queryKey: ["listing", id] });
@@ -65,7 +81,7 @@ export const LandlordListingDetailPage = () => {
     onError: (err: unknown) => {
       const detail =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
-        (err instanceof Error ? err.message : "Failed to publish listing.");
+        (err instanceof Error ? err.message : "Failed to submit listing for review.");
       setActionError(detail);
     },
   });
@@ -81,6 +97,21 @@ export const LandlordListingDetailPage = () => {
       const detail =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
         (err instanceof Error ? err.message : "Failed to close listing.");
+      setActionError(detail);
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => listingApi.delete(id!),
+    onSuccess: () => {
+      setActionError(null);
+      void queryClient.invalidateQueries({ queryKey: ["listings", "mine"] });
+      navigate("/app/listings", { replace: true });
+    },
+    onError: (err: unknown) => {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+        (err instanceof Error ? err.message : "Failed to delete listing.");
       setActionError(detail);
     },
   });
@@ -133,9 +164,12 @@ export const LandlordListingDetailPage = () => {
   const hasCoords = listing.latitude != null && listing.longitude != null;
   const isAddressLocked = Boolean(listing.preciseAddress);
 
-  const canPublish = listing.status === "Draft";
+  const canSubmit = listing.status === "Draft" || listing.status === "Denied";
   const canClose = listing.status === "Published" || listing.status === "Activated";
-  const isMutating = publishMutation.isPending || closeMutation.isPending;
+  const canDelete = listing.status === "Draft" || listing.status === "Denied";
+  const submitLabel = listing.status === "Denied" ? "Resubmit for review" : "Submit for review";
+  const isMutating =
+    submitMutation.isPending || closeMutation.isPending || deleteMutation.isPending;
 
   return (
     <div className="space-y-6">
@@ -152,7 +186,11 @@ export const LandlordListingDetailPage = () => {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2 mb-2">
-            <Badge variant={statusVariant[listing.status] ?? "secondary"}>{listing.status}</Badge>
+            <Badge variant={statusVariant[listing.status] ?? "secondary"}>
+              {listing.status === "InReview" && <Clock className="h-3 w-3" />}
+              {listing.status === "Denied" && <AlertTriangle className="h-3 w-3" />}
+              {statusLabel[listing.status] ?? listing.status}
+            </Badge>
             <Badge variant="outline">{listing.propertyType}</Badge>
             {listing.instantBookingEnabled && (
               <Badge variant="accent" className="gap-1">
@@ -191,14 +229,14 @@ export const LandlordListingDetailPage = () => {
               <Pencil className="h-4 w-4" />
               Edit listing
             </Link>
-            {canPublish && (
+            {canSubmit && (
               <Button
                 variant="accent"
-                onClick={() => publishMutation.mutate()}
+                onClick={() => submitMutation.mutate()}
                 disabled={isMutating}
               >
-                <Rocket className="h-4 w-4" />
-                {publishMutation.isPending ? "Publishing..." : "Publish"}
+                <Send className="h-4 w-4" />
+                {submitMutation.isPending ? "Submitting..." : submitLabel}
               </Button>
             )}
             {canClose && (
@@ -215,9 +253,57 @@ export const LandlordListingDetailPage = () => {
                 {closeMutation.isPending ? "Closing..." : "Close"}
               </Button>
             )}
+            {canDelete && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      "Delete this listing permanently? This cannot be undone.",
+                    )
+                  ) {
+                    deleteMutation.mutate();
+                  }
+                }}
+                disabled={isMutating}
+                className="border-destructive/50 text-destructive hover:bg-destructive/10 hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+                {deleteMutation.isPending ? "Deleting..." : "Delete"}
+              </Button>
+            )}
           </div>
         )}
       </div>
+
+      {listing.status === "Denied" && listing.rejectionReason && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            <p className="font-medium">An admin asked you to update this listing before it can go live.</p>
+            <p className="mt-1 text-sm">
+              <span className="font-medium">Reason:</span> {listing.rejectionReason}
+            </p>
+            <p className="mt-2 text-sm">
+              Edit the listing to address the feedback, then click <span className="font-medium">Resubmit for review</span>. Or
+              delete it if you no longer want to list this property.
+            </p>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {listing.status === "InReview" && (
+        <Alert>
+          <Clock className="h-4 w-4" />
+          <AlertDescription>
+            <p className="font-medium">Your listing is being reviewed by our team.</p>
+            <p className="mt-1 text-sm">
+              We&apos;ll notify you as soon as it&apos;s approved (usually within 1 business day). It will become
+              visible to tenants automatically once approved.
+            </p>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {actionError && (
         <Alert variant="destructive">

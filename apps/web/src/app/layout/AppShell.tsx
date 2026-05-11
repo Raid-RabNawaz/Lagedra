@@ -1,3 +1,4 @@
+import { createElement } from "react";
 import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   LogOut,
@@ -26,6 +27,7 @@ import {
   Link2,
   Mail,
   ShieldCheck,
+  ClipboardCheck,
 } from "lucide-react";
 import logoSvg from "@/assets/logo.svg";
 import { useRef, useState, useEffect, useCallback } from "react";
@@ -63,6 +65,7 @@ const iconMap: Record<string, typeof LayoutDashboard> = {
   Link2,
   Mail,
   ShieldCheck,
+  ClipboardCheck,
 };
 
 function resolveIcon(name: string) {
@@ -335,7 +338,7 @@ function SidebarLink({
   collapsed: boolean;
   onClick?: () => void;
 }) {
-  const Icon = resolveIcon(item.icon);
+  const icon = resolveIcon(item.icon);
 
   return (
     <NavLink
@@ -353,7 +356,7 @@ function SidebarLink({
         )
       }
     >
-      <Icon className="h-4 w-4 shrink-0" />
+      {createElement(icon, { className: "h-4 w-4 shrink-0" })}
       {!collapsed && <span className="truncate">{item.label}</span>}
     </NavLink>
   );

@@ -18,6 +18,10 @@ public sealed class DisputePaymentCommandHandler(
     IClock clock)
     : IRequestHandler<DisputePaymentCommand, Result<PaymentConfirmationDto>>
 {
+    private static readonly Error Forbidden = new(
+        "PaymentConfirmation.Forbidden",
+        "Only the deal's tenant can dispute a payment confirmation.");
+
     public async Task<Result<PaymentConfirmationDto>> Handle(
         DisputePaymentCommand request,
         CancellationToken cancellationToken)
@@ -33,6 +37,16 @@ public sealed class DisputePaymentCommandHandler(
             return Result<PaymentConfirmationDto>.Failure(
                 new Error("PaymentConfirmation.NotFound",
                     "No payment confirmation record found for this deal."));
+        }
+
+        var application = await dbContext.DealApplications
+            .AsNoTracking()
+            .FirstOrDefaultAsync(a => a.DealId == request.DealId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (application is null || application.TenantUserId != request.TenantUserId)
+        {
+            return Result<PaymentConfirmationDto>.Failure(Forbidden);
         }
 
         confirmation.DisputeByTenant(

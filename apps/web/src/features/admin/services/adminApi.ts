@@ -13,6 +13,8 @@ import type {
   AuditSearchResultDto,
   PlatformSummaryDto,
   ListingAnalyticsItemDto,
+  ListingDetailsDto,
+  ListingReviewItemDto,
   BlogPostSummaryDto,
   BlogPostDetailDto,
   CreateBlogPostRequest,
@@ -137,6 +139,20 @@ export const adminApi = {
   },
   async upsertSeoPage(slug: string, req: UpsertSeoPageRequest): Promise<SeoPageDto> {
     const r = await http.put<SeoPageDto>(endpoints.adminSeoPages.upsert(slug), req);
+    return r.data;
+  },
+
+  // Listing Review Queue
+  async getPendingListingReviews(): Promise<ListingReviewItemDto[]> {
+    const r = await http.get<ListingReviewItemDto[]>(endpoints.adminListingReview.pending);
+    return r.data;
+  },
+  async approveListing(id: string): Promise<ListingDetailsDto> {
+    const r = await http.post<ListingDetailsDto>(endpoints.adminListingReview.approve(id));
+    return r.data;
+  },
+  async denyListing(id: string, reason: string): Promise<ListingDetailsDto> {
+    const r = await http.post<ListingDetailsDto>(endpoints.adminListingReview.deny(id), { reason });
     return r.data;
   },
 

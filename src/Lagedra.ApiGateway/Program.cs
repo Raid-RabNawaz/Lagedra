@@ -265,6 +265,7 @@ try
     app.MapListingEndpoints();
     app.MapListingDefinitionsEndpoints();
     app.MapAdminListingDefinitionsEndpoints();
+    app.MapAdminListingReviewEndpoints();
     app.MapLocationEndpoints();
     app.MapIdentityEndpoints();
     app.MapHostPaymentEndpoints();

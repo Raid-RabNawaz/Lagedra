@@ -56,6 +56,7 @@ const arbitratorCasesGroup: NavGroup = {
 const adminOpsGroup: NavGroup = {
   label: "Operations",
   items: [
+    { to: "/app/admin/listing-review", label: "Listing Review", icon: "ClipboardCheck" },
     { to: "/app/admin/insurance-queue", label: "Insurance Queue", icon: "ShieldAlert" },
     { to: "/app/admin/fraud-flags", label: "Fraud Flags", icon: "Flag" },
     { to: "/app/admin/arbitration-backlog", label: "Arbitration Backlog", icon: "Scale" },

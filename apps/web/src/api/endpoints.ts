@@ -24,7 +24,9 @@ export const endpoints = {
     priceHistory: (id: string) => `/v1/listings/${id}/price-history`,
     availability: (id: string) => `/v1/listings/${id}/availability`,
     publish: (id: string) => `/v1/listings/${id}/publish`,
+    submitForReview: (id: string) => `/v1/listings/${id}/submit-for-review`,
     close: (id: string) => `/v1/listings/${id}/close`,
+    delete: (id: string) => `/v1/listings/${id}`,
     approxLocation: (id: string) => `/v1/listings/${id}/approx-location`,
     lockAddress: (id: string) => `/v1/listings/${id}/lock-address`,
     addPhoto: (id: string) => `/v1/listings/${id}/photos`,
@@ -220,6 +222,11 @@ export const endpoints = {
   adminAnalytics: {
     summary: "/v1/admin/analytics/summary",
     listings: "/v1/admin/analytics/listings",
+  },
+  adminListingReview: {
+    pending: "/v1/admin/listings/pending-review",
+    approve: (id: string) => `/v1/admin/listings/${id}/approve`,
+    deny: (id: string) => `/v1/admin/listings/${id}/deny`,
   },
   adminBlog: {
     list: "/api/v1/admin/blog",

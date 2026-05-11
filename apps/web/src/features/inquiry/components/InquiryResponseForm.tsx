@@ -7,6 +7,7 @@ import { Select } from "@/components/ui/select";
 import { Alert } from "@/components/ui/alert";
 import { useSubmitAnswer } from "@/features/inquiry/hooks/useInquiry";
 import type { ResponseType } from "@/api/types";
+import { getApiErrorMessage } from "@/api/errors";
 
 type Props = {
   dealId: string;
@@ -29,15 +30,19 @@ export const InquiryResponseForm = ({
     if (!answerValue.trim()) {
       return;
     }
-    await submitMutation.mutateAsync({
-      dealId,
-      payload: {
-        questionId,
-        responseType,
-        answerValue: answerValue.trim(),
-      },
-    });
-    setAnswerValue("");
+    try {
+      await submitMutation.mutateAsync({
+        dealId,
+        payload: {
+          questionId,
+          responseType,
+          answerValue: answerValue.trim(),
+        },
+      });
+      setAnswerValue("");
+    } catch {
+      // Error is surfaced by the mutation state below.
+    }
   };
 
   return (
@@ -87,7 +92,7 @@ export const InquiryResponseForm = ({
 
       {submitMutation.isError && (
         <Alert variant="destructive" className="text-xs">
-          {(submitMutation.error as Error)?.message ?? "Failed to submit answer."}
+          {getApiErrorMessage(submitMutation.error, "Failed to submit answer.")}
         </Alert>
       )}
 

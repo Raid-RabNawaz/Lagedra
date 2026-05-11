@@ -1,29 +1,17 @@
-import { useCallback, useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { partnerApi } from "@/features/partners/services/partnerApi";
-import type { MyPartnerMembershipDto } from "@/api/types";
-
-type State = {
-  isLoading: boolean;
-  membership: MyPartnerMembershipDto | null;
-  error: unknown;
-};
 
 export function usePartnerMembership() {
-  const [state, setState] = useState<State>({ isLoading: true, membership: null, error: null });
+  const query = useQuery({
+    queryKey: ["partner", "my-membership"],
+    queryFn: () => partnerApi.getMyMembership(),
+    staleTime: 60_000,
+  });
 
-  const refresh = useCallback(async () => {
-    setState((s) => ({ ...s, isLoading: true, error: null }));
-    try {
-      const membership = await partnerApi.getMyMembership();
-      setState({ isLoading: false, membership, error: null });
-    } catch (err) {
-      setState({ isLoading: false, membership: null, error: err });
-    }
-  }, []);
-
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  return { ...state, refresh };
+  return {
+    isLoading: query.isLoading,
+    membership: query.data ?? null,
+    error: query.error,
+    refresh: query.refetch,
+  };
 }

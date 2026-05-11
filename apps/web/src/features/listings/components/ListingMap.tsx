@@ -54,8 +54,15 @@ function MapEvents({
   const onBoundsRef = useRef(onBoundsChange);
   const searchOnMoveRef = useRef(searchOnMove);
   const initialDispatched = useRef(false);
-  onBoundsRef.current = onBoundsChange;
-  searchOnMoveRef.current = searchOnMove;
+
+  // Keep callback refs in sync with the latest props without re-subscribing
+  // to the leaflet event handlers below.
+  useEffect(() => {
+    onBoundsRef.current = onBoundsChange;
+  }, [onBoundsChange]);
+  useEffect(() => {
+    searchOnMoveRef.current = searchOnMove;
+  }, [searchOnMove]);
 
   const map = useMapEvents({
     moveend: () => {

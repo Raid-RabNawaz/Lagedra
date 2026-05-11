@@ -41,6 +41,14 @@ public sealed partial class CancelBookingCommandHandler(
                 new Error("Cancel.DealNotFound", "Deal application not found."));
         }
 
+        if (application.TenantUserId != request.CancelledByUserId
+            && application.LandlordUserId != request.CancelledByUserId)
+        {
+            return Result<CancellationResultDto>.Failure(
+                new Error("Cancel.Forbidden",
+                    "Only the deal's tenant or host can cancel this booking."));
+        }
+
         if (application.Status == DealApplicationStatus.Cancelled)
         {
             return Result<CancellationResultDto>.Failure(

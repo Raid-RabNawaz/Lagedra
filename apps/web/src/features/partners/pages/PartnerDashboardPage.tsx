@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import {
   Building2,
   Users,
@@ -15,14 +15,9 @@ import { partnerApi } from "@/features/partners/services/partnerApi";
 import { usePartnerMembership } from "@/features/partners/hooks/usePartnerMembership";
 import { PartnerStatusBadge } from "@/features/partners/components/PartnerStatusBadge";
 import { EndorsementStatusBadge } from "@/features/partners/components/EndorsementStatusBadge";
-import type {
-  DirectReservationDto,
-  PartnerEndorsementDto,
-  ReferralLinkDto,
-} from "@/api/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader } from "@/components/shared/Loader";
 import { ErrorState } from "@/components/shared/ErrorState";
@@ -37,42 +32,26 @@ export const PartnerDashboardPage = () => {
   const { membership, isLoading: membershipLoading, error: membershipError, refresh } =
     usePartnerMembership();
 
-  const [reservations, setReservations] = useState<DirectReservationDto[]>([]);
-  const [endorsements, setEndorsements] = useState<PartnerEndorsementDto[]>([]);
-  const [referrals, setReferrals] = useState<ReferralLinkDto[]>([]);
-  const [activityLoading, setActivityLoading] = useState(true);
-  const [activityError, setActivityError] = useState<unknown>(null);
+  const orgId = membership?.organization.id;
 
-  useEffect(() => {
-    if (!membership) return;
-    let cancelled = false;
-    const orgId = membership.organization.id;
+  const activityQuery = useQuery({
+    queryKey: ["partner", orgId, "dashboard-activity"],
+    queryFn: async () => {
+      const [reservations, endorsements, referrals] = await Promise.all([
+        partnerApi.listReservations(orgId!, { take: 5 }),
+        partnerApi.listEndorsements(orgId!, { take: 5 }),
+        partnerApi.listReferralLinks(orgId!),
+      ]);
+      return { reservations, endorsements, referrals };
+    },
+    enabled: Boolean(orgId),
+  });
 
-    setActivityLoading(true);
-    setActivityError(null);
-
-    Promise.all([
-      partnerApi.listReservations(orgId, { take: 5 }),
-      partnerApi.listEndorsements(orgId, { take: 5 }),
-      partnerApi.listReferralLinks(orgId),
-    ])
-      .then(([resv, endors, refs]) => {
-        if (cancelled) return;
-        setReservations(resv);
-        setEndorsements(endors);
-        setReferrals(refs);
-      })
-      .catch((err) => {
-        if (!cancelled) setActivityError(err);
-      })
-      .finally(() => {
-        if (!cancelled) setActivityLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [membership]);
+  const reservations = activityQuery.data?.reservations ?? [];
+  const endorsements = activityQuery.data?.endorsements ?? [];
+  const referrals = activityQuery.data?.referrals ?? [];
+  const activityLoading = activityQuery.isLoading;
+  const activityError = activityQuery.error;
 
   if (membershipLoading) return <Loader label="Loading partner organization..." />;
   if (membershipError)

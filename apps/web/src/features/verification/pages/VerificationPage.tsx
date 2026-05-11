@@ -115,10 +115,6 @@ export const VerificationPage = () => {
     return () => window.clearTimeout(t);
   }, [actionError]);
 
-  if (isLoading) {
-    return <Loader fullPage label="Loading verification status..." />;
-  }
-
   const kycStatus = verificationStatus?.status ?? "NotStarted";
   const kycConfig = statusConfig(kycStatus);
   const KycIcon = kycConfig.icon;
@@ -183,6 +179,10 @@ export const VerificationPage = () => {
     }
     return null;
   }, [emailVerified, canStartKyc, isPending, kycStatus, isVerified, classInfo, user?.email]);
+
+  if (isLoading) {
+    return <Loader fullPage label="Loading verification status..." />;
+  }
 
   const scrollToAnchor = (hash: string) => {
     const id = hash.replace(/^#/, "");

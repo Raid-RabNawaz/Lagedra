@@ -11,9 +11,15 @@ public static class ActivationEndpoints
 {
     public static IEndpointRouteBuilder MapActivationEndpoints(this IEndpointRouteBuilder app)
     {
+        // Activation is normally triggered automatically via the
+        // OnPaymentConfirmedActivateDealHandler when Stripe confirms payment.
+        // The HTTP endpoint exists for manual recovery only and must therefore
+        // be restricted to platform admins; allowing arbitrary "Member" callers
+        // (after the Tenant/Landlord role merge) would let any authenticated
+        // user activate billing on someone else's deal.
         var group = app.MapGroup("/v1/deals")
             .WithTags("Activation")
-            .RequireAuthorization();
+            .RequireAuthorization("RequirePlatformAdmin");
 
         group.MapPost("/{dealId:guid}/activate", ActivateDeal);
 

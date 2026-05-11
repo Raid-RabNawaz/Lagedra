@@ -84,7 +84,10 @@ internal static class ListingMapper
             hostProfile,
             qualityScore,
             listing.CreatedAt,
-            listing.UpdatedAt);
+            listing.UpdatedAt,
+            listing.RejectionReason,
+            listing.SubmittedForReviewAt,
+            listing.ReviewedAt);
     }
 
     public static ListingSummaryDto ToSummary(Listing listing, int? qualityScore = null)

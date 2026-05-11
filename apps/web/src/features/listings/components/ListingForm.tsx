@@ -1,4 +1,4 @@
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { AmenityDefinitionDto, AmenityCategory } from "@/api/types";
 import type { SafetyDeviceDefinitionDto, ConsiderationDefinitionDto } from "@/api/types";
@@ -67,6 +67,12 @@ export function ListingForm({ defaultValues, onSubmit, submitLabel, definitions 
   const handleSubmit = form.handleSubmit(async (data: ListingFormValues) => {
     await onSubmit(data);
   });
+
+  // Subscribe to id-array changes via the React Compiler-friendly `useWatch`
+  // hook so the toggle grids below re-render when individual chips flip.
+  const amenityIds = useWatch({ control: form.control, name: "amenityIds" }) ?? [];
+  const safetyDeviceIds = useWatch({ control: form.control, name: "safetyDeviceIds" }) ?? [];
+  const considerationIds = useWatch({ control: form.control, name: "considerationIds" }) ?? [];
 
   const toggleId = (field: "amenityIds" | "safetyDeviceIds" | "considerationIds", id: string) => {
     const current = form.getValues(field);
@@ -269,7 +275,7 @@ export function ListingForm({ defaultValues, onSubmit, submitLabel, definitions 
               </h4>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
                 {items.map((a) => {
-                  const checked = form.watch("amenityIds").includes(a.id);
+                  const checked = amenityIds.includes(a.id);
                   return (
                     <button
                       key={a.id}
@@ -298,7 +304,7 @@ export function ListingForm({ defaultValues, onSubmit, submitLabel, definitions 
         <CardContent>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {definitions.safetyDevices.map((s) => {
-              const checked = form.watch("safetyDeviceIds").includes(s.id);
+              const checked = safetyDeviceIds.includes(s.id);
               return (
                 <button
                   key={s.id}
@@ -325,7 +331,7 @@ export function ListingForm({ defaultValues, onSubmit, submitLabel, definitions 
         <CardContent>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
             {definitions.considerations.map((c) => {
-              const checked = form.watch("considerationIds").includes(c.id);
+              const checked = considerationIds.includes(c.id);
               return (
                 <button
                   key={c.id}

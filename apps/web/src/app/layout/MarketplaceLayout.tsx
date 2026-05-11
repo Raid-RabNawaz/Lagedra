@@ -1,3 +1,4 @@
+import { createElement } from "react";
 import { Link, NavLink, Outlet } from "react-router-dom";
 import {
   LogIn,
@@ -16,7 +17,7 @@ import logoSvg from "@/assets/logo.svg";
 import { useAuthStore } from "@/app/auth/authStore";
 import { getBottomTabsForRole, type NavItem } from "@/app/auth/permissions";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 
 const iconMap: Record<string, typeof Search> = {
@@ -273,7 +274,7 @@ function SocialLink({
 }
 
 function BottomTab({ item }: { item: NavItem }) {
-  const Icon = resolveIcon(item.icon);
+  const icon = resolveIcon(item.icon);
 
   return (
     <NavLink
@@ -286,7 +287,7 @@ function BottomTab({ item }: { item: NavItem }) {
         )
       }
     >
-      <Icon className="h-5 w-5" />
+      {createElement(icon, { className: "h-5 w-5" })}
       <span>{item.label}</span>
     </NavLink>
   );

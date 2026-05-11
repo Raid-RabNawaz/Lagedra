@@ -1,5 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
-import { isAxiosError } from "axios";
+import { useState, useCallback, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
 import { ArrowLeft, ArrowRight, CreditCard, ShieldCheck, AlertCircle, Lock, Receipt } from "lucide-react";
 import { loadStripe } from "@stripe/stripe-js";
@@ -19,8 +18,13 @@ import {
   useCreateCheckout,
   useConfirmCheckout,
 } from "@/features/activation-billing/hooks/useCheckout";
-import type { CheckoutDto, ErrorResponse } from "@/api/types";
+import type { CheckoutDto } from "@/api/types";
 import { formatMoney } from "@/utils/format";
+import {
+  getApiErrorMessage,
+  isForbiddenError,
+  isNotFoundError,
+} from "@/api/errors";
 
 function PaymentBreakdown({ checkout }: { checkout: CheckoutDto }) {
   const hostReceives =
@@ -162,29 +166,37 @@ function CheckoutForm({
 
 export default function CheckoutPage() {
   const { dealId } = useParams<{ dealId: string }>();
-  const { data: checkoutStatus, isLoading: statusLoading } = useCheckoutStatus(dealId);
+  const {
+    data: checkoutStatus,
+    isLoading: statusLoading,
+    error: statusError,
+  } = useCheckoutStatus(dealId);
   const createCheckout = useCreateCheckout();
-  const [checkout, setCheckout] = useState<CheckoutDto | null>(null);
-  const [stripePromise, setStripePromise] = useState<ReturnType<typeof loadStripe> | null>(null);
+  // The "current" checkout is whichever is fresher: the one we just created
+  // via the mutation, or the one returned by the server status query.
+  const [createdCheckout, setCreatedCheckout] = useState<CheckoutDto | null>(null);
+  const checkout: CheckoutDto | null =
+    createdCheckout ??
+    (checkoutStatus && checkoutStatus.clientSecret ? checkoutStatus : null);
 
-  useEffect(() => {
-    if (checkoutStatus && checkoutStatus.clientSecret) {
-      setCheckout(checkoutStatus);
-    }
-  }, [checkoutStatus]);
-
-  useEffect(() => {
-    if (!checkout?.clientSecret || !appConfig.stripePublishableKey || stripePromise) {
-      return;
-    }
-
-    setStripePromise(loadStripe(appConfig.stripePublishableKey));
-  }, [checkout?.clientSecret, stripePromise]);
+  // Lazy-init Stripe.js exactly once the first time we need it. `useMemo`
+  // with empty deps keeps the same Promise across renders, so the Elements
+  // provider sees a stable reference.
+  const stripePromise = useMemo(
+    () =>
+      checkout?.clientSecret && appConfig.stripePublishableKey
+        ? loadStripe(appConfig.stripePublishableKey)
+        : null,
+    // We intentionally only init this once `checkout` first has a clientSecret —
+    // re-creating loadStripe on every render would tear down Stripe Elements.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [Boolean(checkout?.clientSecret)],
+  );
 
   const handleStartCheckout = useCallback(() => {
     if (!dealId) return;
     createCheckout.mutate(dealId, {
-      onSuccess: (data) => setCheckout(data),
+      onSuccess: (data) => setCreatedCheckout(data),
     });
   }, [dealId, createCheckout]);
 
@@ -200,6 +212,50 @@ export default function CheckoutPage() {
 
   if (statusLoading) {
     return <Loader label="Loading checkout..." />;
+  }
+
+  if (isForbiddenError(statusError)) {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-16 sm:px-6 lg:px-8">
+        <Link
+          to={dealId ? `/app/deals/${dealId}` : "/app/deals"}
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to deal
+        </Link>
+        <Alert variant="destructive">
+          <Lock className="h-4 w-4" />
+          <span className="ml-2 text-sm">
+            {getApiErrorMessage(
+              statusError,
+              "Only the deal's tenant can complete checkout.",
+            )}
+          </span>
+        </Alert>
+      </div>
+    );
+  }
+
+  if (isNotFoundError(statusError)) {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-16 sm:px-6 lg:px-8">
+        <Link
+          to={dealId ? `/app/deals/${dealId}` : "/app/deals"}
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Back to deal
+        </Link>
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <span className="ml-2 text-sm">
+            Checkout is not yet available for this deal. The application must be
+            approved before you can pay.
+          </span>
+        </Alert>
+      </div>
+    );
   }
 
   const options = checkout?.clientSecret
@@ -282,13 +338,10 @@ export default function CheckoutPage() {
               <div className="mt-4 flex items-center gap-2 text-sm text-destructive justify-center">
                 <AlertCircle className="h-4 w-4" />
                 <span>
-                  {isAxiosError<ErrorResponse>(createCheckout.error)
-                    ? (createCheckout.error.response?.data?.detail
-                      ?? createCheckout.error.response?.data?.message
-                      ?? createCheckout.error.response?.data?.error
-                      ?? createCheckout.error.message)
-                    : ((createCheckout.error as Error)?.message
-                      ?? "Failed to create checkout. Please try again.")}
+                  {getApiErrorMessage(
+                    createCheckout.error,
+                    "Failed to create checkout. Please try again.",
+                  )}
                 </span>
               </div>
             )}
