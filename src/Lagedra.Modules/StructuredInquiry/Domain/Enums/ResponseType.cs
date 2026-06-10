@@ -4,5 +4,12 @@ public enum ResponseType
 {
     YesNo,
     MultipleChoice,
-    Numeric
+    Numeric,
+    /// <summary>
+    /// Phase 17 — free-form text answer. Used both for the "Other" predefined-
+    /// question fallback (tenant types their own question, host replies in
+    /// prose) and for free-form host responses to numeric/categorical asks.
+    /// </summary>
+    OpenText,
 }
+

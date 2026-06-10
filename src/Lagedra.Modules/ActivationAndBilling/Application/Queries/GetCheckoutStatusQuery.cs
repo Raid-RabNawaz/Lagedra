@@ -60,7 +60,8 @@ public sealed class GetCheckoutStatusQueryHandler(
                     confirmation.FirstMonthRentCents,
                     confirmation.DepositAmountCents,
                     confirmation.InsuranceFeeCents,
-                    confirmation.InsuranceFeeCents + confirmation.MonthlyProtocolFeeCents,
+                    confirmation.InsuranceFeeCents + confirmation.MonthlyProtocolFeeCents + confirmation.ServiceFeeCents,
+                    confirmation.ServiceFeeCents,
                     "usd"));
         }
 
@@ -77,7 +78,8 @@ public sealed class GetCheckoutStatusQueryHandler(
                 confirmation.FirstMonthRentCents,
                 confirmation.DepositAmountCents,
                 confirmation.InsuranceFeeCents,
-                confirmation.InsuranceFeeCents + confirmation.MonthlyProtocolFeeCents,
+                confirmation.InsuranceFeeCents + confirmation.MonthlyProtocolFeeCents + confirmation.ServiceFeeCents,
+                confirmation.ServiceFeeCents,
                 "usd"));
     }
 }

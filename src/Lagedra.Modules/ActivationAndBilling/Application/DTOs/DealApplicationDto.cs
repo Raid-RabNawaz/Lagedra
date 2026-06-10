@@ -20,4 +20,9 @@ public sealed record DealApplicationDto(
     Guid? PartnerOrganizationId,
     bool IsPartnerReferred,
     string? JurisdictionWarning,
-    DealApplicationSource Source = DealApplicationSource.TenantSelfApply);
+    DealApplicationSource Source = DealApplicationSource.TenantSelfApply,
+    // New fields appended after Source so partner-direct callers that
+    // still construct the DTO positionally don't have to adjust their
+    // call sites for two unrelated additions.
+    int GuestCount = 1,
+    string? Message = null);

@@ -22,5 +22,13 @@ public sealed class ApplicationUserConfiguration : IEntityTypeConfiguration<Appl
 
         builder.Property(u => u.LastLoginAt)
             .IsRequired(false);
+
+        // Phase 16.9: cached Stripe customer id, lazily populated by the
+        // booking pre-flight. Capped to a generous bound that comfortably
+        // fits Stripe's `cus_…` ids; nullable for legacy users created
+        // before card-on-file was introduced.
+        builder.Property(u => u.StripeCustomerId)
+            .HasMaxLength(64)
+            .IsRequired(false);
     }
 }

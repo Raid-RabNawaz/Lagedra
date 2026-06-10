@@ -1,29 +1,28 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { adminApi } from "@/features/admin/services/adminApi";
-import type { PackVersionSummaryDto } from "@/api/types";
+import { useAuthStore } from "@/app/auth/authStore";
+import type { PendingPackApprovalDto } from "@/api/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { Loader } from "@/components/shared/Loader";
 
 export const DualControlApprovalsPage = () => {
-  const [packId, setPackId] = useState("");
-  const [versions, setVersions] = useState<PackVersionSummaryDto[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const user = useAuthStore((s) => s.user);
+  const [pending, setPending] = useState<PendingPackApprovalDto[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionInFlight, setActionInFlight] = useState<string | null>(null);
 
-  const loadVersions = async () => {
-    if (!packId.trim()) return;
+  const loadPending = async () => {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await adminApi.listPackVersions(packId.trim());
-      setVersions(data.filter((v) => v.status === "PendingApproval"));
+      const data = await adminApi.listPendingPackApprovals();
+      setPending(data);
     } catch {
       setError("Failed to load pending approvals.");
     } finally {
@@ -31,16 +30,27 @@ export const DualControlApprovalsPage = () => {
     }
   };
 
-  const handleApprove = async (versionId: string) => {
-    setActionInFlight(versionId);
+  useEffect(() => {
+    void loadPending();
+  }, []);
+
+  const handleApprove = async (item: PendingPackApprovalDto) => {
+    if (!user?.userId) return;
+    setActionInFlight(item.versionId);
     try {
-      await adminApi.approveVersion(packId.trim(), versionId);
-      await loadVersions();
+      await adminApi.approveVersion(item.packId, item.versionId, user.userId);
+      await loadPending();
     } catch {
-      setError("Approval failed. Please try again.");
+      setError("Approval failed. You may already be the first approver — a different admin must provide the second approval.");
     } finally {
       setActionInFlight(null);
     }
+  };
+
+  const approvalHint = (item: PendingPackApprovalDto) => {
+    if (!item.approvedBy) return "Awaiting first approver";
+    if (item.approvedBy === user?.userId) return "You approved — needs second approver";
+    return "First approval recorded — you can provide second approval";
   };
 
   return (
@@ -48,85 +58,71 @@ export const DualControlApprovalsPage = () => {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Dual Control Approvals</h1>
         <p className="mt-1 text-muted-foreground">
-          Pending jurisdiction pack versions requiring second approver.
+          Jurisdiction pack versions requiring a second distinct platform admin approval.
         </p>
       </div>
 
       <Card>
-        <CardHeader className="pb-4">
-          <CardTitle className="text-lg">Load Pending Approvals</CardTitle>
+        <CardHeader className="flex flex-row items-center justify-between pb-4">
+          <CardTitle className="text-lg">Pending approvals</CardTitle>
+          <Button variant="outline" size="sm" onClick={() => void loadPending()} disabled={isLoading}>
+            Refresh
+          </Button>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-3">
-            <Input
-              placeholder="Enter pack GUID..."
-              className="max-w-md"
-              value={packId}
-              onChange={(e) => setPackId(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && loadVersions()}
-            />
-            <Button onClick={loadVersions} disabled={!packId.trim() || isLoading}>
-              Load Versions
-            </Button>
-          </div>
+          {isLoading ? (
+            <Loader label="Loading pending approvals..." />
+          ) : error ? (
+            <p className="py-8 text-center text-destructive">{error}</p>
+          ) : pending.length === 0 ? (
+            <p className="py-8 text-center text-muted-foreground">No versions awaiting approval.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Jurisdiction</TableHead>
+                  <TableHead>Version</TableHead>
+                  <TableHead>Effective</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pending.map((item) => (
+                  <TableRow key={item.versionId}>
+                    <TableCell className="font-medium">{item.jurisdictionCode}</TableCell>
+                    <TableCell>v{item.versionNumber}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {item.effectiveDate
+                        ? new Date(item.effectiveDate).toLocaleDateString()
+                        : "—"}
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-xs text-muted-foreground">{approvalHint(item)}</span>
+                    </TableCell>
+                    <TableCell className="text-right space-x-2">
+                      <Link to="/app/admin/jurisdiction-packs">
+                        <Button variant="ghost" size="sm">Manage</Button>
+                      </Link>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={
+                          actionInFlight === item.versionId
+                          || item.approvedBy === user?.userId
+                        }
+                        onClick={() => void handleApprove(item)}
+                      >
+                        {actionInFlight === item.versionId ? "Approving…" : "Approve"}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
-
-      {(isLoading || error || versions.length > 0) && (
-        <Card>
-          <CardContent className="pt-6">
-            {isLoading ? (
-              <Loader label="Loading pending approvals..." />
-            ) : error ? (
-              <p className="py-8 text-center text-destructive">{error}</p>
-            ) : versions.length === 0 ? (
-              <p className="py-8 text-center text-muted-foreground">No pending approvals.</p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Version Label</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Jurisdiction Code</TableHead>
-                    <TableHead>Created At</TableHead>
-                    <TableHead>Effective Date</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {versions.map((v) => (
-                    <TableRow key={v.versionId}>
-                      <TableCell className="font-medium">{v.versionLabel}</TableCell>
-                      <TableCell>
-                        <Badge variant="accent">PendingApproval</Badge>
-                      </TableCell>
-                      <TableCell>{v.jurisdictionCode}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {new Date(v.createdAt).toLocaleDateString()}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {v.effectiveDate
-                          ? new Date(v.effectiveDate).toLocaleDateString()
-                          : "—"}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={actionInFlight === v.versionId}
-                          onClick={() => handleApprove(v.versionId)}
-                        >
-                          Approve
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 };

@@ -24,6 +24,7 @@ public static class InquiryEndpoints
 
         group.MapPost("/{dealId:guid}/unlock-request", RequestDetailUnlock);
         group.MapPost("/{dealId:guid}/approve-unlock", ApproveInquiryUnlock);
+        group.MapPost("/{dealId:guid}/lock", LockInquirySession);
         group.MapPost("/{dealId:guid}/questions", SubmitInquiryQuestion);
         group.MapPost("/{dealId:guid}/answers", SubmitLandlordResponse);
         // Inquiries close automatically when the Truth Surface is confirmed.
@@ -32,6 +33,27 @@ public static class InquiryEndpoints
             .RequireAuthorization("RequirePlatformAdmin");
         group.MapGet("/{dealId:guid}", GetInquiryThread);
         group.MapGet("/predefined-questions", ListPredefinedQuestions);
+
+        // Phase 17 — session-id-based routes that work for both pre-booking
+        // and deal-linked threads. Pre-booking sessions have no deal id, so
+        // the deal-id-based routes above can't address them.
+        var sessions = app.MapGroup("/v1/inquiry-sessions")
+            .WithTags("StructuredInquiry")
+            .RequireAuthorization();
+
+        sessions.MapGet("/host", ListHostInquiries);
+        sessions.MapGet("/mine", ListMyTenantInquiries);
+        sessions.MapGet("/{sessionId:guid}", GetInquiryBySession);
+        sessions.MapPost("/{sessionId:guid}/questions", SubmitQuestionToSession);
+        sessions.MapPost("/{sessionId:guid}/answers", SubmitResponseToSession);
+
+        // Phase 17 — listing-scoped pre-booking inquiry endpoints.
+        var listings = app.MapGroup("/v1/listings/{listingId:guid}/inquiry")
+            .WithTags("StructuredInquiry")
+            .RequireAuthorization();
+
+        listings.MapPost("", StartListingInquiry);
+        listings.MapGet("/mine", GetMyListingInquiry);
 
         return app;
     }
@@ -68,6 +90,22 @@ public static class InquiryEndpoints
             : ToErrorResult(result.Error);
     }
 
+    private static async Task<IResult> LockInquirySession(
+        [FromRoute] Guid dealId,
+        ClaimsPrincipal user,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetUserId(user);
+        var result = await mediator
+            .Send(new LockInquirySessionCommand(dealId, userId), cancellationToken)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
+    }
+
     private static async Task<IResult> SubmitInquiryQuestion(
         [FromRoute] Guid dealId,
         [FromBody] SubmitInquiryQuestionRequest request,
@@ -79,7 +117,8 @@ public static class InquiryEndpoints
         var result = await mediator.Send(
             new SubmitInquiryQuestionCommand(
                 dealId, userId,
-                request.Category, request.PredefinedQuestionId, request.CustomQuestionText),
+                request.Category, request.PredefinedQuestionId,
+                request.CustomQuestionText, request.OpenQuestionText),
             cancellationToken)
             .ConfigureAwait(true);
 
@@ -152,6 +191,126 @@ public static class InquiryEndpoints
             : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
     }
 
+    private static async Task<IResult> StartListingInquiry(
+        [FromRoute] Guid listingId,
+        ClaimsPrincipal user,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetUserId(user);
+        var result = await mediator
+            .Send(new StartListingInquiryCommand(listingId, userId), cancellationToken)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Created($"/v1/inquiry-sessions/{result.Value.SessionId}", result.Value)
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> GetMyListingInquiry(
+        [FromRoute] Guid listingId,
+        ClaimsPrincipal user,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetUserId(user);
+        var result = await mediator
+            .Send(new GetMyListingInquiryQuery(listingId, userId), cancellationToken)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> ListHostInquiries(
+        ClaimsPrincipal user,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetUserId(user);
+        var result = await mediator
+            .Send(new ListMyHostInquiriesQuery(userId), cancellationToken)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> ListMyTenantInquiries(
+        ClaimsPrincipal user,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetUserId(user);
+        var result = await mediator
+            .Send(new ListMyTenantInquiriesQuery(userId), cancellationToken)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> GetInquiryBySession(
+        [FromRoute] Guid sessionId,
+        ClaimsPrincipal user,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetUserId(user);
+        var isAdmin = user.IsInRole("PlatformAdmin");
+        var result = await mediator
+            .Send(new GetInquiryBySessionIdQuery(sessionId, userId, isAdmin), cancellationToken)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> SubmitQuestionToSession(
+        [FromRoute] Guid sessionId,
+        [FromBody] SubmitInquiryQuestionRequest request,
+        ClaimsPrincipal user,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetUserId(user);
+        var result = await mediator.Send(
+            new SubmitQuestionToSessionCommand(
+                sessionId, userId,
+                request.Category, request.PredefinedQuestionId,
+                request.CustomQuestionText, request.OpenQuestionText),
+            cancellationToken)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Created($"/v1/inquiry-sessions/{sessionId}", result.Value)
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> SubmitResponseToSession(
+        [FromRoute] Guid sessionId,
+        [FromBody] SubmitLandlordResponseRequest request,
+        ClaimsPrincipal user,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetUserId(user);
+        var result = await mediator.Send(
+            new SubmitResponseToSessionCommand(
+                sessionId, userId,
+                request.QuestionId, request.ResponseType, request.AnswerValue),
+            cancellationToken)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
+    }
+
     private static Guid GetUserId(ClaimsPrincipal user) =>
         Guid.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)
             ?? throw new InvalidOperationException("User ID claim not found."));
@@ -167,7 +326,9 @@ public static class InquiryEndpoints
 
         return error.Code switch
         {
-            "Inquiry.NotFound" or "Inquiry.DealNotFound" => Results.NotFound(payload),
+            "Inquiry.NotFound"
+                or "Inquiry.DealNotFound"
+                or "Inquiry.ListingNotFound" => Results.NotFound(payload),
             _ => Results.BadRequest(payload),
         };
     }

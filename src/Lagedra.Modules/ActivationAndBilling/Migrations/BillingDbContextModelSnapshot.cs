@@ -213,6 +213,11 @@ namespace ActivationAndBilling.Migrations
                     b.Property<long?>("FirstMonthRentCents")
                         .HasColumnType("bigint");
 
+                    b.Property<int>("GuestCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
+
                     b.Property<long?>("InsuranceFeeCents")
                         .HasColumnType("bigint");
 
@@ -231,6 +236,10 @@ namespace ActivationAndBilling.Migrations
 
                     b.Property<Guid>("ListingId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("Message")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
 
                     b.Property<Guid?>("PartnerOrganizationId")
                         .HasColumnType("uuid");
@@ -253,6 +262,10 @@ namespace ActivationAndBilling.Migrations
 
                     b.Property<int>("StayDurationDays")
                         .HasColumnType("integer");
+
+                    b.Property<string>("StripePaymentMethodId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<DateTime>("SubmittedAt")
                         .HasColumnType("timestamp with time zone");
@@ -352,6 +365,11 @@ namespace ActivationAndBilling.Migrations
 
                     b.Property<DateTime?>("ReminderSentAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("ServiceFeeCents")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L);
 
                     b.Property<string>("Status")
                         .IsRequired()

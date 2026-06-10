@@ -34,11 +34,15 @@ COPY src/Lagedra.Modules/PartnerNetwork/PartnerNetwork.csproj                   
 COPY src/Lagedra.Modules/AuditLog/AuditLog.csproj                               src/Lagedra.Modules/AuditLog/
 COPY src/Lagedra.Modules/Analytics/Analytics.csproj                             src/Lagedra.Modules/Analytics/
 
+# Test projects
+COPY tests/Lagedra.Tests.Unit/Lagedra.Tests.Unit.csproj                       tests/Lagedra.Tests.Unit/
+
 RUN dotnet restore Lagedra.sln
 
 # ── Stage 2: build ────────────────────────────────────────────────────────────
 FROM restore AS build
 COPY src/ src/
+COPY tests/ tests/
 RUN dotnet build Lagedra.sln -c Release --no-restore
 
 # ── Stage 3: publish API ───────────────────────────────────────────────────────

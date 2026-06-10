@@ -31,7 +31,9 @@ public sealed record UpdateListingCommand(
     IReadOnlyList<Guid>? ConsiderationIds = null,
     bool? InstantBookingEnabled = null,
     Uri? VirtualTourUrl = null,
-    string? ApproxAddress = null) : IRequest<Result<ListingDetailsDto>>;
+    string? ApproxAddress = null,
+    long? DefaultDepositCents = null,
+    bool ClearDefaultDeposit = false) : IRequest<Result<ListingDetailsDto>>;
 
 public sealed class UpdateListingCommandHandler(
     ListingsDbContext dbContext,
@@ -133,6 +135,16 @@ public sealed class UpdateListingCommandHandler(
         if (request.VirtualTourUrl is not null)
         {
             listing.SetVirtualTourUrl(request.VirtualTourUrl);
+        }
+
+        // Phase 16.2: explicit clear takes precedence; otherwise update only when supplied.
+        if (request.ClearDefaultDeposit)
+        {
+            listing.SetDefaultDeposit(null);
+        }
+        else if (request.DefaultDepositCents.HasValue)
+        {
+            listing.SetDefaultDeposit(request.DefaultDepositCents);
         }
 
         if (rentChanged)

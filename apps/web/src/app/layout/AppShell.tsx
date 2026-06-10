@@ -1,5 +1,5 @@
 import { createElement } from "react";
-import { Link, NavLink, Outlet, useNavigate } from "react-router-dom";
+import { Link, NavLink, Outlet } from "react-router-dom";
 import {
   LogOut,
   Menu,
@@ -7,8 +7,6 @@ import {
   LayoutDashboard,
   User,
   Users,
-  ChevronDown,
-  Key,
   Search,
   Building2,
   Plus,
@@ -21,25 +19,38 @@ import {
   LogIn,
   Settings,
   CalendarCheck,
-  Handshake,
   BookOpen,
   Scale,
   Link2,
   Mail,
   ShieldCheck,
+  ShieldAlert,
   ClipboardCheck,
+  Bell,
+  Wallet,
+  Flag,
+  FileSearch,
+  UserCheck,
+  AlertTriangle,
+  Ban,
+  Globe,
+  BarChart3,
+  TrendingUp,
+  ScrollText,
+  SlidersHorizontal,
+  MessageSquare,
+  MessageCircle,
 } from "lucide-react";
 import logoSvg from "@/assets/logo.svg";
-import { useRef, useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { authApi } from "@/features/auth/services/authApi";
 import { useAuthStore } from "@/app/auth/authStore";
-import { getSidebarGroupsForRole, type NavItem } from "@/app/auth/permissions";
+import { getSidebarGroupsForRole, supportsModeSwitching, type NavItem } from "@/app/auth/permissions";
 import { roleLabel } from "@/app/auth/roles";
+import { useModeStore } from "@/app/auth/modeStore";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { NotificationBell } from "@/features/notifications/components/NotificationBell";
-import { useNotificationHub } from "@/features/notifications/hooks/useNotificationHub";
+import { AuthedHeaderActions } from "@/app/layout/AuthedHeaderActions";
 import { cn } from "@/lib/utils";
 
 const SIDEBAR_KEY = "lagedra.sidebar";
@@ -48,7 +59,6 @@ const iconMap: Record<string, typeof LayoutDashboard> = {
   LayoutDashboard,
   User,
   Users,
-  Key,
   Search,
   Building2,
   Plus,
@@ -59,13 +69,27 @@ const iconMap: Record<string, typeof LayoutDashboard> = {
   LogIn,
   Settings,
   CalendarCheck,
-  Handshake,
   BookOpen,
   Scale,
   Link2,
   Mail,
   ShieldCheck,
+  ShieldAlert,
   ClipboardCheck,
+  Bell,
+  Wallet,
+  Flag,
+  FileSearch,
+  UserCheck,
+  AlertTriangle,
+  Ban,
+  Globe,
+  BarChart3,
+  TrendingUp,
+  ScrollText,
+  SlidersHorizontal,
+  MessageSquare,
+  MessageCircle,
 };
 
 function resolveIcon(name: string) {
@@ -75,19 +99,18 @@ function resolveIcon(name: string) {
 export const AppShell = () => {
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
-  const navigate = useNavigate();
 
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === "undefined") return false;
     return window.localStorage.getItem(SIDEBAR_KEY) === "true";
   });
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
-  const userMenuRef = useRef<HTMLDivElement>(null);
 
-  const groups = getSidebarGroupsForRole(user?.role ?? "");
-  useNotificationHub();
+  const mode = useModeStore((s) => s.mode);
+  const showModeSwitch = supportsModeSwitching(user?.role);
+
+  const groups = getSidebarGroupsForRole(user?.role ?? "", showModeSwitch ? mode : undefined);
 
   const toggleCollapsed = useCallback(() => {
     setCollapsed((v) => {
@@ -97,24 +120,16 @@ export const AppShell = () => {
     });
   }, []);
 
-  useEffect(() => {
-    if (!userMenuOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
-        setUserMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [userMenuOpen]);
-
-  const onLogout = async () => {
+  // Mobile slide-out keeps its own inline Log out button (sidebar
+  // pattern), so we still need a logout handler here in addition to
+  // the one bundled inside <AuthedHeaderActions>.
+  const onLogoutMobile = async () => {
     setLoggingOut(true);
     try {
       await authApi.logout();
     } finally {
       setUser(null);
-      navigate("/auth/login", { replace: true });
+      window.location.assign("/auth/login");
     }
   };
 
@@ -127,29 +142,61 @@ export const AppShell = () => {
     .map((s) => s[0]?.toUpperCase())
     .join("");
 
-  const sidebarContent = (onNav?: () => void) => (
-    <nav className="flex flex-col gap-6 p-3">
-      {groups.map((group) => (
-        <div key={group.label}>
-          {!collapsed && (
-            <p className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-              {group.label}
-            </p>
-          )}
-          <div className="flex flex-col gap-0.5">
-            {group.items.map((item) => (
-              <SidebarLink
-                key={item.to}
-                item={item}
-                collapsed={collapsed}
-                onClick={onNav}
-              />
-            ))}
-          </div>
-        </div>
-      ))}
-    </nav>
-  );
+  const sidebarContent = (onNav?: () => void) => {
+    // First group whose label starts with "Admin ·" marks the
+    // boundary between member-facing sections and admin-only
+    // sections. We render a horizontal divider above it so the
+    // mode switch between "your account" and "platform tools"
+    // is visually unambiguous, instead of having one long
+    // undifferentiated wall of group headers.
+    const firstAdminIndex = groups.findIndex((g) => g.label.startsWith("Admin"));
+
+    return (
+      <nav className="flex flex-col gap-6 p-3">
+        {groups.map((group, idx) => {
+          const isFirstAdmin = firstAdminIndex >= 0 && idx === firstAdminIndex;
+          // Strip the "Admin · " prefix from the rendered label —
+          // the divider + separate visual block already conveys
+          // the grouping, and shorter labels read better in the
+          // narrow sidebar.
+          const displayLabel = group.label.startsWith("Admin · ")
+            ? group.label.slice("Admin · ".length)
+            : group.label;
+
+          return (
+            <div key={group.label}>
+              {isFirstAdmin && !collapsed && (
+                <div className="-mt-2 mb-3 flex items-center gap-2 px-3">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary">
+                    Platform admin
+                  </span>
+                  <div className="h-px flex-1 bg-border" />
+                </div>
+              )}
+              {isFirstAdmin && collapsed && (
+                <div className="mb-2 mx-2 h-px bg-border" />
+              )}
+              {!collapsed && (
+                <p className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  {displayLabel}
+                </p>
+              )}
+              <div className="flex flex-col gap-0.5">
+                {group.items.map((item) => (
+                  <SidebarLink
+                    key={item.to}
+                    item={item}
+                    collapsed={collapsed}
+                    onClick={onNav}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </nav>
+    );
+  };
 
   return (
     <div className="flex min-h-screen flex-col bg-secondary/30">
@@ -182,66 +229,11 @@ export const AppShell = () => {
               Browse listings
             </Link>
 
-            <NotificationBell />
-
-            {/* User dropdown */}
-            <div className="relative" ref={userMenuRef}>
-              <button
-                onClick={() => setUserMenuOpen((v) => !v)}
-                className="flex items-center gap-2 rounded-full py-1 pl-1 pr-3 transition-colors hover:bg-secondary cursor-pointer"
-              >
-                <Avatar className="h-8 w-8">
-                  {user?.profilePhotoUrl ? (
-                    <AvatarImage src={user.profilePhotoUrl} alt={displayName} />
-                  ) : null}
-                  <AvatarFallback className="text-xs">{initials}</AvatarFallback>
-                </Avatar>
-                <div className="hidden sm:block text-left">
-                  <p className="text-sm font-medium leading-none">{displayName}</p>
-                  <p className="text-[10px] text-muted-foreground leading-tight">
-                    {roleLabel(String(user?.role ?? ""))}
-                  </p>
-                </div>
-                <ChevronDown
-                  className={cn(
-                    "h-3.5 w-3.5 text-muted-foreground transition-transform hidden sm:block",
-                    userMenuOpen && "rotate-180",
-                  )}
-                />
-              </button>
-
-              {userMenuOpen && (
-                <div className="absolute right-0 top-full mt-2 w-56 rounded-xl border bg-background p-1.5 shadow-lg animate-fade-in">
-                  <div className="px-3 py-2 border-b mb-1">
-                    <p className="text-sm font-medium">{user?.email}</p>
-                    <Badge variant="secondary" className="mt-1 text-[10px]">
-                      {roleLabel(String(user?.role ?? ""))}
-                    </Badge>
-                  </div>
-
-                  <Link
-                    to="/app/profile"
-                    onClick={() => setUserMenuOpen(false)}
-                    className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-                  >
-                    <User className="h-4 w-4" />
-                    Profile & settings
-                  </Link>
-
-                  <button
-                    onClick={() => {
-                      setUserMenuOpen(false);
-                      void onLogout();
-                    }}
-                    disabled={loggingOut}
-                    className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors cursor-pointer disabled:opacity-50"
-                  >
-                    <LogOut className="h-4 w-4" />
-                    {loggingOut ? "Logging out..." : "Log out"}
-                  </button>
-                </div>
-              )}
-            </div>
+            {/* Mode switch + bell + user dropdown live here. The
+                Dashboard link is omitted from the dropdown inside the
+                AppShell because the sidebar's Main group already pins
+                it — adding it again would be a duplicate affordance. */}
+            <AuthedHeaderActions />
           </div>
         </div>
       </header>
@@ -305,7 +297,7 @@ export const AppShell = () => {
                 <button
                   onClick={() => {
                     setMobileOpen(false);
-                    void onLogout();
+                    void onLogoutMobile();
                   }}
                   disabled={loggingOut}
                   className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors cursor-pointer disabled:opacity-50"
@@ -361,3 +353,4 @@ function SidebarLink({
     </NavLink>
   );
 }
+

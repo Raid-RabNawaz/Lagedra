@@ -20,6 +20,7 @@ public static class ApplicationEndpoints
             .RequireAuthorization();
 
         group.MapPost("/", SubmitApplication);
+        group.MapPost("/setup-intent", CreateBookingSetupIntent);
         group.MapGet("/mine", ListMyApplications);
         group.MapPost("/{id:guid}/approve", ApproveApplication);
         group.MapPost("/{id:guid}/reject", RejectApplication);
@@ -27,6 +28,22 @@ public static class ApplicationEndpoints
         group.MapGet("/listing/{listingId:guid}", ListApplicationsForListing);
 
         return app;
+    }
+
+    private static async Task<IResult> CreateBookingSetupIntent(
+        [FromBody] CreateBookingSetupIntentRequest request,
+        ClaimsPrincipal user,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var tenantUserId = GetUserId(user);
+        var result = await mediator
+            .Send(new CreateBookingSetupIntentCommand(tenantUserId, request.ListingId), ct)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
     }
 
     private static async Task<IResult> ListMyApplications(
@@ -53,11 +70,15 @@ public static class ApplicationEndpoints
         var result = await mediator.Send(
             new SubmitApplicationCommand(
                 request.ListingId, tenantUserId,
-                request.RequestedCheckIn, request.RequestedCheckOut), ct)
+                request.RequestedCheckIn, request.RequestedCheckOut,
+                request.GuestCount, request.Message,
+                request.StripePaymentMethodId), ct)
             .ConfigureAwait(true);
 
         return result.IsSuccess
-            ? Results.Created($"/v1/applications/{result.Value.ApplicationId}", result.Value)
+            ? Results.Created(
+                $"/v1/applications/{result.Value.Application.ApplicationId}",
+                result.Value)
             : ToErrorResult(result.Error);
     }
 

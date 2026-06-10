@@ -16,7 +16,7 @@ $migrations = @(
     @{ Project = "src/Lagedra.Auth";                                       Context = "AuthDbContext" }
     @{ Project = "src/Lagedra.Modules/ActivationAndBilling";               Context = "BillingDbContext" }
     @{ Project = "src/Lagedra.Modules/IdentityAndVerification";            Context = "IdentityVerificationDbContext" }
-    @{ Project = "src/Lagedra.Modules/ListingAndLocation";                 Context = "ListingDbContext" }
+    @{ Project = "src/Lagedra.Modules/ListingAndLocation";                 Context = "ListingsDbContext" }
     @{ Project = "src/Lagedra.Modules/StructuredInquiry";                  Context = "InquiryDbContext" }
     @{ Project = "src/Lagedra.Modules/VerificationAndRisk";                Context = "VerificationDbContext" }
     @{ Project = "src/Lagedra.Modules/InsuranceIntegration";               Context = "InsuranceDbContext" }

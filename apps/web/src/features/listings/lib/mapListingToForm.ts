@@ -12,6 +12,10 @@ export function listingDetailsToFormValues(listing: ListingDetailsDto): ListingF
     description: listing.description,
     monthlyRentDollars: listing.monthlyRentCents / 100,
     maxDepositDollars: listing.maxDepositCents / 100,
+    defaultDepositDollars:
+      listing.defaultDepositCents != null
+        ? listing.defaultDepositCents / 100
+        : undefined,
     insuranceRequired: listing.insuranceRequired,
     bedrooms: listing.bedrooms,
     bathrooms: Number(listing.bathrooms),

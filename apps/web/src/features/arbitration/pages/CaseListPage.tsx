@@ -16,6 +16,8 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { formatDate, formatMoney } from "@/utils/format";
 import { useCases } from "@/features/arbitration/hooks/useArbitration";
 import { useMyDeals } from "@/features/deals/hooks/useDeals";
+import { useAuthStore } from "@/app/auth/authStore";
+import { roles } from "@/app/auth/roles";
 import { FileArbitrationDialog } from "@/features/arbitration/components/FileArbitrationDialog";
 import { Select } from "@/components/ui/select";
 import {
@@ -173,8 +175,12 @@ function DealPickerDialog({
 }
 
 export function CaseListPage() {
+  const user = useAuthStore((s) => s.user);
+  const isArbitrator = String(user?.role) === roles.arbitrator;
   const [searchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState<ArbitrationStatus>("Filed");
+  const [activeTab, setActiveTab] = useState<ArbitrationStatus>(
+    isArbitrator ? "UnderReview" : "Filed",
+  );
   const { data: cases, isLoading, error } = useCases(activeTab);
 
   const preselectedDealId = searchParams.get("dealId");
@@ -207,16 +213,22 @@ export function CaseListPage() {
         <div className="flex items-center gap-3">
           <Scale className="h-7 w-7 text-blue-600" />
           <div>
-            <h1 className="text-xl font-bold tracking-tight">Arbitration Cases</h1>
+            <h1 className="text-xl font-bold tracking-tight">
+              {isArbitrator ? "Assigned cases" : "Arbitration Cases"}
+            </h1>
             <p className="text-sm text-muted-foreground">
-              View and manage dispute resolution cases.
+              {isArbitrator
+                ? "Cases assigned to you for review and decision."
+                : "View and manage dispute resolution cases."}
             </p>
           </div>
         </div>
-        <Button onClick={handleFileClick} className="gap-1.5">
-          <Plus className="h-4 w-4" />
-          File a Case
-        </Button>
+        {!isArbitrator && (
+          <Button onClick={handleFileClick} className="gap-1.5">
+            <Plus className="h-4 w-4" />
+            File a Case
+          </Button>
+        )}
       </div>
 
       <DealPickerDialog

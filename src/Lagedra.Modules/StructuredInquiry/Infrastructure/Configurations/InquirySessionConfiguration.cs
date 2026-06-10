@@ -13,8 +13,17 @@ public sealed class InquirySessionConfiguration : IEntityTypeConfiguration<Inqui
         builder.ToTable("sessions");
         builder.HasKey(s => s.Id);
 
-        builder.Property(s => s.DealId).IsRequired();
+        // Phase 17 — listing + tenant are the new identity. DealId is now
+        // nullable because pre-booking inquiries don't have one yet.
+        builder.Property(s => s.ListingId).IsRequired();
+        builder.Property(s => s.TenantUserId).IsRequired();
+        builder.Property(s => s.DealId).IsRequired(false);
+
         builder.HasIndex(s => s.DealId);
+        builder.HasIndex(s => s.ListingId);
+        // Used by the listing detail page to find a tenant's existing
+        // pre-booking thread for "continue conversation" semantics.
+        builder.HasIndex(s => new { s.ListingId, s.TenantUserId });
 
         builder.Property(s => s.Status)
             .HasConversion<string>()

@@ -1,5 +1,4 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import type { AxiosError } from "axios";
 import { truthSurfaceApi } from "@/features/truth-surface/services/truthSurfaceApi";
 import type { ConfirmingParty } from "@/api/types";
 
@@ -12,17 +11,18 @@ export function useSnapshot(snapshotId: string | undefined) {
   });
 }
 
+/**
+ * `data` resolves to the active Truth Surface for the deal, or `null` if
+ * none has been created yet (404 is treated as a normal pre-confirmation
+ * state, not an error). Use `data` truthiness to gate "review" vs
+ * "create" affordances.
+ */
 export function useSnapshotByDealId(dealId: string | undefined) {
   return useQuery({
     queryKey: ["truth-surface", "by-deal", dealId],
     queryFn: () => truthSurfaceApi.getSnapshotByDealId(dealId!),
     enabled: Boolean(dealId),
     staleTime: 15_000,
-    retry: (failureCount, error) => {
-      const status = (error as AxiosError)?.response?.status;
-      if (status === 404) return false;
-      return failureCount < 2;
-    },
   });
 }
 
@@ -61,6 +61,13 @@ export function useConfirmSnapshot() {
     }) => truthSurfaceApi.confirm(snapshotId, { party }),
     onSuccess: (data) => {
       queryClient.setQueryData(["truth-surface", data.snapshotId], data);
+      queryClient.setQueryData(["truth-surface", "by-deal", data.dealId], data);
+      // Phase 16.5: tenant confirmation seals the TS, which fires the
+      // domain event that creates the DealPaymentConfirmation row.
+      // Refresh the checkout query so the inline checkout page can
+      // transition straight from the confirmation panel to the
+      // payment element without a manual reload.
+      queryClient.invalidateQueries({ queryKey: ["checkout", data.dealId] });
       queryClient.invalidateQueries({ queryKey: ["deals"] });
     },
   });

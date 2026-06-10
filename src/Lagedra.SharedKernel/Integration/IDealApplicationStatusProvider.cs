@@ -14,7 +14,8 @@ public interface IDealApplicationStatusProvider
 
 public sealed record DealParticipantsDto(
     Guid LandlordUserId,
-    Guid TenantUserId);
+    Guid TenantUserId,
+    Guid ListingId);
 
 public sealed record DealApplicationDetailsDto(
     Guid ApplicationId,

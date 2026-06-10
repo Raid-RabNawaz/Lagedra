@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Monthly House Rental</title>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      { "@type": "WebSite", "name": "Listings Site" },
+      {
+        "@type": "House",
+        "name": "Spacious Family House",
+        "description": "Four-bedroom family house available for long-term stays.",
+        "numberOfBedrooms": 4,
+        "numberOfBathroomsTotal": 2,
+        "address": {
+          "@type": "PostalAddress",
+          "addressLocality": "Portland",
+          "addressRegion": "OR"
+        },
+        "offers": {
+          "@type": "Offer",
+          "priceCurrency": "USD",
+          "priceSpecification": {
+            "@type": "UnitPriceSpecification",
+            "price": "3200",
+            "priceCurrency": "USD",
+            "unitText": "MONTH"
+          }
+        }
+      }
+    ]
+  }
+  </script>
+</head>
+<body></body>
+</html>

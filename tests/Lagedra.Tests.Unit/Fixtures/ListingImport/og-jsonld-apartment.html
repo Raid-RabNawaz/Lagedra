@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Fallback Title Should Not Win</title>
+  <link rel="canonical" href="https://example-rentals.test/listings/sunny-loft" />
+
+  <meta property="og:title" content="Sunny Downtown Loft" />
+  <meta property="og:description" content="A bright, modern loft in the heart of downtown with great natural light and a full kitchen." />
+  <meta property="og:type" content="product" />
+  <meta property="og:url" content="https://example-rentals.test/listings/sunny-loft" />
+  <meta property="og:image" content="https://cdn.example-rentals.test/photos/loft-1.jpg" />
+  <meta property="og:image:alt" content="Living room with large windows" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="800" />
+  <meta property="og:image" content="https://cdn.example-rentals.test/photos/loft-2.jpg" />
+  <meta name="description" content="Should be overridden by og:description." />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Apartment",
+    "name": "Sunny Downtown Loft",
+    "description": "A bright, modern loft in the heart of downtown.",
+    "numberOfBedrooms": 2,
+    "numberOfBathroomsTotal": 1.5,
+    "floorSize": { "@type": "QuantitativeValue", "value": 950, "unitCode": "FTK" },
+    "occupancy": { "@type": "QuantitativeValue", "maxValue": 4 },
+    "checkinTime": "15:00",
+    "checkoutTime": "11:00",
+    "image": [
+      "https://cdn.example-rentals.test/photos/loft-1.jpg",
+      "https://cdn.example-rentals.test/photos/loft-3.jpg"
+    ],
+    "address": {
+      "@type": "PostalAddress",
+      "streetAddress": "742 Should Be Ignored St",
+      "addressLocality": "Austin",
+      "addressRegion": "TX",
+      "postalCode": "78701",
+      "addressCountry": "US"
+    },
+    "amenityFeature": [
+      { "@type": "LocationFeatureSpecification", "name": "Wifi", "value": true },
+      { "@type": "LocationFeatureSpecification", "name": "Kitchen", "value": true },
+      { "@type": "LocationFeatureSpecification", "name": "Pool", "value": false }
+    ],
+    "offers": {
+      "@type": "Offer",
+      "price": "180.00",
+      "priceCurrency": "USD"
+    }
+  }
+  </script>
+</head>
+<body>
+  <h1>Sunny Downtown Loft</h1>
+</body>
+</html>

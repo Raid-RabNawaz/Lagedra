@@ -1,6 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { arbitrationApi } from "@/features/arbitration/services/arbitrationApi";
-import type { ArbitrationStatus, ArbitrationTier, ArbitrationCategory } from "@/api/types";
+import type {
+  ArbitrationStatus,
+  ArbitrationTier,
+  ArbitrationCategory,
+  IssueDecisionRequest,
+} from "@/api/types";
 
 export function useCases(status: ArbitrationStatus) {
   return useQuery({
@@ -43,14 +48,12 @@ export function useAttachEvidence() {
     mutationFn: ({
       caseId,
       slotType,
-      submittedBy,
       evidenceManifestId,
     }: {
       caseId: string;
       slotType: string;
-      submittedBy: string;
       evidenceManifestId: string;
-    }) => arbitrationApi.attachEvidence(caseId, slotType, submittedBy, evidenceManifestId),
+    }) => arbitrationApi.attachEvidence(caseId, slotType, evidenceManifestId),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["arbitration"] });
     },
@@ -72,13 +75,19 @@ export function useIssueDecision() {
   return useMutation({
     mutationFn: ({
       caseId,
-      decisionSummary,
-      awardAmount,
-    }: {
-      caseId: string;
-      decisionSummary: string;
-      awardAmount?: number | null;
-    }) => arbitrationApi.issueDecision(caseId, decisionSummary, awardAmount),
+      ...body
+    }: IssueDecisionRequest & { caseId: string }) =>
+      arbitrationApi.issueDecision(caseId, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["arbitration"] });
+    },
+  });
+}
+
+export function useBeginReview() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (caseId: string) => arbitrationApi.beginReview(caseId),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["arbitration"] });
     },
@@ -95,8 +104,13 @@ export function useAssignArbitrator() {
     }: {
       caseId: string;
       arbitratorUserId: string;
-      concurrentCaseCount: number;
-    }) => arbitrationApi.assignArbitrator(caseId, arbitratorUserId, concurrentCaseCount),
+      concurrentCaseCount?: number;
+    }) =>
+      arbitrationApi.assignArbitrator(
+        caseId,
+        arbitratorUserId,
+        concurrentCaseCount,
+      ),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["arbitration"] });
     },

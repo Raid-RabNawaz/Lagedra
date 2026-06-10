@@ -1,3 +1,4 @@
+using Lagedra.Modules.Arbitration.Application.Services;
 using Lagedra.Modules.Arbitration.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Results;
 using MediatR;
@@ -7,26 +8,32 @@ namespace Lagedra.Modules.Arbitration.Application.Commands;
 
 public sealed record AppealCaseCommand(
     Guid CaseId,
-    Guid AppealedByUserId,
+    ArbitrationUserContext Caller,
     string Reason) : IRequest<Result>;
 
-public sealed class AppealCaseCommandHandler(ArbitrationDbContext dbContext)
+public sealed class AppealCaseCommandHandler(
+    ArbitrationDbContext dbContext,
+    ArbitrationCaseAccessEvaluator accessEvaluator)
     : IRequestHandler<AppealCaseCommand, Result>
 {
     public async Task<Result> Handle(AppealCaseCommand request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var arbitrationCase = await dbContext.ArbitrationCases
-            .FirstOrDefaultAsync(c => c.Id == request.CaseId, cancellationToken)
+        var access = await accessEvaluator
+            .RequireAsync(request.CaseId, request.Caller, CaseAccessLevel.Appeal, cancellationToken)
             .ConfigureAwait(false);
 
-        if (arbitrationCase is null)
+        if (!access.IsSuccess)
         {
-            return Result.Failure(new Error("Arbitration.CaseNotFound", "Case not found."));
+            return Result.Failure(access.Error);
         }
 
-        arbitrationCase.Appeal(request.AppealedByUserId, request.Reason);
+        var arbitrationCase = await dbContext.ArbitrationCases
+            .FirstAsync(c => c.Id == request.CaseId, cancellationToken)
+            .ConfigureAwait(false);
+
+        arbitrationCase.Appeal(request.Caller.UserId, request.Reason);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return Result.Success();

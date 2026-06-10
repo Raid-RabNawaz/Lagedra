@@ -6,6 +6,8 @@ public sealed record CaseDto(
     Guid CaseId,
     Guid DealId,
     Guid FiledByUserId,
+    Guid? LandlordUserId,
+    Guid? TenantUserId,
     ArbitrationTier Tier,
     ArbitrationCategory Category,
     ArbitrationStatus Status,
@@ -14,7 +16,10 @@ public sealed record CaseDto(
     DateTime? EvidenceCompleteAt,
     DateTime? DecisionDueAt,
     int EvidenceSlotCount,
+    Guid? AssignedArbitratorUserId,
+    string? AssignedArbitratorEmail,
     DecisionDto? Decision,
+    DecisionDto? PriorDecision,
     IReadOnlyList<EvidenceSlotDto>? EvidenceSlots);
 
 public sealed record EvidenceSlotDto(

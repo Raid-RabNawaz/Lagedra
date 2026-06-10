@@ -147,25 +147,31 @@ public sealed class ListMyDealsQueryHandler(
         Domain.Aggregates.DealPaymentConfirmation? payment,
         TruthSurfaceSnapshotInfo? truthSurface)
     {
+        // Phase 17 — "Inquiry" is no longer a deal phase. Under V2 a Truth
+        // Surface is auto-created the moment a deal is approved, so the only
+        // meaningful pre-activation states are TruthSurface and Checkout. If
+        // we somehow have a deal with neither, surface it as TruthSurface so
+        // the host's deal page lands on "create / review snapshot" rather
+        // than the legacy "Inquiry" CTA that no longer renders anywhere.
         if (payment is not null)
         {
             return payment.Status switch
             {
-                PaymentConfirmationStatus.Pending => "AwaitingPayment",
+                PaymentConfirmationStatus.Pending => "Checkout",
                 PaymentConfirmationStatus.Confirmed => "Active",
-                PaymentConfirmationStatus.Disputed => "AwaitingPayment",
+                PaymentConfirmationStatus.Disputed => "Checkout",
                 PaymentConfirmationStatus.Rejected => "Cancelled",
                 PaymentConfirmationStatus.Cancelled => "Cancelled",
-                _ => "Inquiry",
+                _ => "TruthSurface",
             };
         }
 
         if (truthSurface is not null)
         {
-            return truthSurface.IsSealed ? "AwaitingPayment" : "TruthSurface";
+            return truthSurface.IsSealed ? "Checkout" : "TruthSurface";
         }
 
-        return "Inquiry";
+        return "TruthSurface";
     }
 
     private static bool MatchesFilter(string phase, string? filter)
@@ -176,9 +182,17 @@ public sealed class ListMyDealsQueryHandler(
             return true;
         }
 
+        // Phase 17 compatibility shim — older frontend bundles still cached
+        // in a user's browser may send ?phase=Inquiry. Treat it as a no-op
+        // (return everything) for one release, then drop in Phase 18.
+        if (string.Equals(filter, "Inquiry", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
         if (string.Equals(filter, "active", StringComparison.OrdinalIgnoreCase))
         {
-            return phase is "Inquiry" or "TruthSurface" or "AwaitingPayment" or "Checkout" or "Active";
+            return phase is "TruthSurface" or "Checkout" or "Active";
         }
 
         if (string.Equals(filter, "past", StringComparison.OrdinalIgnoreCase))

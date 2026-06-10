@@ -16,6 +16,7 @@ public sealed class ArbitrationDbContext(
     public DbSet<ArbitrationCase> ArbitrationCases => Set<ArbitrationCase>();
     public DbSet<EvidenceSlot> EvidenceSlots => Set<EvidenceSlot>();
     public DbSet<ArbitratorAssignment> ArbitratorAssignments => Set<ArbitratorAssignment>();
+    public DbSet<DecisionPenalty> DecisionPenalties => Set<DecisionPenalty>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

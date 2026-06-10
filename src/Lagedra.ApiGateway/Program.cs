@@ -150,6 +150,7 @@ try
         .AddPolicy("RequireMember", p => p.RequireRole("Member", "PlatformAdmin", "Landlord", "Tenant"))
         .AddPolicy("RequireArbitrator", p => p.RequireRole("Arbitrator", "PlatformAdmin"))
         .AddPolicy("RequirePlatformAdmin", p => p.RequireRole("PlatformAdmin"))
+        .AddPolicy("RequirePackApprover", p => p.RequireRole("PlatformAdmin", "Arbitrator"))
         .AddPolicy("RequireInsurancePartner", p => p.RequireRole("InsurancePartner", "PlatformAdmin"))
         .AddPolicy("RequireInstitutionPartner", p => p.RequireRole("InstitutionPartner", "PlatformAdmin"));
 
@@ -195,7 +196,16 @@ try
         foreach (var ctxType in dbContextTypes)
         {
             if (sp.GetService(ctxType) is Microsoft.EntityFrameworkCore.DbContext ctx)
-                await ctx.Database.MigrateAsync().ConfigureAwait(false);
+            {
+                try
+                {
+                    await ctx.Database.MigrateAsync().ConfigureAwait(false);
+                }
+                catch (InvalidOperationException ex) when (ex.Message.Contains("PendingModelChanges", StringComparison.Ordinal))
+                {
+                    Log.Warning("Pending model changes detected for {Context} – existing migrations applied, skipping.", ctxType.Name);
+                }
+            }
         }
     }
 
@@ -206,9 +216,39 @@ try
     await Lagedra.Modules.ListingAndLocation.Infrastructure.Seeding.ListingDefinitionsSeeder
         .SeedAsync(app.Services).ConfigureAwait(false);
 
+    // Phase 16.10 — ensure the application_submitted email template (and
+    // the rest of the baseline set) exists so the one-tap approve link
+    // actually renders. No-op when admin-managed rows already exist.
+    await Lagedra.Modules.Notifications.Infrastructure.Seeding.NotificationTemplateSeeder
+        .SeedAsync(app.Services).ConfigureAwait(false);
+
+    try
+    {
+        await using var jurisdictionSeedScope = app.Services.CreateAsyncScope();
+        var jurisdictionMediator = jurisdictionSeedScope.ServiceProvider.GetRequiredService<MediatR.IMediator>();
+        await jurisdictionMediator.Send(
+            new Lagedra.Modules.JurisdictionPacks.Application.Commands.SeedCaliforniaDepositCapCommand())
+            .ConfigureAwait(false);
+    }
+    catch (DbUpdateException ex)
+    {
+        Log.Warning(ex, "Jurisdiction pack seed skipped (DB error): {Message}", ex.Message);
+    }
+    catch (InvalidOperationException ex)
+    {
+        Log.Warning(ex, "Jurisdiction pack seed skipped (invalid state): {Message}", ex.Message);
+    }
+
     await using var settingsScope = app.Services.CreateAsyncScope();
     var settingsDb = settingsScope.ServiceProvider.GetRequiredService<PlatformSettingsDbContext>();
-    await settingsDb.Database.MigrateAsync().ConfigureAwait(false);
+    try
+    {
+        await settingsDb.Database.MigrateAsync().ConfigureAwait(false);
+    }
+    catch (InvalidOperationException ex) when (ex.Message.Contains("PendingModelChanges", StringComparison.Ordinal))
+    {
+        Log.Warning("Pending model changes detected for PlatformSettingsDbContext – existing migrations applied, skipping.");
+    }
 
     app.UseCorrelationId();
     app.UseGlobalExceptionHandler();
@@ -255,6 +295,7 @@ try
     app.MapAuthEndpoints();
     app.MapTruthSurfaceEndpoints();
     app.MapApplicationEndpoints();
+    app.MapActionEndpoints();
     app.MapActivationEndpoints();
     app.MapDealEndpoints();
     app.MapCheckoutEndpoints();
@@ -263,6 +304,7 @@ try
     app.MapDamageClaimEndpoints();
     app.MapStripeWebhookEndpoints();
     app.MapListingEndpoints();
+    app.MapListingImportEndpoints();
     app.MapListingDefinitionsEndpoints();
     app.MapAdminListingDefinitionsEndpoints();
     app.MapAdminListingReviewEndpoints();
@@ -283,6 +325,7 @@ try
     app.MapEvidenceEndpoints();
     app.MapUploadEndpoints();
     app.MapJurisdictionPackEndpoints();
+    app.MapAdminJurisdictionPackEndpoints();
     app.MapNotificationEndpoints();
     app.MapInAppNotificationEndpoints();
     app.MapPrivacyEndpoints();

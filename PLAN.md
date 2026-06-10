@@ -2495,8 +2495,9 @@
 
 - [ ] `pages/InsuranceUnknownQueue.tsx` — deals in "Status: Unknown"; manual verification portal; 24h SLA countdown indicator
 - [ ] `pages/FraudFlags.tsx` — fraud flags by severity (High/Medium/Low); review/resolve workflow; 24h/72h SLA display
-- [ ] `pages/ArbitrationBacklog.tsx` — caseload per arbitrator; SLA status; triage view; overflow assignment button
-- [ ] `pages/JurisdictionPackVersions.tsx` — draft/pending/active packs; dual-control approval workflow (2nd approver view)
+- [x] `pages/ArbitrationBacklog.tsx` — caseload per arbitrator; SLA status; triage view; auto-assign from backlog (implemented in `apps/web` at `/app/admin/arbitration-backlog`)
+- [x] `pages/JurisdictionPackVersions.tsx` — pack catalog, draft effective date, dual-control approve/publish/deprecate (implemented in `apps/web` at `/app/admin/jurisdiction-packs`)
+- [x] `pages/DualControlApprovals.tsx` — global pending approvals queue (implemented in `apps/web` at `/app/admin/dual-control`)
 - [ ] `pages/EvidenceReview.tsx` — malware scan queue; infected file quarantine; manual evidence review
 - [ ] `pages/AuditSearch.tsx` — full audit event log; filter by user, event type, date range
 - [ ] `pages/ManualVerification.tsx` — Persona KYC manual review fallback queue; ≤ 24h SLA
@@ -3291,87 +3292,87 @@ flowchart LR
 
 ### 16.1 Listing Detail — live availability, price quote, KYC pre-flight
 
-- [ ] Range-aware availability: extend [`GetListingAvailabilityQuery.cs`](src/Lagedra.Modules/ListingAndLocation/Application/Queries/GetListingAvailabilityQuery.cs) and [`ListingEndpoints.cs:291`](src/Lagedra.Modules/ListingAndLocation/Presentation/Endpoints/ListingEndpoints.cs) to accept `from`/`to` and return `{available: bool, blocks: [...]}`.
-- [ ] New `POST /v1/listings/{id}/quote` endpoint + `GetListingQuoteQuery` — composes `MonthlyRentCents`, computed `DepositCents` (default or band midpoint), `IInsuranceFeeCalculator.CalculateFeeAsync` ([`IInsuranceFeeCalculator.cs:3`](src/Lagedra.SharedKernel/Insurance/IInsuranceFeeCalculator.cs)), and protocol fee from `IPlatformSettingsProvider`. Returns `QuoteDto { rentCents, depositCents, insuranceFeeCents, protocolFeeCents, totalCents }`.
-- [ ] Pre-flight consent status: new `GET /v1/privacy/consents/me/status` returning `{hasRequired: bool, missing: ConsentTypeDto[]}` backed by `IConsentChecker.HasRequiredConsentsAsync` ([`IConsentChecker.cs:3`](src/Lagedra.SharedKernel/Integration/IConsentChecker.cs)). Bypass `ConsentMiddleware` for this read endpoint.
-- [ ] Frontend [`ListingDetailPage.tsx`](apps/web/src/features/listings/pages/ListingDetailPage.tsx): inline date picker hits `/availability?from=&to=`, then `/quote`. Shows itemized total. KYC banner replaces apply CTA when `hasRequired === false`, deep-linking to [`VerificationPage.tsx`](apps/web/src/features/verification/pages/VerificationPage.tsx) with return URL.
+- [x] Range-aware availability: extend [`GetListingAvailabilityQuery.cs`](src/Lagedra.Modules/ListingAndLocation/Application/Queries/GetListingAvailabilityQuery.cs) and [`ListingEndpoints.cs:291`](src/Lagedra.Modules/ListingAndLocation/Presentation/Endpoints/ListingEndpoints.cs) to accept `from`/`to` and return `{available: bool, blocks: [...]}`.
+- [x] New `POST /v1/listings/{id}/quote` endpoint + `GetListingQuoteQuery` — composes `MonthlyRentCents`, computed `DepositCents` (default or band midpoint), `IInsuranceFeeCalculator.CalculateFeeAsync` ([`IInsuranceFeeCalculator.cs:3`](src/Lagedra.SharedKernel/Insurance/IInsuranceFeeCalculator.cs)), and protocol fee from `IPlatformSettingsProvider`. Returns `QuoteDto { rentCents, depositCents, insuranceFeeCents, protocolFeeCents, totalCents }`.
+- [x] Pre-flight consent status: new `GET /v1/privacy/consents/me/status` returning `{hasRequired: bool, missing: ConsentTypeDto[]}` backed by `IConsentChecker.HasRequiredConsentsAsync` ([`IConsentChecker.cs:3`](src/Lagedra.SharedKernel/Integration/IConsentChecker.cs)). Bypass `ConsentMiddleware` for this read endpoint.
+- [x] Frontend [`ListingDetailPage.tsx`](apps/web/src/features/listings/pages/ListingDetailPage.tsx): inline date picker hits `/availability?from=&to=`, then `/quote`. Shows itemized total. KYC banner replaces apply CTA when `hasRequired === false`, deep-linking to [`VerificationPage.tsx`](apps/web/src/features/verification/pages/VerificationPage.tsx) with return URL.
 
 ### 16.2 Listing aggregate — `DefaultDepositCents`
 
-- [ ] Add `long? DefaultDepositCents` to [`Listing.cs`](src/Lagedra.Modules/ListingAndLocation/Domain/Aggregates/Listing.cs) with `SetDefaultDeposit(long?)` method (must be `<= MaxDepositCents` if set).
-- [ ] EF mapping in [`ListingConfiguration.cs:37`](src/Lagedra.Modules/ListingAndLocation/Infrastructure/Configurations/ListingConfiguration.cs); migration with backfill (leave NULL on existing rows; quote endpoint falls back to `MaxDepositCents`).
-- [ ] Extend `CreateListingCommand`, `UpdateListingCommand`, contract DTOs, frontend `listingFormSchema`, `ListingForm`/`ListingWizard` with new optional field "Default deposit (used for instant book)".
+- [x] Add `long? DefaultDepositCents` to [`Listing.cs`](src/Lagedra.Modules/ListingAndLocation/Domain/Aggregates/Listing.cs) with `SetDefaultDeposit(long?)` method (must be `<= MaxDepositCents` if set).
+- [x] EF mapping in [`ListingConfiguration.cs:37`](src/Lagedra.Modules/ListingAndLocation/Infrastructure/Configurations/ListingConfiguration.cs); migration with backfill (leave NULL on existing rows; quote endpoint falls back to `MaxDepositCents`).
+- [x] Extend `CreateListingCommand`, `UpdateListingCommand`, contract DTOs, frontend `listingFormSchema`, `ListingForm`/`ListingWizard` with new optional field "Default deposit (used for instant book)".
 
 ### 16.3 Real instant booking
 
-- [ ] In [`SubmitApplicationCommand.cs`](src/Lagedra.Modules/ActivationAndBilling/Application/Commands/SubmitApplicationCommand.cs): if `listing.InstantBookingEnabled`, after `Submit(...)` immediately invoke the same logic as `ApproveDealApplicationCommandHandler` (deposit = `listing.DefaultDepositCents ?? listing.MaxDepositCents`) inside the same transaction.
-- [ ] Pre-condition (instant book only): host must have completed payout setup (`IHostPaymentDetailsProvider` reachable + Connect charges enabled, mirroring [`CreateCheckoutPaymentIntentCommand.cs:96-133`](src/Lagedra.Modules/ActivationAndBilling/Application/Commands/CreateCheckoutPaymentIntentCommand.cs)). If not, force-disable the listing's instant-book flag in API responses and the toggle in the wizard until payouts are set up.
-- [ ] `SubmitApplicationResponse` returns `{ applicationId, dealId?, nextUrl }` so the frontend can route to `/app/deals/{dealId}/checkout` for instant-book or `/app/applications/{id}` for request-to-book.
-- [ ] Frontend [`ApplyDialog.tsx`](apps/web/src/features/applications/components/ApplyDialog.tsx) follows `nextUrl` instead of always closing.
+- [x] In [`SubmitApplicationCommand.cs`](src/Lagedra.Modules/ActivationAndBilling/Application/Commands/SubmitApplicationCommand.cs): if `listing.InstantBookingEnabled`, after `Submit(...)` immediately invoke the same logic as `ApproveDealApplicationCommandHandler` (deposit = `listing.DefaultDepositCents ?? listing.MaxDepositCents`) inside the same transaction.
+- [x] Pre-condition (instant book only): host must have completed payout setup (`IHostPaymentDetailsProvider` reachable + Connect charges enabled, mirroring [`CreateCheckoutPaymentIntentCommand.cs:96-133`](src/Lagedra.Modules/ActivationAndBilling/Application/Commands/CreateCheckoutPaymentIntentCommand.cs)). If not, force-disable the listing's instant-book flag in API responses and the toggle in the wizard until payouts are set up.
+- [x] `SubmitApplicationResponse` returns `{ applicationId, dealId?, nextUrl }` so the frontend can route to `/app/deals/{dealId}/checkout` for instant-book or `/app/applications/{id}` for request-to-book.
+- [x] Frontend [`ApplyDialog.tsx`](apps/web/src/features/applications/components/ApplyDialog.tsx) follows `nextUrl` instead of always closing.
 
 ### 16.4 Collapse host's three actions into one
 
-- [ ] [`ApproveDealApplicationCommand.cs:13`](src/Lagedra.Modules/ActivationAndBilling/Application/Commands/ApproveDealApplicationCommand.cs) handler: after approving, dispatch `CreateTruthSurfaceForDealCommand` then `ConfirmTruthSurfaceCommand(Party=Landlord)` in the same UoW (both already require only `DealId` + caller; see [`CreateTruthSurfaceForDealCommand.cs:13`](src/Lagedra.TruthSurface/Application/Commands/CreateTruthSurfaceForDealCommand.cs) and [`ConfirmTruthSurfaceCommand.cs:15`](src/Lagedra.TruthSurface/Application/Commands/ConfirmTruthSurfaceCommand.cs)).
-- [ ] Remove the standalone "Create Truth Surface" host UI page from the funnel (kept as read-only "View terms" link from `DealDetailPage`). Existing route still resolves for legacy direct links.
-- [ ] Tenant's confirmation moves inline into checkout (see 16.5). The dedicated `TruthSurfaceConfirmationPage` becomes a fallback / re-confirm UI only.
+- [x] [`ApproveDealApplicationCommand.cs:13`](src/Lagedra.Modules/ActivationAndBilling/Application/Commands/ApproveDealApplicationCommand.cs) handler: after approving, dispatch `CreateTruthSurfaceForDealCommand` then `ConfirmTruthSurfaceCommand(Party=Landlord)` in the same UoW (both already require only `DealId` + caller; see [`CreateTruthSurfaceForDealCommand.cs:13`](src/Lagedra.TruthSurface/Application/Commands/CreateTruthSurfaceForDealCommand.cs) and [`ConfirmTruthSurfaceCommand.cs:15`](src/Lagedra.TruthSurface/Application/Commands/ConfirmTruthSurfaceCommand.cs)).
+- [x] Remove the standalone "Create Truth Surface" host UI page from the funnel (kept as read-only "View terms" link from `DealDetailPage`). Existing route still resolves for legacy direct links.
+- [x] Tenant's confirmation moves inline into checkout (see 16.5). The dedicated `TruthSurfaceConfirmationPage` becomes a fallback / re-confirm UI only.
 
 ### 16.5 Inline Truth Surface confirmation in checkout
 
-- [ ] [`CheckoutPage.tsx`](apps/web/src/features/activation-billing/pages/CheckoutPage.tsx) adds a "Booking terms" panel rendering `snapshot.canonicalContent` (already structured JSON) above the Stripe Payment Element.
-- [ ] Single mandatory checkbox: "I agree to the booking terms" → on submit, calls `ConfirmTruthSurfaceCommand(Party=Tenant)` then `confirmPayment`. Server-side seal still happens when both parties confirmed (preserves cryptographic anchor).
-- [ ] Submit button disabled until checkbox is ticked.
+- [x] [`CheckoutPage.tsx`](apps/web/src/features/activation-billing/pages/CheckoutPage.tsx) adds a "Booking terms" panel rendering `snapshot.canonicalContent` (already structured JSON) above the Stripe Payment Element.
+- [x] Single mandatory checkbox: "I agree to the booking terms" → on submit, calls `ConfirmTruthSurfaceCommand(Party=Tenant)` then `confirmPayment`. Server-side seal still happens when both parties confirmed (preserves cryptographic anchor).
+- [x] Submit button disabled until checkbox is ticked.
 
 ### 16.6 Single money surface
 
-- [ ] Change `return_url` in [`CheckoutPage.tsx:89-94`](apps/web/src/features/activation-billing/pages/CheckoutPage.tsx) to `${origin}/app/deals/${dealId}/checkout?status=...`. CheckoutPage handles spinner/success/failure inline.
-- [ ] Remove `redirect_status` handling and "Go to Checkout" nudge from [`BillingPage.tsx:68-76`](apps/web/src/features/activation-billing/pages/BillingPage.tsx) and [`BillingPage.tsx:124-174`](apps/web/src/features/activation-billing/pages/BillingPage.tsx). BillingPage strictly post-active.
-- [ ] Anywhere a deal-detail action would currently route to `/billing` for an unpaid deal (see [`DealDetailPage.tsx:103-117`](apps/web/src/features/deals/pages/DealDetailPage.tsx)), redirect to `/checkout` instead.
+- [x] Change `return_url` in [`CheckoutPage.tsx:89-94`](apps/web/src/features/activation-billing/pages/CheckoutPage.tsx) to `${origin}/app/deals/${dealId}/checkout?status=...`. CheckoutPage handles spinner/success/failure inline.
+- [x] Remove `redirect_status` handling and "Go to Checkout" nudge from [`BillingPage.tsx:68-76`](apps/web/src/features/activation-billing/pages/BillingPage.tsx) and [`BillingPage.tsx:124-174`](apps/web/src/features/activation-billing/pages/BillingPage.tsx). BillingPage strictly post-active.
+- [x] Anywhere a deal-detail action would currently route to `/billing` for an unpaid deal (see [`DealDetailPage.tsx:103-117`](apps/web/src/features/deals/pages/DealDetailPage.tsx)), redirect to `/checkout` instead.
 
 ### 16.7 Phase enum cleanup
 
-- [ ] [`ListMyDealsQuery.cs:146-160`](src/Lagedra.Modules/ActivationAndBilling/Application/Queries/ListMyDealsQuery.cs) emits `"Checkout"` (not `"AwaitingPayment"`).
-- [ ] Remove the `"AwaitingPayment"` member from `DealPhase` in [`apps/web/src/api/types.ts`](apps/web/src/api/types.ts).
-- [ ] Update [`DealTimeline.tsx:5-20`](apps/web/src/features/deals/components/DealTimeline.tsx) and any switch statements (`DealDetailPage`, `DealCard`) to drop the dead branch.
+- [x] [`ListMyDealsQuery.cs:146-160`](src/Lagedra.Modules/ActivationAndBilling/Application/Queries/ListMyDealsQuery.cs) emits `"Checkout"` (not `"AwaitingPayment"`).
+- [x] Remove the `"AwaitingPayment"` member from `DealPhase` in [`apps/web/src/api/types.ts`](apps/web/src/api/types.ts).
+- [x] Update [`DealTimeline.tsx:5-20`](apps/web/src/features/deals/components/DealTimeline.tsx) and any switch statements (`DealDetailPage`, `DealCard`) to drop the dead branch.
 
 ### 16.8 Inquiry defaults to Open
 
-- [ ] [`InquirySession.cs:21-58`](src/Lagedra.Modules/StructuredInquiry/Domain/Aggregates/InquirySession.cs) — `Create(...)` factory sets `Status = Open` (was `Locked`).
-- [ ] New `LockInquirySessionCommand` (host-only) for the rare opt-in lock case.
-- [ ] [`RequestDetailUnlockCommand.cs:21-24`](src/Lagedra.Modules/StructuredInquiry/Application/Commands/RequestDetailUnlockCommand.cs) becomes a no-op for sessions already Open (returns success). Existing Locked sessions still go through `ApproveInquiryUnlockCommand`.
-- [ ] [`InquiryThreadPage.tsx:123-191`](apps/web/src/features/inquiry/pages/InquiryThreadPage.tsx) — drop the unlock UI when session is already Open. Add a host-only "Lock thread" affordance.
+- [x] [`InquirySession.cs:21-58`](src/Lagedra.Modules/StructuredInquiry/Domain/Aggregates/InquirySession.cs) — `Create(...)` factory sets `Status = Open` (was `Locked`).
+- [x] New `LockInquirySessionCommand` (host-only) for the rare opt-in lock case.
+- [x] [`RequestDetailUnlockCommand.cs:21-24`](src/Lagedra.Modules/StructuredInquiry/Application/Commands/RequestDetailUnlockCommand.cs) becomes a no-op for sessions already Open (returns success). Existing Locked sessions still go through `ApproveInquiryUnlockCommand`.
+- [x] [`InquiryThreadPage.tsx:123-191`](apps/web/src/features/inquiry/pages/InquiryThreadPage.tsx) — drop the unlock UI when session is already Open. Add a host-only "Lock thread" affordance.
 
 ### 16.9 Save card on file (request-to-book)
 
-- [ ] [`IStripeService.cs`](src/Lagedra.Infrastructure/External/Payments/IStripeService.cs) adds:
+- [x] [`IStripeService.cs`](src/Lagedra.Infrastructure/External/Payments/IStripeService.cs) adds:
   - `Task<SetupIntentDto> CreateSetupIntentAsync(string customerId, ...)`
   - `Task<PaymentIntentDto> ChargeOffSessionAsync(string customerId, string paymentMethodId, long amountCents, ...)`
   - `Task<string> EnsureCustomerAsync(Guid userId, string email)` (idempotent).
-- [ ] Persist `StripeCustomerId` on `ApplicationUser` (Auth migration).
-- [ ] Persist `StripePaymentMethodId` on `DealApplication` (set when SetupIntent confirmed).
-- [ ] [`SubmitApplicationCommand.cs`](src/Lagedra.Modules/ActivationAndBilling/Application/Commands/SubmitApplicationCommand.cs) (non-instant path): create SetupIntent, return `clientSecret` in response.
-- [ ] [`ApplyDialog.tsx`](apps/web/src/features/applications/components/ApplyDialog.tsx) gains a Stripe Elements step (SetupIntent) before final submit.
-- [ ] [`ApproveDealApplicationCommand.cs`](src/Lagedra.Modules/ActivationAndBilling/Application/Commands/ApproveDealApplicationCommand.cs): after the collapsed Truth Surface dual-confirm (16.4), attempt `ChargeOffSessionAsync`. On `succeeded` → `ActivateDealCommand`; on `requires_action` (SCA) → leave deal in `Checkout` phase + email tenant the existing `/checkout` link as fallback.
-- [ ] Webhook ([`ProcessStripeWebhookCommand.cs:88-99`](src/Lagedra.Modules/ActivationAndBilling/Application/Commands/ProcessStripeWebhookCommand.cs)) already idempotent for `payment_intent.succeeded`; add a path for off-session intents triggered by 16.9.
+- [x] Persist `StripeCustomerId` on `ApplicationUser` (Auth migration).
+- [x] Persist `StripePaymentMethodId` on `DealApplication` (set when SetupIntent confirmed).
+- [x] [`SubmitApplicationCommand.cs`](src/Lagedra.Modules/ActivationAndBilling/Application/Commands/SubmitApplicationCommand.cs) (non-instant path): create SetupIntent, return `clientSecret` in response.
+- [x] [`ApplyDialog.tsx`](apps/web/src/features/applications/components/ApplyDialog.tsx) gains a Stripe Elements step (SetupIntent) before final submit.
+- [x] [`ApproveDealApplicationCommand.cs`](src/Lagedra.Modules/ActivationAndBilling/Application/Commands/ApproveDealApplicationCommand.cs): after the collapsed Truth Surface dual-confirm (16.4), attempt `ChargeOffSessionAsync`. On `succeeded` → `ActivateDealCommand`; on `requires_action` (SCA) → leave deal in `Checkout` phase + email tenant the existing `/checkout` link as fallback.
+- [x] Webhook ([`ProcessStripeWebhookCommand.cs:88-99`](src/Lagedra.Modules/ActivationAndBilling/Application/Commands/ProcessStripeWebhookCommand.cs)) already idempotent for `payment_intent.succeeded`; add a path for off-session intents triggered by 16.9.
 
 ### 16.10 One-tap host approve from email
 
-- [ ] New `IActionTokenService` in `Lagedra.Infrastructure/Security/`: `CreateAsync(purpose, resourceId, userId, ttl)` returns HMAC-SHA256-signed opaque token; `ValidateAndConsumeAsync(token)` checks signature, expiry, and one-time-use via cache (`IDistributedCache`).
-- [ ] New endpoint group `/v1/actions/` in API gateway, **excluded** from JWT auth and consent middleware. First endpoint: `POST /v1/actions/approve-application` body `{ token, depositOverrideCents? }`.
-- [ ] Endpoint validates token (purpose=`approve_application`, scope=`{applicationId}`), consumes it, then dispatches `ApproveDealApplicationCommand` with the embedded host user id and deposit (override or `listing.DefaultDepositCents`).
-- [ ] [`OnApplicationSubmittedNotify`](src/Lagedra.Modules/ActivationAndBilling/Application/EventHandlers/BookingNotificationHandlers.cs) enriches the email with a deep link `${appBase}/host/approve?token=...`.
-- [ ] New thin frontend page `/host/approve` shows a confirmation modal pre-filled with deposit, single "Approve" button, calls the new `/v1/actions/approve-application` endpoint.
-- [ ] Token TTL 24h, one-time-use; rejection paths log with reason.
+- [x] New `IActionTokenService` in `Lagedra.Infrastructure/Security/`: `CreateAsync(purpose, resourceId, userId, ttl)` returns HMAC-SHA256-signed opaque token; `ValidateAndConsumeAsync(token)` checks signature, expiry, and one-time-use via cache (`IDistributedCache`).
+- [x] New endpoint group `/v1/actions/` in API gateway, **excluded** from JWT auth and consent middleware. First endpoint: `POST /v1/actions/approve-application` body `{ token, depositOverrideCents? }`.
+- [x] Endpoint validates token (purpose=`approve_application`, scope=`{applicationId}`), consumes it, then dispatches `ApproveDealApplicationCommand` with the embedded host user id and deposit (override or `listing.DefaultDepositCents`).
+- [x] [`OnApplicationSubmittedNotify`](src/Lagedra.Modules/ActivationAndBilling/Application/EventHandlers/BookingNotificationHandlers.cs) enriches the email with a deep link `${appBase}/host/approve?token=...`.
+- [x] New thin frontend page `/host/approve` shows a confirmation modal pre-filled with deposit, single "Approve" button, calls the new `/v1/actions/approve-application` endpoint.
+- [x] Token TTL 24h, one-time-use; rejection paths log with reason.
 
 ### 16.11 Inline approve / reject from inbox
 
-- [ ] [`ApplicationsPage.tsx`](apps/web/src/features/applications/pages/ApplicationsPage.tsx) (host inbox): each row gets inline "Approve (default deposit)" + "Reject" buttons. "Customize deposit" expands a small inline input.
-- [ ] No backend change — reuses `ApproveDealApplicationCommand` / `RejectDealApplicationCommand`.
+- [x] [`ApplicationsPage.tsx`](apps/web/src/features/applications/pages/ApplicationsPage.tsx) (host inbox): each row gets inline "Approve (default deposit)" + "Reject" buttons. "Customize deposit" expands a small inline input.
+- [x] No backend change — reuses `ApproveDealApplicationCommand` / `RejectDealApplicationCommand`.
 
 ### 16.12 Feature flag, migration, rollout
 
-- [ ] Add `BookingFlow.V2` feature flag (env var + `IFeatureFlags` accessor; default off).
-- [ ] All branching points (16.3, 16.4, 16.5, 16.6, 16.8, 16.9) check the flag; when off, fall back to current behavior.
-- [ ] EF migrations: `AddDefaultDepositCentsToListings`, `AddStripeCustomerIdToUsers`, `AddStripePaymentMethodIdToApplications`, plus action-token cache key prefix doc.
+- [x] Add `BookingFlow.V2` feature flag (env var + `IFeatureFlags` accessor; default off).
+- [x] All branching points (16.3, 16.4, 16.5, 16.6, 16.8, 16.9) check the flag; when off, fall back to current behavior.
+- [x] EF migrations: `AddDefaultDepositCentsToListings`, `AddStripeCustomerIdToUsers`, `AddStripePaymentMethodIdToApplications`, plus action-token cache key prefix doc.
 - [ ] Rollout sequence: deploy → run migrations → enable flag in staging → smoke (16.13 checklist) → enable in prod with kill-switch.
 
 ### 16.13 Verification checklist

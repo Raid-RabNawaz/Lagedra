@@ -10,6 +10,7 @@ public sealed class ArbitrationCase : AggregateRoot<Guid>
 {
     private readonly List<EvidenceSlot> _evidenceSlots = [];
     private readonly List<ArbitratorAssignment> _arbitratorAssignments = [];
+    private readonly List<DecisionPenalty> _decisionPenalties = [];
 
     public Guid DealId { get; private set; }
     public Guid FiledByUserId { get; private set; }
@@ -23,9 +24,13 @@ public sealed class ArbitrationCase : AggregateRoot<Guid>
     public string? DecisionSummary { get; private set; }
     public decimal? AwardAmount { get; private set; }
     public DateTime? DecidedAt { get; private set; }
+    public bool IsStructuredVerdict { get; private set; }
+    public DecisionOutcome? DecisionOutcome { get; private set; }
+    public DecisionSeverity? DecisionSeverity { get; private set; }
 
     public IReadOnlyList<EvidenceSlot> EvidenceSlots => _evidenceSlots.AsReadOnly();
     public IReadOnlyList<ArbitratorAssignment> ArbitratorAssignments => _arbitratorAssignments.AsReadOnly();
+    public IReadOnlyList<DecisionPenalty> DecisionPenalties => _decisionPenalties.AsReadOnly();
 
     private ArbitrationCase() { }
 
@@ -103,10 +108,31 @@ public sealed class ArbitrationCase : AggregateRoot<Guid>
 
         var assignment = new ArbitratorAssignment(Id, arbitratorUserId, DateTime.UtcNow, concurrentCaseCount);
         _arbitratorAssignments.Add(assignment);
+    }
+
+    public void BeginReview()
+    {
+        if (_arbitratorAssignments.Count == 0)
+        {
+            throw new InvalidOperationException("An arbitrator must be assigned before beginning review.");
+        }
+
+        if (Status != ArbitrationStatus.EvidenceComplete)
+        {
+            throw new InvalidOperationException(
+                $"Cannot begin review in status '{Status}'. Case must be evidence-complete.");
+        }
+
         Status = ArbitrationStatus.UnderReview;
     }
 
-    public void IssueDecision(string decisionSummary, decimal? awardAmount)
+    public void IssueDecision(
+        string decisionSummary,
+        decimal? awardAmount,
+        bool isStructured,
+        DecisionOutcome? outcome,
+        DecisionSeverity? severity,
+        IReadOnlyList<DecisionPenalty> penalties)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(decisionSummary);
 
@@ -120,11 +146,25 @@ public sealed class ArbitrationCase : AggregateRoot<Guid>
             throw new InvalidOperationException("An arbitrator must be assigned before issuing a decision.");
         }
 
+        if (isStructured && (outcome is null || severity is null))
+        {
+            throw new InvalidOperationException("Structured verdicts require outcome and severity.");
+        }
+
         var now = DateTime.UtcNow;
-        DecisionSummary = decisionSummary;
+        DecisionSummary = decisionSummary.Trim();
         AwardAmount = awardAmount;
+        IsStructuredVerdict = isStructured;
+        DecisionOutcome = isStructured ? outcome : null;
+        DecisionSeverity = isStructured ? severity : null;
         DecidedAt = now;
         Status = ArbitrationStatus.Decided;
+
+        _decisionPenalties.Clear();
+        foreach (var penalty in penalties)
+        {
+            _decisionPenalties.Add(penalty);
+        }
 
         AddDomainEvent(new DecisionIssuedEvent(Id, DealId, Tier, now));
     }

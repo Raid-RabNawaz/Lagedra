@@ -32,7 +32,8 @@ public sealed record CreateListingCommand(
     IReadOnlyList<Guid>? ConsiderationIds = null,
     bool InstantBookingEnabled = false,
     Uri? VirtualTourUrl = null,
-    string? ApproxAddress = null) : IRequest<Result<ListingDetailsDto>>;
+    string? ApproxAddress = null,
+    long? DefaultDepositCents = null) : IRequest<Result<ListingDetailsDto>>;
 
 public sealed class CreateListingCommandHandler(
     ListingsDbContext dbContext,
@@ -112,6 +113,12 @@ public sealed class CreateListingCommandHandler(
         if (request.VirtualTourUrl is not null)
         {
             listing.SetVirtualTourUrl(request.VirtualTourUrl);
+        }
+
+        // Phase 16.2: optional default deposit for instant-book quotes.
+        if (request.DefaultDepositCents.HasValue)
+        {
+            listing.SetDefaultDeposit(request.DefaultDepositCents);
         }
 
         dbContext.Listings.Add(listing);

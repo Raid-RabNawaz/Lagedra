@@ -49,7 +49,7 @@ function getNotificationRoute(n: InAppNotificationDto): string | null {
       if (n.category.startsWith("truth_surface"))
         return `/app/truth-surface/${n.relatedEntityId}`;
       if (n.category === "application_approved")
-        return `/app/deals/${n.relatedEntityId}/inquiry`;
+        return `/app/deals/${n.relatedEntityId}`;
       return `/app/deals/${n.relatedEntityId}/billing`;
 
     case "Listing":

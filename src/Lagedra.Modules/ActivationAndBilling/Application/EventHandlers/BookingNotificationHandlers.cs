@@ -1,11 +1,17 @@
+using System.Globalization;
+using System.Text;
+using Lagedra.Modules.ActivationAndBilling.Application.Commands;
 using Lagedra.Modules.ActivationAndBilling.Domain.Events;
+using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Integration.Events;
 using Lagedra.Modules.ActivationAndBilling.Infrastructure.Persistence;
 using Lagedra.Modules.Notifications.Application.Commands;
 using Lagedra.Modules.Notifications.Domain.Enums;
 using Lagedra.SharedKernel.Events;
+using Lagedra.SharedKernel.Security;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace Lagedra.Modules.ActivationAndBilling.Application.EventHandlers;
 
@@ -15,9 +21,16 @@ internal static class Channels
     internal static readonly NotificationChannel[] InAppOnly = [NotificationChannel.InApp];
 }
 
-public sealed class OnApplicationSubmittedNotify(BillingDbContext db, IMediator m)
+public sealed class OnApplicationSubmittedNotify(
+    BillingDbContext db,
+    IMediator m,
+    IActionTokenService actionTokens,
+    IListingProvider listingProvider,
+    IConfiguration configuration)
     : IDomainEventHandler<ApplicationSubmittedEvent>
 {
+    private const int OneTapTtlHours = 72;
+
     public async Task Handle(ApplicationSubmittedEvent e, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(e);
@@ -25,12 +38,79 @@ public sealed class OnApplicationSubmittedNotify(BillingDbContext db, IMediator 
             .FirstOrDefaultAsync(a => a.Id == e.ApplicationId, ct).ConfigureAwait(false);
         if (app is null) return;
 
+        // Phase 16.10: mint a 72h one-tap approval token and ship it
+        // alongside the application id. The frontend `/host/approve`
+        // page reads the token from the query string and POSTs it to
+        // /v1/actions/approve-application — bypassing the in-app
+        // approval flow when the host is already on email/mobile.
+        var approveToken = actionTokens.Issue(
+            ApproveApplicationByTokenCommandHandler.ActionLabel,
+            subjectId: e.ApplicationId,
+            principalUserId: app.LandlordUserId,
+            ttl: TimeSpan.FromHours(OneTapTtlHours));
+
+        var frontendUrl = (configuration["App:FrontendUrl"] ?? "http://localhost:3000")
+            .TrimEnd('/');
+
+        // Pull listing context so the email subject + body can show the
+        // host *what* they're approving, and so /host/approve can pre-fill
+        // a sensible default deposit. Best-effort: a missing listing
+        // (e.g. concurrent unpublish) just falls back to placeholders.
+        var listing = await listingProvider
+            .GetListingDetailsAsync(e.ListingId, ct)
+            .ConfigureAwait(false);
+
+        var listingTitle = listing?.Title ?? "your listing";
+        var defaultDepositCents = listing?.DefaultDepositCents
+            ?? listing?.MaxDepositCents
+            ?? 0;
+
+        var approveUrl = BuildApproveUrl(
+            frontendUrl,
+            approveToken,
+            e.ApplicationId,
+            listingTitle,
+            defaultDepositCents);
+
         await m.Send(new NotifyUserCommand(
             app.LandlordUserId, "application_submitted",
             "New Booking Application",
             "A tenant has submitted a booking application for your listing.",
-            new() { ["applicationId"] = e.ApplicationId.ToString(), ["listingId"] = e.ListingId.ToString() },
+            new()
+            {
+                ["applicationId"] = e.ApplicationId.ToString(),
+                ["listingId"] = e.ListingId.ToString(),
+                ["listingTitle"] = listingTitle,
+                ["approveToken"] = approveToken,
+                ["approveTokenTtlHours"] = OneTapTtlHours.ToString(CultureInfo.InvariantCulture),
+                ["approveUrl"] = approveUrl,
+                ["frontendUrl"] = frontendUrl,
+                ["defaultDepositCents"] = defaultDepositCents.ToString(CultureInfo.InvariantCulture),
+            },
             Channels.EmailAndInApp, e.ListingId, "Listing"), ct).ConfigureAwait(false);
+    }
+
+    private static string BuildApproveUrl(
+        string frontendUrl,
+        string token,
+        Guid applicationId,
+        string listingTitle,
+        long defaultDepositCents)
+    {
+        // Manual query construction so we don't depend on UriBuilder's
+        // legacy quirks (e.g. it strips port 80) and so the values land
+        // verbatim in the email — `/host/approve` decodes them itself.
+        var sb = new StringBuilder(frontendUrl.Length + 256);
+        sb.Append(frontendUrl).Append("/host/approve");
+        sb.Append("?token=").Append(Uri.EscapeDataString(token));
+        sb.Append("&applicationId=").Append(applicationId.ToString("D"));
+        sb.Append("&listingTitle=").Append(Uri.EscapeDataString(listingTitle));
+        if (defaultDepositCents > 0)
+        {
+            sb.Append("&depositCents=")
+              .Append(defaultDepositCents.ToString(CultureInfo.InvariantCulture));
+        }
+        return sb.ToString();
     }
 }
 

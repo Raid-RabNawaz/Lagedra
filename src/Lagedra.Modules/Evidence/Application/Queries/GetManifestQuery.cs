@@ -1,4 +1,5 @@
 using Lagedra.Modules.Evidence.Application.DTOs;
+using Lagedra.Modules.Evidence.Application.Services;
 using Lagedra.Modules.Evidence.Domain.Aggregates;
 using Lagedra.Modules.Evidence.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Results;
@@ -7,9 +8,12 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Lagedra.Modules.Evidence.Application.Queries;
 
-public sealed record GetManifestQuery(Guid ManifestId) : IRequest<Result<ManifestDto>>;
+public sealed record GetManifestQuery(Guid ManifestId, EvidenceCallerContext Caller)
+    : IRequest<Result<ManifestDto>>;
 
-public sealed class GetManifestQueryHandler(EvidenceDbContext dbContext)
+public sealed class GetManifestQueryHandler(
+    EvidenceDbContext dbContext,
+    EvidenceViewAccessService accessService)
     : IRequestHandler<GetManifestQuery, Result<ManifestDto>>
 {
     public async Task<Result<ManifestDto>> Handle(
@@ -17,6 +21,15 @@ public sealed class GetManifestQueryHandler(EvidenceDbContext dbContext)
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        var access = await accessService
+            .RequireManifestViewAsync(request.Caller, request.ManifestId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!access.IsSuccess)
+        {
+            return Result<ManifestDto>.Failure(access.Error);
+        }
 
         var manifest = await dbContext.Manifests
             .AsNoTracking()

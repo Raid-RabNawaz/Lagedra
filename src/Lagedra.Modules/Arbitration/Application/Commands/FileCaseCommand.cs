@@ -68,7 +68,7 @@ public sealed class FileCaseCommandHandler(
     }
 
     private static CaseDto MapToDto(ArbitrationCase c) =>
-        new(c.Id, c.DealId, c.FiledByUserId, c.Tier, c.Category, c.Status,
+        new(c.Id, c.DealId, c.FiledByUserId, null, null, c.Tier, c.Category, c.Status,
             c.FilingFeeCents, c.FiledAt, c.EvidenceCompleteAt, c.DecisionDueAt,
-            c.EvidenceSlots.Count, null, null);
+            c.EvidenceSlots.Count, null, null, null, null, null);
 }

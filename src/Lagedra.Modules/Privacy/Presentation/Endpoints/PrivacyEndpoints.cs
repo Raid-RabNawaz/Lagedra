@@ -1,7 +1,9 @@
+using System.Security.Claims;
 using Lagedra.Modules.Privacy.Application.Commands;
 using Lagedra.Modules.Privacy.Application.Queries;
 using Lagedra.Modules.Privacy.Domain.Enums;
 using Lagedra.Modules.Privacy.Presentation.Contracts;
+using Lagedra.SharedKernel.Integration;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -26,6 +28,10 @@ public static class PrivacyEndpoints
         group.MapGet("/export/{id:guid}", GetDataExportStatus);
         group.MapPost("/deletion", RequestDeletion);
         group.MapGet("/consents/{userId:guid}", GetUserConsents);
+        // Booking pre-flight (Phase 16): callers can poll their own consent
+        // state without tripping the consent middleware (this prefix is on
+        // the exempt list).
+        group.MapGet("/consents/me/status", GetMyConsentStatus);
         group.MapPost("/legal-holds", ApplyLegalHold);
         group.MapDelete("/legal-holds/{id:guid}", ReleaseLegalHold);
         group.MapGet("/legal-holds", ListActiveLegalHolds);
@@ -158,5 +164,29 @@ public static class PrivacyEndpoints
         return result.IsSuccess
             ? Results.Ok(result.Value)
             : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+    }
+
+    private static async Task<IResult> GetMyConsentStatus(
+        ClaimsPrincipal user,
+        IConsentChecker consentChecker,
+        CancellationToken cancellationToken)
+    {
+        var idClaim = user.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? user.FindFirstValue("sub");
+
+        if (!Guid.TryParse(idClaim, out var userId))
+        {
+            return Results.Unauthorized();
+        }
+
+        var status = await consentChecker
+            .GetRequiredConsentStatusAsync(userId, cancellationToken)
+            .ConfigureAwait(true);
+
+        return Results.Ok(new
+        {
+            hasRequired = status.HasRequired,
+            missing = status.MissingConsentTypes,
+        });
     }
 }

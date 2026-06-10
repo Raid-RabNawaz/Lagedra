@@ -1,6 +1,15 @@
 import { useState, useCallback } from "react";
 import { isAxiosError } from "axios";
-import { Upload, FileCheck, ShieldAlert, Loader2, File, AlertTriangle } from "lucide-react";
+import {
+  Upload,
+  FileCheck,
+  ShieldAlert,
+  Loader2,
+  File,
+  AlertTriangle,
+  ExternalLink,
+  Download,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +20,10 @@ import {
   useSealManifest,
   useDirectUpload,
   useScanStatus,
+  useDownloadUrl,
 } from "@/features/evidence/hooks/useEvidence";
+import { useAttachEvidence } from "@/features/arbitration/hooks/useArbitration";
+import { getApiErrorMessage } from "@/api/errors";
 import type { ManifestUploadDto, ScanStatus } from "@/api/types";
 
 const ALLOWED_MIME_PREFIXES = ["image/", "video/", "audio/"];
@@ -68,52 +80,151 @@ function scanBadge(status: ScanStatus | undefined) {
   }
 }
 
-function UploadRow({ upload }: { upload: ManifestUploadDto }) {
+function UploadRow({
+  upload,
+  canViewFiles,
+}: {
+  upload: ManifestUploadDto;
+  canViewFiles: boolean;
+}) {
   const { data: scan } = useScanStatus(upload.uploadId);
+  const downloadUrl = useDownloadUrl();
+  const [fileError, setFileError] = useState<string | null>(null);
+
+  const blockedByScan = scan?.status === "Infected";
+  const showActions = canViewFiles && !blockedByScan;
+
+  const openFile = async (downloadOnly: boolean) => {
+    setFileError(null);
+    try {
+      const { presignedUrl, originalFileName } = await downloadUrl.mutateAsync(
+        upload.uploadId,
+      );
+      if (downloadOnly) {
+        const link = document.createElement("a");
+        link.href = presignedUrl;
+        link.download = originalFileName;
+        link.rel = "noopener noreferrer";
+        link.target = "_blank";
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      } else {
+        window.open(presignedUrl, "_blank", "noopener,noreferrer");
+      }
+    } catch (err) {
+      setFileError(
+        getApiErrorMessage(err, "Could not open this evidence file."),
+      );
+    }
+  };
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border p-3 text-sm">
-      <File className="h-4 w-4 text-muted-foreground shrink-0" />
-      <div className="flex-1 min-w-0">
-        <p className="font-medium truncate">{upload.originalFileName}</p>
-        {upload.fileHash && (
-          <p className="text-[10px] text-muted-foreground font-mono truncate">
-            SHA-256: {upload.fileHash}
-          </p>
-        )}
+    <div className="rounded-lg border p-3 text-sm space-y-2">
+      <div className="flex items-center gap-3">
+        <File className="h-4 w-4 text-muted-foreground shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="font-medium truncate">{upload.originalFileName}</p>
+          {upload.fileHash && (
+            <p className="text-[10px] text-muted-foreground font-mono truncate">
+              SHA-256: {upload.fileHash}
+            </p>
+          )}
+        </div>
+        {scanBadge(scan?.status)}
+        <span className="text-xs text-muted-foreground hidden sm:inline">
+          {upload.mimeType}
+        </span>
       </div>
-      {scanBadge(scan?.status)}
-      <span className="text-xs text-muted-foreground">{upload.mimeType}</span>
+      {blockedByScan && (
+        <p className="text-xs text-destructive">File blocked — malware detected.</p>
+      )}
+      {showActions && (
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={downloadUrl.isPending}
+            onClick={() => void openFile(false)}
+          >
+            {downloadUrl.isPending ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+            ) : (
+              <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+            )}
+            Open
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            disabled={downloadUrl.isPending}
+            onClick={() => void openFile(true)}
+          >
+            <Download className="h-3.5 w-3.5 mr-1.5" />
+            Download
+          </Button>
+        </div>
+      )}
+      {scan?.status === "Pending" && showActions && (
+        <p className="text-[10px] text-muted-foreground">
+          Malware scan still running — file can be opened for review.
+        </p>
+      )}
+      {fileError && (
+        <p className="text-xs text-destructive">{fileError}</p>
+      )}
     </div>
   );
 }
 
 type EvidenceUploadProps = {
   dealId: string;
+  caseId?: string;
+  slotType?: string;
   manifestId?: string;
   onManifestCreated?: (manifestId: string) => void;
+  onAttached?: () => void;
   readOnly?: boolean;
+  /** When true, show Open/Download for each uploaded file (reviewers). */
+  canViewFiles?: boolean;
 };
 
 export function EvidenceUpload({
   dealId,
+  caseId,
+  slotType,
   manifestId,
   onManifestCreated,
+  onAttached,
   readOnly = false,
+  canViewFiles = false,
 }: EvidenceUploadProps) {
   const { data: manifest, isLoading } = useManifest(manifestId);
   const createManifest = useCreateManifest();
   const sealManifest = useSealManifest();
+  const attachEvidence = useAttachEvidence();
   const directUpload = useDirectUpload();
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   const handleCreateManifest = useCallback(async () => {
-    const result = await createManifest.mutateAsync({
-      dealId,
-      manifestType: "Arbitration",
-    });
-    onManifestCreated?.(result.manifestId);
+    setCreateError(null);
+    setAttachError(null);
+    try {
+      const result = await createManifest.mutateAsync({
+        dealId,
+        manifestType: "Arbitration",
+      });
+      onManifestCreated?.(result.manifestId);
+    } catch (err) {
+      setCreateError(
+        getApiErrorMessage(err, "Could not create evidence manifest. Check deal access and try again."),
+      );
+    }
   }, [dealId, createManifest, onManifestCreated]);
 
   const handleFileSelect = useCallback(
@@ -172,7 +283,7 @@ export function EvidenceUpload({
           {!readOnly && (
             <Button
               size="sm"
-              onClick={handleCreateManifest}
+              onClick={() => void handleCreateManifest()}
               disabled={createManifest.isPending}
             >
               {createManifest.isPending ? (
@@ -180,8 +291,14 @@ export function EvidenceUpload({
               ) : (
                 <Upload className="h-4 w-4 mr-2" />
               )}
-              Create Manifest
+              Create manifest
             </Button>
+          )}
+          {createError && (
+            <Alert variant="destructive" className="mt-3 text-left">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>{createError}</AlertDescription>
+            </Alert>
           )}
         </CardContent>
       </Card>
@@ -229,57 +346,107 @@ export function EvidenceUpload({
           </p>
         )}
         {manifest?.uploads.map((u) => (
-          <UploadRow key={u.uploadId} upload={u} />
+          <UploadRow key={u.uploadId} upload={u} canViewFiles={canViewFiles || readOnly} />
         ))}
 
-        {uploadError && (
+        {(uploadError || attachError) && (
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>{uploadError}</AlertDescription>
+            <AlertDescription>{uploadError ?? attachError}</AlertDescription>
           </Alert>
         )}
 
-        {!readOnly && !isSealed && (
+        {!readOnly && (
           <div className="space-y-2 pt-2">
-            <div className="flex gap-2">
+            {!isSealed && (
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={uploading}
+                  className="relative"
+                >
+                  <label className="cursor-pointer flex items-center">
+                    {uploading ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <Upload className="h-4 w-4 mr-2" />
+                    )}
+                    {uploading ? "Uploading..." : "Upload File"}
+                    <input
+                      type="file"
+                      accept={ACCEPT_ATTRIBUTE}
+                      className="absolute inset-0 opacity-0 cursor-pointer"
+                      onChange={handleFileSelect}
+                      disabled={uploading}
+                    />
+                  </label>
+                </Button>
+
+                {(manifest?.uploads.length ?? 0) > 0 && (
+                  <Button
+                    size="sm"
+                    onClick={async () => {
+                      setAttachError(null);
+                      try {
+                        await sealManifest.mutateAsync(manifestId);
+                        if (caseId && slotType) {
+                          await attachEvidence.mutateAsync({
+                            caseId,
+                            slotType,
+                            evidenceManifestId: manifestId,
+                          });
+                          onAttached?.();
+                        }
+                      } catch (err) {
+                        setAttachError(
+                          getApiErrorMessage(err, "Could not seal or submit evidence to the case."),
+                        );
+                      }
+                    }}
+                    disabled={sealManifest.isPending || attachEvidence.isPending}
+                  >
+                    {sealManifest.isPending || attachEvidence.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <ShieldAlert className="h-4 w-4 mr-2" />
+                    )}
+                    {caseId ? "Seal & submit to case" : "Seal manifest"}
+                  </Button>
+                )}
+              </div>
+            )}
+            {isSealed && caseId && slotType && (
               <Button
                 size="sm"
                 variant="outline"
-                disabled={uploading}
-                className="relative"
+                onClick={async () => {
+                  setAttachError(null);
+                  try {
+                    await attachEvidence.mutateAsync({
+                      caseId,
+                      slotType,
+                      evidenceManifestId: manifestId,
+                    });
+                    onAttached?.();
+                  } catch (err) {
+                    setAttachError(
+                      err instanceof Error
+                        ? err.message
+                        : "Could not submit evidence to the case.",
+                    );
+                  }
+                }}
+                disabled={attachEvidence.isPending}
               >
-                <label className="cursor-pointer flex items-center">
-                  {uploading ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  ) : (
-                    <Upload className="h-4 w-4 mr-2" />
-                  )}
-                  {uploading ? "Uploading..." : "Upload File"}
-                  <input
-                    type="file"
-                    accept={ACCEPT_ATTRIBUTE}
-                    className="absolute inset-0 opacity-0 cursor-pointer"
-                    onChange={handleFileSelect}
-                    disabled={uploading}
-                  />
-                </label>
+                {attachEvidence.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <ShieldAlert className="h-4 w-4 mr-2" />
+                )}
+                Submit sealed evidence to case
               </Button>
-
-              {(manifest?.uploads.length ?? 0) > 0 && (
-                <Button
-                  size="sm"
-                  onClick={() => sealManifest.mutate(manifestId)}
-                  disabled={sealManifest.isPending}
-                >
-                  {sealManifest.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  ) : (
-                    <ShieldAlert className="h-4 w-4 mr-2" />
-                  )}
-                  Seal Manifest
-                </Button>
-              )}
-            </div>
+            )}
             <p className="text-[11px] text-muted-foreground">
               Allowed: images, video, audio, PDF, Office documents, plain text. Max{" "}
               {MAX_FILE_BYTES / (1024 * 1024)} MB.

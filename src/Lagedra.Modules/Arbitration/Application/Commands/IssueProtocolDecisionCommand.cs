@@ -27,12 +27,15 @@ public sealed class IssueProtocolDecisionCommandHandler(ArbitrationDbContext dbC
             return Result<DecisionDto>.Failure(new Error("Arbitration.CaseNotFound", "Case not found."));
         }
 
-        arbitrationCase.IssueDecision(request.DecisionSummary, awardAmount: null);
+        arbitrationCase.IssueDecision(
+            request.DecisionSummary,
+            awardAmount: null,
+            isStructured: false,
+            outcome: null,
+            severity: null,
+            penalties: []);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        return Result<DecisionDto>.Success(new DecisionDto(
-            arbitrationCase.DecisionSummary!,
-            arbitrationCase.AwardAmount,
-            arbitrationCase.DecidedAt!.Value));
+        return Result<DecisionDto>.Success(IssueDecisionCommandHandler.MapDecision(arbitrationCase));
     }
 }

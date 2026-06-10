@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
+using EvidenceHttpExtensions = Lagedra.Modules.Evidence.Presentation.EvidenceHttpExtensions;
 
 namespace Lagedra.Modules.Evidence.Presentation.Endpoints;
 
@@ -56,13 +57,21 @@ public static class EvidenceEndpoints
 
     private static async Task<IResult> GetManifest(
         [FromRoute] Guid id,
+        HttpContext httpContext,
         IMediator mediator,
         CancellationToken ct)
     {
-        var result = await mediator.Send(new GetManifestQuery(id), ct).ConfigureAwait(true);
+        var result = await mediator.Send(
+            new GetManifestQuery(id, EvidenceHttpExtensions.GetCallerContext(httpContext)),
+            ct).ConfigureAwait(true);
 
-        return result.IsSuccess
-            ? Results.Ok(result.Value)
-            : Results.NotFound(new { error = result.Error.Code, detail = result.Error.Description });
+        if (!result.IsSuccess)
+        {
+            return result.Error.Code == "Evidence.Forbidden"
+                ? Results.Json(new { error = result.Error.Code, detail = result.Error.Description }, statusCode: StatusCodes.Status403Forbidden)
+                : Results.NotFound(new { error = result.Error.Code, detail = result.Error.Description });
+        }
+
+        return Results.Ok(result.Value);
     }
 }

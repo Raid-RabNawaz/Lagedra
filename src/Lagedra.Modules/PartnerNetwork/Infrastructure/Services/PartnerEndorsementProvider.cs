@@ -27,6 +27,12 @@ public sealed class PartnerEndorsementProvider(
         CancellationToken ct = default)
     {
         var now = clock.UtcNow;
+
+        // Phase 17 — the previous implementation projected directly into
+        // the ActiveEndorsementInfo record using null-forgiving operators
+        // (e.ApprovedAt!.Value) and DateTime.MaxValue coalesce, both of
+        // which Npgsql refuses to translate. Pull the raw nullable shape
+        // from the DB first, then project in memory after the round-trip.
         var rows = await dbContext.Endorsements
             .AsNoTracking()
             .Where(e => e.TenantUserId == tenantUserId
@@ -35,16 +41,26 @@ public sealed class PartnerEndorsementProvider(
             .Join(dbContext.Organizations.AsNoTracking(),
                 e => e.OrganizationId,
                 o => o.Id,
-                (e, o) => new ActiveEndorsementInfo(
+                (e, o) => new
+                {
                     e.Id,
                     e.OrganizationId,
-                    o.Name,
-                    e.ApprovedAt!.Value,
-                    e.ExpiresAt ?? DateTime.MaxValue))
+                    OrganizationName = o.Name,
+                    e.ApprovedAt,
+                    e.ExpiresAt,
+                })
             .OrderByDescending(x => x.ApprovedAt)
             .ToListAsync(ct)
             .ConfigureAwait(false);
 
-        return rows.AsReadOnly();
+        return rows
+            .Select(r => new ActiveEndorsementInfo(
+                r.Id,
+                r.OrganizationId,
+                r.OrganizationName,
+                r.ApprovedAt ?? DateTime.MinValue,
+                r.ExpiresAt ?? DateTime.MaxValue))
+            .ToList()
+            .AsReadOnly();
     }
 }

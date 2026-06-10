@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Lagedra.Modules.Arbitration.Application.Commands;
 using Lagedra.Modules.Arbitration.Application.Queries;
+using Lagedra.Modules.Arbitration.Application.Services;
 using Lagedra.Modules.Arbitration.Domain.Enums;
 using Lagedra.Modules.Arbitration.Presentation.Contracts;
 using Lagedra.Infrastructure.Middleware;
@@ -29,6 +30,8 @@ public static class ArbitrationEndpoints
             .RequireAuthorization("RequirePlatformAdmin");
         group.MapPost("/{caseId:guid}/assign", AssignArbitrator)
             .RequireAuthorization("RequirePlatformAdmin");
+        group.MapPost("/{caseId:guid}/begin-review", BeginReview)
+            .RequireAuthorization("RequireArbitrator");
         group.MapPost("/{caseId:guid}/decision", IssueDecision)
             .RequireAuthorization("RequireArbitrator");
         group.MapPut("/{caseId:guid}/close", CloseCase)
@@ -54,29 +57,27 @@ public static class ArbitrationEndpoints
 
         return result.IsSuccess
             ? Results.Created($"/v1/arbitration/cases/{result.Value.CaseId}", result.Value)
-            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
-    }
-
-    private static Guid GetUserId(HttpContext httpContext)
-    {
-        var claim = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)
-            ?? throw new InvalidOperationException("User ID claim not found.");
-        return Guid.Parse(claim.Value);
+            : ArbitrationResults.ToErrorResult(result.Error);
     }
 
     private static async Task<IResult> AttachEvidence(
         [FromRoute] Guid caseId,
         [FromBody] AttachEvidenceRequest request,
+        HttpContext httpContext,
         IMediator mediator,
         CancellationToken ct)
     {
         var result = await mediator.Send(
-            new AttachEvidenceCommand(caseId, request.SlotType, request.SubmittedBy, request.EvidenceManifestId), ct)
+            new AttachEvidenceCommand(
+                caseId,
+                GetCallerContext(httpContext),
+                request.SlotType,
+                request.EvidenceManifestId), ct)
             .ConfigureAwait(true);
 
         return result.IsSuccess
             ? Results.NoContent()
-            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+            : ArbitrationResults.ToErrorResult(result.Error);
     }
 
     private static async Task<IResult> MarkEvidenceComplete(
@@ -89,7 +90,21 @@ public static class ArbitrationEndpoints
 
         return result.IsSuccess
             ? Results.NoContent()
-            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+            : ArbitrationResults.ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> BeginReview(
+        [FromRoute] Guid caseId,
+        HttpContext httpContext,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(
+            new BeginReviewCommand(caseId, GetCallerContext(httpContext)), ct).ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.NoContent()
+            : ArbitrationResults.ToErrorResult(result.Error);
     }
 
     private static async Task<IResult> AssignArbitrator(
@@ -104,57 +119,95 @@ public static class ArbitrationEndpoints
 
         return result.IsSuccess
             ? Results.NoContent()
-            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+            : ArbitrationResults.ToErrorResult(result.Error);
     }
 
     private static async Task<IResult> IssueDecision(
         [FromRoute] Guid caseId,
         [FromBody] IssueDecisionRequest request,
+        HttpContext httpContext,
         IMediator mediator,
         CancellationToken ct)
     {
-        if (request.AwardAmount.HasValue)
-        {
-            var bindingResult = await mediator.Send(
-                new IssueBindingAwardCommand(caseId, request.DecisionSummary, request.AwardAmount.Value), ct)
-                .ConfigureAwait(true);
+        DecisionOutcome? outcome = null;
+        DecisionSeverity? severity = null;
 
-            return bindingResult.IsSuccess
-                ? Results.Ok(bindingResult.Value)
-                : Results.BadRequest(new { error = bindingResult.Error.Code, detail = bindingResult.Error.Description });
+        if (request.IsStructured)
+        {
+            if (!Enum.TryParse<DecisionOutcome>(request.Outcome, ignoreCase: true, out var parsedOutcome))
+            {
+                return Results.BadRequest(new { error = "Arbitration.InvalidOutcome", detail = "Invalid decision outcome." });
+            }
+
+            if (!Enum.TryParse<DecisionSeverity>(request.Severity, ignoreCase: true, out var parsedSeverity))
+            {
+                return Results.BadRequest(new { error = "Arbitration.InvalidSeverity", detail = "Invalid decision severity." });
+            }
+
+            outcome = parsedOutcome;
+            severity = parsedSeverity;
         }
 
-        var protocolResult = await mediator.Send(
-            new IssueProtocolDecisionCommand(caseId, request.DecisionSummary), ct)
+        IReadOnlyList<DecisionPenaltyInput> penalties = [];
+        if (request.Penalties is { Count: > 0 })
+        {
+            var parsed = new List<DecisionPenaltyInput>();
+            foreach (var p in request.Penalties)
+            {
+                if (!Enum.TryParse<PenaltyType>(p.PenaltyType, ignoreCase: true, out var penaltyType))
+                {
+                    return Results.BadRequest(new { error = "Arbitration.InvalidPenaltyType", detail = $"Invalid penalty type '{p.PenaltyType}'." });
+                }
+
+                parsed.Add(new DecisionPenaltyInput(p.PartyUserId, penaltyType, p.AmountCents, p.Description));
+            }
+
+            penalties = parsed;
+        }
+
+        var result = await mediator.Send(
+            new IssueDecisionCommand(
+                caseId,
+                GetCallerContext(httpContext),
+                request.DecisionSummary,
+                request.AwardAmount,
+                request.IsStructured,
+                outcome,
+                severity,
+                penalties), ct)
             .ConfigureAwait(true);
 
-        return protocolResult.IsSuccess
-            ? Results.Ok(protocolResult.Value)
-            : Results.BadRequest(new { error = protocolResult.Error.Code, detail = protocolResult.Error.Description });
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ArbitrationResults.ToErrorResult(result.Error);
     }
 
     private static async Task<IResult> GetCase(
         [FromRoute] Guid caseId,
+        HttpContext httpContext,
         IMediator mediator,
         CancellationToken ct)
     {
-        var result = await mediator.Send(new GetCaseQuery(caseId), ct).ConfigureAwait(true);
+        var result = await mediator.Send(
+            new GetCaseQuery(caseId, GetCallerContext(httpContext)), ct).ConfigureAwait(true);
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.NotFound(new { error = result.Error.Code, detail = result.Error.Description });
+            : ArbitrationResults.ToErrorResult(result.Error);
     }
 
     private static async Task<IResult> CloseCase(
         [FromRoute] Guid caseId,
+        HttpContext httpContext,
         IMediator mediator,
         CancellationToken ct)
     {
-        var result = await mediator.Send(new CloseCaseCommand(caseId), ct).ConfigureAwait(true);
+        var result = await mediator.Send(
+            new CloseCaseCommand(caseId, GetCallerContext(httpContext)), ct).ConfigureAwait(true);
 
         return result.IsSuccess
             ? Results.NoContent()
-            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+            : ArbitrationResults.ToErrorResult(result.Error);
     }
 
     private static async Task<IResult> AppealCase(
@@ -164,25 +217,39 @@ public static class ArbitrationEndpoints
         IMediator mediator,
         CancellationToken ct)
     {
-        var userId = GetUserId(httpContext);
         var result = await mediator.Send(
-            new AppealCaseCommand(caseId, userId, request.Reason), ct)
+            new AppealCaseCommand(caseId, GetCallerContext(httpContext), request.Reason), ct)
             .ConfigureAwait(true);
 
         return result.IsSuccess
             ? Results.NoContent()
-            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+            : ArbitrationResults.ToErrorResult(result.Error);
     }
 
     private static async Task<IResult> ListCasesByStatus(
         [FromQuery] ArbitrationStatus status,
+        HttpContext httpContext,
         IMediator mediator,
         CancellationToken ct)
     {
-        var result = await mediator.Send(new ListCasesByStatusQuery(status), ct).ConfigureAwait(true);
+        var result = await mediator.Send(
+            new ListCasesByStatusQuery(status, GetCallerContext(httpContext)), ct).ConfigureAwait(true);
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+            : ArbitrationResults.ToErrorResult(result.Error);
     }
+
+    private static Guid GetUserId(HttpContext httpContext)
+    {
+        var claim = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)
+            ?? throw new InvalidOperationException("User ID claim not found.");
+        return Guid.Parse(claim.Value);
+    }
+
+    private static ArbitrationUserContext GetCallerContext(HttpContext httpContext) =>
+        new(
+            GetUserId(httpContext),
+            httpContext.User.IsInRole("PlatformAdmin"),
+            httpContext.User.IsInRole("Arbitrator"));
 }

@@ -5,8 +5,11 @@ using Lagedra.Modules.ActivationAndBilling.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Insurance;
 using Lagedra.SharedKernel.Results;
+using Lagedra.SharedKernel.Settings;
+using Lagedra.TruthSurface.Application.Commands;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace Lagedra.Modules.ActivationAndBilling.Application.Commands;
 
@@ -15,10 +18,14 @@ public sealed record ApproveDealApplicationCommand(
     Guid CallerUserId,
     long DepositAmountCents) : IRequest<Result<DealApplicationDto>>;
 
-public sealed class ApproveDealApplicationCommandHandler(
+public sealed partial class ApproveDealApplicationCommandHandler(
     BillingDbContext dbContext,
     IListingProvider listingProvider,
-    IInsuranceFeeCalculator insuranceFeeCalculator)
+    IInsuranceFeeCalculator insuranceFeeCalculator,
+    IMediator mediator,
+    IFeatureFlags featureFlags,
+    IInquiryDealLinker inquiryDealLinker,
+    ILogger<ApproveDealApplicationCommandHandler> logger)
     : IRequestHandler<ApproveDealApplicationCommand, Result<DealApplicationDto>>
 {
     private static readonly Error ApplicationNotFound = new("Application.NotFound", "Application not found.");
@@ -85,7 +92,74 @@ public sealed class ApproveDealApplicationCommandHandler(
 
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
+        // Phase 16.4: collapse the host's three actions (approve → create
+        // truth surface → confirm truth surface) into a single click. We
+        // dispatch the two TruthSurface commands sequentially via MediatR
+        // so the deal lands on the tenant's checkout with a landlord-
+        // confirmed snapshot already waiting for them.
+        //
+        // The off-session card-on-file charge (16.9) intentionally does
+        // NOT run here. The Truth Surface is a hard architectural gate:
+        // the tenant must inline-confirm the snapshot first. The actual
+        // charge fires from OnTruthSurfaceConfirmedCreatePaymentConfirmationHandler
+        // once the snapshot seals — that's the *only* path that can
+        // produce a Confirmed DealPaymentConfirmation under V2.
+        if (application.DealId is { } dealId)
+        {
+            // Phase 17: link the tenant's pre-booking inquiry thread (if
+            // any) onto the freshly-created deal so the conversation
+            // history surfaces on the deal page.
+            await inquiryDealLinker
+                .LinkOpenInquiryToDealAsync(
+                    application.ListingId,
+                    application.TenantUserId,
+                    dealId,
+                    cancellationToken)
+                .ConfigureAwait(false);
+
+            if (featureFlags.BookingFlowV2Enabled)
+            {
+                await AutoConfirmTruthSurfaceAsync(
+                    dealId,
+                    application.LandlordUserId,
+                    application.Id,
+                    cancellationToken).ConfigureAwait(false);
+            }
+        }
+
         return Result<DealApplicationDto>.Success(MapToDto(application));
+    }
+
+    private async Task AutoConfirmTruthSurfaceAsync(
+        Guid dealId,
+        Guid landlordUserId,
+        Guid applicationId,
+        CancellationToken cancellationToken)
+    {
+        var createResult = await mediator
+            .Send(new CreateTruthSurfaceForDealCommand(dealId, landlordUserId), cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!createResult.IsSuccess)
+        {
+            // The host can still create + confirm manually from the deal
+            // detail page if this best-effort step fails (e.g. retry).
+            LogTruthSurfaceCreateFailed(logger, applicationId, dealId, createResult.Error.Code);
+            return;
+        }
+
+        var snapshotId = createResult.Value.SnapshotId;
+
+        var confirmResult = await mediator
+            .Send(
+                new ConfirmTruthSurfaceCommand(snapshotId, ConfirmingParty.Landlord),
+                cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!confirmResult.IsSuccess)
+        {
+            LogTruthSurfaceLandlordConfirmFailed(logger, applicationId, snapshotId, confirmResult.Error.Code);
+        }
     }
 
     private static DealApplicationDto MapToDto(DealApplication a) =>
@@ -93,5 +167,18 @@ public sealed class ApproveDealApplicationCommandHandler(
             a.Status, a.DealId, a.SubmittedAt, a.DecidedAt,
             a.RequestedCheckIn, a.RequestedCheckOut, a.StayDurationDays,
             a.DepositAmountCents, a.InsuranceFeeCents, a.FirstMonthRentCents,
-            a.PartnerOrganizationId, a.IsPartnerReferred, a.JurisdictionWarning, a.Source);
+            a.PartnerOrganizationId, a.IsPartnerReferred, a.JurisdictionWarning, a.Source,
+            a.GuestCount, a.Message);
+
+    [LoggerMessage(
+        Level = LogLevel.Warning,
+        Message = "Auto-create Truth Surface failed for application {ApplicationId} deal {DealId}: {ErrorCode}")]
+    private static partial void LogTruthSurfaceCreateFailed(
+        ILogger logger, Guid applicationId, Guid dealId, string errorCode);
+
+    [LoggerMessage(
+        Level = LogLevel.Warning,
+        Message = "Auto-confirm Truth Surface (landlord) failed for application {ApplicationId} snapshot {SnapshotId}: {ErrorCode}")]
+    private static partial void LogTruthSurfaceLandlordConfirmFailed(
+        ILogger logger, Guid applicationId, Guid snapshotId, string errorCode);
 }

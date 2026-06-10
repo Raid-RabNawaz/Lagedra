@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams, Link, useSearchParams } from "react-router-dom";
+import { useParams, Link, Navigate } from "react-router-dom";
 import {
   ArrowLeft,
   CreditCard,
@@ -9,7 +9,6 @@ import {
   AlertTriangle,
   CheckCircle2,
   XCircle,
-  ExternalLink,
   FileWarning,
   Ban,
   Shield,
@@ -24,7 +23,6 @@ import {
   useConfirmPayment,
   useConfirmPlatformPayment,
 } from "@/features/activation-billing/hooks/useBilling";
-import { useCheckoutStatus } from "@/features/activation-billing/hooks/useCheckout";
 import { useMyDeals } from "@/features/deals/hooks/useDeals";
 import {
   getApiErrorMessage,
@@ -47,9 +45,8 @@ import { formatDate, formatMoney } from "@/utils/format";
 
 export const BillingPage = () => {
   const { dealId } = useParams<{ dealId: string }>();
-  const [searchParams] = useSearchParams();
   const user = useAuthStore((s) => s.user);
-  const { data: deals } = useMyDeals("all");
+  const { data: deals, isLoading: dealsLoading } = useMyDeals("all");
   const deal = deals?.find((d) => d.dealId === dealId);
   // Tenant/Landlord were merged into a single "Member" role, so participation
   // must be checked per-deal. Authorize UI controls against the actual deal
@@ -58,17 +55,39 @@ export const BillingPage = () => {
   const isLandlord = !!user && !!deal && user.userId === deal.landlordUserId;
   const isTenant = !!user && !!deal && user.userId === deal.tenantUserId;
 
+  // Phase 16.6: enforce the single-money-surface rule **eagerly**. We
+  // resolve the navigation decision *before* kicking off the billing/
+  // payment queries so a tenant who lands on /billing for a pre-Active
+  // deal doesn't see a flash of empty billing UI before bouncing.
+  // While the deals list is still loading the page renders a skeleton
+  // (rather than firing the queries against an account that doesn't
+  // exist yet), so 404s never reach the user as errors.
+  if (deal && dealId) {
+    const isPostActive =
+      deal.dealPhase === "Active" || deal.dealPhase === "Closed";
+    if (!isPostActive) {
+      const redirectTo =
+        deal.dealPhase === "Checkout"
+          ? `/app/deals/${dealId}/checkout`
+          : `/app/deals/${dealId}`;
+      return <Navigate to={redirectTo} replace />;
+    }
+  }
+
+  const isPostActive =
+    !!deal &&
+    (deal.dealPhase === "Active" || deal.dealPhase === "Closed");
+
   const {
     data: billing,
     isLoading: billingLoading,
     error: billingError,
-  } = useBillingStatus(dealId);
+  } = useBillingStatus(isPostActive ? dealId : undefined);
   const {
     data: payment,
     isLoading: paymentLoading,
     error: paymentError,
-  } = usePaymentStatus(dealId);
-  const { data: checkout, refetch: refetchCheckout } = useCheckoutStatus(dealId);
+  } = usePaymentStatus(isPostActive ? dealId : undefined);
   const { data: paymentDetailsData } = usePaymentDetails(
     isTenant && payment?.status === "Pending" ? dealId : undefined,
   );
@@ -91,22 +110,7 @@ export const BillingPage = () => {
   const [showDamageClaimDialog, setShowDamageClaimDialog] = useState(false);
   const [showStopBillingDialog, setShowStopBillingDialog] = useState(false);
 
-  // Surface Stripe redirect outcome once per URL change. We track the value
-  // we've already reacted to so flipping searchParams later doesn't re-trigger
-  // the toast or refetch.
-  const redirectStatus = searchParams.get("redirect_status");
-  const [seenRedirectStatus, setSeenRedirectStatus] = useState<string | null>(null);
-  if (redirectStatus !== seenRedirectStatus) {
-    setSeenRedirectStatus(redirectStatus);
-    if (redirectStatus === "succeeded") {
-      setActionSuccess("Payment completed successfully!");
-      refetchCheckout();
-    } else if (redirectStatus === "failed") {
-      setActionError("Payment failed. Please try again.");
-    }
-  }
-
-  if (billingLoading || paymentLoading) {
+  if (dealsLoading || billingLoading || paymentLoading) {
     return <Loader fullPage label="Loading billing..." />;
   }
 
@@ -149,10 +153,6 @@ export const BillingPage = () => {
       setActionError(getApiErrorMessage(e, "Failed to confirm platform payment."));
     }
   };
-
-  const paymentCompleted = payment?.status === "Confirmed";
-  const needsCheckout =
-    payment && !paymentCompleted && checkout?.status !== "succeeded";
 
   if (isAccessDenied) {
     return (
@@ -212,30 +212,6 @@ export const BillingPage = () => {
           <AlertTriangle className="h-4 w-4" />
           <span className="ml-2 text-sm">{actionError}</span>
         </Alert>
-      )}
-
-      {needsCheckout && isTenant && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 mb-6">
-          <div className="flex items-start gap-3">
-            <CreditCard className="h-5 w-5 text-amber-600 mt-0.5" />
-            <div>
-              <p className="font-medium text-amber-800">
-                Payment required to activate this deal
-              </p>
-              <p className="text-sm text-amber-700 mt-1">
-                Complete the secure checkout to pay the first month's rent,
-                deposit, and insurance. The deal will be activated automatically
-                once payment is confirmed.
-              </p>
-              <Link to={`/app/deals/${dealId}/checkout`}>
-                <Button size="sm" className="mt-3 gap-2">
-                  <ExternalLink className="h-4 w-4" />
-                  Go to Checkout
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </div>
       )}
 
       {billing && (

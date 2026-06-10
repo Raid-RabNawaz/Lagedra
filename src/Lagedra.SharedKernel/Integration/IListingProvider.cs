@@ -53,7 +53,8 @@ public sealed record ListingDetailsDto(
     IReadOnlyList<string>? SafetyDeviceNames = null,
     IReadOnlyList<string>? ConsiderationNames = null,
     bool AcceptsPartnerDirectReservations = true,
-    bool InstantBookingEnabled = false);
+    bool InstantBookingEnabled = false,
+    long? DefaultDepositCents = null);
 
 public sealed record ListingSummaryInfoDto(
     Guid Id,
@@ -67,4 +68,22 @@ public interface IListingProvider
     Task<bool> IsAvailableAsync(Guid listingId, DateOnly checkIn, DateOnly checkOut, CancellationToken ct = default);
     Task BlockDatesForDealAsync(Guid listingId, Guid dealId, DateOnly checkIn, DateOnly checkOut, CancellationToken ct = default);
     Task<IReadOnlyList<ListingSummaryInfoDto>> GetListingSummariesAsync(IReadOnlyList<Guid> listingIds, CancellationToken ct = default);
+
+    /// <summary>
+    /// Phase 17 — return every listing id owned by the given landlord.
+    /// Used by cross-module inboxes (e.g. the host inquiries view) that
+    /// need to filter their own data by the host's listings without a
+    /// per-row authorization round-trip.
+    /// </summary>
+    Task<IReadOnlyList<Guid>> GetListingIdsForLandlordAsync(Guid landlordUserId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Phase 17 — bulk lookup of (listing id → landlord id) used by the
+    /// tenant-side "My conversations" inbox to resolve the host display
+    /// name per row without expanding <see cref="ListingSummaryInfoDto"/>
+    /// (and thereby breaking other consumers that already destructure it).
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, Guid>> GetLandlordIdsForListingsAsync(
+        IReadOnlyList<Guid> listingIds,
+        CancellationToken ct = default);
 }

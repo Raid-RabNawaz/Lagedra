@@ -1,4 +1,6 @@
 using Lagedra.Infrastructure.Eventing;
+using Lagedra.Modules.JurisdictionPacks.Application.EventHandlers;
+using Lagedra.Modules.JurisdictionPacks.Domain.Events;
 using Lagedra.Modules.JurisdictionPacks.Infrastructure.Jobs;
 using Lagedra.Modules.JurisdictionPacks.Infrastructure.Persistence;
 using Lagedra.Modules.JurisdictionPacks.Infrastructure.Repositories;
@@ -27,6 +29,8 @@ public static class JurisdictionPacksModuleRegistration
 
         services.AddScoped<JurisdictionPackRepository>();
         services.AddScoped<IJurisdictionPackProvider, JurisdictionPackProvider>();
+
+        services.AddDomainEventHandler<JurisdictionPackPublishedEvent, OnPackPublishedInvalidateCacheHandler>();
 
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(JurisdictionPacksModuleRegistration).Assembly));

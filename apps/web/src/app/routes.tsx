@@ -3,6 +3,7 @@ import { Navigate, createBrowserRouter } from "react-router-dom";
 import { RequireAuth } from "@/app/auth/RequireAuth";
 import { RequireMember } from "@/app/auth/RequireMember";
 import { RequireRole } from "@/app/auth/RequireRole";
+import { RequireArbitrationAccess } from "@/app/auth/RequireArbitrationAccess";
 import { roles } from "@/app/auth/roles";
 import { AuthLayout } from "@/features/auth/pages/AuthLayout";
 import { AppShell } from "@/app/layout/AppShell";
@@ -17,6 +18,7 @@ const ForgotPasswordPage = lazy(() => import("@/features/auth/pages/ForgotPasswo
 const ResetPasswordPage = lazy(() => import("@/features/auth/pages/ResetPasswordPage").then((m) => ({ default: m.ResetPasswordPage })));
 const DashboardPage = lazy(() => import("@/features/auth/pages/DashboardPage").then((m) => ({ default: m.DashboardPage })));
 const ProfilePage = lazy(() => import("@/features/auth/pages/ProfilePage").then((m) => ({ default: m.ProfilePage })));
+const PublicProfilePage = lazy(() => import("@/features/auth/pages/PublicProfilePage").then((m) => ({ default: m.PublicProfilePage })));
 const UsersPage = lazy(() => import("@/features/admin/pages/UsersPage").then((m) => ({ default: m.UsersPage })));
 const DefinitionsPage = lazy(() => import("@/features/admin/pages/DefinitionsPage").then((m) => ({ default: m.DefinitionsPage })));
 const InsuranceUnknownQueuePage = lazy(() => import("@/features/admin/pages/InsuranceUnknownQueuePage").then((m) => ({ default: m.InsuranceUnknownQueuePage })));
@@ -32,6 +34,7 @@ const BlogPostsPage = lazy(() => import("@/features/admin/pages/BlogPostsPage").
 const BlogPostEditorPage = lazy(() => import("@/features/admin/pages/BlogPostEditorPage").then((m) => ({ default: m.BlogPostEditorPage })));
 const SeoPage = lazy(() => import("@/features/admin/pages/SeoPage").then((m) => ({ default: m.SeoPage })));
 const AuditSearchPage = lazy(() => import("@/features/admin/pages/AuditSearchPage").then((m) => ({ default: m.AuditSearchPage })));
+const PlatformSettingsPage = lazy(() => import("@/features/admin/pages/PlatformSettingsPage").then((m) => ({ default: m.PlatformSettingsPage })));
 const AnalyticsDashboardPage = lazy(() => import("@/features/admin/pages/AnalyticsDashboardPage").then((m) => ({ default: m.AnalyticsDashboardPage })));
 const ListingAnalyticsPage = lazy(() => import("@/features/admin/pages/ListingAnalyticsPage").then((m) => ({ default: m.ListingAnalyticsPage })));
 const ListingReviewPage = lazy(() => import("@/features/admin/pages/ListingReviewPage").then((m) => ({ default: m.ListingReviewPage })));
@@ -46,7 +49,11 @@ const SavedListingsPage = lazy(() => import("@/features/listings/pages/SavedList
 const ApplicationsPage = lazy(() => import("@/features/applications/pages/ApplicationsPage").then((m) => ({ default: m.ApplicationsPage })));
 const ApplicationDetailPage = lazy(() => import("@/features/applications/pages/ApplicationDetailPage").then((m) => ({ default: m.ApplicationDetailPage })));
 const MyApplicationsPage = lazy(() => import("@/features/applications/pages/MyApplicationsPage").then((m) => ({ default: m.MyApplicationsPage })));
+const HostApprovePage = lazy(() => import("@/features/applications/pages/HostApprovePage").then((m) => ({ default: m.HostApprovePage })));
 const InquiryThreadPage = lazy(() => import("@/features/inquiry/pages/InquiryThreadPage").then((m) => ({ default: m.InquiryThreadPage })));
+const ListingInquiryPage = lazy(() => import("@/features/inquiry/pages/ListingInquiryPage").then((m) => ({ default: m.ListingInquiryPage })));
+const HostInquiriesPage = lazy(() => import("@/features/inquiry/pages/HostInquiriesPage").then((m) => ({ default: m.HostInquiriesPage })));
+const MyInquiriesPage = lazy(() => import("@/features/inquiry/pages/MyInquiriesPage").then((m) => ({ default: m.MyInquiriesPage })));
 const TruthSurfaceConfirmationPage = lazy(() => import("@/features/truth-surface/pages/TruthSurfaceConfirmationPage").then((m) => ({ default: m.TruthSurfaceConfirmationPage })));
 const BillingPage = lazy(() => import("@/features/activation-billing/pages/BillingPage").then((m) => ({ default: m.BillingPage })));
 const CheckoutPage = lazy(() => import("@/features/activation-billing/pages/CheckoutPage"));
@@ -92,6 +99,13 @@ export const router = createBrowserRouter([
     ],
   },
 
+  // Phase 16.10 — anonymous one-tap host approval landing page
+  {
+    path: "/host/approve",
+    element: <LazyPage><HostApprovePage /></LazyPage>,
+    errorElement: <RouteErrorBoundary />,
+  },
+
   // Auth routes
   {
     path: "/auth",
@@ -118,16 +132,19 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <LazyPage><DashboardPage /></LazyPage> },
           { path: "profile", element: <LazyPage><ProfilePage /></LazyPage> },
+          { path: "users/:userId", element: <LazyPage><PublicProfilePage /></LazyPage> },
           { path: "verification", element: <LazyPage><VerificationPage /></LazyPage> },
           { path: "notifications", element: <LazyPage><NotificationsPage /></LazyPage> },
           { path: "notification-preferences", element: <LazyPage><NotificationPreferencesPage /></LazyPage> },
           { path: "saved", element: <LazyPage><SavedListingsPage /></LazyPage> },
           { path: "applications/:id", element: <LazyPage><ApplicationDetailPage /></LazyPage> },
           { path: "my-applications", element: <LazyPage><MyApplicationsPage /></LazyPage> },
+          { path: "my-inquiries", element: <LazyPage><MyInquiriesPage /></LazyPage> },
           { path: "deals", element: <LazyPage><MyDealsPage /></LazyPage> },
           { path: "reservations", element: <Navigate to="/app/deals" replace /> },
           { path: "deals/:dealId", element: <LazyPage><DealDetailPage /></LazyPage> },
           { path: "deals/:dealId/inquiry", element: <LazyPage><InquiryThreadPage /></LazyPage> },
+          { path: "inquiry/:sessionId", element: <LazyPage><ListingInquiryPage /></LazyPage> },
           { path: "deals/:dealId/truth-surface", element: <LazyPage><DealTruthSurfacePage /></LazyPage> },
           { path: "deals/:dealId/create-truth-surface", element: <LazyPage><CreateTruthSurfacePage /></LazyPage> },
           { path: "truth-surface/:snapshotId", element: <LazyPage><TruthSurfaceConfirmationPage /></LazyPage> },
@@ -137,8 +154,21 @@ export const router = createBrowserRouter([
           { path: "deals/:dealId/compliance", element: <LazyPage><DealCompliancePage /></LazyPage> },
           { path: "deals/:dealId/trust-ledger", element: <LazyPage><DealTrustLedgerPage /></LazyPage> },
           { path: "trust-ledger", element: <LazyPage><UserTrustLedgerPage /></LazyPage> },
-          { path: "arbitration", element: <LazyPage><CaseListPage /></LazyPage> },
-          { path: "arbitration/:caseId", element: <LazyPage><CaseDetailPage /></LazyPage> },
+          {
+            path: "arbitration",
+            element: <RequireArbitrationAccess />,
+            children: [
+              { index: true, element: <LazyPage><CaseListPage /></LazyPage> },
+              { path: ":caseId", element: <LazyPage><CaseDetailPage /></LazyPage> },
+            ],
+          },
+          {
+            path: "jurisdiction-packs",
+            element: <RequireRole allowed={[roles.arbitrator, roles.platformAdmin]} />,
+            children: [
+              { index: true, element: <LazyPage><JurisdictionPackVersionsPage /></LazyPage> },
+            ],
+          },
           {
             element: <RequireMember />,
             children: [
@@ -147,6 +177,7 @@ export const router = createBrowserRouter([
               { path: "listings/:id", element: <LazyPage><LandlordListingDetailPage /></LazyPage> },
               { path: "listings/:id/edit", element: <LazyPage><EditListingPage /></LazyPage> },
               { path: "applications", element: <LazyPage><ApplicationsPage /></LazyPage> },
+              { path: "inquiries", element: <LazyPage><HostInquiriesPage /></LazyPage> },
               { path: "payout-setup", element: <LazyPage><HostStripeOnboardingPage /></LazyPage> },
               { path: "stripe-onboarding", element: <Navigate to="/app/payout-setup" replace /> },
             ],
@@ -198,6 +229,7 @@ export const router = createBrowserRouter([
               { path: "restrictions", element: <LazyPage><UserRestrictionsPage /></LazyPage> },
               { path: "jurisdiction-packs", element: <LazyPage><JurisdictionPackVersionsPage /></LazyPage> },
               { path: "dual-control", element: <LazyPage><DualControlApprovalsPage /></LazyPage> },
+              { path: "settings", element: <LazyPage><PlatformSettingsPage /></LazyPage> },
               { path: "blog", element: <LazyPage><BlogPostsPage /></LazyPage> },
               { path: "blog/new", element: <LazyPage><BlogPostEditorPage /></LazyPage> },
               { path: "blog/:postId/edit", element: <LazyPage><BlogPostEditorPage /></LazyPage> },

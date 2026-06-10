@@ -1,4 +1,5 @@
 using Lagedra.Modules.ActivationAndBilling.Application.EventHandlers;
+using Lagedra.Modules.ActivationAndBilling.Application.Services;
 using Lagedra.Modules.ActivationAndBilling.Domain.Events;
 using Lagedra.SharedKernel.Integration.Events;
 using Lagedra.Modules.ActivationAndBilling.Domain.Interfaces;
@@ -35,6 +36,7 @@ public static class ActivationAndBillingModuleRegistration
         services.AddScoped<IDealPaymentConfirmationRepository, DealPaymentConfirmationRepository>();
         services.AddScoped<IDealApplicationStatusProvider, DealApplicationStatusProvider>();
         services.AddScoped<IPartnerDirectBookingService, PartnerDirectBookingService>();
+        services.AddScoped<ICardOnFileChargeService, CardOnFileChargeService>();
 
         services.AddDomainEventHandler<TruthSurfaceConfirmedEvent,
             OnTruthSurfaceConfirmedCreatePaymentConfirmationHandler>();

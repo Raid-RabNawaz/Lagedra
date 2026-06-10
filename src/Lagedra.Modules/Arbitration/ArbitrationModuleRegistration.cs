@@ -1,9 +1,12 @@
 using Lagedra.Infrastructure.Eventing;
+using Lagedra.Modules.Arbitration.Application.Services;
 using Lagedra.Modules.Arbitration.Application.EventHandlers;
 using Lagedra.Modules.Arbitration.Domain.Events;
 using Lagedra.Modules.Arbitration.Infrastructure.Jobs;
 using Lagedra.Modules.Arbitration.Infrastructure.Persistence;
 using Lagedra.Modules.Arbitration.Infrastructure.Repositories;
+using Lagedra.Modules.Arbitration.Infrastructure.Services;
+using Lagedra.SharedKernel.Integration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -26,6 +29,9 @@ public static class ArbitrationModuleRegistration
         services.AddOutboxContext<ArbitrationDbContext>();
 
         services.AddScoped<ArbitrationCaseRepository>();
+        services.AddScoped<ArbitratorAssignmentSelector>();
+        services.AddScoped<ArbitrationCaseAccessEvaluator>();
+        services.AddScoped<IArbitrationEvidenceManifestAccessProvider, ArbitrationEvidenceManifestAccessProvider>();
 
         // Notification handlers
         services.AddDomainEventHandler<CaseFiledEvent, OnCaseFiledNotify>();

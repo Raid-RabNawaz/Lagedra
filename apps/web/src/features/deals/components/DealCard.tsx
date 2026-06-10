@@ -8,12 +8,8 @@ import type { DealSummaryDto, DealPhase } from "@/api/types";
 
 function actionLabel(phase: DealPhase, isLandlord: boolean): string {
   switch (phase) {
-    case "Inquiry":
-      return isLandlord ? "Respond to inquiry" : "Continue inquiry";
     case "TruthSurface":
       return "Confirm truth surface";
-    case "AwaitingPayment":
-      return isLandlord ? "View payment" : "Complete payment";
     case "Checkout":
       return isLandlord ? "View checkout" : "Complete checkout";
     case "Active":

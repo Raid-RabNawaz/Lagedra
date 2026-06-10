@@ -111,6 +111,8 @@ public static class AuthModuleRegistration
         services.AddScoped<IUserStatusProvider, UserStatusProvider>();
         services.AddScoped<IIdentityInvitationService, IdentityInvitationService>();
         services.AddScoped<IUserLookupService, UserLookupService>();
+        services.AddScoped<IArbitratorPanelProvider, ArbitratorPanelProvider>();
+        services.AddScoped<IUserStripeProfileService, UserStripeProfileService>();
 
         // Notification handlers
         services.AddDomainEventHandler<Domain.Events.UserRegisteredEvent,

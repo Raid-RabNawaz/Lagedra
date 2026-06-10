@@ -1,4 +1,5 @@
-import { useParams, Link, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
+import { useParams, Link, useNavigate, Navigate } from "react-router-dom";
 import {
   ArrowLeft,
   FileCheck,
@@ -119,14 +120,42 @@ export function CreateTruthSurfacePage() {
   const deal = deals?.find((d) => d.dealId === dealId);
   const isLoading = dealsLoading || snapshotLoading;
 
+  // Phase 16.4 — the host's manual create CTA is a legacy entry point.
+  // Under V2 the snapshot is auto-created at approval time, so when this
+  // page sees one already exists we silently redirect to its confirmation
+  // page rather than showing a click-through. This avoids the broken UX
+  // where the host clicks "Create" on a stale link and triggers a
+  // duplicate-create error from the backend.
+  useEffect(() => {
+    if (existingSnapshot) {
+      navigate(`/app/truth-surface/${existingSnapshot.snapshotId}`, {
+        replace: true,
+      });
+    }
+  }, [existingSnapshot, navigate]);
+
   const handleCreate = async () => {
     if (!dealId) return;
+    // The endpoint is idempotent: if a snapshot was created concurrently
+    // (e.g. AutoConfirmTruthSurfaceAsync just landed while this page
+    // loaded), the API returns the existing one and we route to it.
     const result = await createMutation.mutateAsync(dealId);
     navigate(`/app/truth-surface/${result.snapshotId}`, { replace: true });
   };
 
   if (isLoading) {
     return <Loader fullPage label="Loading deal terms..." />;
+  }
+
+  // Render an immediate redirect if the effect hasn't fired yet on first
+  // paint — e.g. when the snapshot was already in cache from a prior page.
+  if (existingSnapshot) {
+    return (
+      <Navigate
+        to={`/app/truth-surface/${existingSnapshot.snapshotId}`}
+        replace
+      />
+    );
   }
 
   if (!deal) {
@@ -142,36 +171,6 @@ export function CreateTruthSurfacePage() {
           </Button>
         </Link>
       </EmptyState>
-    );
-  }
-
-  if (existingSnapshot) {
-    return (
-      <div className="mx-auto max-w-2xl px-4 py-8 sm:px-6 lg:px-8">
-        <Link
-          to={`/app/deals/${dealId}`}
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to deal
-        </Link>
-
-        <Alert className="border-blue-300 bg-blue-50 text-blue-800">
-          <FileCheck className="h-4 w-4" />
-          <span className="ml-2 text-sm">
-            A truth surface already exists for this deal. You can review and confirm it.
-          </span>
-        </Alert>
-
-        <div className="mt-4 flex justify-center">
-          <Link to={`/app/truth-surface/${existingSnapshot.snapshotId}`}>
-            <Button className="gap-2">
-              <FileCheck className="h-4 w-4" />
-              Go to Truth Surface
-            </Button>
-          </Link>
-        </div>
-      </div>
     );
   }
 

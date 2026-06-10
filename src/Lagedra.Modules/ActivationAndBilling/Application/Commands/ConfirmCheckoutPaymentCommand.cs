@@ -104,7 +104,8 @@ public sealed partial class ConfirmCheckoutPaymentCommandHandler(
             c.FirstMonthRentCents,
             c.DepositAmountCents,
             c.InsuranceFeeCents,
-            c.InsuranceFeeCents + c.MonthlyProtocolFeeCents,
+            c.InsuranceFeeCents + c.MonthlyProtocolFeeCents + c.ServiceFeeCents,
+            c.ServiceFeeCents,
             "usd");
 
     [LoggerMessage(Level = LogLevel.Information,

@@ -7,6 +7,13 @@ namespace Lagedra.Modules.ActivationAndBilling.Domain.Aggregates;
 
 public sealed class DealApplication : AggregateRoot<Guid>
 {
+    /// <summary>
+    /// Hard cap on the tenant's optional cover note. Mirrors the textarea's
+    /// `maxLength` on the apply dialog so client and server agree on what
+    /// "too long" means, instead of one side silently truncating.
+    /// </summary>
+    public const int MessageMaxLength = 1000;
+
     public Guid ListingId { get; private set; }
     public Guid TenantUserId { get; private set; }
     public Guid LandlordUserId { get; private set; }
@@ -26,10 +33,38 @@ public sealed class DealApplication : AggregateRoot<Guid>
     public string? JurisdictionWarning { get; private set; }
 
     /// <summary>
+    /// Number of guests the tenant declared at submission time. Always
+    /// at least 1 (the tenant counts as a guest), capped at the listing's
+    /// <c>HouseRules.MaxGuests</c> by the submit command. Used by hosts
+    /// when deciding whether to accept a request and surfaced verbatim
+    /// on the Truth Surface so the booked headcount is auditable.
+    /// </summary>
+    public int GuestCount { get; private set; }
+
+    /// <summary>
+    /// Optional cover note from the tenant explaining why they want to
+    /// book, travel context, who's coming, etc. — analogous to Airbnb's
+    /// "Send the host a message" field. Capped at <see cref="MessageMaxLength"/>
+    /// characters; longer payloads are rejected by the submit command
+    /// rather than silently trimmed, so the tenant knows their note
+    /// didn't get truncated mid-sentence.
+    /// </summary>
+    public string? Message { get; private set; }
+
+    /// <summary>
     /// Set once both parties confirm the Truth Surface. Provides direct
     /// traceability from the booking record to its sealed legal snapshot.
     /// </summary>
     public Guid? TruthSurfaceSnapshotId { get; private set; }
+
+    /// <summary>
+    /// Phase 16.9 — Stripe payment-method id captured during the booking
+    /// pre-flight (apply dialog SetupIntent step). When present and the
+    /// BookingFlow.V2 flag is enabled the host's approve action immediately
+    /// charges this card off-session, skipping the separate checkout page
+    /// for the tenant.
+    /// </summary>
+    public string? StripePaymentMethodId { get; private set; }
 
     private DealApplication() { }
 
@@ -39,9 +74,12 @@ public sealed class DealApplication : AggregateRoot<Guid>
         Guid landlordUserId,
         DateOnly requestedCheckIn,
         DateOnly requestedCheckOut,
+        int guestCount = 1,
+        string? message = null,
         Guid? partnerOrganizationId = null,
         bool isPartnerReferred = false,
-        DealApplicationSource source = DealApplicationSource.TenantSelfApply)
+        DealApplicationSource source = DealApplicationSource.TenantSelfApply,
+        string? stripePaymentMethodId = null)
     {
         if (requestedCheckOut <= requestedCheckIn)
         {
@@ -60,6 +98,23 @@ public sealed class DealApplication : AggregateRoot<Guid>
             throw new ArgumentOutOfRangeException(nameof(requestedCheckOut), "Maximum stay is 180 days.");
         }
 
+        if (guestCount < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(guestCount), "Guest count must be at least 1.");
+        }
+
+        // Trim + collapse the optional cover note rather than persisting
+        // raw whitespace. Empty/whitespace-only notes are stored as null
+        // so consumers can use a simple null check to decide whether to
+        // render the "tenant message" section.
+        var normalisedMessage = string.IsNullOrWhiteSpace(message) ? null : message.Trim();
+        if (normalisedMessage is { Length: > MessageMaxLength })
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(message),
+                $"Message must be {MessageMaxLength} characters or fewer.");
+        }
+
         var application = new DealApplication
         {
             Id = Guid.NewGuid(),
@@ -69,12 +124,17 @@ public sealed class DealApplication : AggregateRoot<Guid>
             RequestedCheckIn = requestedCheckIn,
             RequestedCheckOut = requestedCheckOut,
             StayDurationDays = duration,
+            GuestCount = guestCount,
+            Message = normalisedMessage,
             Status = DealApplicationStatus.Pending,
             SubmittedAt = DateTime.UtcNow,
             CreatedAt = DateTime.UtcNow,
             PartnerOrganizationId = partnerOrganizationId,
             IsPartnerReferred = isPartnerReferred,
-            Source = source
+            Source = source,
+            StripePaymentMethodId = string.IsNullOrWhiteSpace(stripePaymentMethodId)
+                ? null
+                : stripePaymentMethodId,
         };
 
         application.AddDomainEvent(new ApplicationSubmittedEvent(

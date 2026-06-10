@@ -39,6 +39,11 @@ public static class AuthEndpoints
         group.MapPost("/change-password", ChangePassword).RequireAuthorization();
         group.MapPut("/users/{userId:guid}/role", UpdateRole).RequireAuthorization("RequirePlatformAdmin");
         group.MapGet("/users", ListUsers).RequireAuthorization("RequirePlatformAdmin");
+        // Public on purpose — the DTO is hand-curated to exclude PII
+        // (no email, no phone, no DOB, no emergency contacts) so the
+        // marketplace listing detail page can render a rich "About the
+        // host" section to anonymous shoppers without forcing sign-in.
+        group.MapGet("/users/{userId:guid}/public-profile", GetPublicProfile).AllowAnonymous();
 
         return app;
     }
@@ -373,5 +378,16 @@ public static class AuthEndpoints
         return result.IsSuccess
             ? Results.Ok(result.Value)
             : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+    }
+
+    private static async Task<IResult> GetPublicProfile(
+        [FromRoute] Guid userId,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetPublicProfileQuery(userId), ct).ConfigureAwait(true);
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : Results.NotFound(new { error = result.Error.Code, detail = result.Error.Description });
     }
 }

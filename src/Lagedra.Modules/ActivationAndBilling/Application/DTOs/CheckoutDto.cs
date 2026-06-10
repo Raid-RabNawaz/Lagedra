@@ -9,4 +9,5 @@ public sealed record CheckoutDto(
     long DepositAmountCents,
     long InsuranceFeeCents,
     long ApplicationFeeCents,
+    long ServiceFeeCents,
     string Currency);

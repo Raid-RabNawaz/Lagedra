@@ -18,6 +18,8 @@ import {
   useCreateCheckout,
   useConfirmCheckout,
 } from "@/features/activation-billing/hooks/useCheckout";
+import { InlineTruthSurfaceConfirm } from "@/features/activation-billing/components/InlineTruthSurfaceConfirm";
+import { useSnapshotByDealId } from "@/features/truth-surface/hooks/useTruthSurface";
 import type { CheckoutDto } from "@/api/types";
 import { formatMoney } from "@/utils/format";
 import {
@@ -46,6 +48,12 @@ function PaymentBreakdown({ checkout }: { checkout: CheckoutDto }) {
           <span className="text-muted-foreground">Insurance premium</span>
           <span>{formatMoney(checkout.insuranceFeeCents)}</span>
         </div>
+        {checkout.serviceFeeCents > 0 && (
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Service fee</span>
+            <span>{formatMoney(checkout.serviceFeeCents)}</span>
+          </div>
+        )}
         <div className="border-t pt-2 flex justify-between font-semibold">
           <span>Total</span>
           <span>{formatMoney(checkout.totalAmountCents)}</span>
@@ -90,10 +98,15 @@ function CheckoutForm({
         return;
       }
 
+      // Phase 16.6: keep the tenant on the single money surface
+      // (checkout) for the redirect-back. The previous return_url
+      // dumped users on /billing, which is now reserved for active
+      // deals. If anything goes wrong, the inline UI here can recover
+      // and retry without bouncing the tenant between two pages.
       const { error: confirmError } = await stripe.confirmPayment({
         elements,
         confirmParams: {
-          return_url: `${window.location.origin}/app/deals/${dealId}/billing`,
+          return_url: `${window.location.origin}/app/deals/${dealId}/checkout`,
         },
         redirect: "if_required",
       });
@@ -172,6 +185,17 @@ export default function CheckoutPage() {
     error: statusError,
   } = useCheckoutStatus(dealId);
   const createCheckout = useCreateCheckout();
+
+  // Phase 16.5: pull the snapshot in parallel so we can render the
+  // inline tenant confirmation panel when the host has already
+  // landlord-confirmed (auto, via 16.4) but the tenant hasn't ticked
+  // through yet. While that's pending, the GetCheckoutStatus API
+  // legitimately 404s ("no payment confirmation found"), and we
+  // suppress the "checkout unavailable" alert in that specific case.
+  const snapshotQuery = useSnapshotByDealId(dealId);
+  const snapshot = snapshotQuery.data;
+  const tenantNeedsToConfirm =
+    !!snapshot && !snapshot.tenantConfirmed;
   // The "current" checkout is whichever is fresher: the one we just created
   // via the mutation, or the one returned by the server status query.
   const [createdCheckout, setCreatedCheckout] = useState<CheckoutDto | null>(null);
@@ -237,11 +261,19 @@ export default function CheckoutPage() {
     );
   }
 
-  if (isNotFoundError(statusError)) {
+  // 404 from /checkout means there is no DealPaymentConfirmation row
+  // yet. Two real-world cases:
+  //   (a) the tenant still needs to confirm the Truth Surface (the
+  //       handler that creates that row only fires post-seal). We
+  //       fall through to render the inline TS confirmation panel
+  //       below.
+  //   (b) the application genuinely isn't approved yet — surface the
+  //       legacy "not yet available" alert.
+  if (isNotFoundError(statusError) && !tenantNeedsToConfirm && dealId) {
     return (
       <div className="mx-auto max-w-lg px-4 py-16 sm:px-6 lg:px-8">
         <Link
-          to={dealId ? `/app/deals/${dealId}` : "/app/deals"}
+          to={`/app/deals/${dealId}`}
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -290,6 +322,17 @@ export default function CheckoutPage() {
         </div>
       )}
 
+      {/*
+       * Phase 16.5 inline confirmation. Renders only when a snapshot
+       * exists and the tenant hasn't confirmed yet. While visible we
+       * also gate the "Proceed to Payment" / Stripe Elements blocks
+       * below to avoid letting the tenant pay for a deal whose terms
+       * they haven't sealed.
+       */}
+      {dealId && tenantNeedsToConfirm && (
+        <InlineTruthSurfaceConfirm dealId={dealId} />
+      )}
+
       {checkoutStatus?.status === "succeeded" && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-center">
           <ShieldCheck className="h-8 w-8 text-emerald-600 mx-auto mb-2" />
@@ -316,40 +359,42 @@ export default function CheckoutPage() {
         </div>
       )}
 
-      {checkoutStatus?.status !== "succeeded" && !checkout?.clientSecret && (
-        <Card>
-          <CardContent className="py-8 text-center">
-            <Lock className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
-            <p className="text-sm text-muted-foreground mb-4">
-              Ready to proceed? Click below to start the secure payment process.
-            </p>
-            <Button
-              onClick={handleStartCheckout}
-              disabled={createCheckout.isPending}
-              size="lg"
-              className="gap-2"
-            >
-              <CreditCard className="h-4 w-4" />
-              {createCheckout.isPending
-                ? "Preparing..."
-                : "Proceed to Payment"}
-            </Button>
-            {createCheckout.isError && (
-              <div className="mt-4 flex items-center gap-2 text-sm text-destructive justify-center">
-                <AlertCircle className="h-4 w-4" />
-                <span>
-                  {getApiErrorMessage(
-                    createCheckout.error,
-                    "Failed to create checkout. Please try again.",
-                  )}
-                </span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      {checkoutStatus?.status !== "succeeded" &&
+        !checkout?.clientSecret &&
+        !tenantNeedsToConfirm && (
+          <Card>
+            <CardContent className="py-8 text-center">
+              <Lock className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
+              <p className="text-sm text-muted-foreground mb-4">
+                Ready to proceed? Click below to start the secure payment process.
+              </p>
+              <Button
+                onClick={handleStartCheckout}
+                disabled={createCheckout.isPending}
+                size="lg"
+                className="gap-2"
+              >
+                <CreditCard className="h-4 w-4" />
+                {createCheckout.isPending
+                  ? "Preparing..."
+                  : "Proceed to Payment"}
+              </Button>
+              {createCheckout.isError && (
+                <div className="mt-4 flex items-center gap-2 text-sm text-destructive justify-center">
+                  <AlertCircle className="h-4 w-4" />
+                  <span>
+                    {getApiErrorMessage(
+                      createCheckout.error,
+                      "Failed to create checkout. Please try again.",
+                    )}
+                  </span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
-      {checkout?.clientSecret && options && checkoutStatus?.status !== "succeeded" && (
+      {checkout?.clientSecret && options && checkoutStatus?.status !== "succeeded" && !tenantNeedsToConfirm && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">

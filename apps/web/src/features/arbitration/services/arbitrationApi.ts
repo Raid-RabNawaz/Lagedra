@@ -6,6 +6,7 @@ import type {
   ArbitrationStatus,
   ArbitrationTier,
   ArbitrationCategory,
+  IssueDecisionRequest,
 } from "@/api/types";
 
 export const arbitrationApi = {
@@ -37,12 +38,10 @@ export const arbitrationApi = {
   async attachEvidence(
     caseId: string,
     slotType: string,
-    submittedBy: string,
     evidenceManifestId: string,
   ): Promise<void> {
     await http.post(endpoints.arbitration.attachEvidence(caseId), {
       slotType,
-      submittedBy,
       evidenceManifestId,
     });
   },
@@ -51,25 +50,25 @@ export const arbitrationApi = {
     await http.post(endpoints.arbitration.markEvidenceComplete(caseId));
   },
 
+  async beginReview(caseId: string): Promise<void> {
+    await http.post(endpoints.arbitration.beginReview(caseId));
+  },
+
   async assignArbitrator(
     caseId: string,
     arbitratorUserId: string,
-    concurrentCaseCount: number,
+    concurrentCaseCount?: number,
   ): Promise<void> {
     await http.post(endpoints.arbitration.assignArbitrator(caseId), {
       arbitratorUserId,
-      concurrentCaseCount,
+      ...(concurrentCaseCount !== undefined ? { concurrentCaseCount } : {}),
     });
   },
 
-  async issueDecision(
-    caseId: string,
-    decisionSummary: string,
-    awardAmount?: number | null,
-  ): Promise<DecisionDto> {
+  async issueDecision(caseId: string, body: IssueDecisionRequest): Promise<DecisionDto> {
     const response = await http.post<DecisionDto>(
       endpoints.arbitration.issueDecision(caseId),
-      { decisionSummary, awardAmount },
+      body,
     );
     return response.data;
   },

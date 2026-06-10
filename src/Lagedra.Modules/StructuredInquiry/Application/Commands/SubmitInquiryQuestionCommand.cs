@@ -13,7 +13,8 @@ public sealed record SubmitInquiryQuestionCommand(
     Guid CallerUserId,
     InquiryCategory Category,
     Guid? PredefinedQuestionId,
-    string? CustomQuestionText = null) : IRequest<Result<InquiryQuestionDto>>;
+    string? CustomQuestionText = null,
+    string? OpenQuestionText = null) : IRequest<Result<InquiryQuestionDto>>;
 
 public sealed class SubmitInquiryQuestionCommandHandler(
     InquiryDbContext dbContext,
@@ -26,11 +27,13 @@ public sealed class SubmitInquiryQuestionCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        if (request.PredefinedQuestionId is null && string.IsNullOrWhiteSpace(request.CustomQuestionText))
+        if (request.PredefinedQuestionId is null
+            && string.IsNullOrWhiteSpace(request.CustomQuestionText)
+            && string.IsNullOrWhiteSpace(request.OpenQuestionText))
         {
             return Result<InquiryQuestionDto>.Failure(
                 new Error("Inquiry.InvalidQuestion",
-                    "Either a predefined question ID or custom question text must be provided."));
+                    "Either a predefined question ID, custom question text, or open question text must be provided."));
         }
 
         var participants = await dealStatusProvider
@@ -62,12 +65,17 @@ public sealed class SubmitInquiryQuestionCommandHandler(
                 new Error("Inquiry.NotFound", "No open inquiry session found for this deal."));
         }
 
-        var question = session.AddQuestion(request.Category, request.PredefinedQuestionId, request.CustomQuestionText);
+        var question = session.AddQuestion(
+            request.Category,
+            request.PredefinedQuestionId,
+            request.CustomQuestionText,
+            request.OpenQuestionText);
         dbContext.Entry(question).State = EntityState.Added;
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return Result<InquiryQuestionDto>.Success(
             new InquiryQuestionDto(question.Id, question.PredefinedQuestionId,
-                question.Category, question.SubmittedAt, null, question.CustomText));
+                question.Category, question.SubmittedAt, null,
+                question.CustomText, question.OpenQuestionText));
     }
 }

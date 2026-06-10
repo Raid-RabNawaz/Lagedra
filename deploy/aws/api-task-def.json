@@ -40,7 +40,8 @@
         { "name": "Brevo__Username", "value": "a2d8fc001@smtp-brevo.com" },
         { "name": "Brevo__Password", "value": "cV3rIy0XEROCn8MP" },
         { "name": "Brevo__FromName", "value": "Lagedra" },
-        { "name": "ExternalAuth__Google__ClientId", "value": "262822188598-915tp2sk0cgsv9sj0c6nifnp661998ba.apps.googleusercontent.com" }
+        { "name": "ExternalAuth__Google__ClientId", "value": "262822188598-915tp2sk0cgsv9sj0c6nifnp661998ba.apps.googleusercontent.com" },
+        { "name": "ListingImport__ScrapingAnt__ApiKey", "value": "29f37cdbfe3e47ebae555db06b628241" }
       ],
       "secrets": [
         { "name": "Jwt__Secret", "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/jwt-secret" },

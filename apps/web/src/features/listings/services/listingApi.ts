@@ -9,11 +9,15 @@ import type {
   CreateConsiderationDefinitionRequest,
   CreateListingRequest,
   CreateSafetyDeviceDefinitionRequest,
+  ImportedListingDraftDto,
+  ImportListingFromUrlRequest,
+  ListingAvailabilityDto,
   ListingDetailsDto,
   ListingPhotoDto,
   ListingPriceHistoryDto,
   ListingSummaryDto,
   LockPreciseAddressRequest,
+  QuoteDto,
   SavedListingCollectionDto,
   SearchListingsParams,
   SearchListingsResultDto,
@@ -82,6 +86,21 @@ export const listingApi = {
 
   async create(payload: CreateListingRequest): Promise<ListingDetailsDto> {
     const response = await http.post<ListingDetailsDto>(endpoints.listings.search, payload);
+    return response.data;
+  },
+
+  // Opt-in pre-fill: ask the server to fetch and parse a public listing URL the
+  // host owns. Purely additive; returns suggestions only (nothing is persisted).
+  async importFromUrl(url: string, hostAttestation: boolean): Promise<ImportedListingDraftDto> {
+    const payload: ImportListingFromUrlRequest = { url, hostAttestation };
+    const response = await http.post<ImportedListingDraftDto>(
+      endpoints.listings.importFromUrl,
+      payload,
+      // Server-side rendering via the scraping provider plus optional local-AI
+      // enrichment can take much longer than a normal API call, so override the
+      // default 10s client timeout generously.
+      { timeout: 150000 },
+    );
     return response.data;
   },
 
@@ -160,9 +179,43 @@ export const listingApi = {
 
   // ── Availability calendar ──────────────────────────────────
 
+  /**
+   * Calendar (legacy) availability — returns the raw list of blocks for the
+   * host calendar UI. The endpoint now also serves a range-aware shape via
+   * {@link getAvailabilityRange}.
+   */
   async getAvailability(listingId: string): Promise<AvailabilityBlockDto[]> {
-    const response = await http.get<AvailabilityBlockDto[]>(
+    const response = await http.get<ListingAvailabilityDto>(
       endpoints.listings.availability(listingId),
+    );
+    return response.data.blocks;
+  },
+
+  /**
+   * Phase 16 range-aware availability check. The booking pre-flight uses
+   * this before showing the price quote / Apply CTA.
+   */
+  async getAvailabilityRange(
+    listingId: string,
+    from: string,
+    to: string,
+  ): Promise<ListingAvailabilityDto> {
+    const response = await http.get<ListingAvailabilityDto>(
+      endpoints.listings.availability(listingId),
+      { params: { from, to } },
+    );
+    return response.data;
+  },
+
+  /** Phase 16 itemised quote: rent + deposit + insurance + protocol fee. */
+  async getQuote(
+    listingId: string,
+    checkIn: string,
+    checkOut: string,
+  ): Promise<QuoteDto> {
+    const response = await http.post<QuoteDto>(
+      endpoints.listings.quote(listingId),
+      { checkIn, checkOut },
     );
     return response.data;
   },

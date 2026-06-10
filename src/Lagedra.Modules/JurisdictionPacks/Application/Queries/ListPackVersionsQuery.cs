@@ -30,9 +30,15 @@ public sealed class ListPackVersionsQueryHandler(JurisdictionDbContext dbContext
         var versions = pack.Versions
             .OrderByDescending(v => v.VersionNumber)
             .Select(v => new PackVersionSummaryDto(
-                v.Id, v.VersionNumber, v.Status,
-                v.EffectiveDate, v.ApprovedAt,
-                v.ApprovedBy, v.SecondApproverId))
+                pack.Id,
+                pack.JurisdictionCode.Code,
+                v.Id,
+                v.VersionNumber,
+                v.Status,
+                v.EffectiveDate,
+                v.ApprovedAt,
+                v.ApprovedBy,
+                v.SecondApproverId))
             .ToList();
 
         return Result<IReadOnlyList<PackVersionSummaryDto>>.Success(versions);

@@ -20,4 +20,6 @@ public sealed record UpdateListingRequest(
     IReadOnlyList<Guid>? SafetyDeviceIds = null,
     IReadOnlyList<Guid>? ConsiderationIds = null,
     bool? InstantBookingEnabled = null,
-    Uri? VirtualTourUrl = null);
+    Uri? VirtualTourUrl = null,
+    long? DefaultDepositCents = null,
+    bool ClearDefaultDeposit = false);

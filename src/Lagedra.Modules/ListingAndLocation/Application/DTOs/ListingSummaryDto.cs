@@ -17,4 +17,5 @@ public sealed record ListingSummaryDto(
     double? Longitude,
     Uri? CoverPhotoUrl,
     int? QualityScore,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    long? DefaultDepositCents = null);

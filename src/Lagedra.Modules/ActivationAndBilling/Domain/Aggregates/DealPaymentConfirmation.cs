@@ -15,6 +15,13 @@ public sealed class DealPaymentConfirmation : AggregateRoot<Guid>
     public long DepositAmountCents { get; private set; }
     public long InsuranceFeeCents { get; private set; }
     public long MonthlyProtocolFeeCents { get; private set; }
+
+    /// <summary>
+    /// Platform service fee paid by the tenant at checkout (snapshot of the
+    /// rate in effect when the deal was sealed). Part of
+    /// <see cref="TotalTenantPaymentCents"/>.
+    /// </summary>
+    public long ServiceFeeCents { get; private set; }
     public bool HostPaidPlatform { get; private set; }
     public DateTime? HostPaidPlatformAt { get; private set; }
     public bool HostConfirmed { get; private set; }
@@ -59,6 +66,7 @@ public sealed class DealPaymentConfirmation : AggregateRoot<Guid>
             DepositAmountCents = financials.DepositAmountCents,
             InsuranceFeeCents = financials.InsuranceFeeCents,
             MonthlyProtocolFeeCents = financials.MonthlyProtocolFeeCents,
+            ServiceFeeCents = financials.ServiceFeeCents,
             TotalTenantPaymentCents = financials.TotalTenantPaymentCents,
             TotalHostPlatformPaymentCents = financials.TotalHostPlatformPaymentCents,
             Status = PaymentConfirmationStatus.Pending,

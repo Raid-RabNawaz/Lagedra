@@ -31,6 +31,13 @@ public sealed class PlatformSettingsDbContext(DbContextOptions<PlatformSettingsD
             Seed(PlatformSettingKeys.ArbitrationFeeBindingArbitration, "9900",
                 "Binding arbitration filing fee in cents"),
 
+            Seed(PlatformSettingKeys.TenantServiceFeeBps, "0",
+                "Tenant platform service fee in basis points of first month's rent (100 bps = 1%, 0 disables it)"),
+            Seed(PlatformSettingKeys.TenantServiceFeeFlatCents, "0",
+                "Flat tenant platform service fee in cents (used when service_fee.tenant_use_flat is true)"),
+            Seed(PlatformSettingKeys.TenantServiceFeeUseFlat, "false",
+                "When true, charge a flat tenant service fee (service_fee.tenant_flat_cents); when false, charge a percentage (service_fee.tenant_bps)"),
+
             Seed(PlatformSettingKeys.PaymentGracePeriodDays, "3",
                 "Days after booking confirmation before payment is considered overdue"),
             Seed(PlatformSettingKeys.PaymentReminderAfterDays, "4",

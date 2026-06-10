@@ -37,6 +37,18 @@ public sealed class ArbitrationCaseConfiguration : IEntityTypeConfiguration<Arbi
         builder.Property(c => c.FiledAt).IsRequired();
         builder.Property(c => c.DecisionSummary).HasMaxLength(4000);
         builder.Property(c => c.AwardAmount).HasPrecision(18, 2);
+        builder.Property(c => c.IsStructuredVerdict).IsRequired();
+        builder.Property(c => c.DecisionOutcome)
+            .HasConversion<string>()
+            .HasMaxLength(30);
+        builder.Property(c => c.DecisionSeverity)
+            .HasConversion<string>()
+            .HasMaxLength(30);
+
+        builder.HasMany(c => c.DecisionPenalties)
+            .WithOne()
+            .HasForeignKey(p => p.CaseId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasMany(c => c.EvidenceSlots)
             .WithOne()
@@ -50,6 +62,7 @@ public sealed class ArbitrationCaseConfiguration : IEntityTypeConfiguration<Arbi
 
         builder.Navigation(c => c.EvidenceSlots).UsePropertyAccessMode(PropertyAccessMode.Field);
         builder.Navigation(c => c.ArbitratorAssignments).UsePropertyAccessMode(PropertyAccessMode.Field);
+        builder.Navigation(c => c.DecisionPenalties).UsePropertyAccessMode(PropertyAccessMode.Field);
 
         builder.Ignore(c => c.DomainEvents);
     }

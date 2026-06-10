@@ -71,13 +71,32 @@ function DialogPortal({ children }: { children: React.ReactNode }) {
   if (!open) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain">
       <div
         className="fixed inset-0 bg-black/50 animate-fade-in"
         onClick={() => onOpenChange(false)}
         aria-hidden
       />
-      <div className="relative z-50 w-full max-w-lg">{children}</div>
+      {/*
+       * `min-h-full` + flex centering is the standard headlessui pattern
+       * for scrollable dialogs: the dialog stays vertically centered
+       * when it fits, and falls back to a scrollable column (top-aligned
+       * implicitly via overflow) when the content is taller than the
+       * viewport. `p-4` gives breathing room from the screen edges.
+       *
+       * The onClick guard reroutes "clicked the gutter" events back into
+       * the close action — the previous implementation got that for free
+       * because the backdrop was a sibling, but here the wrapper sits on
+       * top of the backdrop so we need to forward bare-wrapper clicks.
+       */}
+      <div
+        className="relative z-50 flex min-h-full items-center justify-center p-4"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) onOpenChange(false);
+        }}
+      >
+        <div className="w-full max-w-lg">{children}</div>
+      </div>
     </div>,
     document.body,
   );

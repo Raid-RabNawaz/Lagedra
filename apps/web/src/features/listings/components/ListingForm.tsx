@@ -135,6 +135,25 @@ export function ListingForm({ defaultValues, onSubmit, submitLabel, definitions 
               {...form.register("maxDepositDollars", { valueAsNumber: true })}
             />
           </Field>
+          <div className="sm:col-span-2">
+            <Field
+              label="Default deposit for instant book (USD, optional)"
+              error={form.formState.errors.defaultDepositDollars?.message}
+            >
+              <Input
+                type="number"
+                step="0.01"
+                min={0}
+                placeholder="Leave blank to use the maximum deposit"
+                {...form.register("defaultDepositDollars", {
+                  setValueAs: (v) => (v === "" || v === undefined ? undefined : Number(v)),
+                })}
+              />
+              <p className="text-xs text-muted-foreground">
+                Used when a guest books instantly. Cannot exceed the maximum deposit.
+              </p>
+            </Field>
+          </div>
           <label className="flex items-center gap-2 text-sm sm:col-span-2 cursor-pointer">
             <input type="checkbox" {...form.register("insuranceRequired")} className="rounded border-input" />
             Tenant must carry rental insurance

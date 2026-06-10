@@ -142,6 +142,10 @@ namespace Lagedra.Auth.Infrastructure.Persistence.Migrations
                     b.Property<string>("State")
                         .HasColumnType("text");
 
+                    b.Property<string>("StripeCustomerId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<bool>("TwoFactorEnabled")
                         .HasColumnType("boolean");
 

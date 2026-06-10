@@ -14,15 +14,18 @@ export const endpoints = {
     profilePhoto: "/v1/auth/me/profile-photo",
     users: "/v1/auth/users",
     userRole: (userId: string) => `/v1/auth/users/${userId}/role`,
+    publicProfile: (userId: string) => `/v1/auth/users/${userId}/public-profile`,
   },
   listings: {
     search: "/v1/listings",
+    importFromUrl: "/v1/listings/import-from-url",
     mine: "/v1/listings/mine",
     detail: (id: string) => `/v1/listings/${id}`,
     similar: (id: string) => `/v1/listings/${id}/similar`,
     shareUrl: (id: string) => `/v1/listings/${id}/share-url`,
     priceHistory: (id: string) => `/v1/listings/${id}/price-history`,
     availability: (id: string) => `/v1/listings/${id}/availability`,
+    quote: (id: string) => `/v1/listings/${id}/quote`,
     publish: (id: string) => `/v1/listings/${id}/publish`,
     submitForReview: (id: string) => `/v1/listings/${id}/submit-for-review`,
     close: (id: string) => `/v1/listings/${id}/close`,
@@ -55,6 +58,7 @@ export const endpoints = {
   },
   applications: {
     submit: "/v1/applications",
+    setupIntent: "/v1/applications/setup-intent",
     mine: "/v1/applications/mine",
     detail: (id: string) => `/v1/applications/${id}`,
     approve: (id: string) => `/v1/applications/${id}/approve`,
@@ -120,10 +124,19 @@ export const endpoints = {
     thread: (dealId: string) => `/v1/inquiries/${dealId}`,
     requestUnlock: (dealId: string) => `/v1/inquiries/${dealId}/unlock-request`,
     approveUnlock: (dealId: string) => `/v1/inquiries/${dealId}/approve-unlock`,
+    lock: (dealId: string) => `/v1/inquiries/${dealId}/lock`,
     submitQuestion: (dealId: string) => `/v1/inquiries/${dealId}/questions`,
     submitAnswer: (dealId: string) => `/v1/inquiries/${dealId}/answers`,
     close: (dealId: string) => `/v1/inquiries/${dealId}/close`,
     predefinedQuestions: "/v1/inquiries/predefined-questions",
+    // Phase 17 — pre-booking + session-id-based routes.
+    startListingInquiry: (listingId: string) => `/v1/listings/${listingId}/inquiry`,
+    myListingInquiry: (listingId: string) => `/v1/listings/${listingId}/inquiry/mine`,
+    sessionThread: (sessionId: string) => `/v1/inquiry-sessions/${sessionId}`,
+    sessionQuestions: (sessionId: string) => `/v1/inquiry-sessions/${sessionId}/questions`,
+    sessionAnswers: (sessionId: string) => `/v1/inquiry-sessions/${sessionId}/answers`,
+    hostInbox: "/v1/inquiry-sessions/host",
+    myInbox: "/v1/inquiry-sessions/mine",
   },
   identity: {
     startKyc: "/v1/identity/kyc/start",
@@ -150,6 +163,7 @@ export const endpoints = {
   privacy: {
     recordConsent: "/v1/privacy/consent",
     userConsents: (userId: string) => `/v1/privacy/consents/${userId}`,
+    myConsentStatus: "/v1/privacy/consents/me/status",
   },
   complianceMonitoring: {
     status: (dealId: string) => `/v1/deals/${dealId}/compliance`,
@@ -185,6 +199,7 @@ export const endpoints = {
     markEvidenceComplete: (caseId: string) =>
       `/v1/arbitration/cases/${caseId}/evidence-complete`,
     assignArbitrator: (caseId: string) => `/v1/arbitration/cases/${caseId}/assign`,
+    beginReview: (caseId: string) => `/v1/arbitration/cases/${caseId}/begin-review`,
     issueDecision: (caseId: string) => `/v1/arbitration/cases/${caseId}/decision`,
     closeCase: (caseId: string) => `/v1/arbitration/cases/${caseId}/close`,
     appeal: (caseId: string) => `/v1/arbitration/cases/${caseId}/appeal`,
@@ -203,6 +218,12 @@ export const endpoints = {
   },
   adminArbitration: {
     backlog: "/v1/admin/arbitration/backlog",
+    caseload: "/v1/admin/arbitration/caseload",
+    assignAuto: (caseId: string) => `/v1/admin/arbitration/cases/${caseId}/assign-auto`,
+  },
+  adminJurisdictionPacks: {
+    list: "/v1/admin/jurisdiction-packs",
+    pendingApprovals: "/v1/admin/jurisdiction-packs/pending-approvals",
   },
   adminEvidence: {
     scanQueue: "/v1/admin/evidence/scan-queue",
@@ -218,6 +239,10 @@ export const endpoints = {
   },
   adminAudit: {
     search: "/v1/admin/audit",
+  },
+  adminSettings: {
+    list: "/v1/admin/settings",
+    update: (key: string) => `/v1/admin/settings/${encodeURIComponent(key)}`,
   },
   adminAnalytics: {
     summary: "/v1/admin/analytics/summary",

@@ -1,22 +1,20 @@
 import { Check, Circle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { DealPhase } from "@/api/types";
+import { dealPhaseLabel } from "@/features/deals/utils/dealVocabulary";
 
 const steps: { phase: DealPhase; label: string }[] = [
-  { phase: "Inquiry", label: "Inquiry" },
-  { phase: "TruthSurface", label: "Truth Surface" },
-  { phase: "AwaitingPayment", label: "Payment" },
-  { phase: "Active", label: "Active" },
-  { phase: "Closed", label: "Completed" },
+  { phase: "TruthSurface", label: dealPhaseLabel("TruthSurface") },
+  { phase: "Checkout", label: dealPhaseLabel("Checkout") },
+  { phase: "Active", label: dealPhaseLabel("Active") },
+  { phase: "Closed", label: dealPhaseLabel("Closed") },
 ];
 
 const phaseOrder: Record<DealPhase, number> = {
-  Inquiry: 0,
-  TruthSurface: 1,
-  AwaitingPayment: 2,
-  Checkout: 2,
-  Active: 3,
-  Closed: 4,
+  TruthSurface: 0,
+  Checkout: 1,
+  Active: 2,
+  Closed: 3,
   Cancelled: -1,
 };
 

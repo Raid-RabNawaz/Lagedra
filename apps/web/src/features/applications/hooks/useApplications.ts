@@ -42,6 +42,19 @@ export function useSubmitApplication() {
   });
 }
 
+/**
+ * Phase 16.9 — kicks off the booking SetupIntent so the apply dialog
+ * can mount Stripe Elements in card-on-file mode. The mutation is
+ * idempotent server-side (keyed on tenant + listing), so it's safe to
+ * fire when the dialog opens or when the user clicks the "save card"
+ * step.
+ */
+export function useCreateBookingSetupIntent() {
+  return useMutation({
+    mutationFn: (listingId: string) => applicationApi.createSetupIntent(listingId),
+  });
+}
+
 export function useApproveApplication() {
   const queryClient = useQueryClient();
 
@@ -53,6 +66,13 @@ export function useApproveApplication() {
       void queryClient.invalidateQueries({
         queryKey: ["applications", "listing", data.listingId],
       });
+      // Phase 16.11: the host inbox query (`applications/mine`) and
+      // the deals list both surface this application — refresh them
+      // so the inline approve action reflects immediately.
+      void queryClient.invalidateQueries({
+        queryKey: ["applications", "mine"],
+      });
+      void queryClient.invalidateQueries({ queryKey: ["deals"] });
     },
   });
 }
@@ -67,6 +87,10 @@ export function useRejectApplication() {
       void queryClient.invalidateQueries({
         queryKey: ["applications", "listing", data.listingId],
       });
+      void queryClient.invalidateQueries({
+        queryKey: ["applications", "mine"],
+      });
+      void queryClient.invalidateQueries({ queryKey: ["deals"] });
     },
   });
 }

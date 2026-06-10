@@ -20,11 +20,11 @@ public sealed class DealApplicationStatusProvider(BillingDbContext dbContext) : 
         var app = await dbContext.DealApplications
             .AsNoTracking()
             .Where(a => a.DealId == dealId)
-            .Select(a => new { a.LandlordUserId, a.TenantUserId })
+            .Select(a => new { a.LandlordUserId, a.TenantUserId, a.ListingId })
             .FirstOrDefaultAsync(ct)
             .ConfigureAwait(false);
 
-        return app is null ? null : new DealParticipantsDto(app.LandlordUserId, app.TenantUserId);
+        return app is null ? null : new DealParticipantsDto(app.LandlordUserId, app.TenantUserId, app.ListingId);
     }
 
     public async Task<DateOnly?> GetRequestedCheckOutAsync(Guid dealId, CancellationToken ct = default)

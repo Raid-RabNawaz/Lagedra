@@ -36,6 +36,7 @@ public static class ListingEndpoints
         group.MapGet("/{listingId:guid}/share-url", GetShareUrl).AllowAnonymous();
         group.MapGet("/{listingId:guid}/price-history", GetPriceHistory).AllowAnonymous();
         group.MapGet("/{listingId:guid}/availability", GetAvailability).AllowAnonymous();
+        group.MapPost("/{listingId:guid}/quote", GetListingQuote).AllowAnonymous();
         group.MapPost("/{listingId:guid}/block-dates", BlockDates).RequireAuthorization("RequireMember");
         group.MapDelete("/{listingId:guid}/block-dates/{blockId:guid}", UnblockDates).RequireAuthorization("RequireMember");
 
@@ -112,7 +113,9 @@ public static class ListingEndpoints
                 request.SafetyDeviceIds,
                 request.ConsiderationIds,
                 request.InstantBookingEnabled,
-                request.VirtualTourUrl),
+                request.VirtualTourUrl,
+                ApproxAddress: null,
+                DefaultDepositCents: request.DefaultDepositCents),
             cancellationToken).ConfigureAwait(true);
 
         return result.IsSuccess
@@ -149,7 +152,10 @@ public static class ListingEndpoints
                 request.SafetyDeviceIds,
                 request.ConsiderationIds,
                 request.InstantBookingEnabled,
-                request.VirtualTourUrl),
+                request.VirtualTourUrl,
+                ApproxAddress: null,
+                DefaultDepositCents: request.DefaultDepositCents,
+                ClearDefaultDeposit: request.ClearDefaultDeposit),
             cancellationToken).ConfigureAwait(true);
 
         return result.IsSuccess
@@ -314,18 +320,39 @@ public static class ListingEndpoints
 
     private static async Task<IResult> GetAvailability(
         [FromRoute] Guid listingId,
+        [FromQuery] DateOnly? from,
+        [FromQuery] DateOnly? to,
         HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
         var (requesterUserId, isPlatformAdmin) = GetOptionalRequesterContext(httpContext);
         var result = await mediator.Send(
-            new GetListingAvailabilityQuery(listingId, requesterUserId, isPlatformAdmin),
+            new GetListingAvailabilityQuery(listingId, requesterUserId, isPlatformAdmin, from, to),
             cancellationToken).ConfigureAwait(true);
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
-            : Results.NotFound(new { error = result.Error.Code, detail = result.Error.Description });
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> GetListingQuote(
+        [FromRoute] Guid listingId,
+        [FromBody] GetListingQuoteRequest request,
+        HttpContext httpContext,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var (requesterUserId, isPlatformAdmin) = GetOptionalRequesterContext(httpContext);
+        var result = await mediator.Send(
+            new GetListingQuoteQuery(
+                listingId, request.CheckIn, request.CheckOut,
+                requesterUserId, isPlatformAdmin),
+            cancellationToken).ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
     }
 
     private static async Task<IResult> BlockDates(

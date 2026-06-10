@@ -59,5 +59,6 @@ public sealed class ApproveInquiryUnlockCommandHandler(
     }
 
     private static InquiryDto MapToDto(Domain.Aggregates.InquirySession s) =>
-        new(s.Id, s.DealId, s.Status, s.UnlockedByLandlordAt, s.ClosedAt, s.CreatedAt, []);
+        new(s.Id, s.DealId, s.ListingId, s.TenantUserId, s.Status,
+            s.UnlockedByLandlordAt, s.ClosedAt, s.CreatedAt, []);
 }

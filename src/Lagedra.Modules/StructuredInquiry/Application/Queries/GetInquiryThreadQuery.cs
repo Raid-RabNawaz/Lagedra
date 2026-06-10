@@ -63,7 +63,8 @@ public sealed class GetInquiryThreadQueryHandler(
     }
 
     private static InquiryDto MapToDto(InquirySession s) =>
-        new(s.Id, s.DealId, s.Status, s.UnlockedByLandlordAt, s.ClosedAt, s.CreatedAt,
+        new(s.Id, s.DealId, s.ListingId, s.TenantUserId, s.Status,
+            s.UnlockedByLandlordAt, s.ClosedAt, s.CreatedAt,
             s.Questions.Select(q => new InquiryQuestionDto(
                 q.Id,
                 q.PredefinedQuestionId,
@@ -73,6 +74,7 @@ public sealed class GetInquiryThreadQueryHandler(
                     ? new InquiryAnswerDto(q.Answer.Id, q.Answer.ResponseType,
                         q.Answer.AnswerValue, q.Answer.AnsweredAt)
                     : null,
-                q.CustomText))
+                q.CustomText,
+                q.OpenQuestionText))
             .ToList());
 }

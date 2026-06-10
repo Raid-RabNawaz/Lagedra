@@ -23,14 +23,23 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { DealTimeline } from "@/features/deals/components/DealTimeline";
 import { DealPhaseBadge } from "@/features/deals/components/DealPhaseBadge";
 import { useMyDeals } from "@/features/deals/hooks/useDeals";
+import { useSnapshotByDealId } from "@/features/truth-surface/hooks/useTruthSurface";
 import { useAuthStore } from "@/app/auth/authStore";
 import { formatDate, formatMoney } from "@/utils/format";
-import type { DealSummaryDto, DealPhase } from "@/api/types";
+import type { DealSummaryDto, DealPhase, TruthSurfaceDto } from "@/api/types";
 
 type PerspectiveProps = {
   deal: DealSummaryDto;
   isLandlord: boolean;
   isTenant: boolean;
+  /**
+   * Phase 16.4 — Truth Surface for this deal, if one already exists.
+   * Under V2 the snapshot is auto-created at host-approval time, so any
+   * CTA that says "create" must defer to "review" once a snapshot
+   * exists. `undefined` means "still loading"; `null` means "checked,
+   * none yet".
+   */
+  truthSurface?: TruthSurfaceDto | null;
 };
 
 function nextStepMessage(
@@ -39,20 +48,8 @@ function nextStepMessage(
   isTenant: boolean,
 ): string {
   switch (phase) {
-    case "Inquiry":
-      if (isLandlord) {
-        return "A tenant is asking questions about the listing. Respond to their inquiry.";
-      }
-      if (isTenant) {
-        return "Ask the landlord any questions you have before proceeding.";
-      }
-      return "The tenant and landlord are still discussing the listing.";
     case "TruthSurface":
       return "Both parties need to confirm the truth surface to proceed.";
-    case "AwaitingPayment":
-      if (isLandlord) return "Waiting for the tenant to complete payment.";
-      if (isTenant) return "Complete your payment to activate this deal.";
-      return "Waiting for the tenant to complete payment.";
     case "Checkout":
       if (isLandlord) return "The tenant is completing checkout.";
       if (isTenant) return "Finish your checkout to proceed.";
@@ -68,7 +65,12 @@ function nextStepMessage(
   }
 }
 
-function StatusAndNextSteps({ deal, isLandlord, isTenant }: PerspectiveProps) {
+function StatusAndNextSteps({
+  deal,
+  isLandlord,
+  isTenant,
+  truthSurface,
+}: PerspectiveProps) {
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -79,16 +81,44 @@ function StatusAndNextSteps({ deal, isLandlord, isTenant }: PerspectiveProps) {
         <p className="text-sm text-muted-foreground">
           {nextStepMessage(deal.dealPhase, isLandlord, isTenant)}
         </p>
-        <PrimaryAction deal={deal} isLandlord={isLandlord} isTenant={isTenant} />
+        <PrimaryAction
+          deal={deal}
+          isLandlord={isLandlord}
+          isTenant={isTenant}
+          truthSurface={truthSurface}
+        />
       </CardContent>
     </Card>
   );
 }
 
-function PrimaryAction({ deal, isLandlord, isTenant }: PerspectiveProps) {
+function PrimaryAction({ deal, isLandlord, isTenant, truthSurface }: PerspectiveProps) {
+  // Phase 16.4 made the Truth Surface auto-create on host approval, so
+  // *any* legacy CTA that points at /create-truth-surface must defer to
+  // the existing snapshot's confirmation page once one exists. Without
+  // this guard, the host can land on the legacy create page on a deal
+  // that already has a snapshot and trigger a duplicate-create error.
+  if (truthSurface && deal.dealPhase === "TruthSurface") {
+    return (
+      <Link to={`/app/truth-surface/${truthSurface.snapshotId}`}>
+        <Button className="w-full gap-2">
+          <FileCheck className="h-4 w-4" />
+          Review & Confirm Truth Surface
+        </Button>
+      </Link>
+    );
+  }
+
   switch (deal.dealPhase) {
-    case "Inquiry":
-      if (isLandlord) {
+    case "TruthSurface":
+      if (!isLandlord && !isTenant) {
+        return null;
+      }
+      // Phase 17 — pre-V2 deals can land here without an auto-created
+      // snapshot. Send the host to the legacy create page; the create
+      // page itself now redirects to the snapshot if one was created in
+      // a parallel tab (idempotent under the V2 endpoint guard).
+      if (isLandlord && !truthSurface) {
         return (
           <Link to={`/app/deals/${deal.dealId}/create-truth-surface`}>
             <Button className="w-full gap-2">
@@ -99,21 +129,6 @@ function PrimaryAction({ deal, isLandlord, isTenant }: PerspectiveProps) {
         );
       }
       return (
-        <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
-          <Clock className="h-4 w-4 text-amber-600 shrink-0" />
-          <p className="text-sm text-amber-800">
-            {isTenant
-              ? "The landlord will create the truth surface once the inquiry is complete."
-              : "Waiting for the landlord to create the truth surface."}
-          </p>
-        </div>
-      );
-
-    case "TruthSurface":
-      if (!isLandlord && !isTenant) {
-        return null;
-      }
-      return (
         <Link to={`/app/deals/${deal.dealId}/truth-surface`}>
           <Button className="w-full gap-2">
             <FileCheck className="h-4 w-4" />
@@ -122,7 +137,6 @@ function PrimaryAction({ deal, isLandlord, isTenant }: PerspectiveProps) {
         </Link>
       );
 
-    case "AwaitingPayment":
     case "Checkout":
       if (isTenant) {
         return (
@@ -191,6 +205,11 @@ export function DealDetailPage() {
   const { dealId } = useParams<{ dealId: string }>();
   const { data: deals, isLoading, error } = useMyDeals("all");
   const user = useAuthStore((s) => s.user);
+  // Phase 16.4 — fetch the auto-created Truth Surface (if any) so the
+  // primary CTA can route the host to "Review & Confirm" instead of the
+  // legacy create page. The hook 404s gracefully when no snapshot exists,
+  // so `data` is null for pre-V2 deals and the legacy path still applies.
+  const { data: truthSurface } = useSnapshotByDealId(dealId);
 
   const deal = deals?.find((d) => d.dealId === dealId);
   // Tenant/Landlord were merged into a single "Member" role; gate per-deal
@@ -219,8 +238,8 @@ export function DealDetailPage() {
     );
   }
 
-  const showInquiry = ["Inquiry", "TruthSurface", "AwaitingPayment", "Checkout", "Active", "Closed"].includes(deal.dealPhase);
-  const showPayment = ["AwaitingPayment", "Checkout", "Active", "Closed"].includes(deal.dealPhase);
+  const showInquiry = ["TruthSurface", "Checkout", "Active", "Closed"].includes(deal.dealPhase);
+  const showPayment = ["Checkout", "Active", "Closed"].includes(deal.dealPhase);
   const showBilling = ["Active", "Closed"].includes(deal.dealPhase);
   const showCompliance = ["Active", "Closed"].includes(deal.dealPhase);
 
@@ -282,7 +301,12 @@ export function DealDetailPage() {
         </div>
       </div>
 
-      <StatusAndNextSteps deal={deal} isLandlord={isLandlord} isTenant={isTenant} />
+      <StatusAndNextSteps
+        deal={deal}
+        isLandlord={isLandlord}
+        isTenant={isTenant}
+        truthSurface={truthSurface ?? null}
+      />
 
       {/* Section links */}
       <div className="grid gap-3">
@@ -292,13 +316,6 @@ export function DealDetailPage() {
             icon={<MessageSquare className="h-5 w-5" />}
             title="Inquiry"
             description="View questions and answers about this listing"
-            badge={
-              deal.dealPhase === "Inquiry" ? (
-                <Badge variant="accent" className="text-[10px] px-1.5 py-0">
-                  Current
-                </Badge>
-              ) : undefined
-            }
           />
         )}
 
@@ -329,7 +346,7 @@ export function DealDetailPage() {
                 : "Complete your payment"
             }
             badge={
-              deal.dealPhase === "AwaitingPayment" || deal.dealPhase === "Checkout" ? (
+              deal.dealPhase === "Checkout" ? (
                 <Badge variant="accent" className="text-[10px] px-1.5 py-0">
                   Action needed
                 </Badge>

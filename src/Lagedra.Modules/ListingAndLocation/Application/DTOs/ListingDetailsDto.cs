@@ -24,6 +24,7 @@ public sealed record ListingDetailsDto(
     long MaxDepositCents,
     long? SuggestedDepositLowCents,
     long? SuggestedDepositHighCents,
+    long? DefaultDepositCents,
     HouseRulesDto? HouseRules,
     CancellationPolicyDto? CancellationPolicy,
     IReadOnlyList<ListingAmenityDto> Amenities,

@@ -11,6 +11,14 @@ public sealed class ConsentChecker(PrivacyDbContext dbContext) : IConsentChecker
 
     public async Task<bool> HasRequiredConsentsAsync(Guid userId, CancellationToken ct = default)
     {
+        var status = await GetRequiredConsentStatusAsync(userId, ct).ConfigureAwait(false);
+        return status.HasRequired;
+    }
+
+    public async Task<ConsentStatus> GetRequiredConsentStatusAsync(
+        Guid userId,
+        CancellationToken ct = default)
+    {
         var userConsent = await dbContext.UserConsents
             .AsNoTracking()
             .Include(uc => uc.ConsentRecords)
@@ -19,19 +27,22 @@ public sealed class ConsentChecker(PrivacyDbContext dbContext) : IConsentChecker
 
         if (userConsent is null)
         {
-            return false;
+            return new ConsentStatus(
+                HasRequired: false,
+                MissingConsentTypes: RequiredConsents.Select(c => c.ToString()).ToArray());
         }
 
+        var missing = new List<string>(RequiredConsents.Length);
         foreach (var required in RequiredConsents)
         {
             var record = userConsent.ConsentRecords
                 .FirstOrDefault(r => r.ConsentType == required && r.WithdrawnAt == null);
             if (record is null)
             {
-                return false;
+                missing.Add(required.ToString());
             }
         }
 
-        return true;
+        return new ConsentStatus(missing.Count == 0, missing);
     }
 }

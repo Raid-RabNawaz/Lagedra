@@ -6,6 +6,7 @@ import type {
   ExternalLoginRequest,
   ForgotPasswordRequest,
   LoginRequest,
+  PublicUserProfileDto,
   RefreshTokenRequest,
   RegisterRequest,
   RegisterResponse,
@@ -123,6 +124,13 @@ export const authApi = {
 
   async updateUserRole(userId: string, payload: UpdateRoleRequest): Promise<{ message: string }> {
     const response = await http.put<{ message: string }>(endpoints.auth.userRole(userId), payload);
+    return response.data;
+  },
+
+  async getPublicProfile(userId: string): Promise<PublicUserProfileDto> {
+    const response = await http.get<PublicUserProfileDto>(
+      endpoints.auth.publicProfile(userId),
+    );
     return response.data;
   },
 };

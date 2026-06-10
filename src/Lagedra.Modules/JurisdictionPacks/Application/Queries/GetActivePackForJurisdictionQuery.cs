@@ -35,8 +35,14 @@ public sealed class GetActivePackForJurisdictionQueryHandler(JurisdictionDbConte
                 pack.JurisdictionCode.Code,
                 pack.ActiveVersionId,
                 pack.Versions.Select(v => new PackVersionSummaryDto(
-                    v.Id, v.VersionNumber, v.Status,
-                    v.EffectiveDate, v.ApprovedAt,
-                    v.ApprovedBy, v.SecondApproverId)).ToList()));
+                    pack.Id,
+                    pack.JurisdictionCode.Code,
+                    v.Id,
+                    v.VersionNumber,
+                    v.Status,
+                    v.EffectiveDate,
+                    v.ApprovedAt,
+                    v.ApprovedBy,
+                    v.SecondApproverId)).ToList()));
     }
 }

@@ -113,6 +113,23 @@ body {
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
+/*
+ * Pin Leaflet's z-index ladder beneath app chrome.
+ *
+ * Leaflet's defaults are very high — `.leaflet-pane` sits at z-index 400,
+ * controls at 800–1000 — which means a Leaflet map renders ON TOP of our
+ * sticky <header> (z-50), notification dropdowns (z-50), and modal
+ * backdrops (z-50). Forcing the map container into its own stacking
+ * context with `isolation: isolate` clamps every internal pane/control
+ * to the container's level, so the relative ordering of tiles /
+ * markers / popups inside the map is preserved while the map as a
+ * whole sits beneath sticky chrome.
+ */
+.leaflet-container {
+  z-index: 0;
+  isolation: isolate;
+}
+
 .listing-popup .leaflet-popup-content-wrapper {
   padding: 0;
   border-radius: 16px;

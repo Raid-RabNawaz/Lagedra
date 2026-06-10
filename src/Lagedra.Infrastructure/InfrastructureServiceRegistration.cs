@@ -113,6 +113,21 @@ public static class InfrastructureServiceRegistration
             options.UseNpgsql(configuration.GetConnectionString("Default")));
         services.AddScoped<IPlatformSettingsService, PlatformSettingsService>();
 
+        // Feature flags (Phase 16: BookingFlow.V2 rollout)
+        services.AddSingleton<IFeatureFlags, FeatureFlags>();
+
+        // Phase 16.10 — HMAC-signed one-tap action tokens for emails.
+        // Falls back to the JWT secret if no dedicated secret is set so
+        // single-secret dev environments keep working out of the box.
+        services.Configure<ActionTokenSettings>(opts =>
+        {
+            var section = configuration.GetSection(ActionTokenSettings.SectionName);
+            opts.Secret = section["Secret"]
+                ?? configuration["Jwt:Secret"]
+                ?? string.Empty;
+        });
+        services.AddSingleton<IActionTokenService, ActionTokenService>();
+
         // SignalR (real-time notifications)
         services.AddSignalR();
         services.AddSingleton<INotificationPusher, SignalRNotificationPusher>();

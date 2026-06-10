@@ -8,21 +8,25 @@ services:
   api:
     build:
       target: build
+    # The image lays the repo out as /src/Directory.Build.props (+ Directory.Packages.props,
+    # Lagedra.sln) with projects under /src/src/... (Dockerfile: `COPY src/ src/`). Mounting
+    # host ./src at /src/src keeps those baked root build files visible to MSBuild so
+    # TargetFramework/central package versions resolve, while still hot-reloading live source.
     volumes:
-      - ./src:/src
+      - ./src:/src/src
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       DOTNET_USE_POLLING_FILE_WATCHER: "true"
-    entrypoint: ["dotnet", "watch", "run", "--project", "/src/Lagedra.ApiGateway/Lagedra.ApiGateway.csproj", "--urls", "http://0.0.0.0:8080"]
+    entrypoint: ["dotnet", "watch", "run", "--project", "/src/src/Lagedra.ApiGateway/Lagedra.ApiGateway.csproj", "--urls", "http://0.0.0.0:8080"]
 
   worker:
     build:
       target: build
     volumes:
-      - ./src:/src
+      - ./src:/src/src
     environment:
       ASPNETCORE_ENVIRONMENT: Development
-    entrypoint: ["dotnet", "watch", "run", "--project", "/src/Lagedra.Worker/Lagedra.Worker.csproj", "--urls", "http://0.0.0.0:8090"]
+    entrypoint: ["dotnet", "watch", "run", "--project", "/src/src/Lagedra.Worker/Lagedra.Worker.csproj", "--urls", "http://0.0.0.0:8090"]
 
   postgres:
     ports:

@@ -25,6 +25,14 @@ public sealed class Listing : AggregateRoot<Guid>
     public long MaxDepositCents { get; private set; }
     public long? SuggestedDepositLowCents { get; private set; }
     public long? SuggestedDepositHighCents { get; private set; }
+
+    /// <summary>
+    /// Optional landlord-defined deposit applied for instant-book paths
+    /// (Phase 16.2). When <c>null</c>, callers fall back to
+    /// <see cref="MaxDepositCents"/>. Must be ≤ <see cref="MaxDepositCents"/>
+    /// when set; enforced by <see cref="SetDefaultDeposit"/>.
+    /// </summary>
+    public long? DefaultDepositCents { get; private set; }
     public HouseRules? HouseRules { get; private set; }
     public CancellationPolicy? CancellationPolicy { get; private set; }
     public bool InstantBookingEnabled { get; private set; }
@@ -188,6 +196,12 @@ public sealed class Listing : AggregateRoot<Guid>
         SquareFootage = squareFootage;
         StayRange = stayRange;
         MaxDepositCents = maxDepositCents;
+
+        // Keep the invariant DefaultDepositCents <= MaxDepositCents.
+        if (DefaultDepositCents.HasValue && DefaultDepositCents.Value > maxDepositCents)
+        {
+            DefaultDepositCents = null;
+        }
     }
 
     public void SetHouseRules(HouseRules houseRules)
@@ -208,6 +222,38 @@ public sealed class Listing : AggregateRoot<Guid>
     {
         EnsureEditable();
         InstantBookingEnabled = enabled;
+    }
+
+    /// <summary>
+    /// Sets the default deposit used for instant-book quotes (Phase 16.2).
+    /// Pass <c>null</c> to clear and fall back to <see cref="MaxDepositCents"/>.
+    /// Throws when the value exceeds <see cref="MaxDepositCents"/> or is negative.
+    /// </summary>
+    public void SetDefaultDeposit(long? defaultDepositCents)
+    {
+        EnsureEditable();
+
+        if (defaultDepositCents is null)
+        {
+            DefaultDepositCents = null;
+            return;
+        }
+
+        if (defaultDepositCents.Value < 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(defaultDepositCents),
+                "Default deposit must be non-negative.");
+        }
+
+        if (defaultDepositCents.Value > MaxDepositCents)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(defaultDepositCents),
+                $"Default deposit ({defaultDepositCents}) cannot exceed max deposit ({MaxDepositCents}).");
+        }
+
+        DefaultDepositCents = defaultDepositCents;
     }
 
     public void SetAcceptsPartnerDirectReservations(bool accepts)

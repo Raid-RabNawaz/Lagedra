@@ -85,6 +85,14 @@ namespace Arbitration.Migrations
                     b.Property<DateTime?>("DecisionDueAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("DecisionOutcome")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<string>("DecisionSeverity")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
                     b.Property<string>("DecisionSummary")
                         .HasMaxLength(4000)
                         .HasColumnType("character varying(4000)");
@@ -105,6 +113,9 @@ namespace Arbitration.Migrations
                         .HasColumnType("bigint");
 
                     b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsStructuredVerdict")
                         .HasColumnType("boolean");
 
                     b.Property<string>("Status")
@@ -168,6 +179,49 @@ namespace Arbitration.Migrations
                     b.ToTable("arbitrator_assignments", "arbitration");
                 });
 
+            modelBuilder.Entity("Lagedra.Modules.Arbitration.Domain.Entities.DecisionPenalty", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<long?>("AmountCents")
+                        .HasColumnType("bigint");
+
+                    b.Property<Guid>("CaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("PartyUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("PenaltyType")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CaseId");
+
+                    b.ToTable("decision_penalties", "arbitration");
+                });
+
             modelBuilder.Entity("Lagedra.Modules.Arbitration.Domain.Entities.EvidenceSlot", b =>
                 {
                     b.Property<Guid>("Id")
@@ -221,6 +275,15 @@ namespace Arbitration.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Lagedra.Modules.Arbitration.Domain.Entities.DecisionPenalty", b =>
+                {
+                    b.HasOne("Lagedra.Modules.Arbitration.Domain.Aggregates.ArbitrationCase", null)
+                        .WithMany("DecisionPenalties")
+                        .HasForeignKey("CaseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Lagedra.Modules.Arbitration.Domain.Entities.EvidenceSlot", b =>
                 {
                     b.HasOne("Lagedra.Modules.Arbitration.Domain.Aggregates.ArbitrationCase", null)
@@ -233,6 +296,8 @@ namespace Arbitration.Migrations
             modelBuilder.Entity("Lagedra.Modules.Arbitration.Domain.Aggregates.ArbitrationCase", b =>
                 {
                     b.Navigation("ArbitratorAssignments");
+
+                    b.Navigation("DecisionPenalties");
 
                     b.Navigation("EvidenceSlots");
                 });

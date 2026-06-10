@@ -8,6 +8,7 @@ import {
   Shield,
   ShieldCheck,
   CheckCircle2,
+  MailCheck,
   MapPin,
   Share2,
   Zap,
@@ -17,11 +18,17 @@ import {
   ExternalLink,
   Maximize2,
   Images,
+  Languages,
+  Briefcase,
+  Clock,
+  TrendingUp,
+  ArrowUpRight,
 } from "lucide-react";
 import { useState, lazy, Suspense } from "react";
 import { useListingDetail, useSimilarListings } from "@/features/listings/hooks/useListings";
+import { usePublicProfile } from "@/features/auth/hooks/usePublicProfile";
 import { SaveButton } from "@/features/listings/components/SaveButton";
-import { ApplyDialog } from "@/features/applications/components/ApplyDialog";
+import { BookingPanel } from "@/features/listings/components/BookingPanel";
 import { useAuthStore } from "@/app/auth/authStore";
 import { AmenityGrid } from "@/features/listings/components/AmenityGrid";
 import { SafetyDeviceList } from "@/features/listings/components/SafetyDeviceList";
@@ -64,6 +71,15 @@ export const ListingDetailPage = () => {
   const { data: listing, isLoading, isError } = useListingDetail(id);
   const { data: similar } = useSimilarListings(id);
   const user = useAuthStore((s) => s.user);
+  // Pull richer host context (bio, location, languages, occupation,
+  // email-verified flag) from the public-profile endpoint we ship for
+  // application reviews. The detail view already exposes `hostProfile`
+  // for trust badges, but it's deliberately sparse to stay light on
+  // marketplace queries — the extra round-trip here is cheap (cached
+  // 60s by usePublicProfile) and lets us render a real "About the
+  // host" section instead of a name + verified row.
+  const hostUserId = listing?.landlordUserId;
+  const hostPublic = usePublicProfile(hostUserId);
   const [currentPhoto, setCurrentPhoto] = useState(0);
   const [copied, setCopied] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -433,7 +449,10 @@ export const ListingDetailPage = () => {
                     Manage your listing
                   </Link>
                 ) : (
-                  <ApplyDialog listing={listing} />
+                  <BookingPanel
+                    listing={listing}
+                    isProspectiveGuest={user.userId !== listing.landlordUserId}
+                  />
                 )}
               </div>
               <div className="flex gap-2">
@@ -473,61 +492,138 @@ export const ListingDetailPage = () => {
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Hosted by</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-3 mb-3">
-                  <Avatar className="h-12 w-12">
+              <CardContent className="space-y-4">
+                {/* Identity row — avatar + name + member-since + view-profile link */}
+                <div className="flex items-start gap-3">
+                  <Avatar className="h-14 w-14">
                     {listing.hostProfile.profilePhotoUrl ? (
                       <AvatarImage src={listing.hostProfile.profilePhotoUrl} alt={hostName} />
                     ) : null}
-                    <AvatarFallback>{hostInitials}</AvatarFallback>
+                    <AvatarFallback className="text-base">
+                      {hostInitials}
+                    </AvatarFallback>
                   </Avatar>
-                  <div>
-                    <p className="font-medium">{hostName}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold truncate">{hostName}</p>
                     <p className="text-xs text-muted-foreground">
-                      Member since {new Date(listing.hostProfile.memberSince).getFullYear()}
+                      Host · Member since{" "}
+                      {new Date(listing.hostProfile.memberSince).getFullYear()}
                     </p>
+                    {/* Optional one-liner: occupation pulled from the
+                        public profile, only rendered when populated so
+                        we never show an empty subtitle row. */}
+                    {hostPublic.data?.occupation ? (
+                      <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground truncate">
+                        <Briefcase className="h-3 w-3 shrink-0" />
+                        {hostPublic.data.occupation}
+                      </p>
+                    ) : null}
+                    {(hostPublic.data?.city || hostPublic.data?.country) && (
+                      <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground truncate">
+                        <MapPin className="h-3 w-3 shrink-0" />
+                        {[
+                          hostPublic.data?.city,
+                          hostPublic.data?.state,
+                          hostPublic.data?.country,
+                        ]
+                          .filter(Boolean)
+                          .join(", ")}
+                      </p>
+                    )}
                   </div>
                 </div>
 
-                <div className="space-y-2">
+                {/* Bio — collapsed to ~4 lines; viewing full text is
+                    one click away on the public profile page. */}
+                {hostPublic.data?.bio ? (
+                  <p className="text-sm text-muted-foreground leading-relaxed line-clamp-4 whitespace-pre-line">
+                    {hostPublic.data.bio}
+                  </p>
+                ) : null}
+
+                {/* Verification chips */}
+                <div className="space-y-1.5">
                   {listing.hostProfile.isGovernmentIdVerified && (
                     <div className="flex items-center gap-2 text-sm">
-                      <CheckCircle2 className="h-4 w-4 text-success" />
+                      <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
                       Identity verified
                     </div>
                   )}
                   {listing.hostProfile.isPhoneVerified && (
                     <div className="flex items-center gap-2 text-sm">
-                      <CheckCircle2 className="h-4 w-4 text-success" />
+                      <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
                       Phone verified
+                    </div>
+                  )}
+                  {hostPublic.data?.isEmailVerified && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <MailCheck className="h-4 w-4 text-success shrink-0" />
+                      Email verified
                     </div>
                   )}
                   {listing.hostVerificationBadges?.isInsuranceActive && (
                     <div className="flex items-center gap-2 text-sm">
-                      <ShieldCheck className="h-4 w-4 text-success" />
+                      <ShieldCheck className="h-4 w-4 text-success shrink-0" />
                       Insurance active
                     </div>
                   )}
+                  {hostPublic.data?.languages ? (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Languages className="h-4 w-4 text-muted-foreground shrink-0" />
+                      Speaks {hostPublic.data.languages}
+                    </div>
+                  ) : null}
                 </div>
 
+                {/* Response stats — bumped to a 2-col tile only when at
+                    least one stat is available; we render a single tile
+                    when only response rate is present. */}
                 {listing.hostProfile.responseRatePercent != null && (
-                  <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg bg-secondary p-3 text-center">
+                  <div
+                    className={cn(
+                      "grid gap-2 rounded-lg bg-secondary p-3 text-center",
+                      listing.hostProfile.responseTimeMinutes != null
+                        ? "grid-cols-2"
+                        : "grid-cols-1",
+                    )}
+                  >
                     <div>
-                      <p className="text-lg font-semibold">{listing.hostProfile.responseRatePercent}%</p>
-                      <p className="text-[10px] text-muted-foreground">Response rate</p>
+                      <p className="text-lg font-semibold flex items-center justify-center gap-1">
+                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                        {listing.hostProfile.responseRatePercent}%
+                      </p>
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
+                        Response rate
+                      </p>
                     </div>
                     {listing.hostProfile.responseTimeMinutes != null && (
                       <div>
-                        <p className="text-lg font-semibold">
+                        <p className="text-lg font-semibold flex items-center justify-center gap-1">
+                          <Clock className="h-4 w-4 text-muted-foreground" />
                           {listing.hostProfile.responseTimeMinutes < 60
                             ? `${listing.hostProfile.responseTimeMinutes}m`
                             : `${Math.round(listing.hostProfile.responseTimeMinutes / 60)}h`}
                         </p>
-                        <p className="text-[10px] text-muted-foreground">Response time</p>
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
+                          Response time
+                        </p>
                       </div>
                     )}
                   </div>
                 )}
+
+                {hostUserId ? (
+                  <Link
+                    to={`/app/users/${hostUserId}`}
+                    className={cn(
+                      buttonVariants({ variant: "outline", size: "sm" }),
+                      "w-full gap-1.5",
+                    )}
+                  >
+                    View full profile
+                    <ArrowUpRight className="h-3.5 w-3.5" />
+                  </Link>
+                ) : null}
               </CardContent>
             </Card>
           )}

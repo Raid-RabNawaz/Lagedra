@@ -21,7 +21,8 @@ public sealed record CreateListingRequest(
     IReadOnlyList<Guid>? SafetyDeviceIds = null,
     IReadOnlyList<Guid>? ConsiderationIds = null,
     bool InstantBookingEnabled = false,
-    Uri? VirtualTourUrl = null);
+    Uri? VirtualTourUrl = null,
+    long? DefaultDepositCents = null);
 
 public sealed record HouseRulesRequest(
     TimeOnly CheckInTime,

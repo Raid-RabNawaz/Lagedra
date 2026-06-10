@@ -219,6 +219,22 @@ public static class TruthSurfaceEndpoints
         if (access.Outcome == TruthSurfaceAccessOutcome.NotFound) return Results.NotFound();
         if (access.Outcome == TruthSurfaceAccessOutcome.Forbidden) return Results.Forbid();
 
+        // Phase 16.4 made TS auto-creation part of host approval, which means
+        // a deal can already have a snapshot by the time anything reaches
+        // this endpoint. The legacy behaviour (return 400 "AlreadyExists")
+        // turns a normal "the system already did this for you" race into a
+        // user-visible failure. Treat the call as idempotent: if a non-
+        // superseded snapshot exists we just hand it back with 200 OK so
+        // the caller can route the user to the confirmation page. Only when
+        // there's nothing yet do we fall through to the create command.
+        var existing = await mediator
+            .Send(new GetSnapshotByDealIdQuery(dealId), ct)
+            .ConfigureAwait(true);
+        if (existing.IsSuccess)
+        {
+            return Results.Ok(existing.Value);
+        }
+
         // CreateTruthSurfaceForDealCommandHandler additionally enforces that
         // only the landlord may create the snapshot — the auth check above
         // narrows to deal participants + admin; the handler narrows further.
@@ -229,8 +245,33 @@ public static class TruthSurfaceEndpoints
             new CreateTruthSurfaceForDealCommand(dealId, userId), ct)
             .ConfigureAwait(true);
 
-        return result.IsSuccess
-            ? Results.Created($"/v1/truth-surface/{result.Value.SnapshotId}", result.Value)
-            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+        if (result.IsSuccess)
+        {
+            return Results.Created(
+                $"/v1/truth-surface/{result.Value.SnapshotId}", result.Value);
+        }
+
+        // Defensive fallback: if a snapshot was created concurrently
+        // (e.g. AutoConfirmTruthSurfaceAsync just landed), the command
+        // returns AlreadyExists. Re-fetch and surface the same idempotent
+        // 200 OK shape rather than bubbling a 400 to the user.
+        if (result.Error.Code == "TruthSurface.AlreadyExists")
+        {
+            var raceWinner = await mediator
+                .Send(new GetSnapshotByDealIdQuery(dealId), ct)
+                .ConfigureAwait(true);
+            if (raceWinner.IsSuccess)
+            {
+                return Results.Ok(raceWinner.Value);
+            }
+        }
+
+        return result.Error.Code switch
+        {
+            "TruthSurface.Unauthorized" => Results.Forbid(),
+            "TruthSurface.DealNotApproved" =>
+                Results.NotFound(new { error = result.Error.Code, detail = result.Error.Description }),
+            _ => Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description }),
+        };
     }
 }

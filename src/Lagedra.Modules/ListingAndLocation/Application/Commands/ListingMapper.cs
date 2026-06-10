@@ -38,6 +38,7 @@ internal static class ListingMapper
             listing.MaxDepositCents,
             listing.SuggestedDepositLowCents,
             listing.SuggestedDepositHighCents,
+            listing.DefaultDepositCents,
             listing.HouseRules is { } hr
                 ? new HouseRulesDto(
                     hr.CheckInTime, hr.CheckOutTime, hr.MaxGuests,
@@ -110,6 +111,7 @@ internal static class ListingMapper
             listing.Photos.FirstOrDefault(p => p.IsCover)?.Url
                 ?? listing.Photos.OrderBy(p => p.SortOrder).FirstOrDefault()?.Url,
             qualityScore,
-            listing.CreatedAt);
+            listing.CreatedAt,
+            listing.DefaultDepositCents);
     }
 }

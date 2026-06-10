@@ -252,6 +252,107 @@ public sealed partial class StripeService(
         return balance is not null;
     }
 
+    public async Task<StripeSetupIntentResult> CreateSetupIntentAsync(
+        string customerId,
+        Dictionary<string, string>? metadata = null,
+        string? idempotencyKey = null,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(customerId);
+
+        var opts = NewRequestOptions(idempotencyKey);
+        var service = new SetupIntentService();
+
+        var options = new SetupIntentCreateOptions
+        {
+            Customer = customerId,
+            Usage = "off_session",
+            AutomaticPaymentMethods = new SetupIntentAutomaticPaymentMethodsOptions
+            {
+                Enabled = true,
+            },
+            Metadata = metadata ?? [],
+        };
+
+        var setupIntent = await service.CreateAsync(options, opts, ct).ConfigureAwait(false);
+        LogSetupIntentCreated(logger, setupIntent.Id, customerId);
+        return new StripeSetupIntentResult(setupIntent.Id, setupIntent.ClientSecret, setupIntent.Status);
+    }
+
+    public async Task<StripePaymentIntentResult> ChargeOffSessionPlatformAsync(
+        string customerId,
+        string paymentMethodId,
+        long amountCents,
+        string currency,
+        Dictionary<string, string>? metadata = null,
+        string? idempotencyKey = null,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(customerId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(paymentMethodId);
+
+        var opts = NewRequestOptions(idempotencyKey);
+        var service = new PaymentIntentService();
+
+        // Off-session charge: confirm immediately, do not show 3DS UI. If the
+        // card requires authentication Stripe returns a "requires_action"
+        // PaymentIntent and the caller can fall back to surfacing the
+        // checkout flow for that one-off case.
+        var options = new PaymentIntentCreateOptions
+        {
+            Amount = amountCents,
+            Currency = currency,
+            Customer = customerId,
+            PaymentMethod = paymentMethodId,
+            Confirm = true,
+            OffSession = true,
+            Metadata = metadata ?? [],
+        };
+
+        var pi = await service.CreateAsync(options, opts, ct).ConfigureAwait(false);
+        LogOffSessionChargeCreated(logger, pi.Id, amountCents, customerId);
+        return new StripePaymentIntentResult(pi.Id, pi.ClientSecret, pi.Status, pi.Amount, pi.Currency);
+    }
+
+    public async Task<StripePaymentIntentResult> ChargeOffSessionDestinationAsync(
+        string customerId,
+        string paymentMethodId,
+        long amountCents,
+        string currency,
+        string destinationAccountId,
+        long applicationFeeCents,
+        Dictionary<string, string>? metadata = null,
+        string? idempotencyKey = null,
+        CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(customerId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(paymentMethodId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(destinationAccountId);
+
+        var opts = NewRequestOptions(idempotencyKey);
+        var service = new PaymentIntentService();
+
+        var options = new PaymentIntentCreateOptions
+        {
+            Amount = amountCents,
+            Currency = currency,
+            Customer = customerId,
+            PaymentMethod = paymentMethodId,
+            ApplicationFeeAmount = applicationFeeCents,
+            TransferData = new PaymentIntentTransferDataOptions
+            {
+                Destination = destinationAccountId,
+            },
+            Confirm = true,
+            OffSession = true,
+            Metadata = metadata ?? [],
+        };
+
+        var pi = await service.CreateAsync(options, opts, ct).ConfigureAwait(false);
+        LogOffSessionChargeCreated(logger, pi.Id, amountCents, customerId);
+        return new StripePaymentIntentResult(pi.Id, pi.ClientSecret, pi.Status, pi.Amount, pi.Currency);
+    }
+
     [LoggerMessage(Level = LogLevel.Information, Message = "Stripe customer created for user {UserId}: {CustomerId}")]
     private static partial void LogCustomerCreated(ILogger logger, Guid userId, string customerId);
 
@@ -272,4 +373,10 @@ public sealed partial class StripeService(
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Stripe refund created: {RefundId} for PI {PaymentIntentId}, amount {AmountCents}")]
     private static partial void LogRefundCreated(ILogger logger, string refundId, string paymentIntentId, long amountCents);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Stripe SetupIntent created: {SetupIntentId} for customer {CustomerId}")]
+    private static partial void LogSetupIntentCreated(ILogger logger, string setupIntentId, string customerId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Stripe off-session charge created: {PaymentIntentId} amount {AmountCents} customer {CustomerId}")]
+    private static partial void LogOffSessionChargeCreated(ILogger logger, string paymentIntentId, long amountCents, string customerId);
 }

@@ -12,6 +12,8 @@
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="Quartz" />
     <PackageReference Include="Quartz.Extensions.Hosting" />
+    <PackageReference Include="AngleSharp" />
+    <PackageReference Include="Microsoft.Extensions.AI" />
   </ItemGroup>
 
 </Project>

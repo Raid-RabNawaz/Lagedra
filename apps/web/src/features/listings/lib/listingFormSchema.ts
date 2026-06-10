@@ -38,6 +38,14 @@ export const listingFormSchema = z
     description: z.string().min(50, "Description must be at least 50 characters"),
     monthlyRentDollars: z.number().positive("Enter monthly rent"),
     maxDepositDollars: z.number().min(0, "Deposit cannot be negative"),
+    defaultDepositDollars: z.preprocess(
+      (v) => {
+        if (v === "" || v === undefined || v === null) return undefined;
+        const n = Number(v);
+        return Number.isNaN(n) ? undefined : n;
+      },
+      z.number().min(0, "Default deposit cannot be negative").optional(),
+    ),
     insuranceRequired: z.boolean(),
     bedrooms: z.number().int().min(0),
     bathrooms: z.number().min(0.5),
@@ -69,7 +77,16 @@ export const listingFormSchema = z
   .refine((d) => d.minStayDays <= d.maxStayDays, {
     message: "Min stay cannot exceed max stay",
     path: ["maxStayDays"],
-  });
+  })
+  .refine(
+    (d) =>
+      d.defaultDepositDollars === undefined
+      || d.defaultDepositDollars <= d.maxDepositDollars,
+    {
+      message: "Default deposit cannot exceed maximum deposit",
+      path: ["defaultDepositDollars"],
+    },
+  );
 
 export type ListingFormValues = z.infer<typeof listingFormSchema>;
 
@@ -79,6 +96,7 @@ export const defaultListingFormValues: ListingFormValues = {
   description: "",
   monthlyRentDollars: 1500,
   maxDepositDollars: 1500,
+  defaultDepositDollars: undefined,
   insuranceRequired: false,
   bedrooms: 1,
   bathrooms: 1,

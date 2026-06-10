@@ -85,6 +85,27 @@ namespace Lagedra.Infrastructure.Migrations
                         },
                         new
                         {
+                            Key = "service_fee.tenant_bps",
+                            Description = "Tenant platform service fee in basis points of first month's rent (100 bps = 1%, 0 disables it)",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Value = "0"
+                        },
+                        new
+                        {
+                            Key = "service_fee.tenant_flat_cents",
+                            Description = "Flat tenant platform service fee in cents (used when service_fee.tenant_use_flat is true)",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Value = "0"
+                        },
+                        new
+                        {
+                            Key = "service_fee.tenant_use_flat",
+                            Description = "When true, charge a flat tenant service fee (service_fee.tenant_flat_cents); when false, charge a percentage (service_fee.tenant_bps)",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Value = "false"
+                        },
+                        new
+                        {
                             Key = "payment.grace_period_days",
                             Description = "Days after booking confirmation before payment is considered overdue",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),

@@ -13,6 +13,7 @@ import {
   usePredefinedQuestions,
   useRequestUnlock,
   useApproveUnlock,
+  useLockInquiry,
 } from "@/features/inquiry/hooks/useInquiry";
 import { useMyDeals } from "@/features/deals/hooks/useDeals";
 import { InquiryStatusBadge } from "@/features/inquiry/components/InquiryStatusBadge";
@@ -44,6 +45,7 @@ const responseTypeLabels: Record<ResponseType, string> = {
   YesNo: "Yes / No",
   MultipleChoice: "Multiple Choice",
   Numeric: "Numeric",
+  OpenText: "Open response",
 };
 
 export const InquiryThreadPage = () => {
@@ -64,6 +66,7 @@ export const InquiryThreadPage = () => {
   const { data: predefinedQuestions } = usePredefinedQuestions();
   const requestUnlock = useRequestUnlock();
   const approveUnlock = useApproveUnlock();
+  const lockThread = useLockInquiry();
 
   const is404 = isNotFoundError(error);
   const isForbidden = isForbiddenError(error);
@@ -73,6 +76,9 @@ export const InquiryThreadPage = () => {
   const isLocked = inquiry?.status === "Locked";
 
   const getQuestionText = (q: InquiryQuestionDto): string => {
+    if (q.openQuestionText) {
+      return q.openQuestionText;
+    }
     if (q.customText) {
       return q.customText;
     }
@@ -125,7 +131,7 @@ export const InquiryThreadPage = () => {
         </Alert>
       )}
 
-      {/* No session — tenant can request */}
+      {/* No session — tenant can start one (now Open by default) */}
       {noSession && (
         <Card>
           <CardContent className="py-12">
@@ -133,8 +139,8 @@ export const InquiryThreadPage = () => {
               title="No inquiry session yet"
               description={
                 isTenant
-                  ? "Request to unlock the inquiry service for this deal. The landlord must approve before questions can be asked."
-                  : "The tenant has not yet requested an inquiry session for this deal."
+                  ? "Start an inquiry to ask the host structured questions about this listing."
+                  : "The tenant has not yet started an inquiry session for this deal."
               }
             />
             {isTenant && dealId && (
@@ -145,9 +151,7 @@ export const InquiryThreadPage = () => {
                   className="gap-2"
                 >
                   <Unlock className="h-4 w-4" />
-                  {requestUnlock.isPending
-                    ? "Requesting..."
-                    : "Request Detail Unlock"}
+                  {requestUnlock.isPending ? "Starting..." : "Start Inquiry"}
                 </Button>
               </div>
             )}
@@ -155,7 +159,7 @@ export const InquiryThreadPage = () => {
               <Alert variant="destructive" className="mt-4 max-w-md mx-auto">
                 {getApiErrorMessage(
                   requestUnlock.error,
-                  "Failed to request unlock.",
+                  "Failed to start inquiry.",
                 )}
               </Alert>
             )}
@@ -226,24 +230,44 @@ export const InquiryThreadPage = () => {
       {inquiry && (isOpen || isClosed) && (
         <>
           {/* Session meta */}
-          <div className="flex flex-wrap gap-4 text-sm text-muted-foreground mb-6">
-            <span className="flex items-center gap-1">
-              <Clock className="h-3.5 w-3.5" />
-              Created: {formatDate(inquiry.createdAt)}
-            </span>
-            {inquiry.unlockedByLandlordAt && (
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+            <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
               <span className="flex items-center gap-1">
-                <Unlock className="h-3.5 w-3.5" />
-                Unlocked: {formatDate(inquiry.unlockedByLandlordAt)}
+                <Clock className="h-3.5 w-3.5" />
+                Created: {formatDate(inquiry.createdAt)}
               </span>
-            )}
-            {inquiry.closedAt && (
-              <span className="flex items-center gap-1">
+              {inquiry.unlockedByLandlordAt && (
+                <span className="flex items-center gap-1">
+                  <Unlock className="h-3.5 w-3.5" />
+                  Opened: {formatDate(inquiry.unlockedByLandlordAt)}
+                </span>
+              )}
+              {inquiry.closedAt && (
+                <span className="flex items-center gap-1">
+                  <Lock className="h-3.5 w-3.5" />
+                  Closed: {formatDate(inquiry.closedAt)}
+                </span>
+              )}
+            </div>
+            {isOpen && isLandlord && dealId && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="gap-2"
+                onClick={() => lockThread.mutate(dealId)}
+                disabled={lockThread.isPending}
+                title="Re-lock this thread so further questions require your approval."
+              >
                 <Lock className="h-3.5 w-3.5" />
-                Closed: {formatDate(inquiry.closedAt)}
-              </span>
+                {lockThread.isPending ? "Locking..." : "Lock thread"}
+              </Button>
             )}
           </div>
+          {lockThread.isError && (
+            <Alert variant="destructive" className="mb-6">
+              {getApiErrorMessage(lockThread.error, "Failed to lock thread.")}
+            </Alert>
+          )}
 
           {/* Question / answer thread */}
           {inquiry.questions.length === 0 && isOpen && (
@@ -298,11 +322,12 @@ export const InquiryThreadPage = () => {
                         </span>
                       </div>
                     </div>
-                  ) : isOpen && isLandlord ? (
+                  ) : isOpen && isLandlord && inquiry.dealId ? (
                     <InquiryResponseForm
                       dealId={inquiry.dealId}
                       questionId={q.questionId}
                       expectedResponseType={getExpectedResponseType(q)}
+                      isOpenQuestion={!!q.openQuestionText}
                     />
                   ) : (
                     <p className="text-sm text-muted-foreground italic">

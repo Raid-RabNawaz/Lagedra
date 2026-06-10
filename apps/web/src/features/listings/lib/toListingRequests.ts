@@ -50,6 +50,10 @@ export function toCreateListingRequest(
     considerationIds: v.considerationIds.length ? v.considerationIds : null,
     instantBookingEnabled: v.instantBookingEnabled,
     virtualTourUrl: v.virtualTourUrl?.trim() || null,
+    defaultDepositCents:
+      v.defaultDepositDollars === undefined
+        ? null
+        : Math.round(v.defaultDepositDollars * 100),
   };
 }
 
@@ -73,5 +77,10 @@ export function toUpdateListingRequest(v: ListingFormValues): UpdateListingReque
     considerationIds: v.considerationIds.length ? v.considerationIds : null,
     instantBookingEnabled: v.instantBookingEnabled,
     virtualTourUrl: v.virtualTourUrl?.trim() || null,
+    defaultDepositCents:
+      v.defaultDepositDollars === undefined
+        ? null
+        : Math.round(v.defaultDepositDollars * 100),
+    clearDefaultDeposit: v.defaultDepositDollars === undefined,
   };
 }

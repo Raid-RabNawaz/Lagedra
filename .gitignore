@@ -40,6 +40,9 @@ dist/
 !.env.example
 !deploy/env/*.env
 
+# Local API gateway overrides (Stripe, Brevo, JWT, etc.)
+src/Lagedra.ApiGateway/appsettings.Development.json
+
 ## ── IDE ───────────────────────────────────────────────────────────────────────
 .idea/
 *.iml
@@ -67,3 +70,5 @@ minio-data/
 
 ## ── Generated OpenAPI ─────────────────────────────────────────────────────────
 tools/openapi/*.json
+/src/Lagedra.ApiGateway/appsettings.Development.json.example
+/src/Lagedra.ApiGateway/appsettings.Development.json

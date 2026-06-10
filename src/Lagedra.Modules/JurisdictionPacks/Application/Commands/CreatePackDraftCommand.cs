@@ -28,8 +28,9 @@ public sealed class CreatePackDraftCommandHandler(JurisdictionDbContext dbContex
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        var normalizedCode = request.JurisdictionCode.ToUpperInvariant();
         var exists = await dbContext.JurisdictionPacks
-            .AnyAsync(p => p.JurisdictionCode.Code.Equals(request.JurisdictionCode, StringComparison.OrdinalIgnoreCase), cancellationToken)
+            .AnyAsync(p => p.JurisdictionCode.Code == normalizedCode, cancellationToken)
             .ConfigureAwait(false);
 
         if (exists)
@@ -52,7 +53,13 @@ public sealed class CreatePackDraftCommandHandler(JurisdictionDbContext dbContex
             pack.JurisdictionCode.Code,
             pack.ActiveVersionId,
             pack.Versions.Select(v => new PackVersionSummaryDto(
-                v.Id, v.VersionNumber, v.Status,
-                v.EffectiveDate, v.ApprovedAt,
-                v.ApprovedBy, v.SecondApproverId)).ToList());
+                pack.Id,
+                pack.JurisdictionCode.Code,
+                v.Id,
+                v.VersionNumber,
+                v.Status,
+                v.EffectiveDate,
+                v.ApprovedAt,
+                v.ApprovedBy,
+                v.SecondApproverId)).ToList());
 }

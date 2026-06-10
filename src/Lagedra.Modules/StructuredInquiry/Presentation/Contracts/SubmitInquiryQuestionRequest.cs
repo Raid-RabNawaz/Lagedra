@@ -5,4 +5,5 @@ namespace Lagedra.Modules.StructuredInquiry.Presentation.Contracts;
 public sealed record SubmitInquiryQuestionRequest(
     InquiryCategory Category,
     Guid? PredefinedQuestionId = null,
-    string? CustomQuestionText = null);
+    string? CustomQuestionText = null,
+    string? OpenQuestionText = null);

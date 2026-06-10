@@ -105,7 +105,8 @@ public sealed class ListingProvider(ListingsDbContext db) : IListingProvider
             safetyNames,
             considerationNames,
             listing.AcceptsPartnerDirectReservations,
-            listing.InstantBookingEnabled);
+            listing.InstantBookingEnabled,
+            listing.DefaultDepositCents);
     }
 
     public async Task<bool> IsAvailableAsync(
@@ -164,5 +165,36 @@ public sealed class ListingProvider(ListingsDbContext db) : IListingProvider
                 l.PreciseAddress != null ? l.PreciseAddress.City : null))
             .ToListAsync(ct)
             .ConfigureAwait(false);
+    }
+
+    public async Task<IReadOnlyList<Guid>> GetListingIdsForLandlordAsync(
+        Guid landlordUserId,
+        CancellationToken ct = default) =>
+        await db.Listings
+            .AsNoTracking()
+            .Where(l => l.LandlordUserId == landlordUserId)
+            .Select(l => l.Id)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+    public async Task<IReadOnlyDictionary<Guid, Guid>> GetLandlordIdsForListingsAsync(
+        IReadOnlyList<Guid> listingIds,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(listingIds);
+
+        if (listingIds.Count == 0)
+        {
+            return new Dictionary<Guid, Guid>();
+        }
+
+        var rows = await db.Listings
+            .AsNoTracking()
+            .Where(l => listingIds.Contains(l.Id))
+            .Select(l => new { l.Id, l.LandlordUserId })
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        return rows.ToDictionary(r => r.Id, r => r.LandlordUserId);
     }
 }

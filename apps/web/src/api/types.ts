@@ -13,6 +13,26 @@ export type AuthResultDto = {
   role: UserRole | number;
 };
 
+export type PublicUserProfileDto = {
+  userId: string;
+  displayName?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  bio?: string | null;
+  profilePhotoUrl?: string | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  languages?: string | null;
+  occupation?: string | null;
+  isGovernmentIdVerified: boolean;
+  isPhoneVerified: boolean;
+  isEmailVerified: boolean;
+  responseRatePercent?: number | null;
+  responseTimeMinutes?: number | null;
+  memberSince: string;
+};
+
 export type UserProfileDto = {
   userId: string;
   email: string;
@@ -173,6 +193,12 @@ export type ListingSummaryDto = {
   coverPhotoUrl?: string | null;
   qualityScore?: number | null;
   createdAt: string;
+  /**
+   * Phase 16.7 — host's default security deposit. Surfaced here so
+   * inline approve actions on the host inbox can pre-fill the deposit
+   * field without an extra round trip to the listing details endpoint.
+   */
+  defaultDepositCents?: number | null;
 };
 
 export type ListingPhotoDto = {
@@ -269,6 +295,7 @@ export type ListingDetailsDto = {
   maxDepositCents: number;
   suggestedDepositLowCents?: number | null;
   suggestedDepositHighCents?: number | null;
+  defaultDepositCents?: number | null;
   houseRules?: HouseRulesDto | null;
   cancellationPolicy?: CancellationPolicyDto | null;
   amenities: ListingAmenityDto[];
@@ -396,6 +423,50 @@ export type CreateListingRequest = {
   considerationIds?: string[] | null;
   instantBookingEnabled: boolean;
   virtualTourUrl?: string | null;
+  defaultDepositCents?: number | null;
+};
+
+// ── Import from URL (opt-in create-listing pre-fill) ───────────
+// Additive only. These mirror the backend ImportedListingDraftDto and are pure
+// suggestions: nothing is persisted until the host saves the listing.
+
+export type ImportListingFromUrlRequest = {
+  url: string;
+  hostAttestation: boolean;
+};
+
+export type ImportedPhotoCandidateDto = {
+  url: string;
+  altText?: string | null;
+  width?: number | null;
+  height?: number | null;
+};
+
+export type ImportedListingDraftDto = {
+  title?: string | null;
+  description?: string | null;
+  propertyType?: string | null;
+  bedrooms?: number | null;
+  bathrooms?: number | null;
+  squareFootage?: number | null;
+  maxGuests?: number | null;
+  checkInTime?: string | null;
+  checkOutTime?: string | null;
+  monthlyRentCents?: number | null;
+  nightlyRateCents?: number | null;
+  currency?: string | null;
+  approxAddress?: string | null;
+  amenityHints?: string[] | null;
+  photos?: ImportedPhotoCandidateDto[] | null;
+  sourceUrl?: string | null;
+  sourceHost?: string | null;
+  petsAllowed?: boolean | null;
+  smokingAllowed?: boolean | null;
+  partiesAllowed?: boolean | null;
+  quietHoursStart?: string | null;
+  quietHoursEnd?: string | null;
+  houseRules?: string | null;
+  cancellationPolicy?: string | null;
 };
 
 export type UpdateListingRequest = {
@@ -417,6 +488,8 @@ export type UpdateListingRequest = {
   considerationIds?: string[] | null;
   instantBookingEnabled?: boolean | null;
   virtualTourUrl?: string | null;
+  defaultDepositCents?: number | null;
+  clearDefaultDeposit?: boolean;
 };
 
 export type SetApproxLocationRequest = {
@@ -501,7 +574,12 @@ export type InquiryCategory =
   | "RuleClarification"
   | "Proximity";
 
-export type ResponseType = "YesNo" | "MultipleChoice" | "Numeric";
+/**
+ * Phase 17 — `OpenText` lets the host respond to a tenant's free-form
+ * "Other" question with prose. Older bundles will still see the existing
+ * three structured types unchanged.
+ */
+export type ResponseType = "YesNo" | "MultipleChoice" | "Numeric" | "OpenText";
 
 export type InquiryAnswerDto = {
   answerId: string;
@@ -517,16 +595,71 @@ export type InquiryQuestionDto = {
   submittedAt: string;
   answer: InquiryAnswerDto | null;
   customText?: string | null;
+  /**
+   * Phase 17 — populated when the tenant chose to ask a free-form
+   * question (typically via the "Other" option in a category). Up to
+   * 1000 characters; rendered as the question prompt when present.
+   */
+  openQuestionText?: string | null;
 };
 
+/**
+ * Phase 17 — sessions can now be either pre-booking (no `dealId`) or
+ * deal-linked. `listingId` and `tenantUserId` are always present so the
+ * UI can resolve display context without a deal round-trip.
+ */
 export type InquiryDto = {
   sessionId: string;
-  dealId: string;
+  dealId: string | null;
+  listingId: string;
+  tenantUserId: string;
   status: InquirySessionStatus;
   unlockedByLandlordAt: string | null;
   closedAt: string | null;
   createdAt: string;
   questions: InquiryQuestionDto[];
+};
+
+/**
+ * Phase 17 — host inbox row for the Inquiries page. Lightweight: fetches
+ * just enough listing + tenant context to render a card without pulling
+ * the entire thread.
+ */
+export type HostInquirySummaryDto = {
+  sessionId: string;
+  listingId: string;
+  listingTitle: string | null;
+  listingCoverPhotoUri: string | null;
+  listingCity: string | null;
+  tenantUserId: string;
+  tenantDisplayName: string | null;
+  status: InquirySessionStatus;
+  dealId: string | null;
+  createdAt: string;
+  lastActivityAt: string;
+  questionCount: number;
+  unansweredCount: number;
+};
+
+/**
+ * Phase 17 — tenant counterpart of {@link HostInquirySummaryDto}. The
+ * `unansweredByHostCount` field is the symmetric metric: how many of
+ * the tenant's questions are still waiting on a host reply.
+ */
+export type TenantInquirySummaryDto = {
+  sessionId: string;
+  listingId: string;
+  listingTitle: string | null;
+  listingCoverPhotoUri: string | null;
+  listingCity: string | null;
+  landlordUserId: string;
+  landlordDisplayName: string | null;
+  status: InquirySessionStatus;
+  dealId: string | null;
+  createdAt: string;
+  lastActivityAt: string;
+  questionCount: number;
+  unansweredByHostCount: number;
 };
 
 export type PredefinedQuestionDto = {
@@ -540,6 +673,8 @@ export type SubmitInquiryQuestionRequest = {
   category: InquiryCategory;
   predefinedQuestionId?: string | null;
   customQuestionText?: string | null;
+  /** Phase 17 — free-form question text (≤1000 chars). */
+  openQuestionText?: string | null;
 };
 
 export type SubmitLandlordResponseRequest = {
@@ -570,16 +705,61 @@ export type DealApplicationDto = {
   partnerOrganizationId: string | null;
   isPartnerReferred: boolean;
   jurisdictionWarning: string | null;
+  /** Headcount the tenant declared at submission. Defaults to 1 on legacy rows. */
+  guestCount: number;
+  /** Airbnb-style cover note from the tenant. Null when none was provided. */
+  message: string | null;
+};
+
+/**
+ * Phase 16: API now returns the application DTO plus a frontend-relative
+ * route (`nextPath`) telling the caller where to send the guest. For
+ * instant book: `/app/deals/{dealId}/checkout`. For request-to-book:
+ * `/app/applications/{applicationId}`.
+ */
+export type SubmitApplicationResult = {
+  application: DealApplicationDto;
+  nextPath: string;
 };
 
 export type SubmitApplicationRequest = {
   listingId: string;
   requestedCheckIn: string;
   requestedCheckOut: string;
+  /**
+   * Headcount the tenant is booking for. Server validates against the
+   * listing's `houseRules.maxGuests` and rejects values below 1. Optional
+   * over the wire so callers that haven't shipped the UI yet still
+   * submit valid applications (server default = 1).
+   */
+  guestCount?: number;
+  /**
+   * Optional Airbnb-style cover note. Up to 1000 chars; whitespace-only
+   * notes are normalised to null server-side.
+   */
+  message?: string | null;
+  /**
+   * Phase 16.9 — optional Stripe `pm_…` id captured during the apply
+   * dialog's SetupIntent step. When supplied, the host's approve action
+   * (or instant-book) charges this card off-session and the tenant
+   * skips the checkout page entirely.
+   */
+  stripePaymentMethodId?: string | null;
 };
 
 export type ApproveApplicationRequest = {
   depositAmountCents: number;
+};
+
+/**
+ * Phase 16.9 — server response from `POST /v1/applications/setup-intent`
+ * used to mount Stripe Elements in the apply dialog before the tenant
+ * confirms an off-session usage SetupIntent.
+ */
+export type BookingSetupIntentResult = {
+  setupIntentId: string;
+  clientSecret: string;
+  customerId: string;
 };
 
 // ── Host Stripe Connect ──────────────────────────────────────
@@ -616,6 +796,7 @@ export type CheckoutDto = {
   depositAmountCents: number;
   insuranceFeeCents: number;
   applicationFeeCents: number;
+  serviceFeeCents: number;
   currency: string;
 };
 
@@ -733,6 +914,39 @@ export type AvailabilityBlockDto = {
   checkInDate: string;
   checkOutDate: string;
   blockType: AvailabilityBlockType;
+};
+
+/**
+ * Range-aware availability response (Phase 16). When the caller supplies
+ * ?from=&to=, `available` reflects whether the listing is bookable in the
+ * requested window and `blocks` contains only overlapping blocks.
+ */
+export type ListingAvailabilityDto = {
+  available: boolean;
+  blocks: AvailabilityBlockDto[];
+};
+
+/** Itemised pre-flight quote returned by `POST /v1/listings/{id}/quote`. */
+export type QuoteDto = {
+  checkIn: string;
+  checkOut: string;
+  stayDurationDays: number;
+  rentCents: number;
+  depositCents: number;
+  insuranceFeeCents: number;
+  /** Disclosed for transparency only — charged to the host, not the tenant. */
+  protocolFeeCents: number;
+  /** Platform service fee charged to the tenant; included in totalCents. */
+  serviceFeeCents: number;
+  /** Tenant-payable total = rent + deposit + insurance + service fee. */
+  totalCents: number;
+  currency: string;
+};
+
+/** Pre-flight consent state for the booking funnel. */
+export type ConsentStatusDto = {
+  hasRequired: boolean;
+  missing: string[];
 };
 
 export type BlockDatesRequest = {
@@ -853,9 +1067,7 @@ export type RiskViewDto = {
 // ── Deals Hub ────────────────────────────────────────────────
 
 export type DealPhase =
-  | "Inquiry"
   | "TruthSurface"
-  | "AwaitingPayment"
   | "Checkout"
   | "Active"
   | "Closed"
@@ -1049,12 +1261,6 @@ export type ArbitrationCategory =
 
 export type ArbitrationTier = "ProtocolAdjudication" | "BindingArbitration";
 
-export type DecisionDto = {
-  summary: string;
-  awardAmount: number | null;
-  decidedAt: string;
-};
-
 export type EvidenceSlotDto = {
   slotId: string;
   slotType: string;
@@ -1063,10 +1269,50 @@ export type EvidenceSlotDto = {
   submittedAt: string;
 };
 
+export type DecisionOutcome = "LandlordFavored" | "TenantFavored" | "SharedFault" | "Dismissed";
+export type DecisionSeverity = "Low" | "Medium" | "High";
+export type PenaltyType =
+  | "Monetary"
+  | "DepositWithhold"
+  | "TrustLedgerMark"
+  | "AccountWarning"
+  | "ProtocolFee"
+  | "Custom"
+  | "RentCredit"
+  | "LateFee"
+  | "DamageRestitution"
+  | "InsuranceRecovery"
+  | "AccountRestriction"
+  | "PlatformBan"
+  | "CorrectiveAction"
+  | "LeaseTermination"
+  | "CleaningFee"
+  | "UtilitiesRecovery";
+
+export type DecisionPenaltyDto = {
+  penaltyId: string;
+  partyUserId: string;
+  penaltyType: PenaltyType;
+  amountCents: number | null;
+  description: string | null;
+};
+
+export type DecisionDto = {
+  summary: string;
+  awardAmount: number | null;
+  decidedAt: string;
+  isStructured: boolean;
+  outcome: DecisionOutcome | null;
+  severity: DecisionSeverity | null;
+  penalties: DecisionPenaltyDto[];
+};
+
 export type CaseDto = {
   caseId: string;
   dealId: string;
   filedByUserId: string;
+  landlordUserId: string | null;
+  tenantUserId: string | null;
   tier: ArbitrationTier;
   category: ArbitrationCategory;
   status: ArbitrationStatus;
@@ -1075,8 +1321,35 @@ export type CaseDto = {
   evidenceCompleteAt: string | null;
   decisionDueAt: string | null;
   evidenceSlotCount: number;
+  assignedArbitratorUserId: string | null;
+  assignedArbitratorEmail: string | null;
   decision: DecisionDto | null;
+  /** Verdict from before an appeal; shown while case is back in review. */
+  priorDecision: DecisionDto | null;
   evidenceSlots: EvidenceSlotDto[] | null;
+};
+
+export type IssueDecisionRequest = {
+  decisionSummary: string;
+  awardAmount?: number | null;
+  isStructured: boolean;
+  outcome?: DecisionOutcome | null;
+  severity?: DecisionSeverity | null;
+  penalties?: {
+    partyUserId: string;
+    penaltyType: PenaltyType;
+    amountCents?: number | null;
+    description?: string | null;
+  }[];
+};
+
+export type ArbitratorCaseloadDto = {
+  arbitratorUserId: string;
+  email: string;
+  displayName: string | null;
+  activeCaseCount: number;
+  isOverSoftCap: boolean;
+  isAtHardCap: boolean;
 };
 
 // ── Admin: Insurance Unknown Queue ─────────────────────────
@@ -1265,34 +1538,84 @@ export type UpsertSeoPageRequest = {
 // ── Admin: Jurisdiction Packs ───────────────────────────────
 export type PackVersionStatus = "Draft" | "PendingApproval" | "Active" | "Deprecated";
 
+export type JurisdictionPackDto = {
+  packId: string;
+  jurisdictionCode: string;
+  activeVersionId: string | null;
+  versions: PackVersionSummaryDto[];
+};
+
+export type JurisdictionPackSummaryDto = {
+  packId: string;
+  jurisdictionCode: string;
+  activeVersionId: string | null;
+  versionCount: number;
+};
+
+export type PendingPackApprovalDto = {
+  packId: string;
+  jurisdictionCode: string;
+  versionId: string;
+  versionNumber: number;
+  effectiveDate: string | null;
+  approvedBy: string | null;
+  secondApproverId: string | null;
+};
+
 export type PackVersionSummaryDto = {
   packId: string;
-  versionId: string;
   jurisdictionCode: string;
-  versionLabel: string;
+  versionId: string;
+  versionNumber: number;
   status: PackVersionStatus;
-  createdAt: string;
   effectiveDate: string | null;
-  createdByUserId: string;
-  approvedByUserId: string | null;
+  approvedAt: string | null;
+  approvedBy: string | null;
+  secondApproverId: string | null;
 };
 
 export type PackVersionDetailDto = PackVersionSummaryDto & {
-  depositCapRules: DepositCapRuleDto[];
+  effectiveDateRules: EffectiveDateRuleDto[];
   fieldGatingRules: FieldGatingRuleDto[];
+  evidenceSchedules: EvidenceScheduleDto[];
+  depositCapRules: DepositCapRuleDto[];
+};
+
+export type EffectiveDateRuleDto = {
+  id: string;
+  fieldName: string;
+  effectiveDate: string;
 };
 
 export type DepositCapRuleDto = {
   id: string;
-  condition: string;
-  maxMonths: number;
+  jurisdictionCode: string;
+  maxMultiplier: number;
+  exceptionCondition: string | null;
+  exceptionMultiplier: number | null;
+  legalReference: string;
 };
 
 export type FieldGatingRuleDto = {
   id: string;
-  fieldPath: string;
-  gatingType: string;
-  ruleExpression: string;
+  fieldName: string;
+  gatingType: "Hard" | "Soft";
+  value: string;
+  condition: string | null;
+};
+
+export type EvidenceScheduleDto = {
+  id: string;
+  category: string;
+  minimumRequirements: string;
+};
+
+export type UpdatePackDraftBody = {
+  effectiveDate?: string;
+  effectiveDateRules?: Omit<EffectiveDateRuleDto, "id">[];
+  fieldGatingRules?: Omit<FieldGatingRuleDto, "id">[];
+  evidenceSchedules?: Omit<EvidenceScheduleDto, "id">[];
+  depositCapRules?: Omit<DepositCapRuleDto, "id">[];
 };
 
 // ── Partner Network ─────────────────────────────────────────
@@ -1483,4 +1806,18 @@ export type ListEndorsementsParams = {
   status?: PartnerEndorsementStatus;
   skip?: number;
   take?: number;
+};
+
+// ── Platform settings (admin-configurable fees & toggles) ───
+export type PlatformSettingDto = {
+  key: string;
+  value: string;
+  description: string | null;
+  updatedAt: string;
+  updatedByUserId: string | null;
+};
+
+export type UpdatePlatformSettingRequest = {
+  value: string;
+  description?: string | null;
 };

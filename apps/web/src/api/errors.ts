@@ -15,6 +15,15 @@ const FORBIDDEN_FALLBACK_BY_PREFIX: Record<string, string> = {
   "BillingAccount.": "You do not have access to this deal's billing.",
   "Proration.": "You do not have access to this deal's proration quote.",
   "Inquiry.": "You do not have access to this deal's inquiry thread.",
+  "Arbitration.": "You do not have access to this arbitration case.",
+};
+
+const BAD_REQUEST_FALLBACK_BY_PREFIX: Record<string, string> = {
+  "Arbitration.NoArbitratorAvailable":
+    "No arbitrator could be assigned. Check the panel has active Arbitrator users and caseload caps.",
+  "Arbitration.AlreadyAssigned": "This case already has an assigned arbitrator.",
+  "Arbitration.InvalidArbitrator": "Selected user is not on the arbitrator panel.",
+  "Arbitration.CaseloadHardCap": "That arbitrator is at the maximum active case limit.",
 };
 
 const NOT_FOUND_FALLBACK_BY_PREFIX: Record<string, string> = {
@@ -73,6 +82,11 @@ export const getApiErrorMessage = (
 
       if (status === 404) {
         const friendly = findFallback(NOT_FOUND_FALLBACK_BY_PREFIX, data.error);
+        if (friendly) return friendly;
+      }
+
+      if (status === 400) {
+        const friendly = BAD_REQUEST_FALLBACK_BY_PREFIX[data.error];
         if (friendly) return friendly;
       }
 

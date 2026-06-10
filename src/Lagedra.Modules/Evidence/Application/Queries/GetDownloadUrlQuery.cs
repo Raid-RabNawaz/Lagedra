@@ -1,4 +1,5 @@
 using Lagedra.Infrastructure.External.Storage;
+using Lagedra.Modules.Evidence.Application.Services;
 using Lagedra.Modules.Evidence.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Results;
 using MediatR;
@@ -9,10 +10,12 @@ namespace Lagedra.Modules.Evidence.Application.Queries;
 
 public sealed record DownloadUrlDto(Guid UploadId, Uri PresignedUrl, string OriginalFileName);
 
-public sealed record GetDownloadUrlQuery(Guid UploadId) : IRequest<Result<DownloadUrlDto>>;
+public sealed record GetDownloadUrlQuery(Guid UploadId, EvidenceCallerContext Caller)
+    : IRequest<Result<DownloadUrlDto>>;
 
 public sealed class GetDownloadUrlQueryHandler(
     EvidenceDbContext dbContext,
+    EvidenceViewAccessService accessService,
     IObjectStorageService storageService,
     IOptions<MinioSettings> storageOptions)
     : IRequestHandler<GetDownloadUrlQuery, Result<DownloadUrlDto>>
@@ -25,6 +28,15 @@ public sealed class GetDownloadUrlQueryHandler(
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        var access = await accessService
+            .RequireUploadViewAsync(request.Caller, request.UploadId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!access.IsSuccess)
+        {
+            return Result<DownloadUrlDto>.Failure(access.Error);
+        }
 
         var upload = await dbContext.Uploads
             .AsNoTracking()

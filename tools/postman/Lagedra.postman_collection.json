@@ -588,21 +588,36 @@
       "name": "Jurisdiction Packs",
       "item": [
         {
-          "name": "List Jurisdiction Packs",
+          "name": "List Packs (Admin)",
           "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
             "method": "GET",
-            "url": { "raw": "{{baseUrl}}/api/jurisdictions", "host": ["{{baseUrl}}"], "path": ["api", "jurisdictions"] }
+            "url": { "raw": "{{baseUrl}}/v1/admin/jurisdiction-packs", "host": ["{{baseUrl}}"], "path": ["v1", "admin", "jurisdiction-packs"] }
           }
         },
         {
-          "name": "Get Jurisdiction Pack",
+          "name": "List Pending Approvals (Admin)",
           "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
             "method": "GET",
-            "url": { "raw": "{{baseUrl}}/api/jurisdictions/US-TX", "host": ["{{baseUrl}}"], "path": ["api", "jurisdictions", "US-TX"] }
+            "url": { "raw": "{{baseUrl}}/v1/admin/jurisdiction-packs/pending-approvals", "host": ["{{baseUrl}}"], "path": ["v1", "admin", "jurisdiction-packs", "pending-approvals"] }
           }
         },
         {
-          "name": "Create Jurisdiction Pack (Admin)",
+          "name": "Get Pack by Jurisdiction Code",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/v1/jurisdiction-packs/US-CA", "host": ["{{baseUrl}}"], "path": ["v1", "jurisdiction-packs", "US-CA"] }
+          }
+        },
+        {
+          "name": "Create Pack (Admin)",
           "request": {
             "auth": {
               "type": "bearer",
@@ -612,13 +627,35 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"code\": \"US-CA\",\n  \"name\": \"California\",\n  \"country\": \"US\",\n  \"state\": \"CA\",\n  \"rules\": {\n    \"maxSecurityDeposit\": 2,\n    \"noticePeriodDays\": 30,\n    \"requiresRentersInsurance\": true\n  }\n}"
+              "raw": "{\n  \"jurisdictionCode\": \"US-CA\"\n}"
             },
-            "url": { "raw": "{{baseUrl}}/api/admin/jurisdictions", "host": ["{{baseUrl}}"], "path": ["api", "admin", "jurisdictions"] }
+            "url": { "raw": "{{baseUrl}}/v1/jurisdiction-packs", "host": ["{{baseUrl}}"], "path": ["v1", "jurisdiction-packs"] }
           }
         },
         {
-          "name": "Update Jurisdiction Pack (Admin)",
+          "name": "List Versions (Admin)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/v1/jurisdiction-packs/{{packId}}/versions", "host": ["{{baseUrl}}"], "path": ["v1", "jurisdiction-packs", "{{packId}}", "versions"] }
+          }
+        },
+        {
+          "name": "Get Version Details (Admin)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/v1/jurisdiction-packs/{{packId}}/versions/{{versionId}}", "host": ["{{baseUrl}}"], "path": ["v1", "jurisdiction-packs", "{{packId}}", "versions", "{{versionId}}"] }
+          }
+        },
+        {
+          "name": "Update Draft (Admin)",
           "request": {
             "auth": {
               "type": "bearer",
@@ -628,20 +665,58 @@
             "header": [{ "key": "Content-Type", "value": "application/json" }],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"name\": \"California (Updated)\",\n  \"rules\": {\n    \"maxSecurityDeposit\": 1,\n    \"noticePeriodDays\": 60,\n    \"requiresRentersInsurance\": true\n  }\n}"
+              "raw": "{\n  \"effectiveDate\": \"2026-07-01T00:00:00Z\",\n  \"depositCapRules\": [\n    {\n      \"jurisdictionCode\": \"US-CA\",\n      \"maxMultiplier\": 1.0,\n      \"legalReference\": \"CA Civil Code §1950.5(a)\",\n      \"exceptionCondition\": \"furnished\",\n      \"exceptionMultiplier\": 2.0\n    }\n  ],\n  \"fieldGatingRules\": [\n    {\n      \"fieldName\": \"DepositAmount\",\n      \"gatingType\": \"Hard\",\n      \"value\": \"must-not-exceed-jurisdiction-cap\",\n      \"condition\": null\n    }\n  ],\n  \"evidenceSchedules\": [\n    {\n      \"category\": \"MoveInConditionReport\",\n      \"minimumRequirements\": \"Timestamped photo/video walkthrough within 7 days before move-in\"\n    }\n  ]\n}"
             },
-            "url": { "raw": "{{baseUrl}}/api/admin/jurisdictions/US-CA", "host": ["{{baseUrl}}"], "path": ["api", "admin", "jurisdictions", "US-CA"] }
+            "url": { "raw": "{{baseUrl}}/v1/jurisdiction-packs/{{packId}}/versions/{{versionId}}", "host": ["{{baseUrl}}"], "path": ["v1", "jurisdiction-packs", "{{packId}}", "versions", "{{versionId}}"] }
           }
         },
         {
-          "name": "Delete Jurisdiction Pack (Admin)",
+          "name": "Request Approval (Admin)",
           "request": {
             "auth": {
               "type": "bearer",
               "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
             },
-            "method": "DELETE",
-            "url": { "raw": "{{baseUrl}}/api/admin/jurisdictions/US-CA", "host": ["{{baseUrl}}"], "path": ["api", "admin", "jurisdictions", "US-CA"] }
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/v1/jurisdiction-packs/{{packId}}/versions/{{versionId}}/request-approval", "host": ["{{baseUrl}}"], "path": ["v1", "jurisdiction-packs", "{{packId}}", "versions", "{{versionId}}", "request-approval"] }
+          }
+        },
+        {
+          "name": "Approve Version (Admin)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"approverId\": \"{{userId}}\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/v1/jurisdiction-packs/{{packId}}/versions/{{versionId}}/approve", "host": ["{{baseUrl}}"], "path": ["v1", "jurisdiction-packs", "{{packId}}", "versions", "{{versionId}}", "approve"] }
+          }
+        },
+        {
+          "name": "Publish Version (Admin)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/v1/jurisdiction-packs/{{packId}}/versions/{{versionId}}/publish", "host": ["{{baseUrl}}"], "path": ["v1", "jurisdiction-packs", "{{packId}}", "versions", "{{versionId}}", "publish"] }
+          }
+        },
+        {
+          "name": "Deprecate Version (Admin)",
+          "request": {
+            "auth": {
+              "type": "bearer",
+              "bearer": [{ "key": "token", "value": "{{adminToken}}", "type": "string" }]
+            },
+            "method": "POST",
+            "url": { "raw": "{{baseUrl}}/v1/jurisdiction-packs/{{packId}}/versions/{{versionId}}/deprecate", "host": ["{{baseUrl}}"], "path": ["v1", "jurisdiction-packs", "{{packId}}", "versions", "{{versionId}}", "deprecate"] }
           }
         }
       ]

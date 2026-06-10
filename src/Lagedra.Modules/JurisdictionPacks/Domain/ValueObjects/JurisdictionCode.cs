@@ -19,7 +19,7 @@ public sealed partial class JurisdictionCode : ValueObject
         if (!JurisdictionCodePattern().IsMatch(code))
         {
             throw new ArgumentException(
-                $"Jurisdiction code '{code}' must follow the format XX-YY-ZZ (e.g. US-CA-LA).",
+                $"Jurisdiction code '{code}' must follow the format CC-SS or CC-SS-CCC (e.g. US-CA, US-CA-LA, GB-ENG).",
                 nameof(code));
         }
 
@@ -33,6 +33,6 @@ public sealed partial class JurisdictionCode : ValueObject
 
     public override string ToString() => Code;
 
-    [GeneratedRegex(@"^[A-Z]{2}-[A-Z]{2}-[A-Z]{2,}$", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^[A-Z]{2}(-[A-Z]{2,10}){1,2}$", RegexOptions.IgnoreCase)]
     private static partial Regex JurisdictionCodePattern();
 }

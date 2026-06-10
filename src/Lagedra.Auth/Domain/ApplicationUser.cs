@@ -29,4 +29,13 @@ public sealed class ApplicationUser : IdentityUser<Guid>, ISoftDeletable
     public bool IsPhoneVerified { get; set; }
     public int? ResponseRatePercent { get; set; }
     public int? ResponseTimeMinutes { get; set; }
+
+    /// <summary>
+    /// Cached Stripe Customer id for this user. Populated lazily the first
+    /// time we call <see cref="Lagedra.Infrastructure.External.Payments.IStripeService.GetOrCreateCustomerAsync"/>
+    /// from the Phase 16.9 booking pre-flight (SetupIntent), then reused for
+    /// subsequent off-session charges so the tenant only sees a card-input
+    /// surface once per account.
+    /// </summary>
+    public string? StripeCustomerId { get; set; }
 }

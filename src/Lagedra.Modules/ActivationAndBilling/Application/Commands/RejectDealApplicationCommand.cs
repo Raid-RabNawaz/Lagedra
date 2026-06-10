@@ -50,5 +50,6 @@ public sealed class RejectDealApplicationCommandHandler(
             a.Status, a.DealId, a.SubmittedAt, a.DecidedAt,
             a.RequestedCheckIn, a.RequestedCheckOut, a.StayDurationDays,
             a.DepositAmountCents, a.InsuranceFeeCents, a.FirstMonthRentCents,
-            a.PartnerOrganizationId, a.IsPartnerReferred, a.JurisdictionWarning, a.Source);
+            a.PartnerOrganizationId, a.IsPartnerReferred, a.JurisdictionWarning, a.Source,
+            a.GuestCount, a.Message);
 }

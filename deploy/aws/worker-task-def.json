@@ -32,7 +32,8 @@
         { "name": "Jwt__Issuer", "value": "https://api.lagedra.com" },
         { "name": "Jwt__Audience", "value": "https://lagedra.com" },
         { "name": "App__BaseUrl", "value": "https://api.lagedra.com" },
-        { "name": "App__FrontendUrl", "value": "https://lagedra.com" }
+        { "name": "App__FrontendUrl", "value": "https://lagedra.com" },
+        { "name": "ListingImport__ScrapingAnt__ApiKey", "value": "29f37cdbfe3e47ebae555db06b628241" }
       ],
       "secrets": [
         { "name": "Jwt__Secret", "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/jwt-secret" },

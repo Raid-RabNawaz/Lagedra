@@ -2,8 +2,10 @@ import { endpoints } from "@/api/endpoints";
 import { http } from "@/api/http";
 import type {
   ApproveApplicationRequest,
+  BookingSetupIntentResult,
   DealApplicationDto,
   SubmitApplicationRequest,
+  SubmitApplicationResult,
 } from "@/api/types";
 
 export const applicationApi = {
@@ -12,10 +14,18 @@ export const applicationApi = {
     return response.data;
   },
 
-  async submit(payload: SubmitApplicationRequest): Promise<DealApplicationDto> {
-    const response = await http.post<DealApplicationDto>(
+  async submit(payload: SubmitApplicationRequest): Promise<SubmitApplicationResult> {
+    const response = await http.post<SubmitApplicationResult>(
       endpoints.applications.submit,
       payload,
+    );
+    return response.data;
+  },
+
+  async createSetupIntent(listingId: string): Promise<BookingSetupIntentResult> {
+    const response = await http.post<BookingSetupIntentResult>(
+      endpoints.applications.setupIntent,
+      { listingId },
     );
     return response.data;
   },

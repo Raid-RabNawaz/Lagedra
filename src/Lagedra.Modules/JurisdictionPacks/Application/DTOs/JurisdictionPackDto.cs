@@ -9,6 +9,8 @@ public sealed record JurisdictionPackDto(
     IReadOnlyList<PackVersionSummaryDto> Versions);
 
 public sealed record PackVersionSummaryDto(
+    Guid PackId,
+    string JurisdictionCode,
     Guid VersionId,
     int VersionNumber,
     PackVersionStatus Status,

@@ -9,14 +9,17 @@ import {
   Inbox,
   User,
   LayoutDashboard,
+  CalendarCheck,
+  Bell,
   Facebook,
   Instagram,
   Linkedin,
 } from "lucide-react";
 import logoSvg from "@/assets/logo.svg";
 import { useAuthStore } from "@/app/auth/authStore";
-import { getBottomTabsForRole, type NavItem } from "@/app/auth/permissions";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getBottomTabsForRole, supportsModeSwitching, type NavItem } from "@/app/auth/permissions";
+import { useModeStore } from "@/app/auth/modeStore";
+import { AuthedHeaderActions } from "@/app/layout/AuthedHeaderActions";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 
@@ -27,6 +30,8 @@ const iconMap: Record<string, typeof Search> = {
   Inbox,
   User,
   LayoutDashboard,
+  CalendarCheck,
+  Bell,
   LogIn,
   UserPlus,
 };
@@ -39,17 +44,13 @@ export const MarketplaceLayout = () => {
   const user = useAuthStore((s) => s.user);
   const accessToken = useAuthStore((s) => s.accessToken);
   const isLoggedIn = Boolean(accessToken);
+  const mode = useModeStore((s) => s.mode);
 
-  const bottomTabs = getBottomTabsForRole(isLoggedIn ? (user?.role ?? null) : null);
-
-  const displayName =
-    user?.displayName || user?.firstName || user?.email?.split("@")[0] || "";
-  const initials = displayName
-    .split(" ")
-    .filter((s) => s.length > 0)
-    .slice(0, 2)
-    .map((s) => s[0]?.toUpperCase())
-    .join("");
+  const role = isLoggedIn ? (user?.role ?? null) : null;
+  const bottomTabs = getBottomTabsForRole(
+    role,
+    supportsModeSwitching(role) ? mode : undefined,
+  );
 
   return (
     <div className="flex min-h-screen flex-col bg-background">
@@ -68,22 +69,16 @@ export const MarketplaceLayout = () => {
             <HeaderLink to="/listings/search?propertyType=House" label="Houses" />
           </nav>
 
+          {/*
+           * Authed shoppers get the same mode-switch + bell + user
+           * dropdown as the AppShell so the chrome stays identical when
+           * navigating between the marketplace and the dashboard. The
+           * dropdown here also surfaces a "Dashboard" entry because
+           * there's no sidebar to fall back on outside `/app`.
+           */}
           <div className="flex items-center gap-2">
-            {isLoggedIn ? (
-              <Link
-                to="/app"
-                className="flex items-center gap-2 rounded-full py-1 pl-1 pr-3 transition-colors hover:bg-secondary"
-              >
-                <Avatar className="h-9 w-9 ring-2 ring-primary/15">
-                  {user?.profilePhotoUrl ? (
-                    <AvatarImage src={user.profilePhotoUrl} alt={displayName} />
-                  ) : null}
-                  <AvatarFallback className="text-xs bg-primary text-primary-foreground">
-                    {initials || "U"}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="text-sm font-semibold hidden sm:inline">Dashboard</span>
-              </Link>
+            {isLoggedIn && user ? (
+              <AuthedHeaderActions showDashboardInMenu />
             ) : (
               <>
                 <Link

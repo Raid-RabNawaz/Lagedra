@@ -82,7 +82,9 @@ public sealed class CreateCheckoutPaymentIntentCommandHandler(
         }
 
         var totalAmountCents = confirmation.TotalTenantPaymentCents;
-        var applicationFeeCents = confirmation.InsuranceFeeCents + confirmation.MonthlyProtocolFeeCents;
+        var applicationFeeCents = confirmation.InsuranceFeeCents
+            + confirmation.MonthlyProtocolFeeCents
+            + confirmation.ServiceFeeCents;
 
         var idempotencyKey = $"pi-deal-{request.DealId}";
         var metadata = new Dictionary<string, string>
@@ -154,6 +156,7 @@ public sealed class CreateCheckoutPaymentIntentCommandHandler(
             c.FirstMonthRentCents,
             c.DepositAmountCents,
             c.InsuranceFeeCents,
-            c.InsuranceFeeCents + c.MonthlyProtocolFeeCents,
+            c.InsuranceFeeCents + c.MonthlyProtocolFeeCents + c.ServiceFeeCents,
+            c.ServiceFeeCents,
             "usd");
 }

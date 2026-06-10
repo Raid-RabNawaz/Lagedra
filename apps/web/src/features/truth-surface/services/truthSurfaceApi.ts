@@ -1,3 +1,4 @@
+import type { AxiosError } from "axios";
 import { endpoints } from "@/api/endpoints";
 import { http } from "@/api/http";
 import type {
@@ -16,11 +17,27 @@ export const truthSurfaceApi = {
     return response.data;
   },
 
-  async getSnapshotByDealId(dealId: string): Promise<TruthSurfaceDto> {
-    const response = await http.get<TruthSurfaceDto>(
-      endpoints.truthSurface.byDeal(dealId),
-    );
-    return response.data;
+  /**
+   * Returns the active Truth Surface for a deal, or `null` if none has been
+   * created yet. 404 is the API's way of saying "no snapshot exists" which
+   * is a normal pre-confirmation state — not an error — so we collapse it
+   * to a null result here. Callers can use `data === null` to render
+   * "create" affordances and `data` to render "review" affordances without
+   * juggling react-query's `isError` state.
+   */
+  async getSnapshotByDealId(dealId: string): Promise<TruthSurfaceDto | null> {
+    try {
+      const response = await http.get<TruthSurfaceDto>(
+        endpoints.truthSurface.byDeal(dealId),
+      );
+      return response.data;
+    } catch (err) {
+      const status = (err as AxiosError)?.response?.status;
+      if (status === 404) {
+        return null;
+      }
+      throw err;
+    }
   },
 
   async create(payload: CreateSnapshotRequest): Promise<TruthSurfaceDto> {

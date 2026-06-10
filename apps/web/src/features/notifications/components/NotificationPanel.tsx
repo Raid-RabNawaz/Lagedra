@@ -43,7 +43,7 @@ function getNotificationRoute(n: InAppNotificationDto): string | null {
       )
         return `/app/deals/${n.relatedEntityId}/billing`;
       if (n.category === "application_approved")
-        return `/app/deals/${n.relatedEntityId}/inquiry`;
+        return `/app/deals/${n.relatedEntityId}`;
       return `/app/deals/${n.relatedEntityId}`;
 
     case "Listing":

@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Lagedra.Modules.JurisdictionPacks.Application.Commands;
 using Lagedra.Modules.JurisdictionPacks.Application.Queries;
 using Lagedra.Modules.JurisdictionPacks.Presentation.Contracts;
@@ -17,15 +18,15 @@ public static class JurisdictionPackEndpoints
             .WithTags("JurisdictionPacks")
             .RequireAuthorization();
 
-        group.MapPost("/", CreatePack);
-        group.MapPut("/{id:guid}/versions/{versionId:guid}", UpdateDraft);
-        group.MapPost("/{id:guid}/versions/{versionId:guid}/request-approval", RequestApproval);
-        group.MapPost("/{id:guid}/versions/{versionId:guid}/approve", ApproveVersion);
-        group.MapPost("/{id:guid}/versions/{versionId:guid}/publish", PublishVersion);
-        group.MapPost("/{id:guid}/versions/{versionId:guid}/deprecate", DeprecateVersion);
+        group.MapPost("/", CreatePack).RequireAuthorization("RequirePlatformAdmin");
+        group.MapPut("/{id:guid}/versions/{versionId:guid}", UpdateDraft).RequireAuthorization("RequirePlatformAdmin");
+        group.MapPost("/{id:guid}/versions/{versionId:guid}/request-approval", RequestApproval).RequireAuthorization("RequirePlatformAdmin");
+        group.MapPost("/{id:guid}/versions/{versionId:guid}/approve", ApproveVersion).RequireAuthorization("RequirePackApprover");
+        group.MapPost("/{id:guid}/versions/{versionId:guid}/publish", PublishVersion).RequireAuthorization("RequirePlatformAdmin");
+        group.MapPost("/{id:guid}/versions/{versionId:guid}/deprecate", DeprecateVersion).RequireAuthorization("RequirePlatformAdmin");
         group.MapGet("/{code}", GetByJurisdictionCode);
-        group.MapGet("/{id:guid}/versions", ListVersions);
-        group.MapGet("/{id:guid}/versions/{versionId:guid}", GetVersionDetails);
+        group.MapGet("/{id:guid}/versions", ListVersions).RequireAuthorization("RequirePackApprover");
+        group.MapGet("/{id:guid}/versions/{versionId:guid}", GetVersionDetails).RequireAuthorization("RequirePackApprover");
 
         return app;
     }
@@ -84,17 +85,26 @@ public static class JurisdictionPackEndpoints
     private static async Task<IResult> ApproveVersion(
         [FromRoute] Guid id,
         [FromRoute] Guid versionId,
-        [FromBody] ApprovePackVersionRequest request,
+        [FromBody] ApprovePackVersionRequest? request,
+        HttpContext httpContext,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
+        var approverId = request?.ApproverId ?? GetUserId(httpContext);
         var result = await mediator.Send(
-            new ApprovePackVersionCommand(id, versionId, request.ApproverId), cancellationToken)
+            new ApprovePackVersionCommand(id, versionId, approverId), cancellationToken)
             .ConfigureAwait(true);
 
         return result.IsSuccess
             ? Results.NoContent()
             : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+    }
+
+    private static Guid GetUserId(HttpContext httpContext)
+    {
+        var claim = httpContext.User.FindFirst(ClaimTypes.NameIdentifier)
+            ?? throw new InvalidOperationException("User ID claim not found.");
+        return Guid.Parse(claim.Value);
     }
 
     private static async Task<IResult> PublishVersion(

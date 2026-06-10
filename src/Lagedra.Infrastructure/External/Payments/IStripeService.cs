@@ -7,6 +7,12 @@ public sealed record StripeAccountStatusResult(string AccountId, bool ChargesEna
 public sealed record StripePaymentIntentResult(string PaymentIntentId, string ClientSecret, string Status, long Amount, string Currency);
 public sealed record StripeRefundResult(string RefundId, long AmountRefunded, string Status);
 
+/// <summary>
+/// Phase 16.9: Stripe SetupIntent client material returned to the frontend
+/// so the tenant can confirm a payment-method save off-session at apply time.
+/// </summary>
+public sealed record StripeSetupIntentResult(string SetupIntentId, string ClientSecret, string Status);
+
 public interface IStripeService
 {
     Task<string> GetOrCreateCustomerAsync(Guid userId, string email, CancellationToken ct = default);
@@ -35,4 +41,50 @@ public interface IStripeService
     Task<StripePaymentIntentResult> GetPaymentIntentAsync(string paymentIntentId, CancellationToken ct = default);
     Task<StripeRefundResult> RefundPaymentIntentAsync(string paymentIntentId, long? amountCents = null, string? idempotencyKey = null, CancellationToken ct = default);
     Task<bool> CheckConnectivityAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Creates a SetupIntent for the supplied customer so the frontend can
+    /// confirm a card save (off-session usage) during the apply flow. The
+    /// resulting payment-method id is later attached to the application and
+    /// charged from the host's approve action without a second tenant prompt
+    /// (Phase 16.9 "card on file").
+    /// </summary>
+    Task<StripeSetupIntentResult> CreateSetupIntentAsync(
+        string customerId,
+        Dictionary<string, string>? metadata = null,
+        string? idempotencyKey = null,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Charges a previously saved payment method off-session against the
+    /// platform Stripe account (direct-payout host model). Used by
+    /// <c>ApproveDealApplicationCommand</c> to settle the booking the moment
+    /// the host approves, without sending the tenant back to the checkout
+    /// surface.
+    /// </summary>
+    Task<StripePaymentIntentResult> ChargeOffSessionPlatformAsync(
+        string customerId,
+        string paymentMethodId,
+        long amountCents,
+        string currency,
+        Dictionary<string, string>? metadata = null,
+        string? idempotencyKey = null,
+        CancellationToken ct = default);
+
+    /// <summary>
+    /// Charges a saved payment method off-session against a connected
+    /// destination account (Stripe Connect host model). Mirror of
+    /// <see cref="ChargeOffSessionPlatformAsync"/> for hosts who haven't
+    /// switched to direct payouts.
+    /// </summary>
+    Task<StripePaymentIntentResult> ChargeOffSessionDestinationAsync(
+        string customerId,
+        string paymentMethodId,
+        long amountCents,
+        string currency,
+        string destinationAccountId,
+        long applicationFeeCents,
+        Dictionary<string, string>? metadata = null,
+        string? idempotencyKey = null,
+        CancellationToken ct = default);
 }

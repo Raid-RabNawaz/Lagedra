@@ -27,9 +27,12 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Loader } from "@/components/shared/Loader";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { CardGridSkeleton } from "@/components/shared/ListSkeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { ErrorState } from "@/components/shared/ErrorState";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Building2 } from "lucide-react";
 import { formatMoney, formatDate } from "@/utils/format";
 import { cn } from "@/lib/utils";
 
@@ -133,25 +136,18 @@ export const MyListingsPage = () => {
 
   const isMutating = submitMutation.isPending || closeMutation.isPending || deleteMutation.isPending;
 
-  if (isLoading) return <Loader label="Loading your listings..." />;
-  if (isError) {
-    return <p className="text-destructive">Failed to load listings.</p>;
-  }
-
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">My listings</h1>
-          <p className="mt-1 text-muted-foreground">
-            Manage your properties and publish to the marketplace.
-          </p>
-        </div>
+      <PageHeader
+        icon={Building2}
+        title="My listings"
+        description="Manage your properties and publish to the marketplace."
+      >
         <Link to="/app/listings/new" className={cn(buttonVariants({ variant: "accent" }))}>
           <Plus className="h-4 w-4" />
           New listing
         </Link>
-      </div>
+      </PageHeader>
 
       {actionError && (
         <Alert variant="destructive">
@@ -159,7 +155,14 @@ export const MyListingsPage = () => {
         </Alert>
       )}
 
-      {items.length === 0 ? (
+      {isLoading ? (
+        <CardGridSkeleton cards={6} />
+      ) : isError ? (
+        <ErrorState
+          title="Couldn't load your listings"
+          message="Something went wrong while loading your listings."
+        />
+      ) : items.length === 0 ? (
         <EmptyState
           title="No listings yet"
           description="Create your first listing to appear in search results."

@@ -6,6 +6,10 @@ import type {
   UserRestrictionDto,
   ApplyRestrictionRequest,
   ArbitrationBacklogItemDto,
+  ArbitratorCaseloadDto,
+  JurisdictionPackSummaryDto,
+  PendingPackApprovalDto,
+  JurisdictionPackDto,
   EvidenceScanQueueItemDto,
   ManualVerificationItemDto,
   ViolationDto,
@@ -23,6 +27,9 @@ import type {
   UpsertSeoPageRequest,
   PackVersionSummaryDto,
   PackVersionDetailDto,
+  UpdatePackDraftBody,
+  PlatformSettingDto,
+  UpdatePlatformSettingRequest,
 } from "@/api/types";
 
 export const adminApi = {
@@ -56,6 +63,16 @@ export const adminApi = {
   // Arbitration Backlog
   async getArbitrationBacklog(): Promise<ArbitrationBacklogItemDto[]> {
     const r = await http.get<ArbitrationBacklogItemDto[]>(endpoints.adminArbitration.backlog);
+    return r.data;
+  },
+  async getArbitratorCaseload(): Promise<ArbitratorCaseloadDto[]> {
+    const r = await http.get<ArbitratorCaseloadDto[]>(endpoints.adminArbitration.caseload);
+    return r.data;
+  },
+  async autoAssignArbitrator(caseId: string): Promise<{ arbitratorUserId: string }> {
+    const r = await http.post<{ arbitratorUserId: string }>(
+      endpoints.adminArbitration.assignAuto(caseId),
+    );
     return r.data;
   },
 
@@ -157,6 +174,22 @@ export const adminApi = {
   },
 
   // Jurisdiction Packs
+  async listJurisdictionPacks(): Promise<JurisdictionPackSummaryDto[]> {
+    const r = await http.get<JurisdictionPackSummaryDto[]>(endpoints.adminJurisdictionPacks.list);
+    return r.data;
+  },
+  async listPendingPackApprovals(): Promise<PendingPackApprovalDto[]> {
+    const r = await http.get<PendingPackApprovalDto[]>(
+      endpoints.adminJurisdictionPacks.pendingApprovals,
+    );
+    return r.data;
+  },
+  async createJurisdictionPack(jurisdictionCode: string): Promise<JurisdictionPackDto> {
+    const r = await http.post<JurisdictionPackDto>(endpoints.jurisdictionPacks.create, {
+      jurisdictionCode,
+    });
+    return r.data;
+  },
   async listPackVersions(packId: string): Promise<PackVersionSummaryDto[]> {
     const r = await http.get<PackVersionSummaryDto[]>(endpoints.jurisdictionPacks.listVersions(packId));
     return r.data;
@@ -170,13 +203,43 @@ export const adminApi = {
   async requestApproval(packId: string, versionId: string): Promise<void> {
     await http.post(endpoints.jurisdictionPacks.requestApproval(packId, versionId));
   },
-  async approveVersion(packId: string, versionId: string): Promise<void> {
-    await http.post(endpoints.jurisdictionPacks.approve(packId, versionId));
+  async approveVersion(
+    packId: string,
+    versionId: string,
+    approverId?: string,
+  ): Promise<void> {
+    await http.post(
+      endpoints.jurisdictionPacks.approve(packId, versionId),
+      approverId ? { approverId } : {},
+    );
+  },
+  async updatePackDraft(
+    packId: string,
+    versionId: string,
+    body: UpdatePackDraftBody,
+  ): Promise<PackVersionDetailDto> {
+    const r = await http.put<PackVersionDetailDto>(
+      endpoints.jurisdictionPacks.updateDraft(packId, versionId),
+      body,
+    );
+    return r.data;
   },
   async publishVersion(packId: string, versionId: string): Promise<void> {
     await http.post(endpoints.jurisdictionPacks.publish(packId, versionId));
   },
   async deprecateVersion(packId: string, versionId: string): Promise<void> {
     await http.post(endpoints.jurisdictionPacks.deprecate(packId, versionId));
+  },
+
+  // Platform Settings (fees & toggles)
+  async listPlatformSettings(): Promise<PlatformSettingDto[]> {
+    const r = await http.get<PlatformSettingDto[]>(endpoints.adminSettings.list);
+    return r.data;
+  },
+  async updatePlatformSetting(
+    key: string,
+    req: UpdatePlatformSettingRequest,
+  ): Promise<void> {
+    await http.put(endpoints.adminSettings.update(key), req);
   },
 };

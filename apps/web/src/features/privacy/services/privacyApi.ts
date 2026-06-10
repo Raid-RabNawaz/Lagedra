@@ -1,6 +1,11 @@
 import { endpoints } from "@/api/endpoints";
 import { http } from "@/api/http";
-import type { ConsentRecordDto, ConsentTypeDto, RecordConsentRequest } from "@/api/types";
+import type {
+  ConsentRecordDto,
+  ConsentStatusDto,
+  ConsentTypeDto,
+  RecordConsentRequest,
+} from "@/api/types";
 
 function clientMetadata(): { ipAddress: string; userAgent: string } {
   return {
@@ -13,6 +18,16 @@ function clientMetadata(): { ipAddress: string; userAgent: string } {
 export const privacyApi = {
   async getUserConsents(userId: string): Promise<ConsentRecordDto[]> {
     const response = await http.get<ConsentRecordDto[]>(endpoints.privacy.userConsents(userId));
+    return response.data;
+  },
+
+  /**
+   * Phase 16 booking pre-flight: returns whether the caller has every
+   * required consent and, if not, which ones are missing. Bypasses the
+   * ConsentMiddleware (the `/v1/privacy/consents` prefix is exempt).
+   */
+  async getMyConsentStatus(): Promise<ConsentStatusDto> {
+    const response = await http.get<ConsentStatusDto>(endpoints.privacy.myConsentStatus);
     return response.data;
   },
 
