@@ -78,7 +78,6 @@ public sealed class GetListingQuoteQueryHandler(
                 l.SuggestedDepositHighCents,
                 MinStayDays = l.StayRange != null ? (int?)l.StayRange.MinDays : null,
                 MaxStayDays = l.StayRange != null ? (int?)l.StayRange.MaxDays : null,
-                l.InsuranceRequired,
             })
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
@@ -115,11 +114,14 @@ public sealed class GetListingQuoteQueryHandler(
             listing.SuggestedDepositHighCents,
             listing.MaxDepositCents);
 
-        var insuranceQuote = listing.InsuranceRequired
-            ? await insuranceFeeCalculator
-                .CalculateFeeAsync(listing.MonthlyRentCents, stayDays, cancellationToken)
-                .ConfigureAwait(false)
-            : new InsuranceFeeQuote(0, "None", null);
+        // Every booking is covered by a third-party policy quoted at
+        // booking time — there is no longer a host opt-in. The fee
+        // calculator decides the actual premium based on rent + stay
+        // length; the listing flag that used to gate this call has been
+        // removed alongside its UI checkbox.
+        var insuranceQuote = await insuranceFeeCalculator
+            .CalculateFeeAsync(listing.MonthlyRentCents, stayDays, cancellationToken)
+            .ConfigureAwait(false);
 
         var protocolFeeCents = await ResolveProtocolFeeAsync(cancellationToken).ConfigureAwait(false);
 

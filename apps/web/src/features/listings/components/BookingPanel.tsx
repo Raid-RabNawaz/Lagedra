@@ -1,7 +1,7 @@
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { AlertCircle, ShieldAlert, Loader2, MessageSquare } from "lucide-react";
-import { Alert } from "@/components/ui/alert";
+import { AlertCircle, ShieldAlert, Loader2, MessageSquare, Send } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
@@ -39,22 +39,48 @@ type Props = {
 export const BookingPanel = ({ listing, isProspectiveGuest }: Props) => {
   const [checkIn, setCheckIn] = useState("");
   const [checkOut, setCheckOut] = useState("");
+  // Controls whether the date field shows its inline error state. Flipped
+  // on by clicking "Request to book" with no / invalid dates; cleared the
+  // moment the user changes either date so they get instant feedback that
+  // their fix has been registered.
+  const [showDateError, setShowDateError] = useState(false);
+  // Drives the ApplyDialog in controlled mode so we can decide whether to
+  // open it based on local validity *before* the user gets in front of
+  // the dialog. (The default trigger inside ApplyDialog opens
+  // unconditionally and bypasses this check.)
+  const [applyOpen, setApplyOpen] = useState(false);
 
-  const stayDays = useMemo(() => {
+  const rawDayDelta = useMemo(() => {
     if (!checkIn || !checkOut) return 0;
-    return Math.max(
-      0,
-      Math.round(
-        (new Date(checkOut).getTime() - new Date(checkIn).getTime()) /
-          86_400_000,
-      ),
+    return Math.round(
+      (new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86_400_000,
     );
   }, [checkIn, checkOut]);
+
+  const stayDays = Math.max(0, rawDayDelta);
 
   const minStay = listing.minStayDays ?? 30;
   const maxStay = listing.maxStayDays ?? 365;
   const stayInRange = stayDays >= minStay && stayDays <= maxStay;
   const datesValid = Boolean(checkIn && checkOut && stayDays > 0 && stayInRange);
+
+  const dateErrorMessage = !checkIn && !checkOut
+    ? "Select check-in and check-out dates."
+    : !checkIn
+      ? "Select a check-in date."
+      : !checkOut
+        ? "Select a check-out date."
+        : rawDayDelta <= 0
+          ? "Check-out must be after check-in."
+          : !stayInRange
+            ? `Stay must be between ${minStay} and ${maxStay} days.`
+            : "";
+
+  // Whenever the user touches the date field we drop the error styling.
+  // It comes back the next time they click the (still-invalid) CTA.
+  useEffect(() => {
+    if (showDateError && datesValid) setShowDateError(false);
+  }, [showDateError, datesValid]);
 
   const availability = useListingAvailabilityRange(
     listing.id,
@@ -98,6 +124,49 @@ export const BookingPanel = ({ listing, isProspectiveGuest }: Props) => {
     });
   };
 
+  // Gate the CTA on everything the booking flow needs in one place:
+  //   * dates entered AND in-range (datesValid)
+  //   * availability check has returned without error
+  //   * the listing is actually available for the picked window
+  // Anything missing → button is soft-disabled and the matching Alert
+  // above the button already explains the reason; the tooltip below
+  // mirrors that text for users hovering the dimmed button.
+  const checkingAvailability = datesValid && availability.isLoading;
+  const availabilityFailed = datesValid && availability.isError;
+  const datesUnavailable =
+    datesValid && !availability.isLoading && !availability.isError && !isAvailable;
+  const canSubmit =
+    datesValid && !availability.isLoading && !availability.isError && isAvailable;
+
+  const submitDisabledReason = !datesValid
+    ? dateErrorMessage || "Pick valid check-in and check-out dates first."
+    : checkingAvailability
+      ? "Checking availability…"
+      : availabilityFailed
+        ? "Couldn't check availability — try again in a moment."
+        : datesUnavailable
+          ? "Those dates are unavailable. Try another window."
+          : undefined;
+
+  const handleRequestToBook = () => {
+    if (!datesValid) {
+      // Highlight the date field instead of silently swallowing the
+      // click — this is the entire point of the inline-validation
+      // requirement. The button stays clickable (aria-disabled) so the
+      // error path actually runs.
+      setShowDateError(true);
+      return;
+    }
+    if (!canSubmit) {
+      // Dates are syntactically valid but the listing isn't bookable
+      // for that window (still loading, errored, or already taken).
+      // The surrounding Alert is already on screen explaining the
+      // reason, so we just swallow the click.
+      return;
+    }
+    setApplyOpen(true);
+  };
+
   return (
     <div className="space-y-4">
       <DateRangeField
@@ -105,12 +174,24 @@ export const BookingPanel = ({ listing, isProspectiveGuest }: Props) => {
         onChange={(next) => {
           setCheckIn(next.checkIn);
           setCheckOut(next.checkOut);
+          // Picking *anything* clears the error so the user sees they're
+          // making progress without having to retry the CTA first.
+          if (showDateError) setShowDateError(false);
         }}
         minStayDays={minStay}
         maxStayDays={maxStay}
+        error={showDateError}
+        errorMessage={showDateError ? dateErrorMessage : undefined}
+        id="booking-panel-dates"
       />
 
-      {checkIn && checkOut && stayDays > 0 && !stayInRange && (
+      {/* The inline `errorMessage` on DateRangeField already covers the
+          "stay too long / too short" copy when the user attempts to
+          submit. The separate Alert is kept only for the case where the
+          user typed valid dates that just happen to fall outside the
+          listing's stay range — visible *before* they click anything,
+          which the inline error (gated on submit-attempt) won't catch. */}
+      {checkIn && checkOut && stayDays > 0 && !stayInRange && !showDateError && (
         <Alert variant="destructive" className="text-xs">
           Stay must be {minStay}–{maxStay} days. You picked {stayDays}.
         </Alert>
@@ -132,7 +213,9 @@ export const BookingPanel = ({ listing, isProspectiveGuest }: Props) => {
       {datesValid && !availability.isLoading && !isAvailable && (
         <Alert variant="destructive" className="text-xs">
           <AlertCircle className="h-4 w-4" />
-          Those dates are unavailable. Try another window.
+          <AlertDescription>
+            Those dates are unavailable. Try another window.
+          </AlertDescription>
         </Alert>
       )}
 
@@ -181,8 +264,11 @@ export const BookingPanel = ({ listing, isProspectiveGuest }: Props) => {
       {/*
        * Three CTA states, in priority order:
        *   1. KYC required → deep link to verification
-       *   2. Dates valid + available → ApplyDialog with prefilled dates
-       *   3. No / invalid dates → disabled CTA via ApplyDialog (no dates)
+       *   2. Otherwise → soft-disabled "Request to book" button. Click
+       *      with valid dates opens the ApplyDialog (controlled mode);
+       *      click with missing/invalid dates flips the date field into
+       *      its inline error state so the user knows *why* the form
+       *      isn't progressing instead of pressing a dead button.
        */}
       {isProspectiveGuest && needsConsents ? (
         <Link
@@ -196,11 +282,27 @@ export const BookingPanel = ({ listing, isProspectiveGuest }: Props) => {
           Verify your identity to book
         </Link>
       ) : (
-        <ApplyDialog
-          listing={listing}
-          initialCheckIn={datesValid && isAvailable ? checkIn : undefined}
-          initialCheckOut={datesValid && isAvailable ? checkOut : undefined}
-        />
+        <>
+          <Button
+            type="button"
+            variant="accent"
+            size="lg"
+            className={cn("w-full gap-2", !canSubmit && "opacity-60")}
+            aria-disabled={!canSubmit}
+            onClick={handleRequestToBook}
+            title={submitDisabledReason}
+          >
+            <Send className="h-4 w-4" />
+            {listing.instantBookingEnabled ? "Book instantly" : "Request to book"}
+          </Button>
+          <ApplyDialog
+            listing={listing}
+            initialCheckIn={datesValid && isAvailable ? checkIn : undefined}
+            initialCheckOut={datesValid && isAvailable ? checkOut : undefined}
+            controlledOpen={applyOpen}
+            onOpenChange={setApplyOpen}
+          />
+        </>
       )}
 
       {/*

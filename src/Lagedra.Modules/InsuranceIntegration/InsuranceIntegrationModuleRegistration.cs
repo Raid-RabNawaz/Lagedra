@@ -33,14 +33,29 @@ public static class InsuranceIntegrationModuleRegistration
         services.AddScoped<Lagedra.SharedKernel.Integration.IUserInsuranceStatusProvider,
             UserInsuranceStatusProvider>();
 
+        // Insurance fee calculator selection.
+        //
+        // Tenant rental insurance is no longer a host opt-in (the listing
+        // flag was retired). Quotes go through whichever calculator is
+        // registered here — so we default to a no-op "None" provider and
+        // require operators to explicitly enable a real calculator before
+        // any insurance line appears on bookings.
+        //
+        //   Insurance:FeeCalculationMode = "Api"          → live third-party connector
+        //   Insurance:FeeCalculationMode = "Configurable" → built-in % of rent (dev/QA)
+        //   anything else (incl. unset)                   → NullInsuranceFeeCalculator (FeeCents = 0)
         var feeMode = configuration["Insurance:FeeCalculationMode"];
         if (string.Equals(feeMode, "Api", StringComparison.OrdinalIgnoreCase))
         {
             services.AddScoped<IInsuranceFeeCalculator, ApiInsuranceFeeCalculator>();
         }
-        else
+        else if (string.Equals(feeMode, "Configurable", StringComparison.OrdinalIgnoreCase))
         {
             services.AddScoped<IInsuranceFeeCalculator, ConfigurableInsuranceFeeCalculator>();
+        }
+        else
+        {
+            services.AddScoped<IInsuranceFeeCalculator, NullInsuranceFeeCalculator>();
         }
 
         services.AddDomainEventHandler<DealActivatedEvent,

@@ -91,6 +91,12 @@ export const ApplyDialog = ({
   const [guestCount, setGuestCount] = useState(1);
   const [message, setMessage] = useState("");
   const [submitErrorMessage, setSubmitErrorMessage] = useState<string | null>(null);
+  // Drives inline date-field error styling. We don't disable the submit
+  // button outright because a fully-disabled button can't trigger field
+  // highlighting on click — the user gets no feedback about *why* the
+  // form isn't accepting them. Instead we let the click through, surface
+  // the error inline, then let the validity gate the actual mutation.
+  const [submitAttempted, setSubmitAttempted] = useState(false);
 
   // Listings without a HouseRules block fall back to a soft cap of 16
   // (Airbnb's published max). The server still rejects values above the
@@ -102,6 +108,7 @@ export const ApplyDialog = ({
       if (initialCheckIn) setCheckIn(initialCheckIn);
       if (initialCheckOut) setCheckOut(initialCheckOut);
       setSubmitErrorMessage(null);
+      setSubmitAttempted(false);
     }
   }, [open, initialCheckIn, initialCheckOut]);
 
@@ -113,15 +120,16 @@ export const ApplyDialog = ({
     setGuestCount((prev) => Math.min(Math.max(1, prev), maxGuests));
   }, [maxGuests]);
 
-  const stayDays =
+  // Raw day delta — negative when check-out is *before* check-in, which we
+  // surface as a distinct error rather than rounding it to zero. The
+  // `stayDays` value used by the rest of the form is clamped at 0.
+  const rawDayDelta =
     checkIn && checkOut
-      ? Math.max(
-          0,
-          Math.round(
-            (new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86_400_000,
-          ),
+      ? Math.round(
+          (new Date(checkOut).getTime() - new Date(checkIn).getTime()) / 86_400_000,
         )
       : 0;
+  const stayDays = Math.max(0, rawDayDelta);
 
   const minStay = listing.minStayDays ?? 30;
   const maxStay = listing.maxStayDays ?? 365;
@@ -133,11 +141,34 @@ export const ApplyDialog = ({
   const guestsValid = guestCount >= 1 && guestCount <= maxGuests;
   const canSubmit = datesValid && guestsValid && !messageTooLong;
 
+  // Inline date-field validation copy. Picked so each invalid combination
+  // surfaces the most actionable hint instead of a generic "fix dates".
+  const dateErrorMessage = !checkIn && !checkOut
+    ? "Select check-in and check-out dates."
+    : !checkIn
+      ? "Select a check-in date."
+      : !checkOut
+        ? "Select a check-out date."
+        : rawDayDelta <= 0
+          ? "Check-out must be after check-in."
+          : !isValidStay
+            ? `Stay must be between ${minStay} and ${maxStay} days.`
+            : "";
+  // Only surface the error styling after the user has tried to submit
+  // (or while there's a current dateErrorMessage post-attempt). Pristine
+  // empty fields shouldn't look "wrong".
+  const showDateError = submitAttempted && Boolean(dateErrorMessage);
+
   const canDecrementGuests = guestCount > 1;
   const canIncrementGuests = guestCount < maxGuests;
 
   const handleSubmit = async () => {
-    if (!user || !canSubmit) return;
+    if (!user) return;
+    // Mark the attempt so the date field can flip into its error state
+    // *before* we early-return on invalid input. Without this the user
+    // could click the disabled-looking button and get zero feedback.
+    setSubmitAttempted(true);
+    if (!canSubmit) return;
 
     setSubmitErrorMessage(null);
 
@@ -231,19 +262,21 @@ export const ApplyDialog = ({
               onChange={(next) => {
                 setCheckIn(next.checkIn);
                 setCheckOut(next.checkOut);
+                // Picking *any* date wipes the error state immediately so
+                // the user doesn't have to click submit again to see
+                // whether their next pick fixed things.
+                if (submitAttempted) setSubmitAttempted(false);
               }}
               minStayDays={minStay}
               maxStayDays={maxStay}
+              error={showDateError}
+              errorMessage={showDateError ? dateErrorMessage : undefined}
+              id="apply-dialog-dates"
             />
 
-            {stayDays > 0 && (
-              <p
-                className={`text-sm ${
-                  isValidStay ? "text-muted-foreground" : "text-destructive"
-                }`}
-              >
+            {stayDays > 0 && isValidStay && (
+              <p className="text-sm text-muted-foreground">
                 {stayDays} day{stayDays !== 1 ? "s" : ""}
-                {!isValidStay && ` (must be ${minStay}–${maxStay} days)`}
               </p>
             )}
 
@@ -380,8 +413,18 @@ export const ApplyDialog = ({
 
             <Button
               type="submit"
-              className="w-full gap-2"
-              disabled={!canSubmit}
+              className={cn(
+                "w-full gap-2",
+                // Soft-disabled look: keeps the click hot so the form's
+                // onSubmit can flip the date field into its error state.
+                // We only hard-disable while the message is over-length
+                // (the textarea has its own visible counter, so a fully
+                // dead button is unambiguous there).
+                !canSubmit && "opacity-60",
+              )}
+              aria-disabled={!canSubmit}
+              disabled={messageTooLong}
+              title={!canSubmit ? "Pick valid check-in and check-out dates first." : undefined}
             >
               <Send className="h-4 w-4" />
               {ctaLabel}

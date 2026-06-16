@@ -183,7 +183,6 @@ export type ListingSummaryDto = {
   status: ListingStatus;
   propertyType: PropertyType;
   monthlyRentCents: number;
-  insuranceRequired: boolean;
   bedrooms: number;
   bathrooms: number;
   minStayDays?: number | null;
@@ -282,7 +281,6 @@ export type ListingDetailsDto = {
   title: string;
   description: string;
   monthlyRentCents: number;
-  insuranceRequired: boolean;
   bedrooms: number;
   bathrooms: number;
   squareFootage?: number | null;
@@ -409,7 +407,6 @@ export type CreateListingRequest = {
   title: string;
   description: string;
   monthlyRentCents: number;
-  insuranceRequired: boolean;
   bedrooms: number;
   bathrooms: number;
   minStayDays: number;
@@ -474,7 +471,6 @@ export type UpdateListingRequest = {
   title: string;
   description: string;
   monthlyRentCents: number;
-  insuranceRequired: boolean;
   bedrooms: number;
   bathrooms: number;
   minStayDays: number;

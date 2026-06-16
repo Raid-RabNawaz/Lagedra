@@ -59,6 +59,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Analytics", "src\Lagedra.Mo
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Lagedra.Tests.Unit", "tests\Lagedra.Tests.Unit\Lagedra.Tests.Unit.csproj", "{DA2F4C9D-7B90-4FD1-AE36-84748E249A74}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ChannelIntegration", "src\Lagedra.Modules\ChannelIntegration\ChannelIntegration.csproj", "{A32F1143-D060-4878-ABF2-9010A30582A1}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -369,6 +371,18 @@ Global
 		{DA2F4C9D-7B90-4FD1-AE36-84748E249A74}.Release|x64.Build.0 = Release|Any CPU
 		{DA2F4C9D-7B90-4FD1-AE36-84748E249A74}.Release|x86.ActiveCfg = Release|Any CPU
 		{DA2F4C9D-7B90-4FD1-AE36-84748E249A74}.Release|x86.Build.0 = Release|Any CPU
+		{A32F1143-D060-4878-ABF2-9010A30582A1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A32F1143-D060-4878-ABF2-9010A30582A1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A32F1143-D060-4878-ABF2-9010A30582A1}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{A32F1143-D060-4878-ABF2-9010A30582A1}.Debug|x64.Build.0 = Debug|Any CPU
+		{A32F1143-D060-4878-ABF2-9010A30582A1}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{A32F1143-D060-4878-ABF2-9010A30582A1}.Debug|x86.Build.0 = Debug|Any CPU
+		{A32F1143-D060-4878-ABF2-9010A30582A1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A32F1143-D060-4878-ABF2-9010A30582A1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A32F1143-D060-4878-ABF2-9010A30582A1}.Release|x64.ActiveCfg = Release|Any CPU
+		{A32F1143-D060-4878-ABF2-9010A30582A1}.Release|x64.Build.0 = Release|Any CPU
+		{A32F1143-D060-4878-ABF2-9010A30582A1}.Release|x86.ActiveCfg = Release|Any CPU
+		{A32F1143-D060-4878-ABF2-9010A30582A1}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -400,6 +414,7 @@ Global
 		{0F701C9A-920C-4D40-A0AD-225D163F2C10} = {5B7CC0C2-67FF-9D9E-B005-0D52DC957648}
 		{4AC11D7C-5A6C-4C41-9541-7E27386CDA5F} = {5B7CC0C2-67FF-9D9E-B005-0D52DC957648}
 		{DA2F4C9D-7B90-4FD1-AE36-84748E249A74} = {22222222-2222-2222-2222-222222222222}
+		{A32F1143-D060-4878-ABF2-9010A30582A1} = {5B7CC0C2-67FF-9D9E-B005-0D52DC957648}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {EA6A3E28-E0B8-4D1C-B935-D3D176BCD889}

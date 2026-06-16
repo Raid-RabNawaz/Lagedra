@@ -15,11 +15,25 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useListings } from "@/features/listings/hooks/useListings";
+import { useGeolocation } from "@/features/listings/hooks/useGeolocation";
 import { ListingCard } from "@/features/listings/components/ListingCard";
 import { HeroSearchBar } from "@/features/listings/components/HeroSearchBar";
-import type { ListingSummaryDto, PropertyType } from "@/api/types";
+import { LocationPermissionPrompt } from "@/features/listings/components/LocationPermissionPrompt";
+import type {
+  ListingSummaryDto,
+  PropertyType,
+  SearchListingsParams,
+} from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+
+/**
+ * Default catchment radius (km) when querying the "near you" carousel.
+ * Mid-term renters routinely consider listings up to ~50km from their
+ * search anchor — a tighter radius produces empty carousels in low-
+ * density markets, a wider one stops feeling "near you".
+ */
+const NEAR_YOU_RADIUS_KM = 50;
 
 type Category = {
   id: PropertyType | "All";
@@ -50,8 +64,37 @@ const SAVE_CARD_IMAGES = [
 
 export const MarketplaceHomePage = () => {
   const [activeCategory, setActiveCategory] = useState<Category["id"]>("All");
+  const [dismissedLocationPrompt, setDismissedLocationPrompt] = useState(false);
 
-  const nearYou = useListings({ page: 1, pageSize: 8, sortBy: "Newest" });
+  // Geolocation drives the first carousel's labelling and filtering. We
+  // never auto-prompt — `useGeolocation` only fires the dialog when the
+  // user clicks the "Enable location" CTA, or when a previous session
+  // had already granted permission.
+  const geo = useGeolocation();
+  const hasCoords = geo.coords != null;
+
+  // Build the "near you" query: when we have coordinates, ask the API
+  // to filter by radius AND sort by distance so the carousel actually
+  // earns its name. Without coordinates we fall back to "Featured rentals"
+  // (Newest sort), but ONLY if the user hasn't explicitly denied — denied
+  // users get an alternative section title and we keep the carousel
+  // useful without misrepresenting it.
+  const nearYouParams = useMemo<SearchListingsParams>(() => {
+    if (geo.coords) {
+      return {
+        page: 1,
+        pageSize: 8,
+        sortBy: "Distance",
+        latitude: geo.coords.latitude,
+        longitude: geo.coords.longitude,
+        radiusKm: NEAR_YOU_RADIUS_KM,
+      };
+    }
+    return { page: 1, pageSize: 8, sortBy: "Newest" };
+  }, [geo.coords]);
+
+  const nearYou = useListings(nearYouParams);
+
   const mostFamous = useListings({ page: 1, pageSize: 8, sortBy: "PriceDesc" });
   const gridParams = useMemo(
     () => ({
@@ -63,6 +106,26 @@ export const MarketplaceHomePage = () => {
     [activeCategory],
   );
   const grid = useListings(gridParams);
+
+  // Section label + "view all" link adapt to geolocation reality:
+  //   - granted/cached coords  → "Rentals near you" (sortBy=Distance)
+  //   - everything else        → "Featured rentals" (sortBy=Newest)
+  // This honours the rule that we never claim "near you" when we can't
+  // back the claim up with actual coordinates.
+  const carouselTitle = hasCoords ? "Rentals near you" : "Featured rentals";
+  const carouselViewAllHref = hasCoords
+    ? `/listings/search?sortBy=Distance&latitude=${geo.coords!.latitude}&longitude=${geo.coords!.longitude}&radiusKm=${NEAR_YOU_RADIUS_KM}`
+    : "/listings/search?sortBy=Newest";
+
+  // Show the prompt only when there's a useful action the user can take.
+  // The "denied" state still surfaces a short explainer banner so the
+  // section title swap doesn't feel arbitrary — but the user dismissed
+  // it once we hide it for the rest of the session.
+  const showLocationPrompt =
+    !dismissedLocationPrompt &&
+    !hasCoords &&
+    geo.permission !== "granted" &&
+    geo.permission !== "unknown";
 
   return (
     <div className="bg-background">
@@ -106,10 +169,23 @@ export const MarketplaceHomePage = () => {
         <div className="h-14 sm:h-16" aria-hidden />
       </section>
 
-      {/* ─── Rentals near you (carousel) ───────────────────── */}
+      {/* ─── Location prompt (only when actionable) ────────── */}
+      {showLocationPrompt && (
+        <section className="mx-auto max-w-7xl px-4 pt-8 sm:px-6 lg:px-8">
+          <LocationPermissionPrompt
+            permission={geo.permission}
+            loading={geo.loading}
+            error={geo.error}
+            onEnable={geo.requestLocation}
+            onDismiss={() => setDismissedLocationPrompt(true)}
+          />
+        </section>
+      )}
+
+      {/* ─── Featured / nearby carousel ─────────────────────── */}
       <Carousel
-        title="Rentals near you"
-        viewAllHref="/listings/search?sortBy=Distance"
+        title={carouselTitle}
+        viewAllHref={carouselViewAllHref}
         loading={nearYou.isLoading}
         items={nearYou.data?.items ?? []}
       />

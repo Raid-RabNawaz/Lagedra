@@ -7,7 +7,6 @@ public sealed record UpdateListingRequest(
     string Title,
     string Description,
     long MonthlyRentCents,
-    bool InsuranceRequired,
     int Bedrooms,
     decimal Bathrooms,
     int MinStayDays,

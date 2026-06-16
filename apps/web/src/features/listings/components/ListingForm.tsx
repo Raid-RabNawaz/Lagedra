@@ -154,10 +154,6 @@ export function ListingForm({ defaultValues, onSubmit, submitLabel, definitions 
               </p>
             </Field>
           </div>
-          <label className="flex items-center gap-2 text-sm sm:col-span-2 cursor-pointer">
-            <input type="checkbox" {...form.register("insuranceRequired")} className="rounded border-input" />
-            Tenant must carry rental insurance
-          </label>
         </CardContent>
       </Card>
 

@@ -3,12 +3,17 @@ import { listingApi } from "@/features/listings/services/listingApi";
 import { privacyApi } from "@/features/privacy/services/privacyApi";
 import type { SearchListingsParams } from "@/api/types";
 
-export function useListings(params: SearchListingsParams) {
+export function useListings(
+  params: SearchListingsParams,
+  options: { enabled?: boolean } = {},
+) {
+  const { enabled = true } = options;
   return useQuery({
     queryKey: ["listings", params],
     queryFn: () => listingApi.search(params),
     placeholderData: keepPreviousData,
     staleTime: 60_000,
+    enabled,
   });
 }
 

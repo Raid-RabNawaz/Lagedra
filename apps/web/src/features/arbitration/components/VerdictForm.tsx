@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
-import { formatDate } from "@/utils/format";
+import { formatDate, formatMoney } from "@/utils/format";
 import { useIssueDecision } from "@/features/arbitration/hooks/useArbitration";
 import type {
   CaseDto,
@@ -103,7 +103,7 @@ function PenaltyLine({ p, c }: { p: DecisionPenaltyDto; c: CaseDto }) {
       {" · "}
       {penaltyTypeLabels[p.penaltyType]}
       {p.amountCents != null && p.amountCents > 0 && (
-        <> · ${(p.amountCents / 100).toLocaleString()}</>
+        <> · {formatMoney(p.amountCents)}</>
       )}
       {p.description && <p className="text-muted-foreground mt-1">{p.description}</p>}
     </li>

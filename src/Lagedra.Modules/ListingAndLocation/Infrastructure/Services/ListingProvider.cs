@@ -97,7 +97,6 @@ public sealed class ListingProvider(ListingsDbContext db) : IListingProvider
             listing.Bedrooms,
             listing.Bathrooms,
             listing.SquareFootage,
-            listing.InsuranceRequired,
             listing.VirtualTourUrl,
             preciseAddress,
             houseRules,

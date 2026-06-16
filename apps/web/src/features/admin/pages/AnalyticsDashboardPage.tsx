@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader } from "@/components/shared/Loader";
+import { formatMoney } from "@/utils/format";
 
 export const AnalyticsDashboardPage = () => {
   const [summary, setSummary] = useState<PlatformSummaryDto | null>(null);
@@ -38,8 +39,9 @@ export const AnalyticsDashboardPage = () => {
     void load(startDate, endDate);
   };
 
-  const formatCurrency = (cents: number) =>
-    `$${(cents / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  // Reuse the global money formatter so the analytics tiles render the
+  // same whole-dollar amounts as the rest of the product.
+  const formatCurrency = (cents: number) => formatMoney(cents);
 
   return (
     <div className="space-y-6">

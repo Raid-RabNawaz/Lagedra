@@ -16,7 +16,6 @@ export function listingDetailsToFormValues(listing: ListingDetailsDto): ListingF
       listing.defaultDepositCents != null
         ? listing.defaultDepositCents / 100
         : undefined,
-    insuranceRequired: listing.insuranceRequired,
     bedrooms: listing.bedrooms,
     bathrooms: Number(listing.bathrooms),
     minStayDays: listing.minStayDays ?? 30,

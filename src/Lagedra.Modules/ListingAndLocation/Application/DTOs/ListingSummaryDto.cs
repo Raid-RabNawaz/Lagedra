@@ -8,7 +8,6 @@ public sealed record ListingSummaryDto(
     ListingStatus Status,
     PropertyType PropertyType,
     long MonthlyRentCents,
-    bool InsuranceRequired,
     int Bedrooms,
     decimal Bathrooms,
     int? MinStayDays,

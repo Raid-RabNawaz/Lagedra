@@ -29,6 +29,7 @@
     <ProjectReference Include="..\Lagedra.Modules\AntiAbuseAndIntegrity\AntiAbuseAndIntegrity.csproj" />
     <ProjectReference Include="..\Lagedra.Modules\ContentManagement\ContentManagement.csproj" />
     <ProjectReference Include="..\Lagedra.Modules\PartnerNetwork\PartnerNetwork.csproj" />
+    <ProjectReference Include="..\Lagedra.Modules\ChannelIntegration\ChannelIntegration.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -33,6 +33,7 @@ COPY src/Lagedra.Modules/ContentManagement/ContentManagement.csproj             
 COPY src/Lagedra.Modules/PartnerNetwork/PartnerNetwork.csproj                   src/Lagedra.Modules/PartnerNetwork/
 COPY src/Lagedra.Modules/AuditLog/AuditLog.csproj                               src/Lagedra.Modules/AuditLog/
 COPY src/Lagedra.Modules/Analytics/Analytics.csproj                             src/Lagedra.Modules/Analytics/
+COPY src/Lagedra.Modules/ChannelIntegration/ChannelIntegration.csproj           src/Lagedra.Modules/ChannelIntegration/
 
 # Test projects
 COPY tests/Lagedra.Tests.Unit/Lagedra.Tests.Unit.csproj                       tests/Lagedra.Tests.Unit/

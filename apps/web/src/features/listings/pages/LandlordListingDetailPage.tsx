@@ -15,7 +15,6 @@ import {
   MapPin,
   Lock,
   Sparkles,
-  Shield,
   Zap,
   CheckCircle2,
   AlertCircle,
@@ -196,12 +195,6 @@ export const LandlordListingDetailPage = () => {
               <Badge variant="accent" className="gap-1">
                 <Zap className="h-3 w-3" />
                 Instant book
-              </Badge>
-            )}
-            {listing.insuranceRequired && (
-              <Badge variant="default" className="gap-1">
-                <Shield className="h-3 w-3" />
-                Insurance required
               </Badge>
             )}
           </div>

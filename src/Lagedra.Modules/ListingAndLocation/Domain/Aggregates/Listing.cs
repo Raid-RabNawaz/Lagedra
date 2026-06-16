@@ -14,7 +14,6 @@ public sealed class Listing : AggregateRoot<Guid>
     public string Title { get; private set; } = string.Empty;
     public string Description { get; private set; } = string.Empty;
     public long MonthlyRentCents { get; private set; }
-    public bool InsuranceRequired { get; private set; }
     public int Bedrooms { get; private set; }
     public decimal Bathrooms { get; private set; }
     public int? SquareFootage { get; private set; }
@@ -90,7 +89,6 @@ public sealed class Listing : AggregateRoot<Guid>
         string title,
         string description,
         long monthlyRentCents,
-        bool insuranceRequired,
         int bedrooms,
         decimal bathrooms,
         StayRange stayRange,
@@ -135,7 +133,6 @@ public sealed class Listing : AggregateRoot<Guid>
             Title = title,
             Description = description,
             MonthlyRentCents = monthlyRentCents,
-            InsuranceRequired = insuranceRequired,
             Bedrooms = bedrooms,
             Bathrooms = bathrooms,
             SquareFootage = squareFootage,
@@ -149,7 +146,6 @@ public sealed class Listing : AggregateRoot<Guid>
         string title,
         string description,
         long monthlyRentCents,
-        bool insuranceRequired,
         int bedrooms,
         decimal bathrooms,
         StayRange stayRange,
@@ -190,7 +186,6 @@ public sealed class Listing : AggregateRoot<Guid>
         Title = title;
         Description = description;
         MonthlyRentCents = monthlyRentCents;
-        InsuranceRequired = insuranceRequired;
         Bedrooms = bedrooms;
         Bathrooms = bathrooms;
         SquareFootage = squareFootage;

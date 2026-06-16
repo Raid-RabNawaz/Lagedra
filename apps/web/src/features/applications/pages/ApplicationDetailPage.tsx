@@ -292,11 +292,11 @@ export const ApplicationDetailPage = () => {
                       max={maxDeposit / 100}
                       value={depositInput}
                       onChange={(e) => setDepositInput(e.target.value)}
-                      placeholder={`Max: $${(maxDeposit / 100).toFixed(2)}`}
+                      placeholder={`Max: ${formatMoney(maxDeposit)}`}
                     />
                     {depositInput && !isValidDeposit && (
                       <p className="text-xs text-destructive">
-                        Must be between $0.01 and {formatMoney(maxDeposit)}
+                        Must be greater than $0 and at most {formatMoney(maxDeposit)}
                       </p>
                     )}
                   </div>

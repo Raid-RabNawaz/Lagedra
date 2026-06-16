@@ -30,7 +30,6 @@ public sealed class ListingConfiguration : IEntityTypeConfiguration<Listing>
         builder.Property(l => l.Title).HasMaxLength(500).IsRequired();
         builder.Property(l => l.Description).HasMaxLength(5000).IsRequired();
         builder.Property(l => l.MonthlyRentCents).IsRequired();
-        builder.Property(l => l.InsuranceRequired).IsRequired();
         builder.Property(l => l.Bedrooms).IsRequired();
         builder.Property(l => l.Bathrooms).HasColumnType("decimal(3,1)").IsRequired();
         builder.Property(l => l.SquareFootage);

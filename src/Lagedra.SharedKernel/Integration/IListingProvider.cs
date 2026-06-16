@@ -45,7 +45,6 @@ public sealed record ListingDetailsDto(
     int Bedrooms = 0,
     decimal Bathrooms = 0m,
     int? SquareFootage = null,
-    bool InsuranceRequired = false,
     Uri? VirtualTourUrl = null,
     ListingAddressDto? PreciseAddress = null,
     ListingHouseRulesDto? HouseRules = null,

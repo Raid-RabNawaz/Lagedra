@@ -11,7 +11,6 @@ public sealed record ListingDetailsDto(
     string Title,
     string Description,
     long MonthlyRentCents,
-    bool InsuranceRequired,
     int Bedrooms,
     decimal Bathrooms,
     int? SquareFootage,

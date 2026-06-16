@@ -42,6 +42,8 @@ public static class ActivationAndBillingModuleRegistration
             OnTruthSurfaceConfirmedCreatePaymentConfirmationHandler>();
         services.AddDomainEventHandler<PaymentConfirmedEvent,
             OnPaymentConfirmedActivateDealHandler>();
+        services.AddDomainEventHandler<PaymentConfirmedEvent,
+            OnPaymentConfirmedPublishToChannelHandler>();
         services.AddDomainEventHandler<PaymentDisputeResolvedEvent,
             OnPaymentDisputeResolvedHandler>();
         services.AddDomainEventHandler<BookingCancelledEvent,

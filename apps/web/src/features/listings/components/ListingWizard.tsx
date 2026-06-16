@@ -94,8 +94,8 @@ const STEPS: Step[] = [
     label: "Pricing & deposit",
     shortLabel: "Pricing",
     icon: DollarSign,
-    description: "Monthly rent, deposit cap and insurance.",
-    fields: ["monthlyRentDollars", "maxDepositDollars", "insuranceRequired"],
+    description: "Monthly rent and deposit cap.",
+    fields: ["monthlyRentDollars", "maxDepositDollars"],
   },
   {
     id: "amenities",
@@ -287,7 +287,7 @@ export function ListingWizard({
   );
 }
 
-// ── Step header ───────────────────────────────────────────────
+// ?? Step header ???????????????????????????????????????????????
 
 function StepHeader({
   steps,
@@ -362,7 +362,7 @@ function StepHeader({
   );
 }
 
-// ── Step bodies ──────────────────────────────────────────────
+// ?? Step bodies ??????????????????????????????????????????????
 
 type StepFormProps = { form: ReturnType<typeof useForm<ListingFormValues>> };
 
@@ -381,7 +381,7 @@ function BasicsStep({ form }: StepFormProps) {
       <Field label="Title" error={form.formState.errors.title?.message}>
         <Input placeholder="Bright 2BR near downtown" {...form.register("title")} />
         <p className="text-[11px] text-muted-foreground">
-          Make it descriptive — renters search by these words.
+          Make it descriptive � renters search by these words.
         </p>
       </Field>
       <div className="sm:col-span-2">
@@ -418,7 +418,7 @@ function PropertyStep({ form }: StepFormProps) {
         <Input
           type="number"
           min={0}
-          placeholder="—"
+          placeholder="�"
           {...form.register("squareFootage", {
             setValueAs: (v) => (v === "" || v === undefined ? undefined : Number(v)),
           })}
@@ -459,19 +459,6 @@ function PricingStep({ form }: StepFormProps) {
           Lagedra will suggest a fair deposit range automatically.
         </p>
       </Field>
-      <label className="sm:col-span-2 flex items-start gap-3 rounded-lg border p-3 cursor-pointer hover:bg-muted/30 transition-colors">
-        <input
-          type="checkbox"
-          {...form.register("insuranceRequired")}
-          className="mt-1 rounded border-input"
-        />
-        <div>
-          <p className="text-sm font-medium">Tenant must carry rental insurance</p>
-          <p className="text-xs text-muted-foreground">
-            Tenants without insurance won't be able to apply.
-          </p>
-        </div>
-      </label>
     </div>
   );
 }
@@ -756,10 +743,10 @@ function ReviewStep({
 
         <ReviewSection title="Basics" onEdit={() => onJump(0)}>
           <ReviewRow label="Property type" value={v.propertyType} />
-          <ReviewRow label="Title" value={v.title || "—"} />
+          <ReviewRow label="Title" value={v.title || "�"} />
           <ReviewRow
             label="Description"
-            value={v.description ? `${v.description.slice(0, 120)}${v.description.length > 120 ? "…" : ""}` : "—"}
+            value={v.description ? `${v.description.slice(0, 120)}${v.description.length > 120 ? "�" : ""}` : "�"}
           />
         </ReviewSection>
 
@@ -772,16 +759,12 @@ function ReviewStep({
           {v.squareFootage != null && (
             <ReviewRow label="Square footage" value={`${v.squareFootage.toLocaleString()} sq ft`} />
           )}
-          <ReviewRow label="Stay length" value={`${v.minStayDays}–${v.maxStayDays} days`} />
+          <ReviewRow label="Stay length" value={`${v.minStayDays}�${v.maxStayDays} days`} />
         </ReviewSection>
 
         <ReviewSection title="Pricing" onEdit={() => onJump(2)}>
           <ReviewRow label="Monthly rent" value={`$${v.monthlyRentDollars.toLocaleString()}`} />
           <ReviewRow label="Max deposit" value={`$${v.maxDepositDollars.toLocaleString()}`} />
-          <ReviewRow
-            label="Insurance required"
-            value={v.insuranceRequired ? "Yes" : "No"}
-          />
         </ReviewSection>
 
         <ReviewSection title="Amenities & safety" onEdit={() => onJump(3)}>
@@ -790,7 +773,7 @@ function ReviewStep({
             value={
               amenityNames.length === 0
                 ? "None"
-                : `${amenityNames.length} (${amenityNames.slice(0, 4).join(", ")}${amenityNames.length > 4 ? ", …" : ""})`
+                : `${amenityNames.length} (${amenityNames.slice(0, 4).join(", ")}${amenityNames.length > 4 ? ", �" : ""})`
             }
           />
           <ReviewRow
@@ -798,7 +781,7 @@ function ReviewStep({
             value={
               safetyNames.length === 0
                 ? "None"
-                : `${safetyNames.length} (${safetyNames.slice(0, 4).join(", ")}${safetyNames.length > 4 ? ", …" : ""})`
+                : `${safetyNames.length} (${safetyNames.slice(0, 4).join(", ")}${safetyNames.length > 4 ? ", �" : ""})`
             }
           />
           <ReviewRow
@@ -806,7 +789,7 @@ function ReviewStep({
             value={
               considerationNames.length === 0
                 ? "None"
-                : `${considerationNames.length} (${considerationNames.slice(0, 4).join(", ")}${considerationNames.length > 4 ? ", …" : ""})`
+                : `${considerationNames.length} (${considerationNames.slice(0, 4).join(", ")}${considerationNames.length > 4 ? ", �" : ""})`
             }
           />
         </ReviewSection>
@@ -839,7 +822,7 @@ function ReviewStep({
   );
 }
 
-// ── Reusable bits ─────────────────────────────────────────────
+// ?? Reusable bits ?????????????????????????????????????????????
 
 function Field({
   label,

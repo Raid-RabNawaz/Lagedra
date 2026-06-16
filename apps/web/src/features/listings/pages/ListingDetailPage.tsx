@@ -5,7 +5,6 @@ import {
   Bath,
   Ruler,
   Calendar,
-  Shield,
   ShieldCheck,
   CheckCircle2,
   MailCheck,
@@ -254,11 +253,6 @@ export const ListingDetailPage = () => {
                   <Zap className="h-3 w-3" /> Instant book
                 </Badge>
               )}
-              {listing.insuranceRequired && (
-                <Badge variant="default" className="gap-1">
-                  <Shield className="h-3 w-3" /> Insurance required
-                </Badge>
-              )}
             </div>
 
             <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
@@ -416,8 +410,17 @@ export const ListingDetailPage = () => {
 
         {/* Sidebar */}
         <div className="lg:col-span-1 space-y-6">
-          {/* Price card */}
-          <Card className="sticky top-24">
+          {/* Price card.
+              `sticky` creates a new stacking context but defaults to
+              `z-auto`, which puts the booking card *behind* the host
+              card sibling below as soon as they overlap (most visible
+              when the host card scrolls upward into the sticky card or
+              when the date-picker popover opens). Pinning the card to
+              `z-20` keeps the entire reservation widget — including
+              its calendar popover — above the host card. The popover
+              itself uses `z-30` so it still beats anything else inside
+              this stacking context. */}
+          <Card className="sticky top-24 z-20">
             <CardContent className="p-6">
               <div className="flex items-baseline gap-1 mb-4">
                 <span className="text-3xl font-bold">{formatMoney(listing.monthlyRentCents)}</span>

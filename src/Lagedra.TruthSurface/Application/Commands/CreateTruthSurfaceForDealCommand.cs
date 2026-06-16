@@ -374,7 +374,6 @@ public sealed class CreateTruthSurfaceForDealCommandHandler(
             ["maxDepositCents"] = listing?.MaxDepositCents,
             ["minStayDays"] = listing?.MinStayDays,
             ["maxStayDays"] = listing?.MaxStayDays,
-            ["insuranceRequired"] = listing?.InsuranceRequired ?? false,
             ["virtualTourUrl"] = listing?.VirtualTourUrl?.OriginalString,
             ["amenities"] = listing?.AmenityNames ?? Array.Empty<string>(),
             ["safetyDevices"] = listing?.SafetyDeviceNames ?? Array.Empty<string>(),

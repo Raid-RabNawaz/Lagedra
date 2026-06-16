@@ -30,6 +30,22 @@ type Props = {
   /** Optional layout hint — "stacked" renders one button, "twin" renders
    *  two segmented buttons styled like a check-in/check-out pair. */
   layout?: "stacked" | "twin";
+  /**
+   * When true, the field renders in an error state — destructive border,
+   * destructive label colour on whichever segment is empty, and (if set)
+   * an `errorMessage` underneath. Used by the booking + apply flows to
+   * highlight the field after the host clicks the CTA without picking
+   * dates first.
+   */
+  error?: boolean;
+  /**
+   * Optional message rendered in destructive text below the field. Only
+   * shown when `error` is true. Keep short — long messages collide with
+   * the "Stay range" hint on the same row.
+   */
+  errorMessage?: string;
+  /** Optional id linking the field to an external label / aria-describedby. */
+  id?: string;
   className?: string;
 };
 
@@ -50,6 +66,9 @@ export function DateRangeField({
   minStayDays,
   maxStayDays,
   layout = "twin",
+  error = false,
+  errorMessage,
+  id,
   className,
 }: Props) {
   const [open, setOpen] = useState(false);
@@ -147,10 +166,29 @@ export function DateRangeField({
   const checkOutLabel = value.checkOut ? formatDateShort(value.checkOut) : "Add date";
   const hasAny = Boolean(value.checkIn || value.checkOut);
 
+  // Use the destructive-border-and-ring trick to show error state without
+  // changing the layout. Per-segment colour adjusts below so that the
+  // empty side of a "check-in picked but no check-out" combo is the one
+  // tinted destructive — clearer than dyeing the whole field red.
+  const errorRingClass = error
+    ? "ring-2 ring-destructive/50 border-destructive"
+    : "";
+  const errorId = id ? `${id}-error` : undefined;
+
   return (
-    <div ref={containerRef} className={cn("relative", className)}>
+    <div
+      ref={containerRef}
+      className={cn("relative", className)}
+      aria-invalid={error || undefined}
+      aria-describedby={error && errorMessage ? errorId : undefined}
+    >
       {layout === "twin" ? (
-        <div className="grid grid-cols-2 overflow-hidden rounded-lg border bg-background">
+        <div
+          className={cn(
+            "grid grid-cols-2 overflow-hidden rounded-lg border bg-background transition-colors",
+            errorRingClass,
+          )}
+        >
           <Segment
             label="Check-in"
             value={checkInLabel}
@@ -158,6 +196,7 @@ export function DateRangeField({
             isFilled={Boolean(value.checkIn)}
             isActive={open && activeSegment === "checkin"}
             onClick={() => openTo("checkin")}
+            hasError={error && !value.checkIn}
           />
           <Segment
             label="Check-out"
@@ -166,6 +205,7 @@ export function DateRangeField({
             isFilled={Boolean(value.checkOut)}
             isActive={open && activeSegment === "checkout"}
             onClick={() => openTo("checkout")}
+            hasError={error && !value.checkOut}
             withDivider
           />
         </div>
@@ -176,9 +216,15 @@ export function DateRangeField({
           className={cn(
             "flex w-full items-center gap-3 rounded-lg border bg-background px-4 py-2.5 text-left transition-colors hover:bg-secondary",
             open && "ring-2 ring-primary",
+            errorRingClass,
           )}
         >
-          <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+          <CalendarIcon
+            className={cn(
+              "h-4 w-4",
+              error ? "text-destructive" : "text-muted-foreground",
+            )}
+          />
           <span className="flex-1 text-sm">
             {hasAny ? (
               <>
@@ -187,20 +233,30 @@ export function DateRangeField({
                 <span className="font-medium">{checkOutLabel}</span>
               </>
             ) : (
-              <span className="text-muted-foreground">Pick your dates</span>
+              <span
+                className={cn(error ? "text-destructive" : "text-muted-foreground")}
+              >
+                Pick your dates
+              </span>
             )}
           </span>
         </button>
       )}
 
-      <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-        <span>
-          {minStayDays && maxStayDays
-            ? `Stay range: ${minStayDays}–${maxStayDays} days`
-            : minStayDays
-              ? `Minimum stay: ${minStayDays} days`
-              : ""}
-        </span>
+      <div className="mt-2 flex items-center justify-between text-xs">
+        {error && errorMessage ? (
+          <span id={errorId} role="alert" className="text-destructive">
+            {errorMessage}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">
+            {minStayDays && maxStayDays
+              ? `Stay range: ${minStayDays}–${maxStayDays} days`
+              : minStayDays
+                ? `Minimum stay: ${minStayDays} days`
+                : ""}
+          </span>
+        )}
         {hasAny && (
           <button
             type="button"
@@ -237,6 +293,7 @@ function Segment({
   isFilled,
   onClick,
   withDivider,
+  hasError,
 }: {
   label: string;
   value: string;
@@ -245,11 +302,15 @@ function Segment({
   isFilled: boolean;
   onClick: () => void;
   withDivider?: boolean;
+  /** Tint the segment destructive — used when the parent field is in error
+   *  state AND this particular segment is the empty one. */
+  hasError?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      aria-invalid={hasError || undefined}
       className={cn(
         "group flex flex-col items-start gap-0.5 px-4 py-2.5 text-left transition-colors",
         withDivider && "border-l",
@@ -258,13 +319,22 @@ function Segment({
           : "hover:bg-secondary/60",
       )}
     >
-      <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+      <span
+        className={cn(
+          "text-[11px] font-semibold uppercase tracking-wide",
+          hasError ? "text-destructive" : "text-muted-foreground",
+        )}
+      >
         {label}
       </span>
       <span
         className={cn(
           "truncate text-sm",
-          isFilled ? "font-medium text-foreground" : "text-muted-foreground/80",
+          isFilled
+            ? "font-medium text-foreground"
+            : hasError
+              ? "text-destructive"
+              : "text-muted-foreground/80",
         )}
       >
         {isFilled ? value : placeholder}

@@ -40,6 +40,8 @@ using Lagedra.Modules.ContentManagement;
 using Lagedra.Modules.ContentManagement.Presentation.Endpoints;
 using Lagedra.Modules.PartnerNetwork;
 using Lagedra.Modules.PartnerNetwork.Presentation.Endpoints;
+using Lagedra.Modules.ChannelIntegration;
+using Lagedra.Modules.ChannelIntegration.Presentation.Endpoints;
 using Lagedra.Modules.AuditLog;
 using Lagedra.Modules.AuditLog.Presentation.Endpoints;
 using Lagedra.Modules.Analytics;
@@ -89,6 +91,7 @@ try
     builder.Services.AddAntiAbuseAndIntegrity(builder.Configuration);
     builder.Services.AddContentManagement(builder.Configuration);
     builder.Services.AddPartnerNetwork(builder.Configuration);
+    builder.Services.AddChannelIntegration(builder.Configuration);
     builder.Services.AddAuditLog(builder.Configuration);
     builder.Services.AddAnalytics(builder.Configuration);
     builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
@@ -190,6 +193,7 @@ try
             typeof(Lagedra.Modules.AntiAbuseAndIntegrity.Infrastructure.Persistence.IntegrityDbContext),
             typeof(Lagedra.Modules.ContentManagement.Infrastructure.Persistence.ContentDbContext),
             typeof(Lagedra.Modules.PartnerNetwork.Infrastructure.Persistence.PartnerDbContext),
+            typeof(Lagedra.Modules.ChannelIntegration.Infrastructure.Persistence.ChannelDbContext),
             typeof(Lagedra.Infrastructure.Settings.PlatformSettingsDbContext),
         };
 
@@ -334,6 +338,7 @@ try
     app.MapSeoPageEndpoints();
     app.MapAdminBlogEndpoints();
     app.MapPartnerEndpoints();
+    app.MapChannelEndpoints();
     app.MapPlatformSettingsEndpoints();
     app.MapAdminComplianceEndpoints();
     app.MapAdminInsuranceEndpoints();

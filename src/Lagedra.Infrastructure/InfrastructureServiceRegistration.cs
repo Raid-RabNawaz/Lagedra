@@ -2,6 +2,8 @@ using Lagedra.Infrastructure.Behaviors;
 using Lagedra.Infrastructure.Caching;
 using Lagedra.Infrastructure.Eventing;
 using Lagedra.Infrastructure.External.Antivirus;
+using Lagedra.Infrastructure.External.Channels;
+using Lagedra.Infrastructure.External.Channels.OwnerRez;
 using Lagedra.Infrastructure.External.Email;
 using Lagedra.Infrastructure.External.Geocoding;
 using Lagedra.Infrastructure.External.Insurance;
@@ -103,6 +105,15 @@ public static class InfrastructureServiceRegistration
 
         // Insurance (stub — replace when MGA partner is confirmed)
         services.AddScoped<IInsuranceApiClient, InsuranceApiClient>();
+
+        // Channel / PMS integrations (provider-agnostic).
+        // Register one IChannelProvider per integrated platform; the registry
+        // resolves them by ProviderKey. Adding Hostaway/Guesty/etc. later is a
+        // one-line addition here — no changes to the sync jobs or publisher.
+        services.Configure<OwnerRezChannelSettings>(
+            configuration.GetSection(OwnerRezChannelSettings.SectionName));
+        services.AddScoped<IChannelProvider, OwnerRezChannelProvider>();
+        services.AddScoped<IChannelProviderRegistry, ChannelProviderRegistry>();
 
         // Caching — swap InMemoryCacheService for a distributed impl (e.g. Redis) here
         services.AddMemoryCache();

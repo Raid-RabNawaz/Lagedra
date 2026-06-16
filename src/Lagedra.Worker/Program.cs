@@ -4,6 +4,7 @@ using Lagedra.Compliance;
 using Lagedra.Infrastructure;
 using Lagedra.Modules.ActivationAndBilling;
 using Lagedra.Modules.AntiAbuseAndIntegrity;
+using Lagedra.Modules.ChannelIntegration;
 using Lagedra.Modules.Arbitration;
 using Lagedra.Modules.ComplianceMonitoring;
 using Lagedra.Modules.ContentManagement;
@@ -59,6 +60,7 @@ try
             services.AddAntiAbuseAndIntegrity(configuration);
             services.AddContentManagement(configuration);
             services.AddPartnerNetwork(configuration);
+            services.AddChannelIntegration(configuration);
 
             services.AddQuartzScheduling(configuration);
         })

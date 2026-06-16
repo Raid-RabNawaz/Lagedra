@@ -58,14 +58,6 @@ export function ListingCard({ listing, className }: ListingCardProps) {
             {propertyTypeLabels[listing.propertyType] ?? listing.propertyType}
           </Badge>
           <div className="absolute right-3 top-3 flex items-center gap-1.5">
-            {listing.insuranceRequired && (
-              <Badge
-                className="rounded-full bg-primary text-[10px] font-semibold text-primary-foreground shadow-sm"
-                variant="accent"
-              >
-                Insured
-              </Badge>
-            )}
             <SaveButton
               listingId={listing.id}
               className="opacity-0 group-hover:opacity-100 transition-opacity sm:opacity-0 max-sm:opacity-100"

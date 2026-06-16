@@ -237,8 +237,13 @@ public sealed class OnBookingCancelledNotify(BillingDbContext db, IMediator m)
             .FirstOrDefaultAsync(a => a.DealId == e.DealId, ct).ConfigureAwait(false);
         if (app is null) return;
 
+        // Currency display policy (Lagedra): never show fractional cents
+        // in user-facing copy. Ceiling-round to the nearest whole dollar
+        // so the recipient is never quoted a lower number than what
+        // actually hits their account.
+        var refundDollars = (long)Math.Ceiling(e.RefundAmountCents / 100m);
         var refundInfo = e.RefundAmountCents > 0
-            ? $"A refund of ${e.RefundAmountCents / 100m:F2} will be processed."
+            ? $"A refund of ${refundDollars:N0} will be processed."
             : "No refund is applicable per the cancellation policy.";
 
         await m.Send(new NotifyUserCommand(
@@ -263,11 +268,12 @@ public sealed class OnDamageClaimFiledNotify(IMediator m)
     public async Task Handle(DamageClaimFiledEvent e, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(e);
+        var claimDollars = (long)Math.Ceiling(e.ClaimedAmountCents / 100m);
         await m.Send(new NotifyUserCommand(
             e.TenantUserId, "damage_claim_filed",
             "Damage Claim Filed",
-            $"A damage claim of ${e.ClaimedAmountCents / 100m:F2} has been filed for your stay.",
-            new() { ["dealId"] = e.DealId.ToString(), ["amount"] = $"{e.ClaimedAmountCents / 100m:F2}" },
+            $"A damage claim of ${claimDollars.ToString("N0", CultureInfo.InvariantCulture)} has been filed for your stay.",
+            new() { ["dealId"] = e.DealId.ToString(), ["amount"] = claimDollars.ToString("N0", CultureInfo.InvariantCulture) },
             Channels.EmailAndInApp, e.DealId, "Deal"), ct).ConfigureAwait(false);
     }
 }
@@ -301,18 +307,20 @@ public sealed class OnDamageClaimApprovedNotify(BillingDbContext db, IMediator m
             .FirstOrDefaultAsync(a => a.DealId == e.DealId, ct).ConfigureAwait(false);
         if (app is null) return;
 
+        var approvedDollars = (long)Math.Ceiling(e.ApprovedAmountCents / 100m);
+        var approvedDollarsLabel = approvedDollars.ToString("N0", CultureInfo.InvariantCulture);
         await m.Send(new NotifyUserCommand(
             e.TenantUserId, "damage_claim_approved",
             "Damage Claim Approved",
-            $"A damage claim of \u20ac{e.ApprovedAmountCents / 100m:F2} has been approved. The amount will be deducted from your deposit.",
-            new() { ["dealId"] = e.DealId.ToString(), ["amount"] = $"{e.ApprovedAmountCents / 100m:F2}" },
+            $"A damage claim of ${approvedDollarsLabel} has been approved. The amount will be deducted from your deposit.",
+            new() { ["dealId"] = e.DealId.ToString(), ["amount"] = approvedDollarsLabel },
             Channels.EmailAndInApp, e.DealId, "Deal"), ct).ConfigureAwait(false);
 
         await m.Send(new NotifyUserCommand(
             app.LandlordUserId, "damage_claim_approved",
             "Damage Claim Approved",
-            $"Your damage claim of \u20ac{e.ApprovedAmountCents / 100m:F2} has been approved.",
-            new() { ["dealId"] = e.DealId.ToString(), ["amount"] = $"{e.ApprovedAmountCents / 100m:F2}" },
+            $"Your damage claim of ${approvedDollarsLabel} has been approved.",
+            new() { ["dealId"] = e.DealId.ToString(), ["amount"] = approvedDollarsLabel },
             Channels.EmailAndInApp, e.DealId, "Deal"), ct).ConfigureAwait(false);
     }
 }

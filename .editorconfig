@@ -84,3 +84,11 @@ indent_style = tab
 
 [*.{cs,vb}]
 dotnet_diagnostic.CA1062.severity = none
+
+# EF Core migrations are generated via tools/scripts (never hand-authored) and
+# intentionally use patterns that trip the strict analyzer set — e.g. inline
+# constant arrays for composite indexes (CA1861). Treat them as generated code
+# so `dotnet ef migrations add` output builds without manual edits.
+[**/Migrations/*.cs]
+generated_code = true
+dotnet_diagnostic.CA1861.severity = none

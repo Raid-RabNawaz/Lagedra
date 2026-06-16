@@ -2,6 +2,7 @@ using Lagedra.Auth.Infrastructure.Jobs;
 using Lagedra.Compliance.Infrastructure.Jobs;
 using Lagedra.Modules.ActivationAndBilling.Infrastructure.Jobs;
 using Lagedra.Modules.AntiAbuseAndIntegrity.Infrastructure.Jobs;
+using Lagedra.Modules.ChannelIntegration.Infrastructure.Jobs;
 using Lagedra.Modules.Arbitration.Infrastructure.Jobs;
 using Lagedra.Modules.ComplianceMonitoring.Infrastructure.Jobs;
 using Lagedra.Modules.Evidence.Infrastructure.Jobs;
@@ -77,6 +78,12 @@ internal static class JobRegistry
 
         // PartnerNetwork
         Register<ExpirePartnerEndorsementsJob>(q, "0 0 1 * * ?");
+
+        // ChannelIntegration (PMS sync). Provider-agnostic — one set of jobs
+        // drives every connected platform via the IChannelProvider registry.
+        Register<ChannelContentSyncJob>(q, "0 0 6,18 * * ?");
+        Register<ChannelAvailabilitySyncJob>(q, "0 0 */3 * * ?");
+        Register<ChannelBookingUpdateJob>(q, "0 0 */6 * * ?");
     }
 
     private static void Register<T>(IServiceCollectionQuartzConfigurator q, string cronExpression)

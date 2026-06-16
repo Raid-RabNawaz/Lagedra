@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Alert } from "@/components/ui/alert";
 import { useFileDamageClaim } from "@/features/activation-billing/hooks/useBilling";
 import { getApiErrorMessage } from "@/api/errors";
+import { formatMoney } from "@/utils/format";
 
 type Props = {
   dealId: string;
@@ -78,10 +79,7 @@ export const FileDamageClaimDialog = ({
           </DialogTitle>
           <DialogDescription>
             Report property damage. Amounts up to the deposit (
-            {new Intl.NumberFormat("en-US", {
-              style: "currency",
-              currency: "USD",
-            }).format(depositAmountCents / 100)}
+            {formatMoney(depositAmountCents)}
             ) are deducted from the deposit. Amounts exceeding the deposit are
             forwarded to the insurance provider.
           </DialogDescription>
