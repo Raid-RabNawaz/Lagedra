@@ -14,7 +14,12 @@ public sealed class FeatureFlags(IConfiguration configuration) : IFeatureFlags
 {
     private const string SectionName = "FeatureFlags";
 
-    public bool BookingFlowV2Enabled => IsEnabled("BookingFlow.V2");
+    // Defaults to enabled: the predetermined-deposit booking flow has replaced
+    // the legacy host-keys-in-deposit flow in place, and the whole apply/approve
+    // UI now depends on it (card + consent captured up front, no deposit input on
+    // approve). Set FeatureFlags:BookingFlow.V2=false only to fall back to the
+    // legacy path deliberately.
+    public bool BookingFlowV2Enabled => IsEnabled("BookingFlow.V2", defaultValue: true);
 
     public bool IsEnabled(string flagName, bool defaultValue = false)
     {

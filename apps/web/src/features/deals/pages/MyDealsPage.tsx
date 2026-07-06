@@ -39,38 +39,38 @@ export function MyDealsPage() {
   // counts stay accurate on every tab and switching tabs doesn't refetch.
   const { data, isLoading, error, refetch } = useMyDeals("all");
 
-  const counts = useMemo(() => {
+  // `/deals/mine` returns deals where the user is *either* the tenant or the
+  // landlord. The Traveling/Hosting switch decides the perspective, so we scope
+  // to one side — otherwise the same deal shows up under both "My reservations"
+  // (guest) and "Bookings" (host), since both nav entries hit this one route.
+  const isHostContext = mode === "host";
+  const scoped = useMemo(() => {
     const all = data ?? [];
+    if (!user) return all;
+    return all.filter((d) =>
+      isHostContext
+        ? d.landlordUserId === user.userId
+        : d.tenantUserId === user.userId,
+    );
+  }, [data, user, isHostContext]);
+
+  const counts = useMemo(() => {
     return {
-      active: all.filter((d) => !isPast(d)).length,
-      past: all.filter(isPast).length,
-      all: all.length,
+      active: scoped.filter((d) => !isPast(d)).length,
+      past: scoped.filter(isPast).length,
+      all: scoped.length,
     } satisfies Record<DealPhaseFilter, number>;
-  }, [data]);
+  }, [scoped]);
 
   const visible = useMemo(
-    () => (data ?? []).filter((d) => matchesPhase(d, phase)),
-    [data, phase],
+    () => scoped.filter((d) => matchesPhase(d, phase)),
+    [scoped, phase],
   );
 
-  const hostDealsCount = useMemo(
-    () => (data ?? []).filter((d) => user && d.landlordUserId === user.userId).length,
-    [data, user],
-  );
-  const guestDealsCount = useMemo(
-    () => (data ?? []).filter((d) => user && d.tenantUserId === user.userId).length,
-    [data, user],
-  );
-
-  // Host mode shows "Bookings" framing; guest mode keeps the traveller
-  // wording. When the user has both we fall back to a hybrid label so
-  // neither side feels mislabeled.
-  const isHostContext =
-    mode === "host" || (hostDealsCount > 0 && guestDealsCount === 0);
   const headerTitle = isHostContext ? "Bookings" : "My reservations";
   const headerDescription = isHostContext
-    ? "Approved bookings on your listings and trips you've booked yourself."
-    : "Trips you've booked and reservations on your listings.";
+    ? "Approved bookings on your listings."
+    : "Trips you've booked.";
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">

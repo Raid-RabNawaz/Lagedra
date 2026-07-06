@@ -27,6 +27,22 @@ public sealed class TruthSnapshotConfiguration : IEntityTypeConfiguration<TruthS
         builder.Property(s => s.Hash).HasMaxLength(128);
         builder.Property(s => s.Signature).HasMaxLength(256);
 
+        builder.Property(s => s.IsLocked).HasDefaultValue(false).IsRequired();
+        builder.Property(s => s.LockedAt);
+
+        // Consent audit metadata (tenant at request, host at approval).
+        builder.Property(s => s.TenantConsentUserId);
+        builder.Property(s => s.TenantConsentAt);
+        builder.Property(s => s.TenantConsentIp).HasMaxLength(64);
+        builder.Property(s => s.TenantConsentUserAgent).HasMaxLength(512);
+        builder.Property(s => s.TenantConsentVersion).HasMaxLength(50);
+
+        builder.Property(s => s.HostConsentUserId);
+        builder.Property(s => s.HostConsentAt);
+        builder.Property(s => s.HostConsentIp).HasMaxLength(64);
+        builder.Property(s => s.HostConsentUserAgent).HasMaxLength(512);
+        builder.Property(s => s.HostConsentVersion).HasMaxLength(50);
+
         builder.HasOne(s => s.Proof)
             .WithOne()
             .HasForeignKey<CryptographicProof>(p => p.SnapshotId)

@@ -47,6 +47,17 @@ public sealed class DealApplicationConfiguration : IEntityTypeConfiguration<Deal
         builder.Property(a => a.DepositAmountCents);
         builder.Property(a => a.InsuranceFeeCents);
         builder.Property(a => a.FirstMonthRentCents);
+        builder.Property(a => a.ServiceFeeCents);
+        builder.Property(a => a.TotalPayableSnapshotCents);
+
+        // Predetermined-deposit snapshot: the tier that selected the deposit
+        // (string-converted so new tiers can be appended) + the reason text.
+        builder.Property(a => a.TenantVerificationTierAtRequest)
+            .HasConversion<string>()
+            .HasMaxLength(40)
+            .IsRequired(false);
+        builder.Property(a => a.DepositReason).HasMaxLength(200);
+
         builder.Property(a => a.PartnerOrganizationId);
         builder.Property(a => a.IsPartnerReferred).IsRequired();
         builder.Property(a => a.Source)
@@ -63,6 +74,23 @@ public sealed class DealApplicationConfiguration : IEntityTypeConfiguration<Deal
         builder.Property(a => a.StripePaymentMethodId)
             .HasMaxLength(64)
             .IsRequired(false);
+
+        // Truth Surface consent audit (tenant at request, host at approval).
+        builder.Property(a => a.TenantTruthSurfaceConsentGiven)
+            .HasDefaultValue(false)
+            .IsRequired();
+        builder.Property(a => a.TenantTruthSurfaceConsentAt);
+        builder.Property(a => a.TenantConsentIpAddress).HasMaxLength(64);
+        builder.Property(a => a.TenantConsentUserAgent).HasMaxLength(512);
+        builder.Property(a => a.TenantConsentVersion).HasMaxLength(50);
+
+        builder.Property(a => a.HostTruthSurfaceConsentGiven)
+            .HasDefaultValue(false)
+            .IsRequired();
+        builder.Property(a => a.HostTruthSurfaceConsentAt);
+        builder.Property(a => a.HostConsentIpAddress).HasMaxLength(64);
+        builder.Property(a => a.HostConsentUserAgent).HasMaxLength(512);
+        builder.Property(a => a.HostConsentVersion).HasMaxLength(50);
 
         builder.HasIndex(a => a.DealId)
             .HasFilter("\"DealId\" IS NOT NULL")

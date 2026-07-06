@@ -28,6 +28,22 @@ function cancellationFromForm(v: ListingFormValues): CreateListingRequest["cance
   };
 }
 
+function dollarsToCentsOrNull(dollars: number | undefined): number | null {
+  return dollars === undefined ? null : Math.round(dollars * 100);
+}
+
+function tierDepositsFromForm(v: ListingFormValues) {
+  return {
+    depositUnverifiedCents: dollarsToCentsOrNull(v.depositUnverifiedDollars),
+    depositBackgroundVerifiedCents: dollarsToCentsOrNull(
+      v.depositBackgroundVerifiedDollars,
+    ),
+    depositPartnerGuaranteedCents: dollarsToCentsOrNull(
+      v.depositPartnerGuaranteedDollars,
+    ),
+  };
+}
+
 export function toCreateListingRequest(
   v: ListingFormValues,
 ): CreateListingRequest {
@@ -53,6 +69,7 @@ export function toCreateListingRequest(
       v.defaultDepositDollars === undefined
         ? null
         : Math.round(v.defaultDepositDollars * 100),
+    ...tierDepositsFromForm(v),
   };
 }
 
@@ -80,5 +97,6 @@ export function toUpdateListingRequest(v: ListingFormValues): UpdateListingReque
         ? null
         : Math.round(v.defaultDepositDollars * 100),
     clearDefaultDeposit: v.defaultDepositDollars === undefined,
+    ...tierDepositsFromForm(v),
   };
 }

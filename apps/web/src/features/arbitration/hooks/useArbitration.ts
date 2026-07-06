@@ -42,6 +42,13 @@ export function useFileCase() {
   });
 }
 
+export function useCreateArbitrationFeeCheckout() {
+  return useMutation({
+    mutationFn: (caseId: string) =>
+      arbitrationApi.createFilingFeeCheckout(caseId),
+  });
+}
+
 export function useAttachEvidence() {
   const qc = useQueryClient();
   return useMutation({

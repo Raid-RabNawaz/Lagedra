@@ -33,6 +33,10 @@ public static class ListingAndLocationModuleRegistration
         services.AddScoped<ListingRepository>();
         services.AddScoped<IListingProvider, ListingProvider>();
 
+        // Cross-module importer used by ChannelIntegration to materialise
+        // externally-sourced listings (e.g. OwnerRez) into Lagedra drafts.
+        services.AddScoped<IListingImporter, ListingImporter>();
+
         // "Import from URL" pre-fill: server-side fetcher + Open Graph/JSON-LD
         // extractor. Mirrors the typed-HttpClient pattern used for IGeocodingService.
         services.AddSingleton<IListingMetadataExtractor, OpenGraphJsonLdExtractor>();

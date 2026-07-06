@@ -105,7 +105,10 @@ public sealed class ListingProvider(ListingsDbContext db) : IListingProvider
             considerationNames,
             listing.AcceptsPartnerDirectReservations,
             listing.InstantBookingEnabled,
-            listing.DefaultDepositCents);
+            listing.DefaultDepositCents,
+            listing.DepositUnverifiedCents,
+            listing.DepositBackgroundVerifiedCents,
+            listing.DepositPartnerGuaranteedCents);
     }
 
     public async Task<bool> IsAvailableAsync(

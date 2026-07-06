@@ -1,8 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { billingApi } from "@/features/activation-billing/services/billingApi";
+import { MY_DEALS_KEY } from "@/features/deals/hooks/useDeals";
 import type {
   DisputePaymentRequest,
   CancelBookingRequest,
+  ConfirmDepositReturnRequest,
   FileDamageClaimRequest,
 } from "@/api/types";
 
@@ -12,6 +14,15 @@ export function useBillingStatus(dealId: string | undefined) {
     queryFn: () => billingApi.getBillingStatus(dealId!),
     enabled: Boolean(dealId),
     staleTime: 30_000,
+  });
+}
+
+export function useHostBillingStatement(enabled = true) {
+  return useQuery({
+    queryKey: ["billing", "host-statement"],
+    queryFn: () => billingApi.getHostStatement(),
+    enabled,
+    staleTime: 60_000,
   });
 }
 
@@ -144,6 +155,60 @@ export function useFileDamageClaim() {
       void queryClient.invalidateQueries({
         queryKey: ["payment", variables.dealId],
       });
+    },
+  });
+}
+
+// ── Deposit return handshake (non-custodial, host-held) ────────────
+
+function invalidateDepositReturn(
+  queryClient: ReturnType<typeof useQueryClient>,
+  dealId: string,
+) {
+  void queryClient.invalidateQueries({ queryKey: ["billing", dealId] });
+  // The deal phase is computed from billing + payment, so refresh the list too.
+  void queryClient.invalidateQueries({ queryKey: [MY_DEALS_KEY] });
+}
+
+export function useBeginMoveOut() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (dealId: string) => billingApi.beginMoveOut(dealId),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["payment", data.dealId], data);
+      invalidateDepositReturn(queryClient, data.dealId);
+    },
+  });
+}
+
+export function useConfirmDepositReturnedByHost() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      dealId,
+      payload,
+    }: {
+      dealId: string;
+      payload: ConfirmDepositReturnRequest;
+    }) => billingApi.confirmDepositReturnedByHost(dealId, payload),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["payment", data.dealId], data);
+      invalidateDepositReturn(queryClient, data.dealId);
+    },
+  });
+}
+
+export function useConfirmDepositReceivedByTenant() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (dealId: string) =>
+      billingApi.confirmDepositReceivedByTenant(dealId),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["payment", data.dealId], data);
+      invalidateDepositReturn(queryClient, data.dealId);
     },
   });
 }

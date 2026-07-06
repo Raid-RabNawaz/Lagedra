@@ -37,6 +37,9 @@ public sealed class ListingConfiguration : IEntityTypeConfiguration<Listing>
         builder.Property(l => l.SuggestedDepositLowCents);
         builder.Property(l => l.SuggestedDepositHighCents);
         builder.Property(l => l.DefaultDepositCents);
+        builder.Property(l => l.DepositUnverifiedCents);
+        builder.Property(l => l.DepositBackgroundVerifiedCents);
+        builder.Property(l => l.DepositPartnerGuaranteedCents);
         builder.Property(l => l.JurisdictionCode).HasMaxLength(50);
         builder.Property(l => l.InstantBookingEnabled).HasDefaultValue(false);
         builder.Property(l => l.AcceptsPartnerDirectReservations).HasDefaultValue(true);

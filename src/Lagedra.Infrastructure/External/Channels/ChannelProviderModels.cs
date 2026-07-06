@@ -20,6 +20,9 @@ public sealed record ChannelAddress(
     string? PostalCode = null,
     string? Country = null);
 
+/// <summary>A single photo pulled from a channel (stable external id + URL).</summary>
+public sealed record ChannelPhoto(string ExternalId, Uri Url, string? Caption = null);
+
 /// <summary>Normalized snapshot of an external listing pulled from a channel.</summary>
 public sealed record ChannelListingSnapshot(
     string ExternalListingId,
@@ -30,9 +33,16 @@ public sealed record ChannelListingSnapshot(
     string Currency = "USD",
     int? MinStayNights = null,
     int? MaxStayNights = null,
+    int? Bedrooms = null,
+    decimal? Bathrooms = null,
+    int? SquareFootage = null,
+    long? DepositCents = null,
+    double? Latitude = null,
+    double? Longitude = null,
+    string? PropertyType = null,
     ChannelAddress? Address = null,
     IReadOnlyList<string>? AmenityCodes = null,
-    IReadOnlyList<Uri>? PhotoUrls = null);
+    IReadOnlyList<ChannelPhoto>? Photos = null);
 
 public sealed record ChannelDateBlock(DateOnly Start, DateOnly End, bool Available);
 

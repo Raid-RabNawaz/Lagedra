@@ -14,6 +14,24 @@ public sealed partial class StripeService(
     private RequestOptions NewRequestOptions(string? idempotencyKey = null) =>
         new() { ApiKey = _settings.SecretKey, IdempotencyKey = idempotencyKey };
 
+    // Restricts the PaymentElement to the configured allow-list. When a list is
+    // set we pass explicit payment_method_types (a hard whitelist) and must NOT
+    // also enable automatic_payment_methods — Stripe rejects setting both. An
+    // empty list means "let Stripe decide" (automatic methods, dashboard/geo),
+    // which is what surfaced wrong-region rails (Pix, Kakao Pay, Naver Pay).
+    private void ApplyPaymentMethodSelection(PaymentIntentCreateOptions options)
+    {
+        if (_settings.PaymentMethodTypes is { Count: > 0 } allowed)
+        {
+            options.PaymentMethodTypes = [.. allowed];
+        }
+        else
+        {
+            options.AutomaticPaymentMethods =
+                new PaymentIntentAutomaticPaymentMethodsOptions { Enabled = true };
+        }
+    }
+
     public async Task<string> GetOrCreateCustomerAsync(Guid userId, string email, CancellationToken ct = default)
     {
         var opts = NewRequestOptions();
@@ -100,7 +118,12 @@ public sealed partial class StripeService(
         return Task.FromResult(webhookEvent);
     }
 
-    public async Task<StripeConnectedAccountResult> CreateConnectedAccountAsync(Guid hostUserId, string email, CancellationToken ct = default)
+    public async Task<StripeConnectedAccountResult> CreateConnectedAccountAsync(
+        Guid hostUserId,
+        string email,
+        Uri? returnUrl = null,
+        Uri? refreshUrl = null,
+        CancellationToken ct = default)
     {
         var opts = NewRequestOptions();
         var accountService = new AccountService();
@@ -112,16 +135,23 @@ public sealed partial class StripeService(
             Metadata = new Dictionary<string, string> { ["hostUserId"] = hostUserId.ToString() },
             Capabilities = new AccountCapabilitiesOptions
             {
-                Transfers = new AccountCapabilitiesTransfersOptions { Requested = true }
+                Transfers = new AccountCapabilitiesTransfersOptions { Requested = true },
+                // Required for destination charges with on_behalf_of: the connected
+                // account is the settlement merchant of record, so it must be able to
+                // accept card payments (non-custodial model — Option A).
+                CardPayments = new AccountCapabilitiesCardPaymentsOptions { Requested = true }
             }
         }, opts, ct).ConfigureAwait(false);
+
+        var resolvedReturn = returnUrl ?? _settings.ConnectReturnUrl;
+        var resolvedRefresh = refreshUrl ?? _settings.ConnectRefreshUrl;
 
         var linkService = new AccountLinkService();
         var link = await linkService.CreateAsync(new AccountLinkCreateOptions
         {
             Account = account.Id,
-            RefreshUrl = _settings.ConnectRefreshUrl.ToString(),
-            ReturnUrl = _settings.ConnectReturnUrl.ToString(),
+            RefreshUrl = resolvedRefresh.ToString(),
+            ReturnUrl = resolvedReturn.ToString(),
             Type = "account_onboarding"
         }, opts, ct).ConfigureAwait(false);
 
@@ -152,17 +182,42 @@ public sealed partial class StripeService(
 
         var account = await accountService.GetAsync(accountId, null, opts, ct).ConfigureAwait(false);
 
+        var requirements = account.Requirements;
+        var currentlyDue = requirements?.CurrentlyDue ?? [];
+        var pastDue = requirements?.PastDue ?? [];
+        var pendingVerification = requirements?.PendingVerification ?? [];
+
+        var hasOutstandingTaxRequirement =
+            currentlyDue.Any(IsTaxRequirement) || pastDue.Any(IsTaxRequirement);
+        var taxRequirementPastDue = pastDue.Any(IsTaxRequirement);
+        var taxRequirementPendingVerification = pendingVerification.Any(IsTaxRequirement);
+        var isRestricted = !string.IsNullOrEmpty(requirements?.DisabledReason);
+        var hasExternalAccount = account.ExternalAccounts?.Data?.Count > 0;
+
         return new StripeAccountStatusResult(
             account.Id,
             account.ChargesEnabled,
             account.PayoutsEnabled,
-            account.DetailsSubmitted);
+            account.DetailsSubmitted,
+            hasExternalAccount,
+            hasOutstandingTaxRequirement,
+            taxRequirementPastDue,
+            taxRequirementPendingVerification,
+            isRestricted);
     }
+
+    // Stripe expresses tax-form needs (W-9/W-8, EIN/SSN) as requirement keys such
+    // as "company.tax_id", "individual.id_number", "individual.ssn_last_4". Match
+    // on the stable token fragments so new variants are still classified as tax.
+    private static bool IsTaxRequirement(string requirement) =>
+        requirement.Contains("tax_id", StringComparison.OrdinalIgnoreCase)
+        || requirement.Contains("id_number", StringComparison.OrdinalIgnoreCase)
+        || requirement.Contains("ssn", StringComparison.OrdinalIgnoreCase);
 
     public async Task<StripePaymentIntentResult> CreateDestinationPaymentIntentAsync(
         long amountCents, string currency, string destinationAccountId,
-        long applicationFeeCents, Dictionary<string, string>? metadata = null,
-        string? idempotencyKey = null, CancellationToken ct = default)
+        string onBehalfOf, long applicationFeeCents, Dictionary<string, string>? metadata = null,
+        string? statementDescriptorSuffix = null, string? idempotencyKey = null, CancellationToken ct = default)
     {
         var opts = NewRequestOptions(idempotencyKey);
         var service = new PaymentIntentService();
@@ -172,16 +227,26 @@ public sealed partial class StripeService(
             Amount = amountCents,
             Currency = currency,
             ApplicationFeeAmount = applicationFeeCents,
+            // on_behalf_of makes the connected account the settlement merchant of
+            // record, so the host's rent/deposit never settles into the platform
+            // balance (non-custodial — Option A).
+            OnBehalfOf = onBehalfOf,
             TransferData = new PaymentIntentTransferDataOptions
             {
                 Destination = destinationAccountId
             },
-            AutomaticPaymentMethods = new PaymentIntentAutomaticPaymentMethodsOptions
-            {
-                Enabled = true
-            },
             Metadata = metadata ?? []
         };
+
+        ApplyPaymentMethodSelection(options);
+
+        // Card payments with on_behalf_of can only set a dynamic suffix; the host's
+        // descriptor is the static component shown to the customer.
+        var suffix = statementDescriptorSuffix ?? _settings.StatementDescriptorSuffix;
+        if (!string.IsNullOrWhiteSpace(suffix))
+        {
+            options.StatementDescriptorSuffix = suffix;
+        }
 
         var pi = await service.CreateAsync(options, opts, ct).ConfigureAwait(false);
         LogPaymentIntentCreated(logger, pi.Id, amountCents, destinationAccountId);
@@ -189,26 +254,31 @@ public sealed partial class StripeService(
     }
 
     public async Task<StripePaymentIntentResult> CreatePlatformPaymentIntentAsync(
-        long amountCents, string currency,
-        Dictionary<string, string>? metadata = null,
+        long amountCents, string currency, Dictionary<string, string>? metadata = null,
         string? idempotencyKey = null, CancellationToken ct = default)
     {
         var opts = NewRequestOptions(idempotencyKey);
         var service = new PaymentIntentService();
 
+        // No TransferData / OnBehalfOf / ApplicationFee: the funds settle into the
+        // platform balance because this is the platform's own service fee.
         var options = new PaymentIntentCreateOptions
         {
             Amount = amountCents,
             Currency = currency,
-            AutomaticPaymentMethods = new PaymentIntentAutomaticPaymentMethodsOptions
-            {
-                Enabled = true
-            },
             Metadata = metadata ?? []
         };
 
+        ApplyPaymentMethodSelection(options);
+
+        var suffix = _settings.StatementDescriptorSuffix;
+        if (!string.IsNullOrWhiteSpace(suffix))
+        {
+            options.StatementDescriptorSuffix = suffix;
+        }
+
         var pi = await service.CreateAsync(options, opts, ct).ConfigureAwait(false);
-        LogPaymentIntentCreated(logger, pi.Id, amountCents, "platform");
+        LogPlatformPaymentIntentCreated(logger, pi.Id, amountCents);
         return new StripePaymentIntentResult(pi.Id, pi.ClientSecret, pi.Status, pi.Amount, pi.Currency);
     }
 
@@ -222,7 +292,13 @@ public sealed partial class StripeService(
         return new StripePaymentIntentResult(pi.Id, pi.ClientSecret, pi.Status, pi.Amount, pi.Currency);
     }
 
-    public async Task<StripeRefundResult> RefundPaymentIntentAsync(string paymentIntentId, long? amountCents = null, string? idempotencyKey = null, CancellationToken ct = default)
+    public async Task<StripeRefundResult> RefundPaymentIntentAsync(
+        string paymentIntentId,
+        long? amountCents = null,
+        bool reverseTransfer = false,
+        bool refundApplicationFee = false,
+        string? idempotencyKey = null,
+        CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(paymentIntentId);
 
@@ -239,6 +315,18 @@ public sealed partial class StripeService(
             options.Amount = amountCents.Value;
         }
 
+        // For destination charges the money is in the host's connected account, so
+        // pull it back on refund. RefundApplicationFee also returns the platform's cut.
+        if (reverseTransfer)
+        {
+            options.ReverseTransfer = true;
+        }
+
+        if (refundApplicationFee)
+        {
+            options.RefundApplicationFee = true;
+        }
+
         var refund = await service.CreateAsync(options, opts, ct).ConfigureAwait(false);
         LogRefundCreated(logger, refund.Id, paymentIntentId, refund.Amount);
         return new StripeRefundResult(refund.Id, refund.Amount, refund.Status);
@@ -250,6 +338,16 @@ public sealed partial class StripeService(
         var service = new BalanceService();
         var balance = await service.GetAsync(opts, ct).ConfigureAwait(false);
         return balance is not null;
+    }
+
+    public async Task<long?> GetPriceAmountCentsAsync(string priceId, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(priceId);
+
+        var opts = NewRequestOptions();
+        var service = new PriceService();
+        var price = await service.GetAsync(priceId, null, opts, ct).ConfigureAwait(false);
+        return price.UnitAmount;
     }
 
     public async Task<StripeSetupIntentResult> CreateSetupIntentAsync(
@@ -267,10 +365,11 @@ public sealed partial class StripeService(
         {
             Customer = customerId,
             Usage = "off_session",
-            AutomaticPaymentMethods = new SetupIntentAutomaticPaymentMethodsOptions
-            {
-                Enabled = true,
-            },
+            // Card-on-file is charged off-session the moment the host approves,
+            // which is a card flow — so save cards only. This also keeps the
+            // wrong-region rails (Pix/Kakao Pay/Naver Pay) out of the apply-time
+            // PaymentElement, matching the checkout allow-list.
+            PaymentMethodTypes = ["card"],
             Metadata = metadata ?? [],
         };
 
@@ -279,59 +378,32 @@ public sealed partial class StripeService(
         return new StripeSetupIntentResult(setupIntent.Id, setupIntent.ClientSecret, setupIntent.Status);
     }
 
-    public async Task<StripePaymentIntentResult> ChargeOffSessionPlatformAsync(
-        string customerId,
-        string paymentMethodId,
-        long amountCents,
-        string currency,
-        Dictionary<string, string>? metadata = null,
-        string? idempotencyKey = null,
-        CancellationToken ct = default)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(customerId);
-        ArgumentException.ThrowIfNullOrWhiteSpace(paymentMethodId);
-
-        var opts = NewRequestOptions(idempotencyKey);
-        var service = new PaymentIntentService();
-
-        // Off-session charge: confirm immediately, do not show 3DS UI. If the
-        // card requires authentication Stripe returns a "requires_action"
-        // PaymentIntent and the caller can fall back to surfacing the
-        // checkout flow for that one-off case.
-        var options = new PaymentIntentCreateOptions
-        {
-            Amount = amountCents,
-            Currency = currency,
-            Customer = customerId,
-            PaymentMethod = paymentMethodId,
-            Confirm = true,
-            OffSession = true,
-            Metadata = metadata ?? [],
-        };
-
-        var pi = await service.CreateAsync(options, opts, ct).ConfigureAwait(false);
-        LogOffSessionChargeCreated(logger, pi.Id, amountCents, customerId);
-        return new StripePaymentIntentResult(pi.Id, pi.ClientSecret, pi.Status, pi.Amount, pi.Currency);
-    }
-
     public async Task<StripePaymentIntentResult> ChargeOffSessionDestinationAsync(
         string customerId,
         string paymentMethodId,
         long amountCents,
         string currency,
         string destinationAccountId,
+        string onBehalfOf,
         long applicationFeeCents,
         Dictionary<string, string>? metadata = null,
+        string? statementDescriptorSuffix = null,
         string? idempotencyKey = null,
         CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(customerId);
         ArgumentException.ThrowIfNullOrWhiteSpace(paymentMethodId);
         ArgumentException.ThrowIfNullOrWhiteSpace(destinationAccountId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(onBehalfOf);
 
         var opts = NewRequestOptions(idempotencyKey);
         var service = new PaymentIntentService();
 
+        // Off-session charge: confirm immediately, do not show 3DS UI. If the
+        // card requires authentication Stripe returns a "requires_action"
+        // PaymentIntent and the caller falls back to surfacing the checkout flow.
+        // on_behalf_of makes the host the settlement merchant of record so the
+        // platform never holds the rent/deposit (non-custodial — Option A).
         var options = new PaymentIntentCreateOptions
         {
             Amount = amountCents,
@@ -339,6 +411,7 @@ public sealed partial class StripeService(
             Customer = customerId,
             PaymentMethod = paymentMethodId,
             ApplicationFeeAmount = applicationFeeCents,
+            OnBehalfOf = onBehalfOf,
             TransferData = new PaymentIntentTransferDataOptions
             {
                 Destination = destinationAccountId,
@@ -347,6 +420,14 @@ public sealed partial class StripeService(
             OffSession = true,
             Metadata = metadata ?? [],
         };
+
+        // Card payments with on_behalf_of can only set a dynamic suffix; the host's
+        // descriptor is the static component shown to the customer.
+        var suffix = statementDescriptorSuffix ?? _settings.StatementDescriptorSuffix;
+        if (!string.IsNullOrWhiteSpace(suffix))
+        {
+            options.StatementDescriptorSuffix = suffix;
+        }
 
         var pi = await service.CreateAsync(options, opts, ct).ConfigureAwait(false);
         LogOffSessionChargeCreated(logger, pi.Id, amountCents, customerId);
@@ -370,6 +451,9 @@ public sealed partial class StripeService(
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Stripe PaymentIntent created: {PaymentIntentId}, amount {AmountCents}, destination {DestinationAccountId}")]
     private static partial void LogPaymentIntentCreated(ILogger logger, string paymentIntentId, long amountCents, string destinationAccountId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Stripe platform PaymentIntent created: {PaymentIntentId}, amount {AmountCents}")]
+    private static partial void LogPlatformPaymentIntentCreated(ILogger logger, string paymentIntentId, long amountCents);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Stripe refund created: {RefundId} for PI {PaymentIntentId}, amount {AmountCents}")]
     private static partial void LogRefundCreated(ILogger logger, string refundId, string paymentIntentId, long amountCents);

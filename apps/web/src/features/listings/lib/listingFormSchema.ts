@@ -31,6 +31,15 @@ const optionalInt = z.preprocess(
   z.number().int().min(0).optional(),
 );
 
+const optionalDepositDollars = z.preprocess(
+  (v) => {
+    if (v === "" || v === undefined || v === null) return undefined;
+    const n = Number(v);
+    return Number.isNaN(n) ? undefined : n;
+  },
+  z.number().min(0, "Deposit cannot be negative").optional(),
+);
+
 export const listingFormSchema = z
   .object({
     propertyType: z.enum(propertyTypes),
@@ -46,6 +55,9 @@ export const listingFormSchema = z
       },
       z.number().min(0, "Default deposit cannot be negative").optional(),
     ),
+    depositUnverifiedDollars: optionalDepositDollars,
+    depositBackgroundVerifiedDollars: optionalDepositDollars,
+    depositPartnerGuaranteedDollars: optionalDepositDollars,
     bedrooms: z.number().int().min(0),
     bathrooms: z.number().min(0.5),
     minStayDays: z.number().int().min(30).max(180),
@@ -85,6 +97,63 @@ export const listingFormSchema = z
       message: "Default deposit cannot exceed maximum deposit",
       path: ["defaultDepositDollars"],
     },
+  )
+  .refine(
+    (d) =>
+      d.depositUnverifiedDollars === undefined
+      || d.depositUnverifiedDollars <= d.maxDepositDollars,
+    {
+      message: "Unverified deposit cannot exceed maximum deposit",
+      path: ["depositUnverifiedDollars"],
+    },
+  )
+  .refine(
+    (d) =>
+      d.depositBackgroundVerifiedDollars === undefined
+      || d.depositBackgroundVerifiedDollars <= d.maxDepositDollars,
+    {
+      message: "Verified deposit cannot exceed maximum deposit",
+      path: ["depositBackgroundVerifiedDollars"],
+    },
+  )
+  .refine(
+    (d) =>
+      d.depositPartnerGuaranteedDollars === undefined
+      || d.depositPartnerGuaranteedDollars <= d.maxDepositDollars,
+    {
+      message: "Partner-guaranteed deposit cannot exceed maximum deposit",
+      path: ["depositPartnerGuaranteedDollars"],
+    },
+  )
+  .refine(
+    (d) =>
+      d.depositBackgroundVerifiedDollars === undefined
+      || d.depositUnverifiedDollars === undefined
+      || d.depositBackgroundVerifiedDollars <= d.depositUnverifiedDollars,
+    {
+      message: "Verified deposit should not exceed the unverified deposit",
+      path: ["depositBackgroundVerifiedDollars"],
+    },
+  )
+  .refine(
+    (d) =>
+      d.depositPartnerGuaranteedDollars === undefined
+      || d.depositBackgroundVerifiedDollars === undefined
+      || d.depositPartnerGuaranteedDollars <= d.depositBackgroundVerifiedDollars,
+    {
+      message: "Partner-guaranteed deposit should not exceed the verified deposit",
+      path: ["depositPartnerGuaranteedDollars"],
+    },
+  )
+  .refine(
+    (d) =>
+      d.depositPartnerGuaranteedDollars === undefined
+      || d.depositUnverifiedDollars === undefined
+      || d.depositPartnerGuaranteedDollars <= d.depositUnverifiedDollars,
+    {
+      message: "Partner-guaranteed deposit should not exceed the unverified deposit",
+      path: ["depositPartnerGuaranteedDollars"],
+    },
   );
 
 export type ListingFormValues = z.infer<typeof listingFormSchema>;
@@ -96,6 +165,9 @@ export const defaultListingFormValues: ListingFormValues = {
   monthlyRentDollars: 1500,
   maxDepositDollars: 1500,
   defaultDepositDollars: undefined,
+  depositUnverifiedDollars: undefined,
+  depositBackgroundVerifiedDollars: undefined,
+  depositPartnerGuaranteedDollars: undefined,
   bedrooms: 1,
   bathrooms: 1,
   minStayDays: 30,

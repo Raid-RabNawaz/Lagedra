@@ -16,6 +16,18 @@ export function listingDetailsToFormValues(listing: ListingDetailsDto): ListingF
       listing.defaultDepositCents != null
         ? listing.defaultDepositCents / 100
         : undefined,
+    depositUnverifiedDollars:
+      listing.depositUnverifiedCents != null
+        ? listing.depositUnverifiedCents / 100
+        : undefined,
+    depositBackgroundVerifiedDollars:
+      listing.depositBackgroundVerifiedCents != null
+        ? listing.depositBackgroundVerifiedCents / 100
+        : undefined,
+    depositPartnerGuaranteedDollars:
+      listing.depositPartnerGuaranteedCents != null
+        ? listing.depositPartnerGuaranteedCents / 100
+        : undefined,
     bedrooms: listing.bedrooms,
     bathrooms: Number(listing.bathrooms),
     minStayDays: listing.minStayDays ?? 30,

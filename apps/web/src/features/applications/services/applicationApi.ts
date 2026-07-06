@@ -4,6 +4,7 @@ import type {
   ApproveApplicationRequest,
   BookingSetupIntentResult,
   DealApplicationDto,
+  ReservationPreviewDto,
   SubmitApplicationRequest,
   SubmitApplicationResult,
 } from "@/api/types";
@@ -26,6 +27,18 @@ export const applicationApi = {
     const response = await http.post<BookingSetupIntentResult>(
       endpoints.applications.setupIntent,
       { listingId },
+    );
+    return response.data;
+  },
+
+  async preview(
+    listingId: string,
+    checkIn: string,
+    checkOut: string,
+  ): Promise<ReservationPreviewDto> {
+    const response = await http.get<ReservationPreviewDto>(
+      endpoints.applications.preview,
+      { params: { listingId, checkIn, checkOut } },
     );
     return response.data;
   },

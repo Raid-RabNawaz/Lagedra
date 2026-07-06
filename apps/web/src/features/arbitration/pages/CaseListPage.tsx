@@ -28,9 +28,15 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import type { ArbitrationStatus, CaseDto, ArbitrationTier } from "@/api/types";
+import type {
+  ArbitrationStatus,
+  ArbitrationCategory,
+  CaseDto,
+  ArbitrationTier,
+} from "@/api/types";
 
 const statusTabs: { value: ArbitrationStatus; label: string }[] = [
+  { value: "PendingPayment", label: "Awaiting Payment" },
   { value: "Filed", label: "Filed" },
   { value: "EvidencePending", label: "Evidence" },
   { value: "UnderReview", label: "Under Review" },
@@ -41,6 +47,7 @@ const statusTabs: { value: ArbitrationStatus; label: string }[] = [
 
 function statusBadge(status: ArbitrationStatus) {
   const variants: Record<ArbitrationStatus, { variant: "default" | "secondary" | "destructive" | "success" | "accent" | "outline"; label: string }> = {
+    PendingPayment: { variant: "outline", label: "Awaiting Payment" },
     Filed: { variant: "accent", label: "Filed" },
     EvidencePending: { variant: "secondary", label: "Evidence Pending" },
     EvidenceComplete: { variant: "secondary", label: "Evidence Complete" },
@@ -66,6 +73,7 @@ function categoryLabel(category: string) {
     CategoryE: "Unauthorized Occupants",
     CategoryF: "Early Termination",
     CategoryG: "Rule Violation",
+    DepositReturn: "Deposit Not Returned",
     Other: "Other",
   };
   return labels[category] ?? category;
@@ -118,7 +126,10 @@ function DealPickerDialog({
   const [selectedDealId, setSelectedDealId] = useState("");
 
   const eligibleDeals = deals?.filter(
-    (d) => d.dealPhase === "Active" || d.dealPhase === "Closed",
+    (d) =>
+      d.dealPhase === "Active" ||
+      d.dealPhase === "AwaitingDepositReturn" ||
+      d.dealPhase === "Closed",
   );
 
   return (
@@ -184,6 +195,9 @@ export function CaseListPage() {
   const { data: cases, isLoading, error } = useCases(activeTab);
 
   const preselectedDealId = searchParams.get("dealId");
+  const preselectedCategory = searchParams.get(
+    "category",
+  ) as ArbitrationCategory | null;
 
   const [dealPickerOpen, setDealPickerOpen] = useState(false);
   const [fileDealId, setFileDealId] = useState<string | null>(
@@ -241,6 +255,7 @@ export function CaseListPage() {
         <FileArbitrationDialog
           dealId={fileDealId}
           open={fileDialogOpen}
+          defaultCategory={preselectedCategory ?? undefined}
           onOpenChange={(open) => {
             setFileDialogOpen(open);
             if (!open) setFileDealId(preselectedDealId);

@@ -7,6 +7,7 @@ const steps: { phase: DealPhase; label: string }[] = [
   { phase: "TruthSurface", label: dealPhaseLabel("TruthSurface") },
   { phase: "Checkout", label: dealPhaseLabel("Checkout") },
   { phase: "Active", label: dealPhaseLabel("Active") },
+  { phase: "AwaitingDepositReturn", label: dealPhaseLabel("AwaitingDepositReturn") },
   { phase: "Closed", label: dealPhaseLabel("Closed") },
 ];
 
@@ -14,18 +15,30 @@ const phaseOrder: Record<DealPhase, number> = {
   TruthSurface: 0,
   Checkout: 1,
   Active: 2,
-  Closed: 3,
+  AwaitingDepositReturn: 3,
+  Closed: 4,
+  PaymentFailed: 1,
   Cancelled: -1,
 };
 
 export function DealTimeline({ currentPhase }: { currentPhase: DealPhase }) {
   const currentIdx = phaseOrder[currentPhase] ?? -1;
   const isCancelled = currentPhase === "Cancelled";
+  const isPaymentFailed = currentPhase === "PaymentFailed";
 
   if (isCancelled) {
     return (
       <div className="flex items-center justify-center rounded-lg bg-destructive/10 py-3 px-4 text-sm font-medium text-destructive">
         This deal has been cancelled
+      </div>
+    );
+  }
+
+  if (isPaymentFailed) {
+    return (
+      <div className="flex items-center justify-center rounded-lg bg-destructive/10 py-3 px-4 text-center text-sm font-medium text-destructive">
+        The agreement is sealed, but the deposit payment failed — update your
+        card to finish activating this booking.
       </div>
     );
   }

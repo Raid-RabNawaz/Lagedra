@@ -12,6 +12,7 @@ const steps: { status: ArbitrationStatus; label: string }[] = [
 ];
 
 const statusOrder: Record<ArbitrationStatus, number> = {
+  PendingPayment: -1,
   Filed: 0,
   EvidencePending: 1,
   EvidenceComplete: 2,

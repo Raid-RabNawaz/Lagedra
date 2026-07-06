@@ -41,7 +41,6 @@ public sealed partial class CardOnFileChargeService(
     IStripeService stripeService,
     IUserStripeProfileService userStripeProfile,
     IHostStripeAccountProvider hostStripeProvider,
-    IHostPaymentDetailsProvider hostPaymentDetailsProvider,
     IClock clock,
     ILogger<CardOnFileChargeService> logger)
     : ICardOnFileChargeService
@@ -78,57 +77,44 @@ public sealed partial class CardOnFileChargeService(
 
         var totalAmountCents =
             firstMonthRentCents + depositAmountCents + insuranceFeeCents + serviceFeeCents;
-        var applicationFeeCents = insuranceFeeCents + monthlyProtocolFeeCents + serviceFeeCents;
+        // Non-custodial (Option A): platform fee = tenant service fee + insurance
+        // premium only. The monthly protocol fee is billed to the host via
+        // subscription, never taken at checkout. Rent + deposit transfer to the host.
+        var applicationFeeCents = insuranceFeeCents + serviceFeeCents;
         var idempotencyKey = $"oss-deal-{dealId:N}";
         var metadata = new Dictionary<string, string>
         {
             ["dealId"] = dealId.ToString(),
             ["tenantUserId"] = application.TenantUserId.ToString(),
             ["landlordUserId"] = application.LandlordUserId.ToString(),
-            ["payoutModel"] = "card-on-file",
+            ["payoutModel"] = "stripe-connect",
             ["bookingFlow"] = "v2",
         };
+
+        var hostStripe = await hostStripeProvider
+            .GetByHostUserIdAsync(application.LandlordUserId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (hostStripe is null || !hostStripe.ChargesEnabled)
+        {
+            return new CardOnFileChargeResult(false, null, "host-not-onboarded");
+        }
 
         StripePaymentIntentResult charge;
         try
         {
-            var directPayout = await hostPaymentDetailsProvider
-                .GetDecryptedPaymentDetailsAsync(application.LandlordUserId, cancellationToken)
-                .ConfigureAwait(false);
-
-            if (directPayout is not null)
-            {
-                charge = await stripeService.ChargeOffSessionPlatformAsync(
-                    profile.StripeCustomerId,
-                    application.StripePaymentMethodId,
-                    totalAmountCents,
-                    "usd",
-                    metadata,
-                    idempotencyKey,
-                    cancellationToken).ConfigureAwait(false);
-            }
-            else
-            {
-                var hostStripe = await hostStripeProvider
-                    .GetByHostUserIdAsync(application.LandlordUserId, cancellationToken)
-                    .ConfigureAwait(false);
-
-                if (hostStripe is null || !hostStripe.ChargesEnabled)
-                {
-                    return new CardOnFileChargeResult(false, null, "host-not-onboarded");
-                }
-
-                charge = await stripeService.ChargeOffSessionDestinationAsync(
-                    profile.StripeCustomerId,
-                    application.StripePaymentMethodId,
-                    totalAmountCents,
-                    "usd",
-                    hostStripe.StripeAccountId,
-                    applicationFeeCents,
-                    metadata,
-                    idempotencyKey,
-                    cancellationToken).ConfigureAwait(false);
-            }
+            charge = await stripeService.ChargeOffSessionDestinationAsync(
+                profile.StripeCustomerId,
+                application.StripePaymentMethodId,
+                totalAmountCents,
+                "usd",
+                hostStripe.StripeAccountId,
+                hostStripe.StripeAccountId,
+                applicationFeeCents,
+                metadata,
+                statementDescriptorSuffix: null,
+                idempotencyKey,
+                cancellationToken).ConfigureAwait(false);
         }
         catch (Stripe.StripeException ex)
         {

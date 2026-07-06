@@ -85,6 +85,25 @@ public sealed partial class ProcessStripeWebhookCommandHandler(
             return;
         }
 
+        // Arbitration filing fees are platform charges that don't map to a deal
+        // payment confirmation. Hand off to the Arbitration module via a shared
+        // integration event so the two modules stay decoupled.
+        if (paymentIntent.Metadata is not null
+            && paymentIntent.Metadata.TryGetValue(ArbitrationFeePaymentMetadata.PurposeKey, out var purpose)
+            && purpose == ArbitrationFeePaymentMetadata.PurposeValue)
+        {
+            if (paymentIntent.Metadata.TryGetValue(ArbitrationFeePaymentMetadata.CaseIdKey, out var caseIdRaw)
+                && Guid.TryParse(caseIdRaw, out var caseId))
+            {
+                await eventBus
+                    .Publish(new ArbitrationFilingFeePaidEvent(caseId, paymentIntent.Id), ct)
+                    .ConfigureAwait(false);
+                LogArbitrationFeePaid(logger, caseId, paymentIntent.Id);
+            }
+
+            return;
+        }
+
         var confirmation = await dbContext.DealPaymentConfirmations
             .FirstOrDefaultAsync(c => c.StripePaymentIntentId == paymentIntent.Id, ct)
             .ConfigureAwait(false);
@@ -288,7 +307,13 @@ public sealed partial class ProcessStripeWebhookCommandHandler(
 
         if (confirmation is not null)
         {
-            confirmation.SetStripePaymentIntent(charge.PaymentIntentId, "refunded", clock);
+            // charge.refunded fires for both full and partial refunds. In the
+            // non-custodial model deposit returns and partial cancellations reverse
+            // only part of the transfer (rent/deposit sits with the host), so only
+            // flip the confirmation to "refunded" when Stripe reports the charge
+            // fully refunded; a partial refund leaves the booking payment settled.
+            var status = charge.Refunded ? "refunded" : "partially_refunded";
+            confirmation.SetStripePaymentIntent(charge.PaymentIntentId, status, clock);
             await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
         }
 
@@ -322,6 +347,9 @@ public sealed partial class ProcessStripeWebhookCommandHandler(
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Activation payment succeeded for deal {DealId}, amount {AmountCents} — auto-activating")]
     private static partial void LogActivationPaymentSucceeded(ILogger logger, Guid dealId, long? amountCents);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Arbitration filing fee paid for case {CaseId} (PI {PaymentIntentId}) — activating case")]
+    private static partial void LogArbitrationFeePaid(ILogger logger, Guid caseId, string paymentIntentId);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Activation payment failed for deal {DealId}, amount {AmountCents}")]
     private static partial void LogActivationPaymentFailed(ILogger logger, Guid dealId, long? amountCents);

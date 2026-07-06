@@ -1,21 +1,16 @@
 import { Link } from "react-router-dom";
 import {
-  ArrowRight,
-  BadgeCheck,
-  Briefcase,
-  CalendarDays,
   Calendar,
   Clock,
   DollarSign,
   ExternalLink,
-  Languages,
-  Mail,
+  Home,
+  ImageOff,
   MapPin,
   MessageCircle,
-  Phone,
+  Receipt,
   Shield,
   ShieldAlert,
-  User,
   Users,
 } from "lucide-react";
 import {
@@ -24,183 +19,120 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Alert } from "@/components/ui/alert";
-import { Loader } from "@/components/shared/Loader";
 import { ApplicationStatusBadge } from "./ApplicationStatusBadge";
-import { usePublicProfile } from "@/features/auth/hooks/usePublicProfile";
+import { ApplicationProfilePanel } from "./ApplicationProfilePanel";
+import { TrustLevelBadge } from "./TrustLevelBadge";
+import { useHostBillingStatement } from "@/features/activation-billing/hooks/useBilling";
 import { formatDate, formatMoney } from "@/utils/format";
-import { getApiErrorMessage, isNotFoundError } from "@/api/errors";
 import type { DealApplicationDto } from "@/api/types";
+
+export type ApplicationPerspective = "host" | "tenant";
 
 type Props = {
   application: DealApplicationDto;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** When true, surface the host-facing "View tenant profile" CTA. */
-  showTenantProfileLink?: boolean;
+  /** Host inbox shows guest profile; tenant view shows host profile. */
+  perspective: ApplicationPerspective;
 };
-
-function initialsFor(name?: string | null): string {
-  if (!name) return "G";
-  const parts = name.split(/\s+/).filter(Boolean).slice(0, 2);
-  if (parts.length === 0) return "G";
-  return parts.map((p) => p[0]?.toUpperCase() ?? "").join("");
-}
-
-function locationLabel(profile: {
-  city?: string | null;
-  state?: string | null;
-  country?: string | null;
-}): string | null {
-  const parts = [profile.city, profile.state, profile.country]
-    .map((p) => p?.trim())
-    .filter((p): p is string => Boolean(p && p.length > 0));
-  return parts.length > 0 ? parts.join(", ") : null;
-}
 
 export const ApplicationDetailDialog = ({
   application,
   open,
   onOpenChange,
-  showTenantProfileLink = false,
+  perspective,
 }: Props) => {
-  const tenant = usePublicProfile(open ? application.tenantUserId : undefined);
-  const profile = tenant.data;
-  const heading = profile?.displayName
-    ?? [profile?.firstName, profile?.lastName].filter(Boolean).join(" ").trim();
-  const display = heading && heading.length > 0 ? heading : "Guest";
-  const location = profile ? locationLabel(profile) : null;
-  const verifiedCount = profile
-    ? [
-        profile.isGovernmentIdVerified,
-        profile.isPhoneVerified,
-        profile.isEmailVerified,
-      ].filter(Boolean).length
-    : 0;
+  const isHostView = perspective === "host";
+  const { data: statement } = useHostBillingStatement(isHostView && open);
+  const profileUserId = isHostView
+    ? application.tenantUserId
+    : application.landlordUserId;
+  const profileRole = isHostView ? "Guest" : "Host";
+  const profileLink = `/app/users/${profileUserId}`;
+
+  const stayLabel = `${application.requestedCheckIn} → ${application.requestedCheckOut}`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
-          <div className="flex items-center gap-3 pr-8">
-            <DialogTitle>Booking request</DialogTitle>
+          <div className="flex flex-wrap items-center gap-2 pr-8">
+            <DialogTitle>Booking request details</DialogTitle>
             <ApplicationStatusBadge status={application.status} />
           </div>
+          <p className="text-sm text-muted-foreground">
+            {stayLabel} · {application.stayDurationDays} day
+            {application.stayDurationDays !== 1 ? "s" : ""} ·{" "}
+            {application.guestCount}{" "}
+            {application.guestCount === 1 ? "guest" : "guests"}
+          </p>
         </DialogHeader>
 
         <div className="space-y-5">
-          {/* Tenant summary */}
-          <section className="rounded-lg border bg-muted/30 p-4">
-            {tenant.isLoading ? (
-              <div className="py-4">
-                <Loader label="Loading guest profile…" />
-              </div>
-            ) : tenant.isError ? (
-              <Alert variant="destructive" className="text-sm">
-                {isNotFoundError(tenant.error)
-                  ? "Guest profile not available."
-                  : getApiErrorMessage(tenant.error, "Failed to load guest profile.")}
-              </Alert>
-            ) : profile ? (
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-                <Avatar className="h-16 w-16 shrink-0">
-                  {profile.profilePhotoUrl ? (
-                    <AvatarImage src={profile.profilePhotoUrl} alt={display} />
-                  ) : null}
-                  <AvatarFallback className="text-base">
-                    {initialsFor(display)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="min-w-0 flex-1 space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-semibold text-base leading-none">
-                      {display}
-                    </p>
-                    {profile.isGovernmentIdVerified && (
-                      <Badge variant="secondary" className="gap-1">
-                        <BadgeCheck className="h-3 w-3" />
-                        ID verified
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                    {location && (
-                      <span className="flex items-center gap-1">
-                        <MapPin className="h-3 w-3" />
-                        {location}
-                      </span>
-                    )}
-                    {profile.occupation && (
-                      <span className="flex items-center gap-1">
-                        <Briefcase className="h-3 w-3" />
-                        {profile.occupation}
-                      </span>
-                    )}
-                    <span className="flex items-center gap-1">
-                      <CalendarDays className="h-3 w-3" />
-                      Member since {formatDate(profile.memberSince)}
-                    </span>
-                  </div>
-                  {profile.bio && (
-                    <p className="text-sm text-muted-foreground line-clamp-3">
-                      {profile.bio}
-                    </p>
-                  )}
-                  <div className="flex flex-wrap items-center gap-2 pt-1">
-                    <VerificationChip
-                      label="ID"
-                      verified={profile.isGovernmentIdVerified}
-                      icon={<BadgeCheck className="h-3 w-3" />}
-                    />
-                    <VerificationChip
-                      label="Phone"
-                      verified={profile.isPhoneVerified}
-                      icon={<Phone className="h-3 w-3" />}
-                    />
-                    <VerificationChip
-                      label="Email"
-                      verified={profile.isEmailVerified}
-                      icon={<Mail className="h-3 w-3" />}
-                    />
-                    {profile.languages && (
-                      <Badge variant="outline" className="gap-1">
-                        <Languages className="h-3 w-3" />
-                        {profile.languages}
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="pt-1 text-[11px] text-muted-foreground">
-                    {verifiedCount}/3 verifications complete
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Guest profile not available.
-              </p>
-            )}
+          <TrustLevelBadge
+            tier={application.tenantVerificationTier}
+            detailed
+            depositReason={application.depositReason}
+          />
 
-            {showTenantProfileLink && (
-              <div className="mt-4">
-                <Link to={`/app/users/${application.tenantUserId}`}>
-                  <Button variant="outline" size="sm" className="gap-1.5">
-                    <User className="h-3.5 w-3.5" />
-                    View full guest profile
-                    <ArrowRight className="h-3.5 w-3.5" />
-                  </Button>
-                </Link>
-              </div>
-            )}
+          {/* Listing context — especially useful on the tenant side */}
+          <section className="rounded-lg border bg-muted/20 p-4">
+            <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              Property
+            </p>
+            <Link
+              to={`/listings/${application.listingId}`}
+              onClick={() => onOpenChange(false)}
+              className="group flex items-center gap-3"
+            >
+              <span className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-muted">
+                {application.listingCoverPhotoUri ? (
+                  <img
+                    src={application.listingCoverPhotoUri}
+                    alt=""
+                    className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                  />
+                ) : (
+                  <span className="flex h-full w-full items-center justify-center">
+                    <ImageOff className="h-5 w-5 text-muted-foreground/40" />
+                  </span>
+                )}
+              </span>
+              <span className="min-w-0">
+                <span className="block font-semibold leading-tight group-hover:underline">
+                  {application.listingTitle ?? "View listing"}
+                </span>
+                {application.listingCity && (
+                  <span className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                    <MapPin className="h-3 w-3" />
+                    {application.listingCity}
+                  </span>
+                )}
+              </span>
+              <ExternalLink className="ml-auto h-4 w-4 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+            </Link>
+          </section>
+
+          {/* Counterparty profile */}
+          <section className="rounded-lg border bg-muted/30 p-4">
+            <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {isHostView ? "Guest" : "Host"}
+            </p>
+            <ApplicationProfilePanel
+              userId={profileUserId}
+              enabled={open}
+              roleLabel={profileRole}
+              profileLink={profileLink}
+            />
           </section>
 
           {/* Stay + financial details */}
           <section className="grid gap-4 sm:grid-cols-2">
             <div className="rounded-lg border p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-3">
+              <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Stay
               </p>
               <ul className="space-y-2 text-sm">
@@ -223,14 +155,13 @@ export const ApplicationDetailDialog = ({
                 <li className="flex items-center gap-2">
                   <Users className="h-4 w-4 text-muted-foreground" />
                   <span className="font-medium">Guests:</span>
-                  {application.guestCount}{" "}
-                  {application.guestCount === 1 ? "guest" : "guests"}
+                  {application.guestCount}
                 </li>
               </ul>
             </div>
 
             <div className="rounded-lg border p-4">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground mb-3">
+              <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Financials
               </p>
               <ul className="space-y-2 text-sm">
@@ -243,10 +174,17 @@ export const ApplicationDetailDialog = ({
                 )}
                 {application.depositAmountCents != null &&
                   application.depositAmountCents > 0 && (
-                    <li className="flex items-center gap-2">
-                      <Shield className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">Deposit:</span>
-                      {formatMoney(application.depositAmountCents)}
+                    <li className="flex items-start gap-2">
+                      <Shield className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+                      <span>
+                        <span className="font-medium">Deposit:</span>{" "}
+                        {formatMoney(application.depositAmountCents)}
+                        {application.depositReason && (
+                          <span className="mt-0.5 block text-xs text-muted-foreground">
+                            {application.depositReason}
+                          </span>
+                        )}
+                      </span>
                     </li>
                   )}
                 {application.insuranceFeeCents != null &&
@@ -257,25 +195,56 @@ export const ApplicationDetailDialog = ({
                       {formatMoney(application.insuranceFeeCents)}
                     </li>
                   )}
+                {application.serviceFeeCents != null &&
+                  application.serviceFeeCents > 0 && (
+                    <li className="flex items-center gap-2">
+                      <Home className="h-4 w-4 text-muted-foreground" />
+                      <span className="font-medium">Service fee:</span>
+                      {formatMoney(application.serviceFeeCents)}
+                    </li>
+                  )}
+                {application.totalPayableSnapshotCents != null &&
+                  application.totalPayableSnapshotCents > 0 && (
+                    <li className="flex items-center gap-2 border-t pt-2 font-semibold">
+                      <DollarSign className="h-4 w-4 text-muted-foreground" />
+                      <span>Total at approval:</span>
+                      {formatMoney(application.totalPayableSnapshotCents)}
+                    </li>
+                  )}
               </ul>
+              {isHostView && (
+                <p className="mt-3 flex items-start gap-2 border-t pt-3 text-xs text-muted-foreground">
+                  <Receipt className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    Rent, deposit and insurance above are paid by the guest. If
+                    you accept, Lagedra charges you a monthly platform fee
+                    {statement && statement.currentMonthlyFeeCents > 0
+                      ? ` of ${formatMoney(statement.currentMonthlyFeeCents)}`
+                      : ""}{" "}
+                    for this booking while it stays active, billed automatically
+                    to your card on file.
+                  </span>
+                </p>
+              )}
             </div>
           </section>
 
-          {/*
-           * Tenant's cover note (Airbnb-style "message the host"). Only
-           * rendered when populated — guests can skip this on submission
-           * and we don't want to display an empty placeholder card.
-           */}
           {application.message && application.message.trim().length > 0 && (
             <section className="rounded-lg border p-4">
               <p className="mb-2 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 <MessageCircle className="h-3.5 w-3.5" />
-                Message from {display}
+                Message from {isHostView ? "guest" : "you"}
               </p>
               <p className="text-sm whitespace-pre-line leading-relaxed">
                 {application.message}
               </p>
             </section>
+          )}
+
+          {application.isPartnerReferred && (
+            <Badge variant="outline" className="w-fit">
+              Partner-referred booking
+            </Badge>
           )}
 
           {application.jurisdictionWarning && (
@@ -288,46 +257,25 @@ export const ApplicationDetailDialog = ({
           <Separator />
 
           <section className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
-            <span>Submitted {formatDate(application.submittedAt)}</span>
-            {application.decidedAt && (
-              <span>Decided {formatDate(application.decidedAt)}</span>
+            <div className="space-y-0.5">
+              <p>Submitted {formatDate(application.submittedAt)}</p>
+              {application.decidedAt && (
+                <p>Decided {formatDate(application.decidedAt)}</p>
+              )}
+            </div>
+            {application.dealId && application.status === "Approved" && (
+              <Link
+                to={`/app/deals/${application.dealId}`}
+                className="inline-flex items-center gap-1 text-primary hover:underline"
+                onClick={() => onOpenChange(false)}
+              >
+                View booking
+                <ExternalLink className="h-3 w-3" />
+              </Link>
             )}
-            <Link
-              to={`/app/applications/${application.applicationId}`}
-              className="inline-flex items-center gap-1 text-primary hover:underline"
-              onClick={() => onOpenChange(false)}
-            >
-              <ExternalLink className="h-3 w-3" />
-              Open full application page
-            </Link>
           </section>
         </div>
       </DialogContent>
     </Dialog>
   );
 };
-
-function VerificationChip({
-  label,
-  verified,
-  icon,
-}: {
-  label: string;
-  verified: boolean;
-  icon: React.ReactNode;
-}) {
-  if (verified) {
-    return (
-      <Badge variant="secondary" className="gap-1">
-        {icon}
-        {label}
-      </Badge>
-    );
-  }
-  return (
-    <Badge variant="outline" className="gap-1 text-muted-foreground">
-      {icon}
-      {label}
-    </Badge>
-  );
-}

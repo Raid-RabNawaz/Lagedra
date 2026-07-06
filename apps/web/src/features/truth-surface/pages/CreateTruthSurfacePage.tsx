@@ -97,7 +97,7 @@ function DealTermsPreview({ deal }: { deal: DealSummaryDto }) {
             <>
               <Separator className="my-1" />
               <TermRow
-                label="Total Due at Checkout"
+                label="Total Due Now"
                 value={
                   <span className="font-semibold">{formatMoney(totalDue > 0 ? totalDue : deal.totalAmountCents)}</span>
                 }
@@ -206,7 +206,7 @@ export function CreateTruthSurfacePage() {
           <p>2. Both you (landlord) and the tenant will need to review and confirm each line item.</p>
           <p>3. Once both parties confirm, the snapshot is cryptographically sealed.</p>
           <p>4. The inquiry service will be automatically closed.</p>
-          <p>5. The tenant can then proceed to checkout and make payment.</p>
+          <p>5. The tenant can then proceed to payment to activate the booking.</p>
         </CardContent>
       </Card>
 

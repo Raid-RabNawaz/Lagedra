@@ -7,7 +7,9 @@ using Microsoft.EntityFrameworkCore;
 namespace Lagedra.Modules.IdentityAndVerification.Application.Commands;
 
 public sealed record RefreshHostOnboardingLinkCommand(
-    Guid HostUserId) : IRequest<Result<Uri>>;
+    Guid HostUserId,
+    Uri? ReturnUrl = null,
+    Uri? RefreshUrl = null) : IRequest<Result<Uri>>;
 
 public sealed class RefreshHostOnboardingLinkCommandHandler(
     IdentityDbContext dbContext,
@@ -32,7 +34,11 @@ public sealed class RefreshHostOnboardingLinkCommandHandler(
         }
 
         var url = await stripeService
-            .CreateAccountOnboardingLinkAsync(account.StripeAccountId, ct: cancellationToken)
+            .CreateAccountOnboardingLinkAsync(
+                account.StripeAccountId,
+                request.ReturnUrl,
+                request.RefreshUrl,
+                cancellationToken)
             .ConfigureAwait(false);
 
         return Result<Uri>.Success(url);

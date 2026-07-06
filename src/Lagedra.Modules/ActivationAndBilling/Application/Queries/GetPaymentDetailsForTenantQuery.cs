@@ -8,6 +8,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Lagedra.Modules.ActivationAndBilling.Application.Queries;
 
+/// <summary>
+/// Returns the host's free-text payout instructions to the tenant. Under the
+/// non-custodial model (Option A) the initial booking — first month's rent +
+/// deposit + fees — is charged through Stripe (destination charge to the host's
+/// connected account), so these instructions are <b>not</b> the deposit or
+/// first-payment channel. They tell the tenant how to pay the host directly for
+/// <b>months 2+ rent</b>, which never flows through the platform.
+/// </summary>
 public sealed record GetPaymentDetailsForTenantQuery(
     Guid DealId,
     Guid TenantUserId) : IRequest<Result<PaymentDetailsDto>>;

@@ -41,6 +41,9 @@ public static class ArbitrationModuleRegistration
         services.AddDomainEventHandler<CaseAppealedEvent, OnCaseAppealedNotify>();
         services.AddDomainEventHandler<ArbitrationBacklogEscalationEvent, OnBacklogEscalationHandler>();
 
+        // Activates a case once its filing fee is paid (Stripe webhook → integration event).
+        services.AddDomainEventHandler<ArbitrationFilingFeePaidEvent, OnArbitrationFilingFeePaidHandler>();
+
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(ArbitrationModuleRegistration).Assembly));
 

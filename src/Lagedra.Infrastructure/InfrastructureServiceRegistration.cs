@@ -61,8 +61,14 @@ public static class InfrastructureServiceRegistration
         services.AddHostedService<OutboxDispatcher>();
 
         // Stripe
-        services.Configure<StripeSettings>(
-            configuration.GetSection(StripeSettings.SectionName));
+        services.AddOptions<StripeSettings>()
+            .Bind(configuration.GetSection(StripeSettings.SectionName))
+            .PostConfigure<IConfiguration>((options, config) =>
+            {
+                var frontend = (config["App:FrontendUrl"] ?? "http://localhost:3000").TrimEnd('/');
+                options.ConnectReturnUrl = new Uri($"{frontend}/app/payout-setup");
+                options.ConnectRefreshUrl = new Uri($"{frontend}/app/payout-setup");
+            });
         services.AddScoped<IStripeService, StripeService>();
 
         // Google Maps
@@ -112,7 +118,29 @@ public static class InfrastructureServiceRegistration
         // one-line addition here — no changes to the sync jobs or publisher.
         services.Configure<OwnerRezChannelSettings>(
             configuration.GetSection(OwnerRezChannelSettings.SectionName));
-        services.AddScoped<IChannelProvider, OwnerRezChannelProvider>();
+
+        var ownerRezSettings = configuration
+            .GetSection(OwnerRezChannelSettings.SectionName)
+            .Get<OwnerRezChannelSettings>() ?? new OwnerRezChannelSettings();
+
+        // The OwnerRez provider talks to the HAXML/HAOLB channel API over a typed
+        // HttpClient: channel-level credentials are sent as HTTP Basic auth and a
+        // descriptive User-Agent is required by OwnerRez. Per-host scoping uses
+        // the connection's advertiser id, not these static credentials.
+        services.AddHttpClient<OwnerRezChannelProvider>(client =>
+        {
+            client.BaseAddress = ownerRezSettings.BaseUrl;
+            client.Timeout = TimeSpan.FromSeconds(30);
+            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", ownerRezSettings.UserAgent);
+            if (!string.IsNullOrWhiteSpace(ownerRezSettings.Username)
+                && !string.IsNullOrWhiteSpace(ownerRezSettings.Key))
+            {
+                var basic = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(
+                    $"{ownerRezSettings.Username}:{ownerRezSettings.Key}"));
+                client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", $"Basic {basic}");
+            }
+        });
+        services.AddScoped<IChannelProvider>(sp => sp.GetRequiredService<OwnerRezChannelProvider>());
         services.AddScoped<IChannelProviderRegistry, ChannelProviderRegistry>();
 
         // Caching — swap InMemoryCacheService for a distributed impl (e.g. Redis) here

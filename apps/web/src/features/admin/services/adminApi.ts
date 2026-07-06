@@ -30,6 +30,7 @@ import type {
   UpdatePackDraftBody,
   PlatformSettingDto,
   UpdatePlatformSettingRequest,
+  ProtocolFeeReconciliationDto,
 } from "@/api/types";
 
 export const adminApi = {
@@ -241,5 +242,11 @@ export const adminApi = {
     req: UpdatePlatformSettingRequest,
   ): Promise<void> {
     await http.put(endpoints.adminSettings.update(key), req);
+  },
+  async getProtocolFeeReconciliation(): Promise<ProtocolFeeReconciliationDto> {
+    const r = await http.get<ProtocolFeeReconciliationDto>(
+      endpoints.adminSettings.protocolFeeReconciliation,
+    );
+    return r.data;
   },
 };

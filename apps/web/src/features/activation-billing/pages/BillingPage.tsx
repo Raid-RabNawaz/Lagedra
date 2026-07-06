@@ -31,6 +31,7 @@ import {
 } from "@/api/errors";
 import { BillingStatusBadge } from "@/features/activation-billing/components/BillingStatusBadge";
 import { PaymentStatusBadge } from "@/features/activation-billing/components/PaymentStatusBadge";
+import { InvoiceStatusBadge } from "@/features/activation-billing/components/InvoiceStatusBadge";
 import { PaymentSecurityNotice } from "@/features/activation-billing/components/NonCustodialDisclaimer";
 import { DisputePaymentDialog } from "@/features/activation-billing/components/DisputePaymentDialog";
 import { CancelBookingDialog } from "@/features/activation-billing/components/CancelBookingDialog";
@@ -40,6 +41,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Loader } from "@/components/shared/Loader";
 import { formatDate, formatMoney } from "@/utils/format";
 
@@ -54,25 +63,6 @@ export const BillingPage = () => {
   // not see participant-only actions.
   const isLandlord = !!user && !!deal && user.userId === deal.landlordUserId;
   const isTenant = !!user && !!deal && user.userId === deal.tenantUserId;
-
-  // Phase 16.6: enforce the single-money-surface rule **eagerly**. We
-  // resolve the navigation decision *before* kicking off the billing/
-  // payment queries so a tenant who lands on /billing for a pre-Active
-  // deal doesn't see a flash of empty billing UI before bouncing.
-  // While the deals list is still loading the page renders a skeleton
-  // (rather than firing the queries against an account that doesn't
-  // exist yet), so 404s never reach the user as errors.
-  if (deal && dealId) {
-    const isPostActive =
-      deal.dealPhase === "Active" || deal.dealPhase === "Closed";
-    if (!isPostActive) {
-      const redirectTo =
-        deal.dealPhase === "Checkout"
-          ? `/app/deals/${dealId}/checkout`
-          : `/app/deals/${dealId}`;
-      return <Navigate to={redirectTo} replace />;
-    }
-  }
 
   const isPostActive =
     !!deal &&
@@ -96,6 +86,13 @@ export const BillingPage = () => {
   const confirmPayment = useConfirmPayment();
   const confirmPlatformPayment = useConfirmPlatformPayment();
 
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [showDisputeDialog, setShowDisputeDialog] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [showDamageClaimDialog, setShowDamageClaimDialog] = useState(false);
+  const [showStopBillingDialog, setShowStopBillingDialog] = useState(false);
+
   const accessError = billingError ?? paymentError;
   const isAccessDenied = isForbiddenError(accessError);
   // 404 on /billing simply means the billing account hasn't been created yet
@@ -103,12 +100,15 @@ export const BillingPage = () => {
   const isOtherError =
     !!accessError && !isAccessDenied && !isNotFoundError(accessError);
 
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
-  const [showDisputeDialog, setShowDisputeDialog] = useState(false);
-  const [showCancelDialog, setShowCancelDialog] = useState(false);
-  const [showDamageClaimDialog, setShowDamageClaimDialog] = useState(false);
-  const [showStopBillingDialog, setShowStopBillingDialog] = useState(false);
+  // Phase 16.6: enforce the single-money-surface rule **eagerly**. Redirect
+  // pre-Active deals away from billing once the deal list has loaded.
+  if (deal && dealId && !isPostActive) {
+    const redirectTo =
+      deal.dealPhase === "Checkout"
+        ? `/app/deals/${dealId}/checkout`
+        : `/app/deals/${dealId}`;
+    return <Navigate to={redirectTo} replace />;
+  }
 
   if (dealsLoading || billingLoading || paymentLoading) {
     return <Loader fullPage label="Loading billing..." />;
@@ -254,6 +254,57 @@ export const BillingPage = () => {
                 </div>
               )}
             </div>
+
+            {isLandlord && (
+              <>
+                <Separator />
+                <div>
+                  <p className="text-sm font-medium mb-2">
+                    Monthly platform fee history
+                  </p>
+                  {billing.invoices.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      No platform-fee charges yet. Your first monthly fee will
+                      appear here once Stripe bills the subscription.
+                    </p>
+                  ) : (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Period</TableHead>
+                          <TableHead className="text-right">Amount</TableHead>
+                          <TableHead className="text-right">Status</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {billing.invoices.map((invoice) => (
+                          <TableRow key={invoice.invoiceId}>
+                            <TableCell className="whitespace-nowrap text-sm">
+                              {formatDate(invoice.periodStart)}
+                              {" – "}
+                              {formatDate(invoice.periodEnd)}
+                            </TableCell>
+                            <TableCell className="text-right text-sm font-medium">
+                              {formatMoney(invoice.amountCents)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <InvoiceStatusBadge status={invoice.status} />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  )}
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    See all your bookings' fees on the{" "}
+                    <Link to="/app/billing" className="text-primary hover:underline">
+                      platform fees statement
+                    </Link>
+                    .
+                  </p>
+                </div>
+              </>
+            )}
 
             {billing.status === "Active" && isLandlord && (
               <>

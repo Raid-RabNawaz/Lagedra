@@ -100,9 +100,16 @@ public sealed partial class CancelBookingCommandHandler(
             try
             {
                 var idempotencyKey = $"refund-deal-{request.DealId}";
+                // Non-custodial (Option A): the refundable rent + deposit was
+                // transferred to the host's connected account at booking, so reverse
+                // the transfer to claw it back before refunding the tenant. The
+                // platform retains its service/insurance fee (insurance is refunded
+                // separately per policy), so the application fee is not refunded here.
                 await stripeService.RefundPaymentIntentAsync(
                     paymentConfirmation.StripePaymentIntentId,
                     refund.TenantRefundCents,
+                    reverseTransfer: true,
+                    refundApplicationFee: false,
                     idempotencyKey,
                     cancellationToken).ConfigureAwait(false);
 

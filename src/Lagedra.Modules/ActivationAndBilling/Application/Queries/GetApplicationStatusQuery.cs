@@ -1,5 +1,4 @@
 using Lagedra.Modules.ActivationAndBilling.Application.DTOs;
-using Lagedra.Modules.ActivationAndBilling.Domain.Aggregates;
 using Lagedra.Modules.ActivationAndBilling.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Results;
 using MediatR;
@@ -42,14 +41,6 @@ public sealed class GetApplicationStatusQueryHandler(
                     "You do not have access to this application."));
         }
 
-        return Result<DealApplicationDto>.Success(MapToDto(application));
+        return Result<DealApplicationDto>.Success(DealApplicationDtoMapper.ToDto(application));
     }
-
-    private static DealApplicationDto MapToDto(DealApplication a) =>
-        new(a.Id, a.ListingId, a.TenantUserId, a.LandlordUserId,
-            a.Status, a.DealId, a.SubmittedAt, a.DecidedAt,
-            a.RequestedCheckIn, a.RequestedCheckOut, a.StayDurationDays,
-            a.DepositAmountCents, a.InsuranceFeeCents, a.FirstMonthRentCents,
-            a.PartnerOrganizationId, a.IsPartnerReferred, a.JurisdictionWarning, a.Source,
-            a.GuestCount, a.Message);
 }

@@ -47,6 +47,8 @@ internal static class SnapshotMapper
             s.TenantConfirmed,
             s.CreatedAt,
             s.SealedAt,
-            proof);
+            proof,
+            s.IsLocked,
+            s.LockedAt);
     }
 }

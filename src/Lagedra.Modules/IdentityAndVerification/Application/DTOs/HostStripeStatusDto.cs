@@ -9,4 +9,6 @@ public sealed record HostStripeStatusDto(
     StripeOnboardingStatus OnboardingStatus,
     bool ChargesEnabled,
     bool PayoutsEnabled,
+    HostAccountRequirementStatus TaxStatus,
+    HostAccountRequirementStatus BankAccountStatus,
     Uri? OnboardingUrl);

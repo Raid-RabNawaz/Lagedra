@@ -33,6 +33,10 @@ import { authApi } from "@/features/auth/services/authApi";
 import { useAuthStore } from "@/app/auth/authStore";
 import { roleLabel, roles } from "@/app/auth/roles";
 import type { UpdateProfileRequest } from "@/api/types";
+import {
+  phoneVerificationStatus,
+  type ProfileSignalStatus,
+} from "@/features/auth/lib/profileCompleteness";
 import { useHostStripeStatus } from "@/features/host-onboarding/hooks/useHostStripe";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -506,6 +510,7 @@ export const ProfilePage = () => {
                 icon={Phone}
                 label="Phone"
                 verified={Boolean(user?.isPhoneVerified)}
+                status={user ? phoneVerificationStatus(user) : undefined}
               />
               <VerificationRow
                 icon={IdCard}
@@ -537,7 +542,7 @@ export const ProfilePage = () => {
                 >
                   <span className="inline-flex items-center gap-1.5">
                     <Wallet className="h-4 w-4" />
-                    Set up payouts
+                    Set up payouts (Stripe)
                   </span>
                   <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                 </Link>
@@ -1151,21 +1156,35 @@ function VerificationRow({
   icon: Icon,
   label,
   verified,
+  status,
   action,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   verified: boolean;
+  /**
+   * Optional tri-state. When supplied it takes precedence over `verified` so a
+   * value that's been provided but not yet verified (e.g. a saved phone number
+   * awaiting SMS confirmation) reads as "Pending" here and on the dashboard —
+   * both surfaces derive it from the same helper.
+   */
+  status?: ProfileSignalStatus;
   action?: React.ReactNode;
 }) {
+  const effective: ProfileSignalStatus = status ?? (verified ? "complete" : "empty");
   return (
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-2">
         <Icon className="h-4 w-4 text-muted-foreground" />
         <span className="text-sm">{label}</span>
       </div>
-      {verified ? (
+      {effective === "complete" ? (
         <CheckCircle2 className="h-4 w-4 text-success" />
+      ) : effective === "pending" ? (
+        <div className="flex items-center gap-2">
+          <span className="text-xs font-medium text-warning">Pending</span>
+          {action}
+        </div>
       ) : (
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">Not verified</span>

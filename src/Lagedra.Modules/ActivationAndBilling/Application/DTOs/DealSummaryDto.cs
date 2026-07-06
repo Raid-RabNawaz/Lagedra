@@ -1,4 +1,5 @@
 using Lagedra.Modules.ActivationAndBilling.Domain.Enums;
+using Lagedra.SharedKernel.Integration;
 
 namespace Lagedra.Modules.ActivationAndBilling.Application.DTOs;
 
@@ -21,4 +22,7 @@ public sealed record DealSummaryDto(
     long? TotalAmountCents,
     BillingAccountStatus? BillingStatus,
     PaymentConfirmationStatus? PaymentStatus,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    TenantVerificationTier? TenantVerificationTier = null,
+    string? DepositReason = null,
+    bool? TruthSurfaceLocked = null);

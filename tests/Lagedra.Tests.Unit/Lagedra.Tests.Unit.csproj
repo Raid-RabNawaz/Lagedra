@@ -20,6 +20,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Lagedra.Modules\ListingAndLocation\ListingAndLocation.csproj" />
+    <ProjectReference Include="..\..\src\Lagedra.Modules\ActivationAndBilling\ActivationAndBilling.csproj" />
+    <ProjectReference Include="..\..\src\Lagedra.TruthSurface\Lagedra.TruthSurface.csproj" />
+    <ProjectReference Include="..\..\src\Lagedra.Modules\PartnerNetwork\PartnerNetwork.csproj" />
+    <ProjectReference Include="..\..\src\Lagedra.Modules\IdentityAndVerification\IdentityAndVerification.csproj" />
+    <ProjectReference Include="..\..\src\Lagedra.Modules\Arbitration\Arbitration.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,10 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, MapPin, Calendar as CalendarIcon, SlidersHorizontal } from "lucide-react";
+import {
+  Search,
+  MapPin,
+  Calendar as CalendarIcon,
+  SlidersHorizontal,
+  Users,
+  Minus,
+  Plus,
+} from "lucide-react";
 import { DateRangeCalendar, type DateRange } from "@/features/listings/components/DateRangeCalendar";
 import { cn } from "@/lib/utils";
 
-type Segment = "where" | "checkin" | "checkout" | "filter" | null;
+type Segment = "where" | "checkin" | "checkout" | "who" | "filter" | null;
+
+const MAX_GUESTS = 16;
+
+function guestsLabel(n: number) {
+  if (n <= 0) return null;
+  return `${n} guest${n === 1 ? "" : "s"}`;
+}
 
 const POPULAR_DESTINATIONS = [
   { label: "New York, NY", hint: "United States" },
@@ -32,6 +47,7 @@ export function HeroSearchBar() {
   const navigate = useNavigate();
   const [where, setWhere] = useState("");
   const [range, setRange] = useState<DateRange>({ start: null, end: null });
+  const [guests, setGuests] = useState(0);
   const [active, setActive] = useState<Segment>(null);
 
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -71,6 +87,7 @@ export function HeroSearchBar() {
     if (where.trim()) params.set("keyword", where.trim());
     if (range.start) params.set("availableFrom", toIsoDate(range.start));
     if (range.end) params.set("availableTo", toIsoDate(range.end));
+    if (guests > 0) params.set("guests", String(guests));
     const qs = params.toString();
     navigate(qs ? `/listings/search?${qs}` : "/listings/search");
   };
@@ -158,6 +175,18 @@ export function HeroSearchBar() {
         />
 
         <SegmentButton
+          isActive={active === "who"}
+          dimmed={Boolean(active) && active !== "who"}
+          label="Who"
+          value={guestsLabel(guests) ?? undefined}
+          placeholder="Add guests"
+          onClick={() => setActive(active === "who" ? null : "who")}
+          className="flex-1"
+          rounded="none"
+          icon={<Users className="h-3.5 w-3.5" />}
+        />
+
+        <SegmentButton
           isActive={active === "filter"}
           dimmed={Boolean(active) && active !== "filter"}
           label="Filter"
@@ -177,7 +206,7 @@ export function HeroSearchBar() {
             className="flex h-12 items-center justify-center gap-2 rounded-full bg-primary px-5 text-primary-foreground transition-all hover:bg-primary/90 hover:shadow-md"
           >
             <Search className="h-4 w-4" />
-            {(where || range.start || active) && (
+            {(where || range.start || guests > 0 || active) && (
               <span className="hidden text-sm font-semibold lg:inline">Search</span>
             )}
           </button>
@@ -204,6 +233,9 @@ export function HeroSearchBar() {
             )}
             {(active === "checkin" || active === "checkout") && (
               <DateRangeCalendar range={range} onChange={handleRangeChange} />
+            )}
+            {active === "who" && (
+              <GuestsPanel value={guests} onChange={setGuests} />
             )}
             {active === "filter" && <FilterPanel onNavigate={submit} />}
           </div>
@@ -326,6 +358,54 @@ function WherePanel({
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+/* ─────────── Guests panel ─────────── */
+
+function GuestsPanel({
+  value,
+  onChange,
+}: {
+  value: number;
+  onChange: (n: number) => void;
+}) {
+  const decrement = () => onChange(Math.max(0, value - 1));
+  const increment = () => onChange(Math.min(MAX_GUESTS, value + 1));
+
+  return (
+    <div className="flex items-center justify-between gap-6 px-1 py-1">
+      <div className="min-w-0">
+        <p className="text-sm font-semibold text-foreground">Guests</p>
+        <p className="text-xs text-muted-foreground">
+          How many people will be staying? Listings that can&apos;t fit your
+          party are hidden.
+        </p>
+      </div>
+      <div className="flex shrink-0 items-center gap-3">
+        <button
+          type="button"
+          onClick={decrement}
+          disabled={value <= 0}
+          aria-label="Decrease guests"
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-border text-foreground transition-colors hover:border-foreground disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <Minus className="h-4 w-4" />
+        </button>
+        <span className="w-12 text-center text-sm font-medium tabular-nums text-foreground">
+          {value === 0 ? "Any" : value}
+        </span>
+        <button
+          type="button"
+          onClick={increment}
+          disabled={value >= MAX_GUESTS}
+          aria-label="Increase guests"
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-border text-foreground transition-colors hover:border-foreground disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          <Plus className="h-4 w-4" />
+        </button>
+      </div>
     </div>
   );
 }

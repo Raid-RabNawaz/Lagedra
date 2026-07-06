@@ -94,8 +94,14 @@ const STEPS: Step[] = [
     label: "Pricing & deposit",
     shortLabel: "Pricing",
     icon: DollarSign,
-    description: "Monthly rent and deposit cap.",
-    fields: ["monthlyRentDollars", "maxDepositDollars"],
+    description: "Monthly rent and predetermined deposits.",
+    fields: [
+      "monthlyRentDollars",
+      "maxDepositDollars",
+      "depositUnverifiedDollars",
+      "depositBackgroundVerifiedDollars",
+      "depositPartnerGuaranteedDollars",
+    ],
   },
   {
     id: "amenities",
@@ -456,7 +462,55 @@ function PricingStep({ form }: StepFormProps) {
           {...form.register("maxDepositDollars", { valueAsNumber: true })}
         />
         <p className="text-[11px] text-muted-foreground">
-          Lagedra will suggest a fair deposit range automatically.
+          The upper limit. Tenants never pay more than this.
+        </p>
+      </Field>
+      <div className="sm:col-span-2 rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+        Set the deposit each tenant pays based on their verification level. The
+        system charges the matching amount automatically when a tenant requests
+        to book — you no longer enter a deposit at approval. Leave a field blank
+        to fall back to the maximum deposit.
+      </div>
+      <Field
+        label="Deposit — unverified tenant (USD)"
+        error={form.formState.errors.depositUnverifiedDollars?.message}
+      >
+        <Input
+          type="number"
+          step="0.01"
+          min={0}
+          {...form.register("depositUnverifiedDollars", { valueAsNumber: true })}
+        />
+        <p className="text-[11px] text-muted-foreground">
+          Typically the full maximum deposit.
+        </p>
+      </Field>
+      <Field
+        label="Deposit — background-verified tenant (USD)"
+        error={form.formState.errors.depositBackgroundVerifiedDollars?.message}
+      >
+        <Input
+          type="number"
+          step="0.01"
+          min={0}
+          {...form.register("depositBackgroundVerifiedDollars", { valueAsNumber: true })}
+        />
+        <p className="text-[11px] text-muted-foreground">
+          A reduced deposit (e.g. 10–20% less) rewards verified tenants.
+        </p>
+      </Field>
+      <Field
+        label="Deposit — partner-guaranteed tenant (USD)"
+        error={form.formState.errors.depositPartnerGuaranteedDollars?.message}
+      >
+        <Input
+          type="number"
+          step="0.01"
+          min={0}
+          {...form.register("depositPartnerGuaranteedDollars", { valueAsNumber: true })}
+        />
+        <p className="text-[11px] text-muted-foreground">
+          Much lower (e.g. under 50% of max) since a partner backs the tenant.
         </p>
       </Field>
     </div>
@@ -765,6 +819,30 @@ function ReviewStep({
         <ReviewSection title="Pricing" onEdit={() => onJump(2)}>
           <ReviewRow label="Monthly rent" value={`$${v.monthlyRentDollars.toLocaleString()}`} />
           <ReviewRow label="Max deposit" value={`$${v.maxDepositDollars.toLocaleString()}`} />
+          <ReviewRow
+            label="Deposit — unverified"
+            value={
+              v.depositUnverifiedDollars != null
+                ? `$${v.depositUnverifiedDollars.toLocaleString()}`
+                : "Max deposit"
+            }
+          />
+          <ReviewRow
+            label="Deposit — verified"
+            value={
+              v.depositBackgroundVerifiedDollars != null
+                ? `$${v.depositBackgroundVerifiedDollars.toLocaleString()}`
+                : "Max deposit"
+            }
+          />
+          <ReviewRow
+            label="Deposit — partner-guaranteed"
+            value={
+              v.depositPartnerGuaranteedDollars != null
+                ? `$${v.depositPartnerGuaranteedDollars.toLocaleString()}`
+                : "Max deposit"
+            }
+          />
         </ReviewSection>
 
         <ReviewSection title="Amenities & safety" onEdit={() => onJump(3)}>

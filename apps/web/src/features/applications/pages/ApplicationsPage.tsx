@@ -6,16 +6,18 @@ import {
   ExternalLink,
   ImageOff,
   Inbox,
+  MapPin,
   Plus,
 } from "lucide-react";
 import { useMyListings } from "@/features/listings/hooks/useMyListings";
 import { useMyApplications } from "@/features/applications/hooks/useApplications";
 import { ApplicationCard } from "@/features/applications/components/ApplicationCard";
+import { ApplicationStatsSummary } from "@/features/applications/components/ApplicationStatsSummary";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { FilterTabs } from "@/components/shared/FilterTabs";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { ListRowsSkeleton } from "@/components/shared/ListSkeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -33,13 +35,15 @@ const statusTabs: { value: StatusFilter; label: string }[] = [
   { value: "All", label: "All" },
   { value: "Pending", label: "Pending" },
   { value: "Approved", label: "Approved" },
-  { value: "Rejected", label: "Rejected" },
+  { value: "Rejected", label: "Declined" },
+  { value: "Expired", label: "Expired" },
   { value: "Cancelled", label: "Cancelled" },
 ];
 
 type ListingGroup = {
   listing: ListingSummaryDto | null;
   listingId: string;
+  listingCity: string | null;
   applications: DealApplicationDto[];
   pendingCount: number;
 };
@@ -60,7 +64,6 @@ export const ApplicationsPage = () => {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("All");
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set());
 
-  // Applications on listings the current user owns (the "inbox" view).
   const landlordApps = useMemo(() => {
     if (!allApps || !listings) return [];
     const ids = new Set(listings.map((l) => l.id));
@@ -74,6 +77,8 @@ export const ApplicationsPage = () => {
       Approved: 0,
       Rejected: 0,
       Cancelled: 0,
+      Expired: 0,
+      PaymentFailed: 0,
     };
     for (const a of landlordApps) base[a.status] += 1;
     return base;
@@ -97,14 +102,18 @@ export const ApplicationsPage = () => {
     }
 
     return Array.from(grouped.entries())
-      .map(([listingId, apps]) => ({
-        listing: listingMap.get(listingId) ?? null,
-        listingId,
-        applications: apps.sort(
+      .map(([listingId, apps]) => {
+        const sorted = apps.sort(
           (a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime(),
-        ),
-        pendingCount: apps.filter((a) => a.status === "Pending").length,
-      }))
+        );
+        return {
+          listing: listingMap.get(listingId) ?? null,
+          listingId,
+          listingCity: sorted[0]?.listingCity ?? null,
+          applications: sorted,
+          pendingCount: sorted.filter((a) => a.status === "Pending").length,
+        };
+      })
       .sort(
         (a, b) =>
           b.pendingCount - a.pendingCount ||
@@ -130,15 +139,15 @@ export const ApplicationsPage = () => {
   const isError = listingsError || appsError;
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6">
       <PageHeader
         icon={Inbox}
         title="Booking requests"
-        description="Guests who applied to stay at your listings, grouped by property."
+        description="Review guests who want to stay at your listings. Click a request to see their full profile and stay details."
       >
         {counts.Pending > 0 && (
           <Badge variant="accent" className="h-7 px-3">
-            {counts.Pending} pending
+            {counts.Pending} need your response
           </Badge>
         )}
       </PageHeader>
@@ -166,29 +175,29 @@ export const ApplicationsPage = () => {
         </EmptyState>
       ) : (
         <>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <Tabs value={statusFilter} onValueChange={(v) => setStatusFilter(v as StatusFilter)}>
-              <TabsList className="overflow-x-auto">
-                {statusTabs.map((t) => (
-                  <TabsTrigger key={t.value} value={t.value} className="gap-1.5">
-                    {t.label}
-                    <span
-                      className={cn(
-                        "rounded-full px-1.5 text-[10px] font-semibold tabular-nums",
-                        statusFilter === t.value
-                          ? "bg-foreground text-background"
-                          : "bg-muted text-muted-foreground",
-                      )}
-                    >
-                      {counts[t.value]}
-                    </span>
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
+          <ApplicationStatsSummary counts={counts} />
+
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <FilterTabs
+              aria-label="Filter booking requests by status"
+              options={statusTabs.map((t) => ({
+                value: t.value,
+                label: t.label,
+                count: counts[t.value],
+              }))}
+              value={statusFilter}
+              onChange={setStatusFilter}
+              hideZeroCounts
+              className="lg:flex-1"
+            />
 
             {groups.length > 1 && (
-              <Button variant="ghost" size="sm" onClick={toggleAll}>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={toggleAll}
+                className="self-start lg:shrink-0"
+              >
                 {allCollapsed ? "Expand all" : "Collapse all"}
               </Button>
             )}
@@ -207,20 +216,35 @@ export const ApplicationsPage = () => {
             <div className="space-y-4">
               {groups.map((group) => {
                 const isCollapsed = collapsedIds.has(group.listingId);
+                const hasPending = group.pendingCount > 0;
                 return (
-                  <Card key={group.listingId}>
-                    <CardHeader className="pb-3">
-                      <button
-                        onClick={() => toggleCollapsed(group.listingId)}
-                        className="flex items-center justify-between gap-3 w-full text-left cursor-pointer"
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
+                  <Card
+                    key={group.listingId}
+                    className={cn(
+                      "overflow-hidden shadow-sm",
+                      hasPending && !isCollapsed && "ring-1 ring-accent/30",
+                    )}
+                  >
+                    <CardHeader
+                      className={cn(
+                        "p-4",
+                        hasPending ? "bg-accent/5" : "bg-muted/30",
+                        !isCollapsed && "border-b",
+                      )}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <button
+                          type="button"
+                          onClick={() => toggleCollapsed(group.listingId)}
+                          aria-expanded={!isCollapsed}
+                          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                        >
                           {isCollapsed ? (
                             <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                           ) : (
                             <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
                           )}
-                          <span className="relative hidden h-10 w-10 shrink-0 overflow-hidden rounded-lg bg-muted sm:block">
+                          <span className="relative h-11 w-11 shrink-0 overflow-hidden rounded-lg bg-muted">
                             {group.listing?.coverPhotoUrl ? (
                               <img
                                 src={group.listing.coverPhotoUrl}
@@ -234,37 +258,48 @@ export const ApplicationsPage = () => {
                               </span>
                             )}
                           </span>
-                          <CardTitle className="text-base truncate">
-                            {group.listing?.title ?? "Unknown listing"}
-                          </CardTitle>
-                          <Badge variant="secondary" className="shrink-0">
-                            {group.applications.length}
-                          </Badge>
+                          <span className="min-w-0">
+                            <CardTitle className="text-base truncate">
+                              {group.listing?.title ?? "Unknown listing"}
+                            </CardTitle>
+                            <span className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                              {group.listingCity && (
+                                <span className="flex items-center gap-1">
+                                  <MapPin className="h-3 w-3" />
+                                  {group.listingCity}
+                                </span>
+                              )}
+                              <span>
+                                {group.applications.length}{" "}
+                                {group.applications.length === 1 ? "request" : "requests"}
+                              </span>
+                            </span>
+                          </span>
+                        </button>
+                        <div className="flex shrink-0 items-center gap-2">
                           {group.pendingCount > 0 && (
-                            <Badge variant="accent" className="shrink-0">
-                              {group.pendingCount} pending
-                            </Badge>
+                            <Badge variant="accent">{group.pendingCount} pending</Badge>
                           )}
+                          <Link
+                            to={`/listings/${group.listingId}`}
+                            onClick={(e) => e.stopPropagation()}
+                            aria-label={`View ${group.listing?.title ?? "listing"}`}
+                            className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                          >
+                            Listing
+                            <ExternalLink className="h-3 w-3" />
+                          </Link>
                         </div>
-                        <Link
-                          to={`/listings/${group.listingId}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                        >
-                          View
-                          <ExternalLink className="h-3 w-3" />
-                        </Link>
-                      </button>
+                      </div>
                     </CardHeader>
 
                     {!isCollapsed && (
-                      <CardContent className="space-y-3 pt-0">
+                      <CardContent className="space-y-3 bg-muted/10 p-4">
                         {group.applications.map((app) => (
                           <ApplicationCard
                             key={app.applicationId}
                             application={app}
-                            showHostActions
-                            defaultDepositCents={group.listing?.defaultDepositCents ?? null}
+                            perspective="host"
                           />
                         ))}
                       </CardContent>

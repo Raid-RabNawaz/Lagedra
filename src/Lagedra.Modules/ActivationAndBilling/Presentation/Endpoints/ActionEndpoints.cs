@@ -31,15 +31,18 @@ public static class ActionEndpoints
 
     private static async Task<IResult> ApproveApplication(
         [FromBody] ApproveApplicationByTokenRequest request,
+        HttpContext httpContext,
         IMediator mediator,
         CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(httpContext);
 
         var result = await mediator.Send(
             new ApproveApplicationByTokenCommand(
                 request.Token,
-                request.DepositAmountCents),
+                IpAddress: httpContext.Connection.RemoteIpAddress?.ToString(),
+                UserAgent: httpContext.Request.Headers.UserAgent.ToString() is { Length: > 0 } ua ? ua : null),
             ct).ConfigureAwait(true);
 
         if (result.IsSuccess)
@@ -56,7 +59,6 @@ public static class ActionEndpoints
                 Results.Json(payload, statusCode: StatusCodes.Status401Unauthorized),
             "OneTap.token.alreadyUsed" =>
                 Results.Json(payload, statusCode: StatusCodes.Status409Conflict),
-            "OneTap.MissingDeposit" => Results.BadRequest(payload),
             "Application.NotFound" => Results.NotFound(payload),
             _ => Results.BadRequest(payload),
         };
@@ -64,5 +66,4 @@ public static class ActionEndpoints
 }
 
 public sealed record ApproveApplicationByTokenRequest(
-    string Token,
-    long? DepositAmountCents);
+    string Token);

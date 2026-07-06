@@ -11,12 +11,19 @@ import {
   Bed,
   Bath,
   CalendarClock,
+  IdCard,
+  Phone,
+  Star,
+  AlertTriangle,
 } from "lucide-react";
 import { adminApi } from "@/features/admin/services/adminApi";
 import type { ListingReviewItemDto } from "@/api/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { cn } from "@/lib/utils";
+import { MIN_HOST_PROFILE_COMPLETENESS } from "@/features/auth/lib/profileCompleteness";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -30,7 +37,6 @@ import {
 import { Loader } from "@/components/shared/Loader";
 import { ErrorState } from "@/components/shared/ErrorState";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { FormError } from "@/components/shared/FormError";
 import { formatMoney, formatDate } from "@/utils/format";
 import { extractErrorMessage } from "@/lib/errors";
@@ -50,14 +56,12 @@ export const ListingReviewPage = () => {
   const [items, setItems] = useState<ListingReviewItemDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [approveInFlight, setApproveInFlight] = useState<string | null>(null);
+  const [approveTarget, setApproveTarget] = useState<ListingReviewItemDto | null>(null);
   const [denyTarget, setDenyTarget] = useState<ListingReviewItemDto | null>(null);
 
   const load = async () => {
     setIsLoading(true);
     setError(null);
-    setActionError(null);
     try {
       const data = await adminApi.getPendingListingReviews();
       setItems(data);
@@ -71,20 +75,6 @@ export const ListingReviewPage = () => {
   useEffect(() => {
     void load();
   }, []);
-
-  const handleApprove = async (item: ListingReviewItemDto) => {
-    if (!window.confirm(`Approve "${item.title}" and publish it to the marketplace?`)) return;
-    setApproveInFlight(item.id);
-    setActionError(null);
-    try {
-      await adminApi.approveListing(item.id);
-      await load();
-    } catch (err) {
-      setActionError(extractErrorMessage(err));
-    } finally {
-      setApproveInFlight(null);
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -103,12 +93,6 @@ export const ListingReviewPage = () => {
           Refresh
         </Button>
       </div>
-
-      {actionError && (
-        <Alert variant="destructive">
-          <AlertDescription>{actionError}</AlertDescription>
-        </Alert>
-      )}
 
       <Card>
         <CardHeader className="pb-3">
@@ -133,8 +117,7 @@ export const ListingReviewPage = () => {
                 <ReviewCard
                   key={item.id}
                   item={item}
-                  isApproving={approveInFlight === item.id}
-                  onApprove={() => void handleApprove(item)}
+                  onApprove={() => setApproveTarget(item)}
                   onDeny={() => setDenyTarget(item)}
                 />
               ))}
@@ -142,6 +125,17 @@ export const ListingReviewPage = () => {
           )}
         </CardContent>
       </Card>
+
+      {approveTarget && (
+        <ApproveDialog
+          item={approveTarget}
+          onClose={() => setApproveTarget(null)}
+          onSuccess={() => {
+            setApproveTarget(null);
+            void load();
+          }}
+        />
+      )}
 
       {denyTarget && (
         <DenyDialog
@@ -159,12 +153,10 @@ export const ListingReviewPage = () => {
 
 function ReviewCard({
   item,
-  isApproving,
   onApprove,
   onDeny,
 }: {
   item: ListingReviewItemDto;
-  isApproving: boolean;
   onApprove: () => void;
   onDeny: () => void;
 }) {
@@ -230,27 +222,24 @@ function ReviewCard({
               · created {formatDate(item.createdAt)}
             </span>
           </p>
-          <p className="mt-1 font-mono text-[10px] text-muted-foreground" title={item.landlordUserId}>
-            Landlord {item.landlordUserId.slice(0, 8)}…
-          </p>
         </div>
+
+        <HostSummary item={item} />
 
         <div className="flex items-center gap-2 pt-1">
           <Button
             variant="accent"
             size="sm"
             onClick={onApprove}
-            disabled={isApproving}
             className="flex-1"
           >
-            {isApproving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+            <Check className="h-3.5 w-3.5" />
             Approve
           </Button>
           <Button
             variant="outline"
             size="sm"
             onClick={onDeny}
-            disabled={isApproving}
             className="flex-1 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
           >
             <X className="h-3.5 w-3.5" />
@@ -259,6 +248,161 @@ function ReviewCard({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function HostSummary({ item }: { item: ListingReviewItemDto }) {
+  const name = item.hostDisplayName?.trim() || "Unnamed host";
+  const initials =
+    name === "Unnamed host"
+      ? "?"
+      : name
+          .split(" ")
+          .slice(0, 2)
+          .map((w) => w[0]?.toUpperCase())
+          .join("");
+  const memberYear = item.hostMemberSince
+    ? new Date(item.hostMemberSince).getFullYear()
+    : null;
+  const completeness = item.hostProfileCompletenessPercent;
+  const profileReady = completeness >= MIN_HOST_PROFILE_COMPLETENESS;
+
+  return (
+    <div className="rounded-md border bg-muted/30 p-3">
+      <div className="flex items-center gap-2">
+        <Avatar className="h-9 w-9">
+          {item.hostProfilePhotoUrl ? (
+            <AvatarImage src={item.hostProfilePhotoUrl} alt={name} />
+          ) : null}
+          <AvatarFallback className="text-xs">{initials}</AvatarFallback>
+        </Avatar>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium leading-tight">{name}</p>
+          <p className="text-[11px] text-muted-foreground">
+            Host{memberYear ? ` · Member since ${memberYear}` : ""}
+          </p>
+        </div>
+        <Badge
+          variant={profileReady ? "secondary" : "outline"}
+          className={cn(
+            "shrink-0 gap-1 text-[10px]",
+            profileReady
+              ? "border-emerald-600/30 bg-emerald-600/10 text-emerald-700"
+              : "border-amber-500/40 bg-amber-500/10 text-amber-700",
+          )}
+          title="How complete the host's public profile is"
+        >
+          {profileReady ? (
+            <Check className="h-3 w-3" />
+          ) : (
+            <AlertTriangle className="h-3 w-3" />
+          )}
+          Profile {completeness}%
+        </Badge>
+      </div>
+
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+        <span
+          className={cn(
+            "flex items-center gap-1",
+            item.hostIsGovernmentIdVerified && "text-emerald-700",
+          )}
+        >
+          <IdCard className="h-3 w-3" />
+          {item.hostIsGovernmentIdVerified ? "ID verified" : "ID not verified"}
+        </span>
+        <span
+          className={cn(
+            "flex items-center gap-1",
+            item.hostIsPhoneVerified && "text-emerald-700",
+          )}
+        >
+          <Phone className="h-3 w-3" />
+          {item.hostIsPhoneVerified ? "Phone verified" : "Phone not verified"}
+        </span>
+        {item.hostResponseRatePercent != null && (
+          <span className="flex items-center gap-1">
+            <Star className="h-3 w-3" />
+            {item.hostResponseRatePercent}% response
+          </span>
+        )}
+      </div>
+
+      <p
+        className="mt-2 font-mono text-[10px] text-muted-foreground/70"
+        title={item.landlordUserId}
+      >
+        {item.landlordUserId.slice(0, 8)}…
+      </p>
+    </div>
+  );
+}
+
+function ApproveDialog({
+  item,
+  onClose,
+  onSuccess,
+}: {
+  item: ListingReviewItemDto;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleApprove = async () => {
+    setSubmitting(true);
+    setError(null);
+    try {
+      await adminApi.approveListing(item.id);
+      onSuccess();
+    } catch (err) {
+      setError(extractErrorMessage(err));
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open onOpenChange={(next) => !next && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Approve &ldquo;{item.title}&rdquo;</DialogTitle>
+          <DialogDescription>
+            This publishes the listing to the marketplace, where guests can find
+            it and request to book. You can take it down later if needed.
+          </DialogDescription>
+        </DialogHeader>
+        {item.hostProfileCompletenessPercent < MIN_HOST_PROFILE_COMPLETENESS && (
+          <div className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs text-amber-800">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              This host&apos;s profile is only {item.hostProfileCompletenessPercent}% complete.
+              Guests may not be able to tell who they&apos;re renting from. Consider
+              sending it back so the host can fill in their profile first.
+            </span>
+          </div>
+        )}
+        {error && <FormError message={error} />}
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="accent"
+            onClick={() => void handleApprove()}
+            disabled={submitting}
+          >
+            {submitting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Check className="h-4 w-4" />
+            )}
+            Approve &amp; publish
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

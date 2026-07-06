@@ -21,4 +21,7 @@ public sealed record UpdateListingRequest(
     bool? InstantBookingEnabled = null,
     Uri? VirtualTourUrl = null,
     long? DefaultDepositCents = null,
-    bool ClearDefaultDeposit = false);
+    bool ClearDefaultDeposit = false,
+    long? DepositUnverifiedCents = null,
+    long? DepositBackgroundVerifiedCents = null,
+    long? DepositPartnerGuaranteedCents = null);

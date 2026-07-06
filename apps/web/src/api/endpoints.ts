@@ -59,6 +59,7 @@ export const endpoints = {
   applications: {
     submit: "/v1/applications",
     setupIntent: "/v1/applications/setup-intent",
+    preview: "/v1/applications/preview",
     mine: "/v1/applications/mine",
     detail: (id: string) => `/v1/applications/${id}`,
     approve: (id: string) => `/v1/applications/${id}/approve`,
@@ -86,6 +87,15 @@ export const endpoints = {
   hostPayment: {
     details: "/v1/hosts/payment-details",
   },
+  channels: {
+    providers: "/v1/channels/providers",
+    list: "/v1/channels/",
+    connect: "/v1/channels/",
+    enable: (id: string) => `/v1/channels/${id}/enable`,
+    disable: (id: string) => `/v1/channels/${id}/disable`,
+    sync: (id: string) => `/v1/channels/${id}/sync`,
+    listings: (id: string) => `/v1/channels/${id}/listings`,
+  },
   deals: {
     mine: "/v1/deals/mine",
   },
@@ -99,6 +109,7 @@ export const endpoints = {
     prorationQuote: (dealId: string) => `/v1/deals/${dealId}/proration-quote`,
     stopBilling: (dealId: string) => `/v1/deals/${dealId}/stop-billing`,
     activate: (dealId: string) => `/v1/deals/${dealId}/activate`,
+    hostStatement: "/v1/me/billing/statement",
   },
   payment: {
     details: (dealId: string) => `/v1/deals/${dealId}/payment/details`,
@@ -109,6 +120,13 @@ export const endpoints = {
     cancel: (dealId: string) => `/v1/deals/${dealId}/payment/cancel`,
     damageClaim: (dealId: string) => `/v1/deals/${dealId}/payment/damage-claim`,
     resolveDispute: (dealId: string) => `/v1/admin/deals/${dealId}/resolve-payment-dispute`,
+    beginMoveOut: (dealId: string) => `/v1/deals/${dealId}/payment/begin-move-out`,
+    depositReturnHostConfirm: (dealId: string) =>
+      `/v1/deals/${dealId}/payment/deposit-return/host-confirm`,
+    depositReturnTenantConfirm: (dealId: string) =>
+      `/v1/deals/${dealId}/payment/deposit-return/tenant-confirm`,
+    forceDepositReturn: (dealId: string) =>
+      `/v1/admin/deals/${dealId}/force-deposit-return`,
   },
   truthSurface: {
     create: "/v1/truth-surface",
@@ -195,6 +213,8 @@ export const endpoints = {
     fileCase: "/v1/arbitration/cases",
     list: "/v1/arbitration/cases",
     getCase: (caseId: string) => `/v1/arbitration/cases/${caseId}`,
+    filingFeeCheckout: (caseId: string) =>
+      `/v1/arbitration/cases/${caseId}/filing-fee/checkout`,
     attachEvidence: (caseId: string) => `/v1/arbitration/cases/${caseId}/evidence`,
     markEvidenceComplete: (caseId: string) =>
       `/v1/arbitration/cases/${caseId}/evidence-complete`,
@@ -243,6 +263,7 @@ export const endpoints = {
   adminSettings: {
     list: "/v1/admin/settings",
     update: (key: string) => `/v1/admin/settings/${encodeURIComponent(key)}`,
+    protocolFeeReconciliation: "/v1/admin/protocol-fee-reconciliation",
   },
   adminAnalytics: {
     summary: "/v1/admin/analytics/summary",

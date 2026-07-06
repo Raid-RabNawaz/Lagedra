@@ -1,4 +1,5 @@
 using Lagedra.Modules.ActivationAndBilling.Application.DTOs;
+using Lagedra.Modules.ActivationAndBilling.Application.Services;
 using Lagedra.SharedKernel.Results;
 using Lagedra.SharedKernel.Security;
 using MediatR;
@@ -6,17 +7,19 @@ using MediatR;
 namespace Lagedra.Modules.ActivationAndBilling.Application.Commands;
 
 /// <summary>
-/// Phase 16.10 — one-tap approval triggered by the host clicking the
-/// deep link in their booking notification email. The token encodes
-/// the (action, applicationId, hostUserId, expiry) tuple; the handler
-/// validates, then forwards to the existing
-/// <see cref="ApproveDealApplicationCommand"/> so all downstream
-/// behaviours (Truth Surface auto-confirm, card-on-file off-session
-/// charge, notifications) run identically to the in-app path.
+/// One-tap approval triggered by the host clicking the deep link in their
+/// booking notification email. The token encodes the (action, applicationId,
+/// hostUserId, expiry) tuple; the handler validates, then forwards to
+/// <see cref="ApproveDealApplicationCommand"/> so all downstream behaviours
+/// (atomic Truth Surface seal, off-session charge, notifications) run
+/// identically to the in-app path. No deposit is required — it was
+/// predetermined at request time. Clicking the signed link constitutes the
+/// host's Truth Surface consent.
 /// </summary>
 public sealed record ApproveApplicationByTokenCommand(
     string Token,
-    long? DepositAmountCentsOverride = null) : IRequest<Result<DealApplicationDto>>;
+    string? IpAddress = null,
+    string? UserAgent = null) : IRequest<Result<DealApplicationDto>>;
 
 public sealed class ApproveApplicationByTokenCommandHandler(
     IActionTokenService actionTokens,
@@ -24,24 +27,13 @@ public sealed class ApproveApplicationByTokenCommandHandler(
     : IRequestHandler<ApproveApplicationByTokenCommand, Result<DealApplicationDto>>
 {
     public const string ActionLabel = "approve_application";
+    public const string ConsentVersion = "ts-consent-email-one-tap-v1";
 
     public async Task<Result<DealApplicationDto>> Handle(
         ApproveApplicationByTokenCommand request,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
-
-        // Validate the deposit *before* burning the token's single-use
-        // budget — otherwise a host who hits "Approve" with the deposit
-        // field empty would invalidate their email link and have to ask
-        // support to reissue.
-        var deposit = request.DepositAmountCentsOverride ?? 0;
-        if (deposit <= 0)
-        {
-            return Result<DealApplicationDto>.Failure(new Error(
-                "OneTap.MissingDeposit",
-                "A deposit amount is required to one-tap approve."));
-        }
 
         var validation = await actionTokens
             .ValidateAndConsumeAsync(request.Token, ActionLabel, cancellationToken)
@@ -57,7 +49,10 @@ public sealed class ApproveApplicationByTokenCommandHandler(
             new ApproveDealApplicationCommand(
                 validation.Payload.SubjectId,
                 validation.Payload.PrincipalUserId,
-                deposit),
+                TruthSurfaceConsentGiven: true,
+                ConsentVersion: ConsentVersion,
+                IpAddress: request.IpAddress,
+                UserAgent: request.UserAgent),
             cancellationToken).ConfigureAwait(false);
     }
 }

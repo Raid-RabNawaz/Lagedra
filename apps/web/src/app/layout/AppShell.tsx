@@ -1,5 +1,5 @@
 import { createElement } from "react";
-import { Link, NavLink, Outlet } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
   LogOut,
   Menu,
@@ -13,8 +13,8 @@ import {
   Heart,
   Inbox,
   FileText,
-  PanelLeftClose,
-  PanelLeft,
+  Pin,
+  PinOff,
   UserPlus,
   LogIn,
   Settings,
@@ -42,10 +42,11 @@ import {
   MessageCircle,
 } from "lucide-react";
 import logoSvg from "@/assets/logo.svg";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { authApi } from "@/features/auth/services/authApi";
 import { useAuthStore } from "@/app/auth/authStore";
 import { getSidebarGroupsForRole, supportsModeSwitching, type NavItem } from "@/app/auth/permissions";
+import { resolveModeSwitchRedirect } from "@/app/auth/modeNavigation";
 import { roleLabel } from "@/app/auth/roles";
 import { useModeStore } from "@/app/auth/modeStore";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -53,7 +54,7 @@ import { Button } from "@/components/ui/button";
 import { AuthedHeaderActions } from "@/app/layout/AuthedHeaderActions";
 import { cn } from "@/lib/utils";
 
-const SIDEBAR_KEY = "lagedra.sidebar";
+const SIDEBAR_PINNED_KEY = "lagedra.sidebar.pinned";
 
 const iconMap: Record<string, typeof LayoutDashboard> = {
   LayoutDashboard,
@@ -100,22 +101,50 @@ export const AppShell = () => {
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
 
-  const [collapsed, setCollapsed] = useState(() => {
+  // Pinned = keep the sidebar fully expanded. Unpinned = show an icon-only
+  // rail that hover-expands (as an overlay) and re-collapses on mouse-leave.
+  // Defaults to unpinned so the space-saving rail is the out-of-the-box
+  // behavior; the choice is remembered per browser.
+  const [pinned, setPinned] = useState(() => {
     if (typeof window === "undefined") return false;
-    return window.localStorage.getItem(SIDEBAR_KEY) === "true";
+    return window.localStorage.getItem(SIDEBAR_PINNED_KEY) === "true";
   });
+  const [hovered, setHovered] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
+  // Effective expanded state drives what the sidebar renders: full labels when
+  // pinned or while the cursor is peeking, icon-only otherwise.
+  const expanded = pinned || hovered;
+  const collapsed = !expanded;
+
   const mode = useModeStore((s) => s.mode);
   const showModeSwitch = supportsModeSwitching(user?.role);
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Keep the active page aligned with Travelling vs Hosting. Without this,
+  // toggling mode updates the sidebar but leaves you on e.g. `/app/applications`
+  // while the UI says "Travelling".
+  useEffect(() => {
+    if (!showModeSwitch) return;
+    const redirect = resolveModeSwitchRedirect(location.pathname, mode);
+    if (redirect) {
+      navigate(redirect, { replace: true });
+    }
+  }, [mode, location.pathname, navigate, showModeSwitch]);
 
   const groups = getSidebarGroupsForRole(user?.role ?? "", showModeSwitch ? mode : undefined);
 
-  const toggleCollapsed = useCallback(() => {
-    setCollapsed((v) => {
+  const togglePinned = useCallback(() => {
+    setPinned((v) => {
       const next = !v;
-      window.localStorage.setItem(SIDEBAR_KEY, String(next));
+      window.localStorage.setItem(SIDEBAR_PINNED_KEY, String(next));
+      // Reset the transient hover state so unpinning immediately collapses
+      // the rail (instead of waiting for the next mouse-leave).
+      if (!next) {
+        setHovered(false);
+      }
       return next;
     });
   }, []);
@@ -239,34 +268,57 @@ export const AppShell = () => {
       </header>
 
       <div className="flex flex-1 min-h-0">
-        {/* ── Desktop sidebar ──────────────────── */}
-        <aside
+        {/* ── Desktop sidebar (collapsible rail) ──────────────────── */}
+        {/* The spacer keeps layout width reserved at the *rail* size when
+            unpinned, so hover-expansion overlays the content instead of
+            reflowing the whole page on every peek. */}
+        <div
           className={cn(
-            "hidden lg:flex flex-col border-r bg-background transition-[width] duration-200 ease-in-out shrink-0",
-            collapsed ? "w-[68px]" : "w-60",
+            "relative hidden lg:block shrink-0 transition-[width] duration-200 ease-in-out",
+            pinned ? "w-60" : "w-[68px]",
           )}
         >
-          <div className="flex-1 overflow-y-auto py-2">
-            {sidebarContent()}
-          </div>
+          <aside
+            onMouseEnter={() => setHovered(true)}
+            onMouseLeave={() => setHovered(false)}
+            className={cn(
+              "fixed left-0 top-14 bottom-0 z-40 flex flex-col border-r bg-background transition-[width] duration-200 ease-in-out",
+              expanded ? "w-60" : "w-[68px]",
+              !pinned && hovered && "shadow-xl",
+            )}
+          >
+            <div className="flex-1 overflow-y-auto py-2">
+              {sidebarContent()}
+            </div>
 
-          <div className="border-t p-2">
-            <button
-              onClick={toggleCollapsed}
-              className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors cursor-pointer"
-              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            >
-              {collapsed ? (
-                <PanelLeft className="h-4 w-4 mx-auto" />
-              ) : (
-                <>
-                  <PanelLeftClose className="h-4 w-4" />
-                  <span>Collapse</span>
-                </>
-              )}
-            </button>
-          </div>
-        </aside>
+            <div className="border-t p-2">
+              <button
+                onClick={togglePinned}
+                className={cn(
+                  "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors cursor-pointer",
+                  collapsed && "justify-center px-2",
+                )}
+                title={
+                  pinned
+                    ? "Unpin sidebar (auto-collapse to icons)"
+                    : "Pin sidebar (keep expanded)"
+                }
+              >
+                {pinned ? (
+                  <>
+                    <PinOff className="h-4 w-4 shrink-0" />
+                    {expanded && <span>Unpin</span>}
+                  </>
+                ) : (
+                  <>
+                    <Pin className="h-4 w-4 shrink-0" />
+                    {expanded && <span>Pin sidebar</span>}
+                  </>
+                )}
+              </button>
+            </div>
+          </aside>
+        </div>
 
         {/* ── Mobile slide-out ─────────────────── */}
         {mobileOpen && (

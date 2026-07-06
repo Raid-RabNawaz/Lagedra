@@ -18,7 +18,6 @@ public sealed class CreateCheckoutPaymentIntentCommandHandler(
     BillingDbContext dbContext,
     IStripeService stripeService,
     IHostStripeAccountProvider hostStripeProvider,
-    IHostPaymentDetailsProvider hostPaymentDetailsProvider,
     IClock clock)
     : IRequestHandler<CreateCheckoutPaymentIntentCommand, Result<CheckoutDto>>
 {
@@ -82,8 +81,11 @@ public sealed class CreateCheckoutPaymentIntentCommandHandler(
         }
 
         var totalAmountCents = confirmation.TotalTenantPaymentCents;
+        // Non-custodial (Option A): the platform fee is the tenant service fee +
+        // insurance premium only. The monthly protocol fee is billed to the host
+        // via subscription, never taken at checkout. Stripe transfers the remainder
+        // (rent + deposit) to the host's connected account.
         var applicationFeeCents = confirmation.InsuranceFeeCents
-            + confirmation.MonthlyProtocolFeeCents
             + confirmation.ServiceFeeCents;
 
         var idempotencyKey = $"pi-deal-{request.DealId}";
@@ -91,7 +93,8 @@ public sealed class CreateCheckoutPaymentIntentCommandHandler(
         {
             ["dealId"] = request.DealId.ToString(),
             ["tenantUserId"] = request.TenantUserId.ToString(),
-            ["landlordUserId"] = application.LandlordUserId.ToString()
+            ["landlordUserId"] = application.LandlordUserId.ToString(),
+            ["payoutModel"] = "stripe-connect"
         };
 
         // Use a dedicated timeout instead of the HTTP request's cancellation token.
@@ -99,48 +102,27 @@ public sealed class CreateCheckoutPaymentIntentCommandHandler(
         // want the PaymentIntent created and persisted so a page refresh picks it up.
         using var stripeCts = new CancellationTokenSource(TimeSpan.FromSeconds(55));
 
-        // Prefer the Airbnb-style direct-payout flow: if the host has saved payout
-        // instructions, charge fully to the platform Stripe account. The host is paid
-        // out-of-band based on those instructions.
-        var directPayoutDetails = await hostPaymentDetailsProvider
-            .GetDecryptedPaymentDetailsAsync(application.LandlordUserId, stripeCts.Token)
+        var hostStripe = await hostStripeProvider
+            .GetByHostUserIdAsync(application.LandlordUserId, stripeCts.Token)
             .ConfigureAwait(false);
 
-        StripePaymentIntentResult pi;
-        if (directPayoutDetails is not null)
+        if (hostStripe is null || !hostStripe.ChargesEnabled)
         {
-            metadata["payoutModel"] = "direct";
-            pi = await stripeService.CreatePlatformPaymentIntentAsync(
-                totalAmountCents,
-                "usd",
-                metadata,
-                idempotencyKey,
-                stripeCts.Token).ConfigureAwait(false);
+            return Result<CheckoutDto>.Failure(
+                new Error("Checkout.HostNotOnboarded",
+                    "The host has not completed payout setup yet. Please wait for the host to finish Stripe onboarding."));
         }
-        else
-        {
-            // Backward-compatible fallback: hosts who previously onboarded via Stripe Connect.
-            var hostStripe = await hostStripeProvider
-                .GetByHostUserIdAsync(application.LandlordUserId, cancellationToken)
-                .ConfigureAwait(false);
 
-            if (hostStripe is null || !hostStripe.ChargesEnabled)
-            {
-                return Result<CheckoutDto>.Failure(
-                    new Error("Checkout.HostNotOnboarded",
-                        "The host has not added payout details yet. Please wait for the host to complete payout setup."));
-            }
-
-            metadata["payoutModel"] = "stripe-connect";
-            pi = await stripeService.CreateDestinationPaymentIntentAsync(
-                totalAmountCents,
-                "usd",
-                hostStripe.StripeAccountId,
-                applicationFeeCents,
-                metadata,
-                idempotencyKey,
-                stripeCts.Token).ConfigureAwait(false);
-        }
+        var pi = await stripeService.CreateDestinationPaymentIntentAsync(
+            totalAmountCents,
+            "usd",
+            hostStripe.StripeAccountId,
+            hostStripe.StripeAccountId,
+            applicationFeeCents,
+            metadata,
+            statementDescriptorSuffix: null,
+            idempotencyKey,
+            stripeCts.Token).ConfigureAwait(false);
 
         confirmation.SetStripePaymentIntent(pi.PaymentIntentId, pi.Status, clock);
         await dbContext.SaveChangesAsync(CancellationToken.None).ConfigureAwait(false);
@@ -156,7 +138,7 @@ public sealed class CreateCheckoutPaymentIntentCommandHandler(
             c.FirstMonthRentCents,
             c.DepositAmountCents,
             c.InsuranceFeeCents,
-            c.InsuranceFeeCents + c.MonthlyProtocolFeeCents + c.ServiceFeeCents,
+            c.InsuranceFeeCents + c.ServiceFeeCents,
             c.ServiceFeeCents,
             "usd");
 }

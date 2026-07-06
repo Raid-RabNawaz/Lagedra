@@ -16,6 +16,11 @@ public static class PlatformSettingKeys
     public const string TenantServiceFeeFlatCents = "service_fee.tenant_flat_cents";
     public const string TenantServiceFeeUseFlat = "service_fee.tenant_use_flat";
 
+    // Booking-request lifecycle
+    // Hours a pending reservation request waits for a host decision before it
+    // auto-expires. Defaults to 72h, matching the one-tap approval token TTL.
+    public const string BookingRequestExpiryHours = "booking_request.expiry_hours";
+
     // Tenant payment timing
     public const string PaymentGracePeriodDays = "payment.grace_period_days";
     public const string PaymentReminderAfterDays = "payment.reminder_after_days";

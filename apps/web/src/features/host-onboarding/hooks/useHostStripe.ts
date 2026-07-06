@@ -49,3 +49,25 @@ export function useSaveHostPaymentDetails() {
     },
   });
 }
+
+/**
+ * Whether the current host can actually receive funds. Non-custodial (Option A):
+ * the booking charge is a Stripe destination charge settled on the host's
+ * connected account, so readiness requires a Connect account with charges and
+ * payouts enabled. Free-text payout notes are only the months-2+ rent channel
+ * and no longer make a host payout-ready. Mirrors the backend precondition that
+ * gates host approval / off-session charges, so the UI can warn before the host
+ * accepts a request they can't be paid for. `settled` is false until the status
+ * lookup resolves, so callers can avoid flashing a false "not ready" warning
+ * during load.
+ */
+export function useHostPayoutReadiness() {
+  const status = useHostStripeStatus();
+
+  const settled = !status.isLoading;
+  const ready =
+    status.data?.chargesEnabled === true &&
+    status.data?.payoutsEnabled === true;
+
+  return { ready, settled };
+}

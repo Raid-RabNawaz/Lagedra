@@ -29,4 +29,10 @@ public sealed record DealApplicationDetailsDto(
     long? FirstMonthRentCents,
     long? DepositAmountCents,
     long? InsuranceFeeCents,
-    string? JurisdictionWarning);
+    string? JurisdictionWarning,
+    int GuestCount = 1,
+    string? Message = null,
+    long? ServiceFeeCents = null,
+    long? TotalPayableSnapshotCents = null,
+    TenantVerificationTier? TenantVerificationTier = null,
+    string? DepositReason = null);

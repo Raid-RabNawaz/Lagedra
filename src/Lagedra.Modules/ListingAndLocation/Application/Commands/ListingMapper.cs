@@ -38,6 +38,9 @@ internal static class ListingMapper
             listing.SuggestedDepositLowCents,
             listing.SuggestedDepositHighCents,
             listing.DefaultDepositCents,
+            listing.DepositUnverifiedCents,
+            listing.DepositBackgroundVerifiedCents,
+            listing.DepositPartnerGuaranteedCents,
             listing.HouseRules is { } hr
                 ? new HouseRulesDto(
                     hr.CheckInTime, hr.CheckOutTime, hr.MaxGuests,

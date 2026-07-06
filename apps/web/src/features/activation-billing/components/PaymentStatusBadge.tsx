@@ -6,8 +6,12 @@ const config: Record<
   { label: string; variant: "default" | "secondary" | "destructive" | "accent" }
 > = {
   Pending: { label: "Pending", variant: "secondary" },
+  PaymentMethodProvided: { label: "Card on file", variant: "secondary" },
+  CapturePending: { label: "Charging", variant: "secondary" },
   Confirmed: { label: "Confirmed", variant: "accent" },
   Disputed: { label: "Disputed", variant: "destructive" },
+  Failed: { label: "Payment failed", variant: "destructive" },
+  Refunded: { label: "Refunded", variant: "default" },
   Rejected: { label: "Rejected", variant: "destructive" },
   Cancelled: { label: "Cancelled", variant: "default" },
 };

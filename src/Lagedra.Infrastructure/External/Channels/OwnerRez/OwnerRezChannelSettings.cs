@@ -23,4 +23,10 @@ public sealed class OwnerRezChannelSettings
     public string Key { get; init; } = string.Empty;
 
     public string UserAgent { get; init; } = "Lagedra/1.0 (+https://lagedra.com)";
+
+    /// <summary>
+    /// Stable identifier OwnerRez echoes back on OLB calls (the
+    /// <c>systemExternalId</c> field). Identifies our channel system.
+    /// </summary>
+    public string SystemExternalId { get; init; } = "Lagedra";
 }

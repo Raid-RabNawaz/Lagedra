@@ -114,7 +114,10 @@ public static class ListingEndpoints
                 request.InstantBookingEnabled,
                 request.VirtualTourUrl,
                 ApproxAddress: null,
-                DefaultDepositCents: request.DefaultDepositCents),
+                DefaultDepositCents: request.DefaultDepositCents,
+                DepositUnverifiedCents: request.DepositUnverifiedCents,
+                DepositBackgroundVerifiedCents: request.DepositBackgroundVerifiedCents,
+                DepositPartnerGuaranteedCents: request.DepositPartnerGuaranteedCents),
             cancellationToken).ConfigureAwait(true);
 
         return result.IsSuccess
@@ -153,7 +156,10 @@ public static class ListingEndpoints
                 request.VirtualTourUrl,
                 ApproxAddress: null,
                 DefaultDepositCents: request.DefaultDepositCents,
-                ClearDefaultDeposit: request.ClearDefaultDeposit),
+                ClearDefaultDeposit: request.ClearDefaultDeposit,
+                DepositUnverifiedCents: request.DepositUnverifiedCents,
+                DepositBackgroundVerifiedCents: request.DepositBackgroundVerifiedCents,
+                DepositPartnerGuaranteedCents: request.DepositPartnerGuaranteedCents),
             cancellationToken).ConfigureAwait(true);
 
         return result.IsSuccess
@@ -234,6 +240,7 @@ public static class ListingEndpoints
         [FromQuery] PropertyType? propertyType,
         [FromQuery] int? minBedrooms,
         [FromQuery] int? minBathrooms,
+        [FromQuery] int? minGuests,
         [FromQuery] int? minStayDays,
         [FromQuery] int? maxStayDays,
         [FromQuery] long? minPriceCents,
@@ -255,6 +262,7 @@ public static class ListingEndpoints
                 latitude, longitude, radiusKm,
                 swLat, swLng, neLat, neLng,
                 propertyType, minBedrooms, minBathrooms,
+                minGuests,
                 minStayDays, maxStayDays,
                 minPriceCents, maxPriceCents,
                 availableFrom, availableTo,

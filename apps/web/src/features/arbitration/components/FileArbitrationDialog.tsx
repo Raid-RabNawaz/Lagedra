@@ -19,12 +19,12 @@ const tierOptions: { value: ArbitrationTier; label: string; description: string 
   {
     value: "ProtocolAdjudication",
     label: "Protocol Adjudication",
-    description: "Non-binding review — $49 filing fee",
+    description: "Non-binding review. A filing fee applies.",
   },
   {
     value: "BindingArbitration",
     label: "Binding Arbitration",
-    description: "Binding decision with monetary award — $99 filing fee",
+    description: "Binding decision with monetary award. A higher filing fee applies.",
   },
 ];
 
@@ -36,6 +36,7 @@ const categoryOptions: { value: ArbitrationCategory; label: string }[] = [
   { value: "CategoryE", label: "Unauthorized Occupants" },
   { value: "CategoryF", label: "Early Termination" },
   { value: "CategoryG", label: "Rule Violation" },
+  { value: "DepositReturn", label: "Deposit Not Returned" },
   { value: "Other", label: "Other" },
 ];
 
@@ -43,13 +44,22 @@ type Props = {
   dealId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Preselects the dispute category (e.g. when deep-linked from the deposit panel). */
+  defaultCategory?: ArbitrationCategory;
 };
 
-export function FileArbitrationDialog({ dealId, open, onOpenChange }: Props) {
+export function FileArbitrationDialog({
+  dealId,
+  open,
+  onOpenChange,
+  defaultCategory,
+}: Props) {
   const navigate = useNavigate();
   const fileCase = useFileCase();
   const [tier, setTier] = useState<ArbitrationTier>("ProtocolAdjudication");
-  const [category, setCategory] = useState<ArbitrationCategory>("CategoryC");
+  const [category, setCategory] = useState<ArbitrationCategory>(
+    defaultCategory ?? "CategoryC",
+  );
   const [error, setError] = useState<string | null>(null);
 
   const selectedTier = tierOptions.find((t) => t.value === tier);
@@ -84,8 +94,9 @@ export function FileArbitrationDialog({ dealId, open, onOpenChange }: Props) {
             File Arbitration Case
           </DialogTitle>
           <DialogDescription>
-            Open a formal dispute resolution case for this deal. A filing fee
-            will be charged based on the tier you select.
+            Open a formal dispute resolution case for this deal. After filing,
+            you'll be asked to pay the filing fee for the tier you select — the
+            case opens once the fee is paid.
           </DialogDescription>
         </DialogHeader>
 
@@ -141,7 +152,7 @@ export function FileArbitrationDialog({ dealId, open, onOpenChange }: Props) {
             Cancel
           </Button>
           <Button onClick={handleSubmit} disabled={fileCase.isPending}>
-            {fileCase.isPending ? "Filing..." : "File Case"}
+            {fileCase.isPending ? "Filing..." : "File & pay fee"}
           </Button>
         </DialogFooter>
       </DialogContent>

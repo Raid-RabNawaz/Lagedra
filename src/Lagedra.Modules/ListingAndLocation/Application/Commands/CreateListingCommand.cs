@@ -1,3 +1,4 @@
+using FluentValidation;
 using Lagedra.Infrastructure.External.Geocoding;
 using Lagedra.Modules.ListingAndLocation.Application.DTOs;
 using Lagedra.Modules.ListingAndLocation.Domain.Aggregates;
@@ -6,9 +7,11 @@ using Lagedra.Modules.ListingAndLocation.Domain.Enums;
 using Lagedra.Modules.ListingAndLocation.Domain.Policies;
 using Lagedra.Modules.ListingAndLocation.Domain.ValueObjects;
 using CancellationPolicyType = Lagedra.SharedKernel.Integration.CancellationPolicyType;
+using IAuditTrailWriter = Lagedra.SharedKernel.Integration.IAuditTrailWriter;
 using Lagedra.Modules.ListingAndLocation.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Results;
 using MediatR;
+using System.Text.Json;
 
 namespace Lagedra.Modules.ListingAndLocation.Application.Commands;
 
@@ -32,11 +35,44 @@ public sealed record CreateListingCommand(
     bool InstantBookingEnabled = false,
     Uri? VirtualTourUrl = null,
     string? ApproxAddress = null,
-    long? DefaultDepositCents = null) : IRequest<Result<ListingDetailsDto>>;
+    long? DefaultDepositCents = null,
+    long? DepositUnverifiedCents = null,
+    long? DepositBackgroundVerifiedCents = null,
+    long? DepositPartnerGuaranteedCents = null) : IRequest<Result<ListingDetailsDto>>;
+
+public sealed class CreateListingCommandValidator : AbstractValidator<CreateListingCommand>
+{
+    public CreateListingCommandValidator()
+    {
+        RuleFor(x => x.MaxDepositCents)
+            .GreaterThan(0)
+            .WithMessage("Maximum deposit must be positive.");
+
+        RuleFor(x => x.DepositUnverifiedCents)
+            .Must((cmd, v) => DepositValidation.IsWithinCap(v, cmd.MaxDepositCents))
+            .WithMessage("Unverified deposit must be between 0 and the maximum deposit.");
+
+        RuleFor(x => x.DepositBackgroundVerifiedCents)
+            .Must((cmd, v) => DepositValidation.IsWithinCap(v, cmd.MaxDepositCents))
+            .WithMessage("Background-verified deposit must be between 0 and the maximum deposit.");
+
+        RuleFor(x => x.DepositPartnerGuaranteedCents)
+            .Must((cmd, v) => DepositValidation.IsWithinCap(v, cmd.MaxDepositCents))
+            .WithMessage("Partner-guaranteed deposit must be between 0 and the maximum deposit.");
+
+        RuleFor(x => x)
+            .Must(x => DepositValidation.IsOrdered(
+                x.DepositPartnerGuaranteedCents,
+                x.DepositBackgroundVerifiedCents,
+                x.DepositUnverifiedCents))
+            .WithMessage("Deposits must satisfy partner-guaranteed \u2264 background-verified \u2264 unverified.");
+    }
+}
 
 public sealed class CreateListingCommandHandler(
     ListingsDbContext dbContext,
-    IGeocodingService geocodingService)
+    IGeocodingService geocodingService,
+    IAuditTrailWriter auditTrail)
     : IRequestHandler<CreateListingCommand, Result<ListingDetailsDto>>
 {
     public async Task<Result<ListingDetailsDto>> Handle(
@@ -119,6 +155,13 @@ public sealed class CreateListingCommandHandler(
             listing.SetDefaultDeposit(request.DefaultDepositCents);
         }
 
+        // Predetermined per-verification-tier deposits (drive the new booking
+        // flow). Any null falls back to MaxDepositCents at booking time.
+        listing.SetVerificationDeposits(
+            request.DepositUnverifiedCents,
+            request.DepositBackgroundVerifiedCents,
+            request.DepositPartnerGuaranteedCents);
+
         dbContext.Listings.Add(listing);
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -126,6 +169,23 @@ public sealed class CreateListingCommandHandler(
         dbContext.ListingPriceHistory.Add(initialPrice);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
+        await auditTrail.RecordAsync(
+            request.LandlordUserId,
+            "listing.deposits_set",
+            "Listing",
+            listing.Id.ToString(),
+            FormatDepositDetails(listing),
+            ct: cancellationToken).ConfigureAwait(false);
+
         return Result<ListingDetailsDto>.Success(ListingMapper.ToDetails(listing));
     }
+
+    internal static string FormatDepositDetails(Listing listing) =>
+        JsonSerializer.Serialize(new
+        {
+            maxDepositCents = listing.MaxDepositCents,
+            unverifiedCents = listing.DepositUnverifiedCents,
+            backgroundVerifiedCents = listing.DepositBackgroundVerifiedCents,
+            partnerGuaranteedCents = listing.DepositPartnerGuaranteedCents,
+        });
 }

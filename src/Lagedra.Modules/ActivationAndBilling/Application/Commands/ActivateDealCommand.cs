@@ -77,6 +77,7 @@ public sealed class ActivateDealCommandHandler(
         return Result<BillingStatusDto>.Success(
             new BillingStatusDto(account.Id, account.DealId, account.Status,
                 account.StartDate, account.EndDate,
-                account.StripeCustomerId, account.StripeSubscriptionId, 0, 0));
+                account.StripeCustomerId, account.StripeSubscriptionId, 0, 0,
+                Array.Empty<InvoiceDto>()));
     }
 }

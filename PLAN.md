@@ -21,7 +21,7 @@
 | Email (library) | MailKit + MimeKit | .NET SMTP client |
 | Email (relay) | Brevo (Sendinblue) SMTP | Configured via `SmtpClient` settings in `appsettings` |
 | SMS | **None in v1** | Email-only; SMS deferred to v2 |
-| Payments | Stripe Connect (NuGet: `Stripe.net`) | Destination charges (activation payment) + platform fee subscriptions; Express accounts for hosts |
+| Payments | Stripe Connect (NuGet: `Stripe.net`) | **Non-custodial** destination charges with `on_behalf_of` (host = settlement merchant of record) + platform fee subscriptions; Express accounts for hosts. See "Architecture Note: Option A — Non-Custodial Payments" |
 | Maps / Geocoding (backend) | Google Maps Platform — Geocoding API + Address Validation API | HttpClient adapter; REST calls |
 | Maps (frontend) | `@react-google-maps/api` npm package | Google Maps JavaScript API |
 | KYC / Identity | Provider-agnostic (`IKycProvider`) | Persona adapter + `NoOpKycProvider` fallback for dev; liveness, document auth, synthetic ID detection |
@@ -118,7 +118,7 @@
 > 1. Tenant applies to a listing → `DealApplication` aggregate created in `ActivationAndBilling`
 > 2. Landlord approves application → `DealId` (Guid) is generated and emitted via `ApplicationApprovedEvent`
 > 3. All other modules (`TruthSurface`, `InsuranceIntegration`, `ComplianceMonitoring`, etc.) reference this `DealId`
-> 4. Once Truth Surface confirmed → tenant is directed to checkout page → tenant pays via Stripe (total = first month rent + deposit + insurance fee) → Stripe destination charge splits funds (platform keeps insurance + activation fee, host receives remainder via connected account) → `payment_intent.succeeded` webhook fires → `ActivateDealCommand` runs → `BillingAccount` activated → host charged monthly platform fee via Stripe subscription
+> 4. Once Truth Surface confirmed → tenant is directed to checkout page → tenant pays via Stripe → **destination charge with `on_behalf_of` = host's connected account** (host is the settlement merchant of record) → Stripe routes **rent + deposit to the host** and nets only the platform fee (**tenant service fee + insurance premium**); the monthly **protocol fee is billed to the host via subscription, never taken at checkout** → `payment_intent.succeeded` webhook fires → `ActivateDealCommand` runs → `BillingAccount` activated. See **"Architecture Note: Option A — Non-Custodial Payments"** for the authoritative flow.
 > 5. Deal status: `ApplicationPending → ApplicationApproved → TruthSurfacePending → TruthSurfaceConfirmed → AwaitingPaymentConfirmation → Active → Closed`
 >
 > There is **no separate Deal module** and **no separate Application module**.
@@ -127,7 +127,9 @@
 
 ## Architecture Note: Custodial Payment via Stripe Connect
 
-> **Decision:** The platform collects activation payments from tenants via Stripe Connect destination charges. This ensures the platform fee is collected upfront and prevents hosts from bypassing the platform.
+> **⚠️ SUPERSEDED (2026-06-23):** This custodial model — and the later "platform charges the full tenant amount to its own Stripe account and pays the host out-of-band" variant that shipped behind `BookingFlow.V2` — is **replaced** by the non-custodial model in **"Architecture Note: Option A — Non-Custodial Payments"** below. The platform must never hold the host's rent or the tenant's deposit. This note is retained for historical context only; do **not** implement against it.
+>
+> **Decision (superseded):** The platform collects activation payments from tenants via Stripe Connect destination charges. This ensures the platform fee is collected upfront and prevents hosts from bypassing the platform.
 >
 > Flow:
 > 1. Both parties confirm the Truth Surface → `TruthSurfaceConfirmedEvent` fires
@@ -173,6 +175,104 @@
 > - `POST /v1/hosts/payouts/refresh-link` → refreshes payout onboarding continuation link
 > - `GET /v1/hosts/payouts/status` → normalized payout capability state for UI
 > - Existing Stripe-specific endpoints remain as compatibility layer until migration is complete
+
+---
+
+## Architecture Note: Option A — Non-Custodial Payments (ADOPTED 2026-06-23)
+
+> **Building pillar:** Tenants pay hosts; Lagedra takes a fee from hosts. The platform **never holds, transmits, or guarantees funds**. This note supersedes "Architecture Note: Custodial Payment via Stripe Connect" above and reconciles the contradictory statements elsewhere in this plan (Phase 14 "Platform never holds funds", §11.7 "platform stays out of the money flow").
+
+### Locked decisions
+
+- **Charge model:** Stripe Connect **destination charges + `on_behalf_of`** = host's connected account. The host is the settlement merchant of record; Stripe atomically routes rent + deposit to the host and nets only the platform fee. The platform never settles the host's funds into its own balance. (Chosen over true direct charges because the tenant's saved card lives on the platform Customer via the apply-time SetupIntent; destination + `on_behalf_of` keeps that off-session flow and the existing platform-account webhooks working with no payment-method cloning.)
+- **Checkout fee:** the `application_fee_amount` = **tenant service fee + insurance premium only**. The monthly **protocol fee is billed to the host via Stripe subscription** (`OnDealActivatedCreateHostSubscriptionHandler`) and is **never** taken at checkout — this removes the current double-charge.
+- **Deposit:** the security deposit flows **to the host** like rent (no platform custody). Damage recovery is handled via Stripe **transfer reversal** (`reverse_transfer` / `refund_application_fee`) within the refund window and/or arbitration — not by deducting from a platform-held balance.
+- **Host onboarding:** Stripe **Express** hosted onboarding (Stripe collects bank account + W-9/W-8); reuse the existing `HostStripeAccount` infrastructure.
+
+### Host onboarding flow (confirmed)
+
+1. Host registers (Auth) → 2. backend creates a Stripe **Express** connected account (`CreateConnectedAccountAsync`) → 3. app redirects host to Stripe onboarding (`CreateAccountOnboardingLinkAsync` → `onboardingUrl`) → 4. host enters business/person, bank, W-9/W-8 on Stripe → 5. Stripe verifies; `account.updated` webhook → `SyncHostStripeStatusCommand` → 6. store `StripeAccountId` on `HostStripeAccount` → 7. `PayoutsEnabled` ⇒ host can receive payouts. Connect readiness (`ChargesEnabled` + `PayoutsEnabled`) is the **only** gate for accepting a booking.
+
+### Workstream 0 — `HostStripeAccount` data model + onboarding
+- [x] Add `card_payments` capability alongside `transfers` in `CreateConnectedAccountAsync` (required for `on_behalf_of` settlement merchant).
+- [x] Add `TaxStatus` and `BankAccountStatus` (enums: `Unknown | Pending | Verified | Restricted`) to `HostStripeAccount`; keep `HostUserId`, `StripeAccountId`, `OnboardingStatus`, `ChargesEnabled`, `PayoutsEnabled`.
+- [x] Extend `StripeAccountStatusResult` + `GetAccountStatusAsync` to return `requirements` (currently_due / pending_verification) and external-account (bank) info.
+- [x] Populate the new fields in `HostStripeAccount.SyncStatus(...)` (derive `BankAccountStatus` from external accounts; `TaxStatus` from outstanding W-9/W-8 requirement items).
+- [x] Add `taxStatus` + `bankAccountStatus` to `HostStripeStatusDto`.
+- [x] **Migration via generated script only** (`tools/scripts/db-migrate-*.ps1/.sh`) — never hand-write the migration; update `HostStripeAccountConfiguration` mapping.
+
+### Workstream 1 — Stripe service primitives (`IStripeService` / `StripeService`)
+- [x] **Remove** `CreatePlatformPaymentIntentAsync` and `ChargeOffSessionPlatformAsync` (the 100%-to-platform paths) — interface + impl.
+- [x] Add `onBehalfOf` (+ optional `statementDescriptorSuffix`) to `CreateDestinationPaymentIntentAsync` and `ChargeOffSessionDestinationAsync`; set `OnBehalfOf` alongside the existing `TransferData.Destination` + `ApplicationFeeAmount`. (Card + `on_behalf_of` only allows a descriptor **suffix**, not a full descriptor — corrected in WS6.)
+- [x] Extend `RefundPaymentIntentAsync` with `reverseTransfer` + `refundApplicationFee` flags (deposit/rent now sit with the host).
+
+### Workstream 2 — Booking money paths (remove platform-custody branch)
+- [x] `CreateCheckoutPaymentIntentCommand`: delete the direct-platform branch; always require host `ChargesEnabled` and use destination + `on_behalf_of`; `applicationFeeCents = InsuranceFeeCents + ServiceFeeCents`; drop `IHostPaymentDetailsProvider`.
+- [x] `CardOnFileChargeService`: delete the platform branch; always destination + `on_behalf_of`; `applicationFeeCents = insurance + service`; drop `IHostPaymentDetailsProvider`.
+- [x] `ApproveDealApplicationCommand` + `SubmitApplicationCommand` (+ `SubmitListingForReviewCommand`): `HostHasPayoutsAsync` requires `connectAccount is { ChargesEnabled: true, PayoutsEnabled: true }` only; remove the free-text branch + `IHostPaymentDetailsProvider`; update `HostPayoutSetupRequired` copy to point at Connect payout setup.
+- [x] Clean up DI registrations after removed dependencies (auto-resolved — no registration edits needed).
+
+### Workstream 3 — Fee model cleanup
+- [x] Confirm `OnDealActivatedCreateHostSubscriptionHandler` is the **only** place the protocol fee is charged; `ReservationPricingService` keeps `MonthlyProtocolFeeCents` for display only.
+
+### Workstream 4 — Deposit-to-host → damage / cancellation
+- [x] Update damage-claim + cancellation refund flows to use `reverseTransfer: true` (+ `refundApplicationFee`) against the destination charge. (Damage claims flow through `ReturnDepositCommand`; cancellation via `CancelBookingCommand`.)
+- [x] Update `ProcessStripeWebhookCommand.HandleChargeRefunded` bookkeeping (full vs partial refund).
+- [x] Reframe `GetPaymentDetailsForTenantQuery` + UI as **months-2+ rent** instructions, not the deposit channel.
+
+### Workstream 5 — Host profile / payout setup UI
+- [x] `HostStripeOnboardingPage.tsx`: make Stripe Connect onboarding the **primary** step using existing `useHostStripeOnboard()` / `useRefreshOnboardingLink()` / `useHostStripeStatus()`; button → `POST /v1/hosts/payouts/start` → redirect to `onboardingUrl`; on return show charges/payouts + tax/bank checklist. Relabel free-text box as optional "Months 2+ rent instructions."
+- [x] `useHostStripe.ts → useHostPayoutReadiness()`: base `ready` on Connect `chargesEnabled` (+`payoutsEnabled`) only (auto-fixes `HostPayoutReadinessNotice`, `ApplicationCard`, `EditListingPage`).
+- [x] `ProfilePage.tsx` + `permissions.ts`: copy → "Set up payouts (Stripe)".
+- [x] `CheckoutPage.tsx`: update footer copy to "host is paid directly via Stripe" (breakdown math unchanged).
+- [x] Add `taxStatus`/`bankAccountStatus` to the `HostStripeStatusDto` TS type in `api/types.ts`.
+
+### Workstream 6 — Config & Stripe dashboard
+- [x] Verify Express accounts request `card_payments` + `transfers`; `ConnectReturnUrl`/`ConnectRefreshUrl` → `/app/payout-setup`; set statement descriptor (suffix; configurable `StatementDescriptorSuffix`); protocol-fee price ID confirmed as a **DB platform setting** (`stripe.platform_fee_price_id`), not appsettings — admin must set it.
+
+### Workstream 7 — Migration / backfill (scripts only)
+- [x] Generate the WS0 column migration via `tools/scripts/db-migrate-noncustodial-payments.{ps1,sh}`.
+- [x] Read-only backfill report to drive the operational steps: `tools/scripts/noncustodial-backfill-report.{sql,ps1,sh}` (lists non-Connect-ready hosts + succeeded payments whose funds are parked on the platform).
+- [ ] Operational (runbook below): one-time prompt/email so non-Connect-ready hosts complete Connect; reconcile any funds already parked in the platform balance from the old path.
+
+#### WS7 runbook — custodial → non-custodial cutover
+
+1. **Generate the lists.** Run the read-only report against the target DB:
+   ```bash
+   DATABASE_URL="postgresql://USER:PW@HOST:5432/lagedra_db" tools/scripts/noncustodial-backfill-report.sh
+   # or: pwsh tools/scripts/noncustodial-backfill-report.ps1 -ConnString "..."
+   ```
+   - **Report 1** = hosts with free-text payout notes but no charges+payouts-enabled Connect account.
+   - **Report 2** = succeeded booking payments whose host is not Connect-ready (rent+deposit likely parked on the platform).
+   - **Report 3** = summary counts + total cents owed to hosts.
+2. **Host outreach (Report 1).** Email/notify each host to finish Stripe onboarding at `/app/payout-setup`. Until they do, instant-book and approval are already blocked server-side (`HostHasPayoutsAsync` requires `ChargesEnabled && PayoutsEnabled`), and `HostPayoutReadinessNotice` warns them in-app — so this is a courtesy heads-up, not a hard dependency.
+3. **Confirm parked funds in Stripe (authoritative).** Report 2 is a DB heuristic. For each `payment_intent_id`, confirm in Stripe that the charge has **no `transfer_data`/`on_behalf_of`** (and/or `metadata.payoutModel = 'direct'`) and that no transfer to the host exists yet — those are the ones whose rent+deposit settled into the platform balance:
+   ```bash
+   stripe payment_intents retrieve <pi_id> --expand latest_charge
+   # parked  => latest_charge.transfer_data == null  (funds in platform balance)
+   # already routed => transfer_data.destination set (acct_...) — nothing to do
+   ```
+4. **Reconcile parked funds.** For each genuinely-parked payment, pay the host their `host_owed_cents` (= first month rent + deposit) once they are Connect-ready, via either: a Stripe **Transfer** to their connected account (`stripe transfers create --amount <host_owed_cents> --currency usd --destination acct_... --metadata[dealId]=<deal_id>`), or an off-Stripe payout per existing agreement. The platform retains the service fee + insurance premium (the old application-fee split). Record the reconciliation reference against the deal.
+5. **Re-run the report** until Report 3 shows `payments_to_reconcile = 0` and `host_owed_cents_total = 0`. New bookings created after the WS1–WS3 deploy already settle directly to hosts, so the list only shrinks.
+
+### Workstream 8 — Docs
+- [ ] Update `SOLUTION_OVERVIEW.md` Flow #6 and the "protocol fee only" line to match this note.
+
+### Regression checklist (must pass)
+- [ ] Express onboarding: create account → redirect → return → `account.updated` sync sets charges/payouts/tax/bank status.
+- [ ] Apply → approve → seal → off-session **destination charge (`on_behalf_of`)** → activation (webhook matches `StripePaymentIntentId`).
+- [ ] Off-session decline → `PaymentFailed` → retry at `/checkout` → activation.
+- [ ] Instant-book with Connect-ready host; non-onboarded host blocked with `HostPayoutSetupRequired` + readiness notices.
+- [ ] Host monthly subscription still created; invoice webhooks still record.
+- [ ] Cancellation + damage refund with transfer reversal.
+- [ ] `PaymentBreakdown` host-receives = rent + deposit (no protocol fee in application fee).
+- [ ] Existing unit tests under `tests/Lagedra.Tests.Unit/ActivationAndBilling/...` pass.
+
+### Suggested PR sequence
+1. WS0 (entity + capability + onboarding sync + migration) — foundational, low risk.
+2. WS1-3 (core money-path switch + fee cleanup) — the behavioral change.
+3. WS4-5 (deposit/refund handling + payout UI).
+4. WS6-8 (config, backfill, docs).
 
 ---
 

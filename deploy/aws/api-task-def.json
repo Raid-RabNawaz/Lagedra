@@ -24,7 +24,7 @@
         { "name": "Jwt__Issuer", "value": "https://api.lagedra.com" },
         { "name": "Jwt__Audience", "value": "https://lagedra.com" },
         { "name": "App__BaseUrl", "value": "https://api.lagedra.com" },
-        { "name": "App__FrontendUrl", "value": "https://lagedra.com" },
+        { "name": "App__FrontendUrl", "value": "https://staging.lagedra.com" },
         { "name": "Stripe__PublishableKey", "value": "pk_test_51TH4W49C1zhcxwIed13rUO089U9x7zqymxW7pjkgeEDIUFss6MBN9WPwXfQQSH3JWOOdnUSm0EYObonbUpprqBbh004eAq2YhU" },
         { "name": "MinIO__Endpoint", "value": "s3.us-west-1.amazonaws.com" },
         { "name": "MinIO__EvidenceBucket", "value": "lagedra-private-prod" },
@@ -41,7 +41,13 @@
         { "name": "Brevo__Password", "value": "cV3rIy0XEROCn8MP" },
         { "name": "Brevo__FromName", "value": "Lagedra" },
         { "name": "ExternalAuth__Google__ClientId", "value": "262822188598-915tp2sk0cgsv9sj0c6nifnp661998ba.apps.googleusercontent.com" },
-        { "name": "ListingImport__ScrapingAnt__ApiKey", "value": "29f37cdbfe3e47ebae555db06b628241" }
+        { "name": "ListingImport__ScrapingAnt__ApiKey", "value": "29f37cdbfe3e47ebae555db06b628241" },
+        { "name": "Channels__OwnerRez__BaseUrl", "value": "https://faststage.ownerrez.com" },
+        { "name": "Channels__OwnerRez__Username", "value": "HaXmlSandboxMoR" },
+        { "name": "Channels__OwnerRez__Key", "value": "0beefaaa-963c-407c-bd64-bdeadb949417" },
+        { "name": "Channels__OwnerRez__UserAgent", "value": "Lagedra/1.0 (+https://lagedra.com)" },
+        { "name": "FeatureFlags__BookingFlow.V2", "value": "true" },
+        { "name": "FeatureFlags__ListingImport.AiExtraction", "value": "false" }
       ],
       "secrets": [
         { "name": "Jwt__Secret", "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/jwt-secret" },

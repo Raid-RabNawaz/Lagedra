@@ -11,9 +11,13 @@ function actionLabel(phase: DealPhase, isLandlord: boolean): string {
     case "TruthSurface":
       return "Confirm truth surface";
     case "Checkout":
-      return isLandlord ? "View checkout" : "Complete checkout";
+      return isLandlord ? "View payment" : "Complete payment";
     case "Active":
       return "View billing";
+    case "AwaitingDepositReturn":
+      return isLandlord ? "Return deposit" : "Confirm deposit";
+    case "PaymentFailed":
+      return isLandlord ? "View details" : "Update payment";
     case "Closed":
     case "Cancelled":
       return "View details";

@@ -112,7 +112,10 @@ public sealed class ListMyDealsQueryHandler(
                 totalAmount,
                 billing?.Status,
                 payment?.Status,
-                app.SubmittedAt));
+                app.SubmittedAt,
+                app.TenantVerificationTierAtRequest,
+                app.DepositReason,
+                truthSurface?.IsSealed));
         }
 
         return Result<IReadOnlyList<DealSummaryDto>>.Success(results);
@@ -129,18 +132,44 @@ public sealed class ListMyDealsQueryHandler(
             return "Cancelled";
         }
 
+        // The host accepted and the Truth Surface sealed, but the off-session
+        // charge failed — surface a distinct phase so the tenant gets a
+        // "retry payment" CTA rather than a generic checkout.
+        if (app.Status == DealApplicationStatus.PaymentFailed
+            && billing is not { Status: BillingAccountStatus.Active })
+        {
+            return "PaymentFailed";
+        }
+
         if (billing is not null)
         {
             return billing.Status switch
             {
                 BillingAccountStatus.Active => "Active",
                 BillingAccountStatus.Suspended => "Active",
-                BillingAccountStatus.Closed => "Closed",
+                BillingAccountStatus.Closed => ComputeClosedPhase(payment),
                 _ => DerivePreActivationPhase(payment, truthSurface),
             };
         }
 
         return DerivePreActivationPhase(payment, truthSurface);
+    }
+
+    // Non-custodial deposit return: a closed billing account is not yet
+    // "Completed" until the host-held deposit has been returned and both
+    // parties have confirmed it. Deals with no deposit (or no confirmed
+    // payment) skip the handshake and complete immediately.
+    private static string ComputeClosedPhase(
+        Domain.Aggregates.DealPaymentConfirmation? payment)
+    {
+        if (payment is { Status: PaymentConfirmationStatus.Confirmed }
+            && payment.DepositAmountCents > 0
+            && payment.DepositReturnSettledAt is null)
+        {
+            return "AwaitingDepositReturn";
+        }
+
+        return "Closed";
     }
 
     private static string DerivePreActivationPhase(
@@ -158,8 +187,11 @@ public sealed class ListMyDealsQueryHandler(
             return payment.Status switch
             {
                 PaymentConfirmationStatus.Pending => "Checkout",
+                PaymentConfirmationStatus.PaymentMethodProvided => "Checkout",
+                PaymentConfirmationStatus.CapturePending => "Checkout",
                 PaymentConfirmationStatus.Confirmed => "Active",
                 PaymentConfirmationStatus.Disputed => "Checkout",
+                PaymentConfirmationStatus.Failed => "PaymentFailed",
                 PaymentConfirmationStatus.Rejected => "Cancelled",
                 PaymentConfirmationStatus.Cancelled => "Cancelled",
                 _ => "TruthSurface",
@@ -192,7 +224,10 @@ public sealed class ListMyDealsQueryHandler(
 
         if (string.Equals(filter, "active", StringComparison.OrdinalIgnoreCase))
         {
-            return phase is "TruthSurface" or "Checkout" or "Active";
+            // A deal awaiting its deposit return is still an open obligation, so
+            // it stays in the "active" set rather than dropping into history.
+            return phase is "TruthSurface" or "Checkout" or "Active"
+                or "PaymentFailed" or "AwaitingDepositReturn";
         }
 
         if (string.Equals(filter, "past", StringComparison.OrdinalIgnoreCase))

@@ -1,12 +1,12 @@
 using Lagedra.Modules.ActivationAndBilling.Application.DTOs;
+using Lagedra.Modules.ActivationAndBilling.Application.Services;
 using Lagedra.Modules.ActivationAndBilling.Domain.Aggregates;
-using Lagedra.Modules.ActivationAndBilling.Domain.Services;
+using Lagedra.Modules.ActivationAndBilling.Domain.Enums;
+using Lagedra.Modules.ActivationAndBilling.Domain.ValueObjects;
 using Lagedra.Modules.ActivationAndBilling.Infrastructure.Persistence;
-using Lagedra.SharedKernel.Insurance;
 using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Results;
 using Lagedra.SharedKernel.Settings;
-using Lagedra.TruthSurface.Application.Commands;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -20,16 +20,18 @@ public sealed record SubmitApplicationCommand(
     DateOnly RequestedCheckOut,
     int GuestCount = 1,
     string? Message = null,
-    string? StripePaymentMethodId = null) : IRequest<Result<SubmitApplicationResult>>;
+    string? StripePaymentMethodId = null,
+    bool TruthSurfaceConsentGiven = false,
+    string? ConsentVersion = null,
+    string? IpAddress = null,
+    string? UserAgent = null) : IRequest<Result<SubmitApplicationResult>>;
 
 /// <summary>
-/// Phase 16 expanded result: when instant booking is enabled (and the
-/// BookingFlow.V2 flag is on, and the host has payouts configured), the
-/// command auto-approves the application and returns the new
-/// <see cref="DealApplicationDto.DealId"/>. <see cref="NextPath"/> is a
-/// frontend-relative route the UI uses to send the guest to the right
-/// next screen — checkout for instant book, applications page for
-/// request-to-book.
+/// Result of a reservation request. Under the predetermined-deposit flow the
+/// request always lands as <c>Pending</c> for the host to accept, except when
+/// the listing has instant booking enabled — then the command auto-approves
+/// (which seals the Truth Surface and charges off-session) in the same call.
+/// <see cref="NextPath"/> tells the UI where to send the tenant next.
 /// </summary>
 public sealed record SubmitApplicationResult(
     DealApplicationDto Application,
@@ -38,12 +40,11 @@ public sealed record SubmitApplicationResult(
 public sealed partial class SubmitApplicationCommandHandler(
     BillingDbContext dbContext,
     IListingProvider listingProvider,
-    IInsuranceFeeCalculator insuranceFeeCalculator,
-    IHostPaymentDetailsProvider hostPaymentDetailsProvider,
+    IReservationPricingService reservationPricingService,
     IHostStripeAccountProvider hostStripeAccountProvider,
     IFeatureFlags featureFlags,
     IMediator mediator,
-    IInquiryDealLinker inquiryDealLinker,
+    IAuditTrailWriter auditTrail,
     ILogger<SubmitApplicationCommandHandler> logger)
     : IRequestHandler<SubmitApplicationCommand, Result<SubmitApplicationResult>>
 {
@@ -51,6 +52,10 @@ public sealed partial class SubmitApplicationCommandHandler(
     private static readonly Error DatesOutOfRange = new("Dates.OutOfStayRange", "Requested dates fall outside the listing's allowed stay range.");
     private static readonly Error DatesUnavailable = new("Dates.Unavailable", "The requested dates are not available.");
     private static readonly Error OwnListing = new("Application.OwnListing", "You cannot apply to your own listing.");
+    private static readonly Error DuplicateActiveRequest = new(
+        "Application.DuplicateActiveRequest",
+        "You already have a booking request or active booking on this listing for overlapping dates. " +
+        "Cancel or wait on that one before requesting these dates again.");
     private static readonly Error GuestCountInvalid = new(
         "Application.GuestCountInvalid", "Guest count must be at least 1.");
     private static readonly Error GuestCountExceedsMax = new(
@@ -59,6 +64,12 @@ public sealed partial class SubmitApplicationCommandHandler(
     private static readonly Error MessageTooLong = new(
         "Application.MessageTooLong",
         $"Message must be {DealApplication.MessageMaxLength} characters or fewer.");
+    private static readonly Error ConsentRequired = new(
+        "Application.ConsentRequired",
+        "You must agree to the Truth Surface terms to submit a reservation request.");
+    private static readonly Error PaymentMethodRequired = new(
+        "Application.PaymentMethodRequired",
+        "A payment method is required to submit a reservation request.");
 
     public async Task<Result<SubmitApplicationResult>> Handle(
         SubmitApplicationCommand request,
@@ -80,10 +91,6 @@ public sealed partial class SubmitApplicationCommandHandler(
             return Result<SubmitApplicationResult>.Failure(OwnListing);
         }
 
-        // Validate the headcount/message pair as Result errors so the API
-        // returns a friendly 400 instead of a 500 from the aggregate's
-        // ArgumentOutOfRangeException. The aggregate's own checks remain
-        // as a defence-in-depth backstop for non-API callers.
         if (request.GuestCount < 1)
         {
             return Result<SubmitApplicationResult>.Failure(GuestCountInvalid);
@@ -95,6 +102,21 @@ public sealed partial class SubmitApplicationCommandHandler(
         if (request.Message is { Length: > DealApplication.MessageMaxLength })
         {
             return Result<SubmitApplicationResult>.Failure(MessageTooLong);
+        }
+
+        // Predetermined-deposit flow: the tenant must consent to the Truth
+        // Surface and provide a payment method up-front so host approval can
+        // seal + charge atomically.
+        if (featureFlags.BookingFlowV2Enabled)
+        {
+            if (!request.TruthSurfaceConsentGiven)
+            {
+                return Result<SubmitApplicationResult>.Failure(ConsentRequired);
+            }
+            if (string.IsNullOrWhiteSpace(request.StripePaymentMethodId))
+            {
+                return Result<SubmitApplicationResult>.Failure(PaymentMethodRequired);
+            }
         }
 
         var duration = request.RequestedCheckOut.DayNumber - request.RequestedCheckIn.DayNumber;
@@ -113,6 +135,45 @@ public sealed partial class SubmitApplicationCommandHandler(
             return Result<SubmitApplicationResult>.Failure(DatesUnavailable);
         }
 
+        // One live request per tenant per overlapping window. Other tenants may
+        // still request the same/overlapping dates (only an active booking blocks
+        // that, via IsAvailableAsync above), but the same tenant stacking
+        // duplicate requests for dates they're already in the queue for — or have
+        // already booked — is not allowed. Statuses that still represent a live
+        // request/booking: Pending (awaiting host), Approved, and PaymentFailed
+        // (sealed, awaiting a retry). Rejected/Cancelled/Expired don't count, so a
+        // tenant can re-request after one of those.
+        var hasOverlappingActiveRequest = await dbContext.DealApplications
+            .AnyAsync(
+                a => a.ListingId == request.ListingId
+                  && a.TenantUserId == request.TenantUserId
+                  && (a.Status == DealApplicationStatus.Pending
+                      || a.Status == DealApplicationStatus.Approved
+                      || a.Status == DealApplicationStatus.PaymentFailed)
+                  && a.RequestedCheckIn < request.RequestedCheckOut
+                  && request.RequestedCheckIn < a.RequestedCheckOut,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (hasOverlappingActiveRequest)
+        {
+            return Result<SubmitApplicationResult>.Failure(DuplicateActiveRequest);
+        }
+
+        // Resolve the tenant's verification tier, select the predetermined
+        // deposit for that tier, and quote fees — all snapshotted on the
+        // application so the price can't drift before host approval.
+        var pricing = await reservationPricingService
+            .ComputeAsync(listing, request.TenantUserId, duration, cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+
+        var tenantConsent = request.TruthSurfaceConsentGiven
+            ? new TruthSurfaceConsentInput(
+                true,
+                request.ConsentVersion ?? BookingConsent.CurrentVersion,
+                request.IpAddress,
+                request.UserAgent)
+            : null;
+
         var application = DealApplication.Submit(
             request.ListingId,
             request.TenantUserId,
@@ -121,141 +182,91 @@ public sealed partial class SubmitApplicationCommandHandler(
             request.RequestedCheckOut,
             guestCount: request.GuestCount,
             message: request.Message,
-            stripePaymentMethodId: request.StripePaymentMethodId);
-
-        // Phase 16: if the listing offers instant booking, the V2 flag is on,
-        // and the host has a payout channel ready, auto-approve in the same
-        // unit-of-work. Falls back silently to standard request-to-book if
-        // any pre-condition fails — the application still lands in the host's
-        // inbox, just without a deal id.
-        var instantBooked = false;
-        if (listing.InstantBookingEnabled
-            && featureFlags.BookingFlowV2Enabled
-            && await HostHasPayoutsAsync(listing.LandlordUserId, cancellationToken).ConfigureAwait(false))
-        {
-            var depositCents = listing.DefaultDepositCents ?? listing.MaxDepositCents;
-            var insuranceQuote = await insuranceFeeCalculator
-                .CalculateFeeAsync(listing.MonthlyRentCents, application.StayDurationDays, cancellationToken)
-                .ConfigureAwait(false);
-            var warning = JurisdictionWarningService.CheckForWarnings(
-                listing.JurisdictionCode, application.StayDurationDays);
-
-            application.Approve(
-                depositCents,
-                insuranceQuote.FeeCents,
-                listing.MonthlyRentCents,
-                warning);
-            instantBooked = true;
-        }
+            stripePaymentMethodId: request.StripePaymentMethodId,
+            depositSnapshot: pricing.ToSnapshot(),
+            tenantConsent: tenantConsent);
 
         dbContext.DealApplications.Add(application);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        // Phase 16.4: instant book auto-approves above; mirror the
-        // ApproveDealApplicationCommand flow so the resulting checkout
-        // surface already shows a landlord-confirmed Truth Surface and
-        // only the tenant tick-and-pay remains.
-        //
-        // The off-session card-on-file charge (16.9) intentionally
-        // does NOT run here. Even with instant book + saved card, the
-        // tenant must inline-confirm the Truth Surface on /checkout
-        // first — the snapshot is a hard architectural gate. Once the
-        // tenant ticks confirm, OnTruthSurfaceConfirmedCreatePayment-
-        // ConfirmationHandler creates the confirmation row and (when a
-        // payment method is on file) charges off-session, which then
-        // raises PaymentConfirmedEvent and activates the deal.
-        if (instantBooked && application.DealId is { } instantDealId)
-        {
-            // Phase 17: preserve the tenant's pre-booking inquiry thread by
-            // linking it to the freshly-minted deal id. No-op when the
-            // tenant never started a thread; idempotent if they did.
-            await inquiryDealLinker
-                .LinkOpenInquiryToDealAsync(
-                    application.ListingId,
-                    application.TenantUserId,
-                    instantDealId,
-                    cancellationToken)
-                .ConfigureAwait(false);
+        await auditTrail.RecordAsync(
+            request.TenantUserId,
+            "booking.reservation_requested",
+            "Application",
+            application.Id.ToString(),
+            FormatRequestAudit(application),
+            request.IpAddress,
+            cancellationToken).ConfigureAwait(false);
 
-            await AutoConfirmTruthSurfaceAsync(
-                instantDealId,
-                application.LandlordUserId,
-                application.Id,
+        // Instant booking = implicit host pre-approval. Route through the same
+        // atomic approval command so the Truth Surface seals (both consents)
+        // and the off-session charge runs immediately, exactly as a manual
+        // host approval would. Falls back silently to request-to-book if any
+        // pre-condition fails.
+        var instantBooked = false;
+        DealApplicationDto applicationDto = DealApplicationDtoMapper.ToDto(application);
+        if (listing.InstantBookingEnabled
+            && featureFlags.BookingFlowV2Enabled
+            && await HostHasPayoutsAsync(listing.LandlordUserId, cancellationToken).ConfigureAwait(false))
+        {
+            var approveResult = await mediator.Send(
+                new ApproveDealApplicationCommand(
+                    application.Id,
+                    listing.LandlordUserId,
+                    TruthSurfaceConsentGiven: true,
+                    ConsentVersion: BookingConsent.InstantBookHostVersion),
                 cancellationToken).ConfigureAwait(false);
+
+            if (approveResult.IsSuccess)
+            {
+                instantBooked = true;
+                applicationDto = approveResult.Value;
+            }
+            else
+            {
+                LogInstantBookApproveFailed(logger, application.Id, approveResult.Error.Code);
+            }
         }
 
-        var nextPath = (instantBooked, application.DealId) switch
+        var nextPath = (instantBooked, applicationDto.DealId) switch
         {
             (true, { } d) => $"/app/deals/{d}/checkout",
             _ => $"/app/applications/{application.Id}",
         };
 
         return Result<SubmitApplicationResult>.Success(
-            new SubmitApplicationResult(MapToDto(application), nextPath));
+            new SubmitApplicationResult(applicationDto, nextPath));
     }
 
-    private async Task AutoConfirmTruthSurfaceAsync(
-        Guid dealId,
-        Guid landlordUserId,
-        Guid applicationId,
-        CancellationToken cancellationToken)
-    {
-        var createResult = await mediator
-            .Send(new CreateTruthSurfaceForDealCommand(dealId, landlordUserId), cancellationToken)
-            .ConfigureAwait(false);
-
-        if (!createResult.IsSuccess)
-        {
-            LogTruthSurfaceCreateFailed(logger, applicationId, dealId, createResult.Error.Code);
-            return;
-        }
-
-        var snapshotId = createResult.Value.SnapshotId;
-        var confirmResult = await mediator
-            .Send(
-                new ConfirmTruthSurfaceCommand(snapshotId, ConfirmingParty.Landlord),
-                cancellationToken)
-            .ConfigureAwait(false);
-
-        if (!confirmResult.IsSuccess)
-        {
-            LogTruthSurfaceLandlordConfirmFailed(logger, applicationId, snapshotId, confirmResult.Error.Code);
-        }
-    }
-
-    [LoggerMessage(
-        Level = LogLevel.Warning,
-        Message = "Auto-create Truth Surface failed for instant-book application {ApplicationId} deal {DealId}: {ErrorCode}")]
-    private static partial void LogTruthSurfaceCreateFailed(
-        ILogger logger, Guid applicationId, Guid dealId, string errorCode);
-
-    [LoggerMessage(
-        Level = LogLevel.Warning,
-        Message = "Auto-confirm Truth Surface (landlord) failed for instant-book application {ApplicationId} snapshot {SnapshotId}: {ErrorCode}")]
-    private static partial void LogTruthSurfaceLandlordConfirmFailed(
-        ILogger logger, Guid applicationId, Guid snapshotId, string errorCode);
-
+    // Non-custodial (Option A): instant-book can only auto-charge when the host
+    // has a Stripe Connect account with charges + payouts enabled, so the
+    // destination charge settles straight to the host. Otherwise fall back to
+    // request-to-book and let the host finish onboarding.
     private async Task<bool> HostHasPayoutsAsync(Guid hostUserId, CancellationToken cancellationToken)
     {
-        var directPayout = await hostPaymentDetailsProvider
-            .GetDecryptedPaymentDetailsAsync(hostUserId, cancellationToken)
-            .ConfigureAwait(false);
-        if (directPayout is not null)
-        {
-            return true;
-        }
-
         var connectAccount = await hostStripeAccountProvider
             .GetByHostUserIdAsync(hostUserId, cancellationToken)
             .ConfigureAwait(false);
         return connectAccount is { ChargesEnabled: true, PayoutsEnabled: true };
     }
 
-    private static DealApplicationDto MapToDto(DealApplication a) =>
-        new(a.Id, a.ListingId, a.TenantUserId, a.LandlordUserId,
-            a.Status, a.DealId, a.SubmittedAt, a.DecidedAt,
-            a.RequestedCheckIn, a.RequestedCheckOut, a.StayDurationDays,
-            a.DepositAmountCents, a.InsuranceFeeCents, a.FirstMonthRentCents,
-            a.PartnerOrganizationId, a.IsPartnerReferred, a.JurisdictionWarning, a.Source,
-            a.GuestCount, a.Message);
+    private static string FormatRequestAudit(DealApplication application) =>
+        System.Text.Json.JsonSerializer.Serialize(new
+        {
+            listingId = application.ListingId,
+            tier = application.TenantVerificationTierAtRequest?.ToString(),
+            depositCents = application.DepositAmountCents,
+            depositReason = application.DepositReason,
+            serviceFeeCents = application.ServiceFeeCents,
+            totalPayableCents = application.TotalPayableSnapshotCents,
+            tenantConsentGiven = application.TenantTruthSurfaceConsentGiven,
+            tenantConsentVersion = application.TenantConsentVersion,
+            paymentMethodProvided = !string.IsNullOrEmpty(application.StripePaymentMethodId),
+        });
+
+    [LoggerMessage(
+        Level = LogLevel.Warning,
+        Message = "Instant-book approval failed for application {ApplicationId}: {ErrorCode}; left as request-to-book")]
+    private static partial void LogInstantBookApproveFailed(
+        ILogger logger, Guid applicationId, string errorCode);
 }

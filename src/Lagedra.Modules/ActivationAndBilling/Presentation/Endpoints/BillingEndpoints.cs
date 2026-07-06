@@ -22,7 +22,45 @@ public static class BillingEndpoints
         group.MapGet("/{dealId:guid}/proration-quote", GetProrationQuote);
         group.MapPost("/{dealId:guid}/stop-billing", StopBilling);
 
+        var meGroup = app.MapGroup("/v1/me/billing")
+            .WithTags("Billing")
+            .RequireAuthorization();
+
+        meGroup.MapGet("/statement", GetHostStatement);
+
+        var adminGroup = app.MapGroup("/v1/admin")
+            .WithTags("Billing")
+            .RequireAuthorization("RequirePlatformAdmin");
+
+        adminGroup.MapGet("/protocol-fee-reconciliation", GetProtocolFeeReconciliation);
+
         return app;
+    }
+
+    private static async Task<IResult> GetProtocolFeeReconciliation(
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetProtocolFeeReconciliationQuery(), ct)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> GetHostStatement(
+        ClaimsPrincipal user,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var userId = GetUserId(user);
+        var result = await mediator.Send(new GetHostBillingStatementQuery(userId), ct)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
     }
 
     private static async Task<IResult> GetBillingStatus(

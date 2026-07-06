@@ -12,6 +12,18 @@ public sealed class HostStripeAccount : Entity<Guid>
     public bool ChargesEnabled { get; private set; }
     public bool PayoutsEnabled { get; private set; }
 
+    /// <summary>
+    /// Tax-form (W-9/W-8) verification state, derived from the connected
+    /// account's outstanding requirements during status sync.
+    /// </summary>
+    public HostAccountRequirementStatus TaxStatus { get; private set; }
+
+    /// <summary>
+    /// External bank account verification state, derived from payout capability
+    /// and outstanding requirements during status sync.
+    /// </summary>
+    public HostAccountRequirementStatus BankAccountStatus { get; private set; }
+
     private HostStripeAccount() { }
 
     public static HostStripeAccount Create(
@@ -31,12 +43,29 @@ public sealed class HostStripeAccount : Entity<Guid>
             OnboardingStatus = StripeOnboardingStatus.Pending,
             ChargesEnabled = false,
             PayoutsEnabled = false,
+            TaxStatus = HostAccountRequirementStatus.Unknown,
+            BankAccountStatus = HostAccountRequirementStatus.Unknown,
             CreatedAt = now,
             UpdatedAt = now
         };
     }
 
-    public void SyncStatus(bool chargesEnabled, bool payoutsEnabled, bool detailsSubmitted, IClock clock)
+    /// <summary>
+    /// Syncs capability flags and requirement-derived states from the connected
+    /// account. The tax/bank inputs are neutral booleans extracted from Stripe's
+    /// <c>requirements</c> collections so this domain method owns the mapping to
+    /// <see cref="HostAccountRequirementStatus"/>.
+    /// </summary>
+    public void SyncStatus(
+        bool chargesEnabled,
+        bool payoutsEnabled,
+        bool detailsSubmitted,
+        bool hasExternalAccount,
+        bool hasOutstandingTaxRequirement,
+        bool taxRequirementPastDue,
+        bool taxRequirementPendingVerification,
+        bool isRestricted,
+        IClock clock)
     {
         ArgumentNullException.ThrowIfNull(clock);
 
@@ -49,6 +78,54 @@ public sealed class HostStripeAccount : Entity<Guid>
                 ? StripeOnboardingStatus.Restricted
                 : StripeOnboardingStatus.Pending;
 
+        BankAccountStatus = DeriveBankStatus(
+            payoutsEnabled, detailsSubmitted, hasExternalAccount, isRestricted);
+
+        TaxStatus = DeriveTaxStatus(
+            detailsSubmitted,
+            hasOutstandingTaxRequirement,
+            taxRequirementPastDue,
+            taxRequirementPendingVerification);
+
         UpdatedAt = clock.UtcNow;
+    }
+
+    private static HostAccountRequirementStatus DeriveBankStatus(
+        bool payoutsEnabled, bool detailsSubmitted, bool hasExternalAccount, bool isRestricted)
+    {
+        if (isRestricted)
+        {
+            return HostAccountRequirementStatus.Restricted;
+        }
+
+        if (payoutsEnabled)
+        {
+            return HostAccountRequirementStatus.Verified;
+        }
+
+        return hasExternalAccount || detailsSubmitted
+            ? HostAccountRequirementStatus.Pending
+            : HostAccountRequirementStatus.Unknown;
+    }
+
+    private static HostAccountRequirementStatus DeriveTaxStatus(
+        bool detailsSubmitted,
+        bool hasOutstandingTaxRequirement,
+        bool taxRequirementPastDue,
+        bool taxRequirementPendingVerification)
+    {
+        if (taxRequirementPastDue)
+        {
+            return HostAccountRequirementStatus.Restricted;
+        }
+
+        if (taxRequirementPendingVerification || hasOutstandingTaxRequirement)
+        {
+            return HostAccountRequirementStatus.Pending;
+        }
+
+        return detailsSubmitted
+            ? HostAccountRequirementStatus.Verified
+            : HostAccountRequirementStatus.Unknown;
     }
 }

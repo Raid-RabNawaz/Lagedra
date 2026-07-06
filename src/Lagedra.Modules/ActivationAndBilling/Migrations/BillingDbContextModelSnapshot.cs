@@ -210,6 +210,10 @@ namespace ActivationAndBilling.Migrations
                     b.Property<long?>("DepositAmountCents")
                         .HasColumnType("bigint");
 
+                    b.Property<string>("DepositReason")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<long?>("FirstMonthRentCents")
                         .HasColumnType("bigint");
 
@@ -217,6 +221,26 @@ namespace ActivationAndBilling.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
                         .HasDefaultValue(1);
+
+                    b.Property<string>("HostConsentIpAddress")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("HostConsentUserAgent")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("HostConsentVersion")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime?>("HostTruthSurfaceConsentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("HostTruthSurfaceConsentGiven")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<long?>("InsuranceFeeCents")
                         .HasColumnType("bigint");
@@ -250,6 +274,9 @@ namespace ActivationAndBilling.Migrations
                     b.Property<DateOnly>("RequestedCheckOut")
                         .HasColumnType("date");
 
+                    b.Property<long?>("ServiceFeeCents")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("Source")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -270,8 +297,35 @@ namespace ActivationAndBilling.Migrations
                     b.Property<DateTime>("SubmittedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("TenantConsentIpAddress")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("TenantConsentUserAgent")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("TenantConsentVersion")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime?>("TenantTruthSurfaceConsentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("TenantTruthSurfaceConsentGiven")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<Guid>("TenantUserId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("TenantVerificationTierAtRequest")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)");
+
+                    b.Property<long?>("TotalPayableSnapshotCents")
+                        .HasColumnType("bigint");
 
                     b.Property<Guid?>("TruthSurfaceSnapshotId")
                         .HasColumnType("uuid");
@@ -320,6 +374,23 @@ namespace ActivationAndBilling.Migrations
                         .HasColumnType("bigint")
                         .HasDefaultValue(0L);
 
+                    b.Property<long?>("DepositReturnAmountCents")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("DepositReturnMethod")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("DepositReturnNote")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime?>("DepositReturnReminderSentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DepositReturnSettledAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid?>("DisputeEvidenceManifestId")
                         .HasColumnType("uuid");
 
@@ -339,6 +410,9 @@ namespace ActivationAndBilling.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<DateTime?>("HostConfirmedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("HostConfirmedDepositReturnedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("HostPaidPlatform")
@@ -363,6 +437,12 @@ namespace ActivationAndBilling.Migrations
                         .HasColumnType("bigint")
                         .HasDefaultValue(0L);
 
+                    b.Property<DateTime?>("MoveOutInitiatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("MoveOutInitiatedByUserId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime?>("ReminderSentAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -383,6 +463,9 @@ namespace ActivationAndBilling.Migrations
                     b.Property<string>("StripePaymentStatus")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime?>("TenantConfirmedDepositReceivedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("TenantDisputed")
                         .HasColumnType("boolean");

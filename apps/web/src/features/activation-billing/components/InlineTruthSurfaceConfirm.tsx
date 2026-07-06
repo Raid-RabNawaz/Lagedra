@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ShieldCheck,
@@ -16,7 +16,7 @@ import {
   useSnapshotByDealId,
   useConfirmSnapshot,
 } from "@/features/truth-surface/hooks/useTruthSurface";
-import { formatMoney } from "@/utils/format";
+import { AgreementDocument } from "@/features/truth-surface/components/AgreementDocument";
 import { getApiErrorMessage } from "@/api/errors";
 import type { TruthSurfaceDto } from "@/api/types";
 
@@ -25,58 +25,6 @@ type Props = {
   /** Fired the moment the tenant successfully confirms. */
   onConfirmed?: () => void;
 };
-
-type CanonicalLine = { key: string; label: string; value: string };
-
-function parseCanonicalContent(raw: string | null | undefined): CanonicalLine[] {
-  if (!raw) return [];
-  try {
-    const obj = JSON.parse(raw) as Record<string, unknown>;
-    return flattenObject(obj);
-  } catch {
-    return [{ key: "content", label: "Content", value: raw }];
-  }
-}
-
-function flattenObject(
-  obj: Record<string, unknown>,
-  prefix = "",
-): CanonicalLine[] {
-  const lines: CanonicalLine[] = [];
-  for (const [key, value] of Object.entries(obj)) {
-    const fullKey = prefix ? `${prefix}.${key}` : key;
-    if (value !== null && typeof value === "object" && !Array.isArray(value)) {
-      lines.push(
-        ...flattenObject(value as Record<string, unknown>, fullKey),
-      );
-    } else {
-      lines.push({ key: fullKey, label: humanize(key), value: formatValue(key, value) });
-    }
-  }
-  return lines;
-}
-
-function humanize(key: string): string {
-  return key
-    .replace(/([A-Z])/g, " $1")
-    .replace(/[_-]/g, " ")
-    .replace(/^\s/, "")
-    .replace(/\b\w/g, (c) => c.toUpperCase())
-    .trim();
-}
-
-function formatValue(key: string, value: unknown): string {
-  if (value === null || value === undefined) return "—";
-  if (typeof value === "boolean") return value ? "Yes" : "No";
-  if (typeof value === "number") {
-    if (key.toLowerCase().endsWith("cents")) return formatMoney(value);
-    return String(value);
-  }
-  if (Array.isArray(value)) {
-    return value.length === 0 ? "—" : value.map(String).join(", ");
-  }
-  return String(value);
-}
 
 /**
  * Phase 16.5 — inline Truth Surface confirmation panel rendered above
@@ -96,11 +44,6 @@ export const InlineTruthSurfaceConfirm = ({ dealId, onConfirmed }: Props) => {
   const snapshotQuery = useSnapshotByDealId(dealId);
   const confirmMutation = useConfirmSnapshot();
   const [checked, setChecked] = useState(false);
-
-  const lines = useMemo(
-    () => parseCanonicalContent(snapshotQuery.data?.canonicalContent),
-    [snapshotQuery.data?.canonicalContent],
-  );
 
   if (snapshotQuery.isLoading) {
     return <Loader label="Loading deal terms…" />;
@@ -155,19 +98,7 @@ export const InlineTruthSurfaceConfirm = ({ dealId, onConfirmed }: Props) => {
           immutable source of truth and you can complete payment.
         </p>
 
-        {lines.length > 0 && (
-          <div className="rounded-md border bg-muted/30 divide-y">
-            {lines.slice(0, 12).map((line) => (
-              <div
-                key={line.key}
-                className="flex items-center justify-between gap-4 px-3 py-2 text-sm"
-              >
-                <span className="text-muted-foreground">{line.label}</span>
-                <span className="font-medium text-right">{line.value}</span>
-              </div>
-            ))}
-          </div>
-        )}
+        <AgreementDocument canonicalContent={snapshot.canonicalContent} compact />
 
         <div className="text-xs">
           <Link

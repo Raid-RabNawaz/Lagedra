@@ -31,6 +31,27 @@ public sealed class TruthSnapshot : AggregateRoot<Guid>, IAppendOnly
     public bool LandlordConfirmed { get; private set; }
     public bool TenantConfirmed { get; private set; }
 
+    /// <summary>
+    /// True once the snapshot is sealed. Sealing makes the agreement immutable;
+    /// a locked snapshot stays the binding record even if a later payment fails.
+    /// </summary>
+    public bool IsLocked { get; private set; }
+    public DateTime? LockedAt { get; private set; }
+
+    // --- Consent audit (who agreed to the Truth Surface, when, from where) ---
+
+    public Guid? TenantConsentUserId { get; private set; }
+    public DateTime? TenantConsentAt { get; private set; }
+    public string? TenantConsentIp { get; private set; }
+    public string? TenantConsentUserAgent { get; private set; }
+    public string? TenantConsentVersion { get; private set; }
+
+    public Guid? HostConsentUserId { get; private set; }
+    public DateTime? HostConsentAt { get; private set; }
+    public string? HostConsentIp { get; private set; }
+    public string? HostConsentUserAgent { get; private set; }
+    public string? HostConsentVersion { get; private set; }
+
     public CryptographicProof? Proof { get; private set; }
 
     public Guid? SupersededBySnapshotId { get; private set; }
@@ -104,6 +125,46 @@ public sealed class TruthSnapshot : AggregateRoot<Guid>, IAppendOnly
     }
 
     /// <summary>
+    /// Records both parties' Truth Surface consent (tenant captured at request
+    /// time, host at approval time) and marks both confirmations in one step,
+    /// so the caller can immediately <see cref="Seal"/>. Used by the atomic
+    /// host-approval path.
+    /// </summary>
+    public void RecordBothConsents(
+        Guid tenantUserId,
+        DateTime tenantConsentAt,
+        string? tenantConsentIp,
+        string? tenantConsentUserAgent,
+        string tenantConsentVersion,
+        Guid hostUserId,
+        DateTime hostConsentAt,
+        string? hostConsentIp,
+        string? hostConsentUserAgent,
+        string hostConsentVersion)
+    {
+        EnsurePendingConfirmation();
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(tenantConsentVersion);
+        ArgumentException.ThrowIfNullOrWhiteSpace(hostConsentVersion);
+
+        TenantConsentUserId = tenantUserId;
+        TenantConsentAt = tenantConsentAt;
+        TenantConsentIp = tenantConsentIp;
+        TenantConsentUserAgent = tenantConsentUserAgent;
+        TenantConsentVersion = tenantConsentVersion;
+
+        HostConsentUserId = hostUserId;
+        HostConsentAt = hostConsentAt;
+        HostConsentIp = hostConsentIp;
+        HostConsentUserAgent = hostConsentUserAgent;
+        HostConsentVersion = hostConsentVersion;
+
+        LandlordConfirmed = true;
+        TenantConfirmed = true;
+        UpdatePendingStatus();
+    }
+
+    /// <summary>
     /// Seals the snapshot cryptographically once both parties have confirmed.
     /// After sealing, the snapshot is immutable.
     /// </summary>
@@ -126,11 +187,31 @@ public sealed class TruthSnapshot : AggregateRoot<Guid>, IAppendOnly
         Signature = signature;
         SealedAt = sealedAt;
         InquiryClosed = true;
+        IsLocked = true;
+        LockedAt = sealedAt;
         Status = TruthSurfaceStatus.Confirmed;
 
         Proof = new CryptographicProof(Id, hash, signature, sealedAt);
 
         AddDomainEvent(new TruthSurfaceConfirmedEvent(Id, DealId, hash, signature, sealedAt));
+    }
+
+    /// <summary>
+    /// Voids the snapshot on a terminal cancel. The agreement is no longer in
+    /// force. This only flips the status; the sealed content/proof remain intact
+    /// for the audit trail (append-only). Not used for recoverable payment
+    /// failures — those keep the snapshot Confirmed/Locked.
+    /// </summary>
+    public void Void(string reason)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+
+        if (Status is TruthSurfaceStatus.Superseded or TruthSurfaceStatus.Voided)
+        {
+            throw new InvalidOperationException($"Cannot void snapshot in status '{Status}'.");
+        }
+
+        Status = TruthSurfaceStatus.Voided;
     }
 
     /// <summary>

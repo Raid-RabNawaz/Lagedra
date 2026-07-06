@@ -28,8 +28,8 @@ public sealed class ForgotPasswordCommandHandler(
 
         var token = await userManager.GeneratePasswordResetTokenAsync(user).ConfigureAwait(true);
         var encoded = Uri.EscapeDataString(token);
-        var baseUrl = configuration["App:FrontendUrl"] ?? "http://localhost:3000";
-        var resetUrl = $"{baseUrl}/reset-password?userId={user.Id}&token={encoded}";
+        var baseUrl = (configuration["App:FrontendUrl"] ?? "http://localhost:3000").TrimEnd('/');
+        var resetUrl = $"{baseUrl}/auth/reset-password?userId={user.Id}&token={encoded}";
 
         await emailService.SendAsync(new EmailMessage
         {

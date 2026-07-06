@@ -111,7 +111,17 @@ export const ListingDetailPage = () => {
         ? `${listing.minStayDays}+ days`
         : null;
 
-  const hostName = listing.hostProfile?.displayName ?? "Host";
+  // Prefer the listing's own host snapshot, then the richer public profile
+  // (display name, else first + last). Both read the same account record, so the
+  // fallbacks just guard against one query loading before the other; "Host" is
+  // only the last resort for a genuinely nameless account.
+  const hostPublicName =
+    hostPublic.data?.displayName ??
+    [hostPublic.data?.firstName, hostPublic.data?.lastName].filter(Boolean).join(" ").trim();
+  const hostName =
+    listing.hostProfile?.displayName ||
+    (hostPublicName && hostPublicName.length > 0 ? hostPublicName : null) ||
+    "Host";
   const hostInitials = hostName
     .split(" ")
     .slice(0, 2)

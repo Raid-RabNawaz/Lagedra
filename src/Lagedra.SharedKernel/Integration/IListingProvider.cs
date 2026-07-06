@@ -53,7 +53,11 @@ public sealed record ListingDetailsDto(
     IReadOnlyList<string>? ConsiderationNames = null,
     bool AcceptsPartnerDirectReservations = true,
     bool InstantBookingEnabled = false,
-    long? DefaultDepositCents = null);
+    long? DefaultDepositCents = null,
+    // Predetermined per-verification-tier deposits. Null falls back to MaxDepositCents.
+    long? DepositUnverifiedCents = null,
+    long? DepositBackgroundVerifiedCents = null,
+    long? DepositPartnerGuaranteedCents = null);
 
 public sealed record ListingSummaryInfoDto(
     Guid Id,

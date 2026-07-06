@@ -10,4 +10,9 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  server: {
+    // Match README / App:FrontendUrl so Stripe Connect return URLs work locally.
+    port: 3000,
+    strictPort: false,
+  },
 });

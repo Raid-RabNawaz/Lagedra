@@ -37,6 +37,8 @@ public static class ActivationAndBillingModuleRegistration
         services.AddScoped<IDealApplicationStatusProvider, DealApplicationStatusProvider>();
         services.AddScoped<IPartnerDirectBookingService, PartnerDirectBookingService>();
         services.AddScoped<ICardOnFileChargeService, CardOnFileChargeService>();
+        services.AddScoped<ITenantVerificationTierResolver, TenantVerificationTierResolver>();
+        services.AddScoped<IReservationPricingService, ReservationPricingService>();
 
         services.AddDomainEventHandler<TruthSurfaceConfirmedEvent,
             OnTruthSurfaceConfirmedCreatePaymentConfirmationHandler>();
@@ -56,6 +58,10 @@ public static class ActivationAndBillingModuleRegistration
             OnApplicationApprovedNotify>();
         services.AddDomainEventHandler<ApplicationRejectedEvent,
             OnApplicationRejectedNotify>();
+        services.AddDomainEventHandler<ApplicationExpiredEvent,
+            OnApplicationExpiredNotify>();
+        services.AddDomainEventHandler<ApplicationSupersededEvent,
+            OnApplicationSupersededNotify>();
         services.AddDomainEventHandler<PaymentConfirmedEvent,
             OnPaymentConfirmedNotify>();
         services.AddDomainEventHandler<PaymentDisputedEvent,
@@ -76,6 +82,8 @@ public static class ActivationAndBillingModuleRegistration
             OnDamageClaimRejectedNotify>();
         services.AddDomainEventHandler<PaymentFailedEvent,
             OnPaymentFailedNotify>();
+        services.AddDomainEventHandler<BookingPaymentFailedEvent,
+            OnBookingPaymentFailedNotify>();
 
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(ActivationAndBillingModuleRegistration).Assembly));

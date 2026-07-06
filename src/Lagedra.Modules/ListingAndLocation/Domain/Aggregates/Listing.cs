@@ -32,6 +32,28 @@ public sealed class Listing : AggregateRoot<Guid>
     /// when set; enforced by <see cref="SetDefaultDeposit"/>.
     /// </summary>
     public long? DefaultDepositCents { get; private set; }
+
+    /// <summary>
+    /// Predetermined deposit charged to an UNVERIFIED tenant (no completed
+    /// background check, no active partner endorsement). When <c>null</c> the
+    /// booking flow falls back to <see cref="MaxDepositCents"/>. Must be in
+    /// <c>[0, MaxDepositCents]</c>. Set via <see cref="SetVerificationDeposits"/>.
+    /// </summary>
+    public long? DepositUnverifiedCents { get; private set; }
+
+    /// <summary>
+    /// Predetermined deposit charged to a tenant who is identity-verified and
+    /// has passed a background check. Typically lower than the unverified
+    /// amount. <c>null</c> falls back to <see cref="MaxDepositCents"/>.
+    /// </summary>
+    public long? DepositBackgroundVerifiedCents { get; private set; }
+
+    /// <summary>
+    /// Predetermined deposit charged to a tenant connected with an approved
+    /// partner (partner guarantee). Typically the lowest amount. <c>null</c>
+    /// falls back to <see cref="MaxDepositCents"/>.
+    /// </summary>
+    public long? DepositPartnerGuaranteedCents { get; private set; }
     public HouseRules? HouseRules { get; private set; }
     public CancellationPolicy? CancellationPolicy { get; private set; }
     public bool InstantBookingEnabled { get; private set; }
@@ -197,6 +219,24 @@ public sealed class Listing : AggregateRoot<Guid>
         {
             DefaultDepositCents = null;
         }
+
+        // Keep the per-tier deposit invariant tier <= MaxDepositCents. If a new
+        // (lower) max invalidates a tier amount, clear it so callers fall back
+        // to MaxDepositCents rather than persisting an out-of-range value.
+        if (DepositUnverifiedCents > maxDepositCents)
+        {
+            DepositUnverifiedCents = null;
+        }
+
+        if (DepositBackgroundVerifiedCents > maxDepositCents)
+        {
+            DepositBackgroundVerifiedCents = null;
+        }
+
+        if (DepositPartnerGuaranteedCents > maxDepositCents)
+        {
+            DepositPartnerGuaranteedCents = null;
+        }
     }
 
     public void SetHouseRules(HouseRules houseRules)
@@ -249,6 +289,75 @@ public sealed class Listing : AggregateRoot<Guid>
         }
 
         DefaultDepositCents = defaultDepositCents;
+    }
+
+    /// <summary>
+    /// Sets the predetermined deposit amounts per tenant-verification tier
+    /// (unverified / background-verified / partner-guaranteed). Any value may
+    /// be <c>null</c> to fall back to <see cref="MaxDepositCents"/> at booking
+    /// time. Enforces, for every supplied value, <c>0 ≤ value ≤ MaxDepositCents</c>
+    /// and the logical ordering <c>partner ≤ background ≤ unverified ≤ max</c>
+    /// (more trust ⇒ lower deposit). Missing tiers are skipped in the ordering
+    /// check so a partial configuration is still valid.
+    /// </summary>
+    public void SetVerificationDeposits(
+        long? unverifiedCents,
+        long? backgroundVerifiedCents,
+        long? partnerGuaranteedCents)
+    {
+        EnsureEditable();
+
+        ValidateTierDeposit(unverifiedCents, nameof(unverifiedCents));
+        ValidateTierDeposit(backgroundVerifiedCents, nameof(backgroundVerifiedCents));
+        ValidateTierDeposit(partnerGuaranteedCents, nameof(partnerGuaranteedCents));
+
+        if (partnerGuaranteedCents.HasValue && backgroundVerifiedCents.HasValue
+            && partnerGuaranteedCents.Value > backgroundVerifiedCents.Value)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(partnerGuaranteedCents),
+                "Partner-guaranteed deposit cannot exceed the background-verified deposit.");
+        }
+
+        if (backgroundVerifiedCents.HasValue && unverifiedCents.HasValue
+            && backgroundVerifiedCents.Value > unverifiedCents.Value)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(backgroundVerifiedCents),
+                "Background-verified deposit cannot exceed the unverified deposit.");
+        }
+
+        if (partnerGuaranteedCents.HasValue && unverifiedCents.HasValue
+            && partnerGuaranteedCents.Value > unverifiedCents.Value)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(partnerGuaranteedCents),
+                "Partner-guaranteed deposit cannot exceed the unverified deposit.");
+        }
+
+        DepositUnverifiedCents = unverifiedCents;
+        DepositBackgroundVerifiedCents = backgroundVerifiedCents;
+        DepositPartnerGuaranteedCents = partnerGuaranteedCents;
+    }
+
+    private void ValidateTierDeposit(long? value, string paramName)
+    {
+        if (!value.HasValue)
+        {
+            return;
+        }
+
+        if (value.Value < 0)
+        {
+            throw new ArgumentOutOfRangeException(paramName, "Deposit must be non-negative.");
+        }
+
+        if (value.Value > MaxDepositCents)
+        {
+            throw new ArgumentOutOfRangeException(
+                paramName,
+                $"Deposit ({value.Value}) cannot exceed max deposit ({MaxDepositCents}).");
+        }
     }
 
     public void SetAcceptsPartnerDirectReservations(bool accepts)
@@ -388,6 +497,15 @@ public sealed class Listing : AggregateRoot<Guid>
         if (ApproxGeoPoint is null)
         {
             throw new InvalidOperationException("Approximate location must be set before submitting for review.");
+        }
+
+        // The precise address (which always carries a city — enforced by the
+        // Address value object) is part of every sealed booking agreement. A
+        // listing must have one before it can go live so the binding Truth
+        // Surface never seals with a blank city.
+        if (PreciseAddress is null)
+        {
+            throw new InvalidOperationException("A full property address must be set before submitting for review.");
         }
 
         Status = ListingStatus.InReview;

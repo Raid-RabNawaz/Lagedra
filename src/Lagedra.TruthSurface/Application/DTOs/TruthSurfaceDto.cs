@@ -14,4 +14,6 @@ public sealed record TruthSurfaceDto(
     bool TenantConfirmed,
     DateTime CreatedAt,
     DateTime? SealedAt,
-    SnapshotProofDto? Proof);
+    SnapshotProofDto? Proof,
+    bool IsLocked = false,
+    DateTime? LockedAt = null);

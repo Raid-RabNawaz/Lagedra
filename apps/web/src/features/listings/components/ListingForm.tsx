@@ -154,6 +154,54 @@ export function ListingForm({ defaultValues, onSubmit, submitLabel, definitions 
               </p>
             </Field>
           </div>
+          <div className="sm:col-span-2 rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+            Predetermined deposits by verification level. The system charges the
+            matching amount automatically when a tenant requests to book — you no
+            longer enter a deposit at approval. Leave a field blank to fall back
+            to the maximum deposit.
+          </div>
+          <Field
+            label="Deposit — unverified tenant (USD)"
+            error={form.formState.errors.depositUnverifiedDollars?.message}
+          >
+            <Input
+              type="number"
+              step="0.01"
+              min={0}
+              placeholder="Falls back to maximum deposit"
+              {...form.register("depositUnverifiedDollars", {
+                setValueAs: (v) => (v === "" || v === undefined ? undefined : Number(v)),
+              })}
+            />
+          </Field>
+          <Field
+            label="Deposit — background-verified tenant (USD)"
+            error={form.formState.errors.depositBackgroundVerifiedDollars?.message}
+          >
+            <Input
+              type="number"
+              step="0.01"
+              min={0}
+              placeholder="Reduced deposit for verified tenants"
+              {...form.register("depositBackgroundVerifiedDollars", {
+                setValueAs: (v) => (v === "" || v === undefined ? undefined : Number(v)),
+              })}
+            />
+          </Field>
+          <Field
+            label="Deposit — partner-guaranteed tenant (USD)"
+            error={form.formState.errors.depositPartnerGuaranteedDollars?.message}
+          >
+            <Input
+              type="number"
+              step="0.01"
+              min={0}
+              placeholder="Much lower — a partner backs the tenant"
+              {...form.register("depositPartnerGuaranteedDollars", {
+                setValueAs: (v) => (v === "" || v === undefined ? undefined : Number(v)),
+              })}
+            />
+          </Field>
         </CardContent>
       </Card>
 

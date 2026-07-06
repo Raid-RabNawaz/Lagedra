@@ -112,6 +112,13 @@ namespace Arbitration.Migrations
                     b.Property<long>("FilingFeeCents")
                         .HasColumnType("bigint");
 
+                    b.Property<DateTime?>("FilingFeePaidAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FilingFeePaymentIntentId")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 

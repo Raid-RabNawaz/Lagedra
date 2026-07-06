@@ -1,9 +1,11 @@
+using FluentValidation;
 using Lagedra.Infrastructure.External.Geocoding;
 using Lagedra.Modules.ListingAndLocation.Application.DTOs;
 using Lagedra.Modules.ListingAndLocation.Domain.Entities;
 using Lagedra.Modules.ListingAndLocation.Domain.Enums;
 using Lagedra.Modules.ListingAndLocation.Domain.ValueObjects;
 using Lagedra.Modules.ListingAndLocation.Infrastructure.Persistence;
+using IAuditTrailWriter = Lagedra.SharedKernel.Integration.IAuditTrailWriter;
 using Lagedra.SharedKernel.Results;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -32,11 +34,44 @@ public sealed record UpdateListingCommand(
     Uri? VirtualTourUrl = null,
     string? ApproxAddress = null,
     long? DefaultDepositCents = null,
-    bool ClearDefaultDeposit = false) : IRequest<Result<ListingDetailsDto>>;
+    bool ClearDefaultDeposit = false,
+    long? DepositUnverifiedCents = null,
+    long? DepositBackgroundVerifiedCents = null,
+    long? DepositPartnerGuaranteedCents = null) : IRequest<Result<ListingDetailsDto>>;
+
+public sealed class UpdateListingCommandValidator : AbstractValidator<UpdateListingCommand>
+{
+    public UpdateListingCommandValidator()
+    {
+        RuleFor(x => x.MaxDepositCents)
+            .GreaterThan(0)
+            .WithMessage("Maximum deposit must be positive.");
+
+        RuleFor(x => x.DepositUnverifiedCents)
+            .Must((cmd, v) => DepositValidation.IsWithinCap(v, cmd.MaxDepositCents))
+            .WithMessage("Unverified deposit must be between 0 and the maximum deposit.");
+
+        RuleFor(x => x.DepositBackgroundVerifiedCents)
+            .Must((cmd, v) => DepositValidation.IsWithinCap(v, cmd.MaxDepositCents))
+            .WithMessage("Background-verified deposit must be between 0 and the maximum deposit.");
+
+        RuleFor(x => x.DepositPartnerGuaranteedCents)
+            .Must((cmd, v) => DepositValidation.IsWithinCap(v, cmd.MaxDepositCents))
+            .WithMessage("Partner-guaranteed deposit must be between 0 and the maximum deposit.");
+
+        RuleFor(x => x)
+            .Must(x => DepositValidation.IsOrdered(
+                x.DepositPartnerGuaranteedCents,
+                x.DepositBackgroundVerifiedCents,
+                x.DepositUnverifiedCents))
+            .WithMessage("Deposits must satisfy partner-guaranteed \u2264 background-verified \u2264 unverified.");
+    }
+}
 
 public sealed class UpdateListingCommandHandler(
     ListingsDbContext dbContext,
-    IGeocodingService geocodingService)
+    IGeocodingService geocodingService,
+    IAuditTrailWriter auditTrail)
     : IRequestHandler<UpdateListingCommand, Result<ListingDetailsDto>>
 {
     private static readonly Error NotFound = new("Listing.NotFound", "Listing not found.");
@@ -145,6 +180,14 @@ public sealed class UpdateListingCommandHandler(
             listing.SetDefaultDeposit(request.DefaultDepositCents);
         }
 
+        // Predetermined per-verification-tier deposits are submitted with the
+        // full edit form, so treat the incoming values as authoritative (null
+        // clears a tier back to the MaxDepositCents fallback).
+        listing.SetVerificationDeposits(
+            request.DepositUnverifiedCents,
+            request.DepositBackgroundVerifiedCents,
+            request.DepositPartnerGuaranteedCents);
+
         if (rentChanged)
         {
             var newRecord = ListingPriceHistory.Create(listing.Id, request.MonthlyRentCents, today);
@@ -164,6 +207,14 @@ public sealed class UpdateListingCommandHandler(
         }
 
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        await auditTrail.RecordAsync(
+            request.CallerUserId,
+            "listing.deposits_set",
+            "Listing",
+            listing.Id.ToString(),
+            CreateListingCommandHandler.FormatDepositDetails(listing),
+            ct: cancellationToken).ConfigureAwait(false);
 
         return Result<ListingDetailsDto>.Success(ListingMapper.ToDetails(listing));
     }

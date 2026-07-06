@@ -13,6 +13,7 @@ type Step = {
 function buildSteps(c: CaseDto): Step[] {
   const hasEvidence = c.evidenceSlotCount > 0;
   const assigned = Boolean(c.assignedArbitratorUserId);
+  const pendingPayment = c.status === "PendingPayment";
   const reviewReady =
     c.status === "EvidenceComplete" || Boolean(c.evidenceCompleteAt);
   const underReview = c.status === "UnderReview";
@@ -21,9 +22,16 @@ function buildSteps(c: CaseDto): Step[] {
 
   return [
     {
+      key: "fee",
+      label: "Filing fee paid",
+      done: !pendingPayment,
+      current: pendingPayment,
+      hint: pendingPayment ? "Pay the filing fee to open the case" : undefined,
+    },
+    {
       key: "filed",
       label: "Case filed",
-      done: true,
+      done: !pendingPayment,
       current: c.status === "Filed",
     },
     {

@@ -194,6 +194,7 @@ try
             typeof(Lagedra.Modules.ContentManagement.Infrastructure.Persistence.ContentDbContext),
             typeof(Lagedra.Modules.PartnerNetwork.Infrastructure.Persistence.PartnerDbContext),
             typeof(Lagedra.Modules.ChannelIntegration.Infrastructure.Persistence.ChannelDbContext),
+            typeof(Lagedra.Modules.AuditLog.Infrastructure.Persistence.AuditDbContext),
             typeof(Lagedra.Infrastructure.Settings.PlatformSettingsDbContext),
         };
 

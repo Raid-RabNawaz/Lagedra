@@ -17,6 +17,7 @@ import { formatDate, formatMoney } from "@/utils/format";
 import { useAuthStore } from "@/app/auth/authStore";
 import { isAdmin } from "@/app/auth/permissions";
 import { roles } from "@/app/auth/roles";
+import { ArbitrationFeeCheckout } from "@/features/arbitration/components/ArbitrationFeeCheckout";
 import { CaseEvidencePanel } from "@/features/arbitration/components/CaseEvidencePanel";
 import { CaseTruthSurfaceSection } from "@/features/arbitration/components/CaseTruthSurfaceSection";
 import { PartyEvidenceUpload } from "@/features/arbitration/components/PartyEvidenceUpload";
@@ -40,6 +41,7 @@ function categoryLabel(category: string) {
     CategoryE: "Unauthorized Occupants",
     CategoryF: "Early Termination",
     CategoryG: "Rule Violation",
+    DepositReturn: "Deposit Not Returned",
     Other: "Other",
   };
   return labels[category] ?? category;
@@ -209,6 +211,8 @@ export function CaseDetailPage() {
       || userId === c.landlordUserId
       || userId === c.tenantUserId);
   const showReviewerMaterials = userIsAdmin || isAssignedArbitrator;
+  const isPendingPayment = c.status === "PendingPayment";
+  const isFiler = Boolean(userId) && userId === c.filedByUserId;
 
   return (
     <div className="mx-auto max-w-4xl space-y-6 pb-12">
@@ -244,6 +248,24 @@ export function CaseDetailPage() {
         </aside>
 
         <div className="space-y-6 min-w-0 lg:col-start-1">
+          {isPendingPayment && isFiler && (
+            <ArbitrationFeeCheckout
+              caseId={c.caseId}
+              filingFeeCents={c.filingFeeCents}
+              onPaid={() => void refetch()}
+            />
+          )}
+
+          {isPendingPayment && !isFiler && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-4 py-3 text-sm text-amber-900 flex gap-2">
+              <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+              <span>
+                This case is awaiting the filing fee from the party who opened
+                it. It will move into evidence and review once the fee is paid.
+              </span>
+            </div>
+          )}
+
           {showEvidence && isDealParty && (
             <section className="space-y-2">
               <h2 className="text-sm font-semibold px-1">Your evidence</h2>

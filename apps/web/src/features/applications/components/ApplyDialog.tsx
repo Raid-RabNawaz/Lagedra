@@ -1,7 +1,23 @@
-import { useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { isAxiosError } from "axios";
 import { useNavigate } from "react-router-dom";
-import { Minus, Plus, Send, ShieldCheck, Users } from "lucide-react";
+import {
+  ArrowLeft,
+  CreditCard,
+  Lock,
+  Minus,
+  Plus,
+  Send,
+  ShieldCheck,
+  Users,
+} from "lucide-react";
+import { loadStripe } from "@stripe/stripe-js";
+import {
+  Elements,
+  PaymentElement,
+  useElements,
+  useStripe,
+} from "@stripe/react-stripe-js";
 import {
   Dialog,
   DialogContent,
@@ -13,52 +29,52 @@ import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Loader } from "@/components/shared/Loader";
+import { appConfig } from "@/app/config";
 import { useAuthStore } from "@/app/auth/authStore";
-import { useSubmitApplication } from "@/features/applications/hooks/useApplications";
+import {
+  useCreateBookingSetupIntent,
+  useReservationPreview,
+  useSubmitApplication,
+} from "@/features/applications/hooks/useApplications";
+import {
+  BOOKING_CONSENT_VERSION,
+  tierLabel,
+} from "@/features/applications/lib/bookingConsent";
 import { DateRangeField } from "@/features/listings/components/DateRangeField";
 import { privacyApi } from "@/features/privacy/services/privacyApi";
 import { formatMoney } from "@/utils/format";
 import { cn } from "@/lib/utils";
-import type { ListingDetailsDto } from "@/api/types";
+import type { ListingDetailsDto, ReservationPreviewDto } from "@/api/types";
 import { getApiErrorMessage } from "@/api/errors";
 
 /** Server-side hard cap on the cover note. Mirrors `DealApplication.MessageMaxLength`. */
 const MESSAGE_MAX_LENGTH = 1000;
 
+const stripePromise = appConfig.stripePublishableKey
+  ? loadStripe(appConfig.stripePublishableKey)
+  : null;
+
 type Props = {
   listing: ListingDetailsDto;
-  /**
-   * Optional pre-filled check-in date (YYYY-MM-DD). Used by the Listing
-   * Detail booking panel so the dates the guest already picked carry into
-   * the dialog.
-   */
   initialCheckIn?: string;
   initialCheckOut?: string;
-  /**
-   * Phase 17 — when set, the dialog runs in controlled mode and the
-   * default trigger button is hidden. Used by surfaces that already
-   * have their own CTA (e.g. the "Continue to Apply" button on the
-   * pre-booking inquiry page).
-   */
   controlledOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
 };
 
+type Step = "details" | "payment";
+
 /**
- * Phase 17.1 — apply flow simplified to dates-only.
- *
- * Earlier (Phase 16.9) this dialog also captured a card off-session via
- * Stripe Elements so an instant-book deal could be charged automatically
- * the moment the host approved. We pulled that step out because the
- * deposit, insurance fee, and jurisdiction warning are all decided at
- * approval time — the tenant should never feel "already paid" before
- * those numbers are final. Single payment surface lives on the deal /
- * checkout page after the Truth Surface is sealed.
- *
- * Backend still accepts an optional `stripePaymentMethodId`; we now
- * always pass null and `CardOnFileChargeService` short-circuits, leaving
- * the standard checkout flow as the only path that bills the guest.
+ * Predetermined-deposit apply flow:
+ *  1. Tenant picks dates / guests / note and sees the full price breakdown
+ *     (predetermined deposit for their verification tier + rent + fees + total).
+ *  2. Tenant saves a card (Stripe SetupIntent, off-session) and agrees to the
+ *     Truth Surface terms.
+ *  3. On submit we confirm the SetupIntent to obtain a `pm_…` token and send it
+ *     with the consent. No money moves now — the host's approval seals the
+ *     Truth Surface and charges the saved card off-session.
  */
 export const ApplyDialog = ({
   listing,
@@ -68,7 +84,6 @@ export const ApplyDialog = ({
   onOpenChange,
 }: Props) => {
   const user = useAuthStore((s) => s.user);
-  const submitMutation = useSubmitApplication();
   const navigate = useNavigate();
 
   const isControlled = controlledOpen !== undefined;
@@ -83,24 +98,17 @@ export const ApplyDialog = ({
     }
   };
 
+  const [step, setStep] = useState<Step>("details");
   const [checkIn, setCheckIn] = useState(initialCheckIn ?? "");
   const [checkOut, setCheckOut] = useState(initialCheckOut ?? "");
-  // Guest count + cover note are local to the dialog — the BookingPanel
-  // never pre-fills them, and resetting on close keeps the next open a
-  // clean slate (matches the listing-detail "dates only" pre-fill model).
   const [guestCount, setGuestCount] = useState(1);
   const [message, setMessage] = useState("");
   const [submitErrorMessage, setSubmitErrorMessage] = useState<string | null>(null);
-  // Drives inline date-field error styling. We don't disable the submit
-  // button outright because a fully-disabled button can't trigger field
-  // highlighting on click — the user gets no feedback about *why* the
-  // form isn't accepting them. Instead we let the click through, surface
-  // the error inline, then let the validity gate the actual mutation.
   const [submitAttempted, setSubmitAttempted] = useState(false);
+  const [clientSecret, setClientSecret] = useState<string | null>(null);
 
-  // Listings without a HouseRules block fall back to a soft cap of 16
-  // (Airbnb's published max). The server still rejects values above the
-  // listing's actual cap, so this is purely a UX guardrail.
+  const setupIntentMutation = useCreateBookingSetupIntent();
+
   const maxGuests = listing.houseRules?.maxGuests ?? 16;
 
   useEffect(() => {
@@ -109,20 +117,15 @@ export const ApplyDialog = ({
       if (initialCheckOut) setCheckOut(initialCheckOut);
       setSubmitErrorMessage(null);
       setSubmitAttempted(false);
+      setStep("details");
+      setClientSecret(null);
     }
   }, [open, initialCheckIn, initialCheckOut]);
 
-  // If the host edits the listing's max guests after the dialog mounts
-  // (or it loads in lazily), make sure we never display a value above
-  // the new cap — otherwise the "Book" button could submit data the
-  // server would immediately reject.
   useEffect(() => {
     setGuestCount((prev) => Math.min(Math.max(1, prev), maxGuests));
   }, [maxGuests]);
 
-  // Raw day delta — negative when check-out is *before* check-in, which we
-  // surface as a distinct error rather than rounding it to zero. The
-  // `stayDays` value used by the rest of the form is clamped at 0.
   const rawDayDelta =
     checkIn && checkOut
       ? Math.round(
@@ -139,10 +142,10 @@ export const ApplyDialog = ({
   const messageLength = message.trim().length;
   const messageTooLong = messageLength > MESSAGE_MAX_LENGTH;
   const guestsValid = guestCount >= 1 && guestCount <= maxGuests;
-  const canSubmit = datesValid && guestsValid && !messageTooLong;
+  const detailsValid = datesValid && guestsValid && !messageTooLong;
 
-  // Inline date-field validation copy. Picked so each invalid combination
-  // surfaces the most actionable hint instead of a generic "fix dates".
+  const preview = useReservationPreview(listing.id, checkIn, checkOut, datesValid);
+
   const dateErrorMessage = !checkIn && !checkOut
     ? "Select check-in and check-out dates."
     : !checkIn
@@ -154,67 +157,54 @@ export const ApplyDialog = ({
           : !isValidStay
             ? `Stay must be between ${minStay} and ${maxStay} days.`
             : "";
-  // Only surface the error styling after the user has tried to submit
-  // (or while there's a current dateErrorMessage post-attempt). Pristine
-  // empty fields shouldn't look "wrong".
   const showDateError = submitAttempted && Boolean(dateErrorMessage);
 
   const canDecrementGuests = guestCount > 1;
   const canIncrementGuests = guestCount < maxGuests;
-
-  const handleSubmit = async () => {
-    if (!user) return;
-    // Mark the attempt so the date field can flip into its error state
-    // *before* we early-return on invalid input. Without this the user
-    // could click the disabled-looking button and get zero feedback.
-    setSubmitAttempted(true);
-    if (!canSubmit) return;
-
-    setSubmitErrorMessage(null);
-
-    try {
-      await privacyApi.ensureRequiredConsents(user.userId);
-
-      const trimmedMessage = message.trim();
-      const result = await submitMutation.mutateAsync({
-        listingId: listing.id,
-        requestedCheckIn: checkIn,
-        requestedCheckOut: checkOut,
-        guestCount,
-        message: trimmedMessage.length > 0 ? trimmedMessage : null,
-        stripePaymentMethodId: null,
-      });
-
-      setOpen(false);
-      setCheckIn("");
-      setCheckOut("");
-      setGuestCount(1);
-      setMessage("");
-
-      if (result?.nextPath) {
-        navigate(result.nextPath);
-      }
-    } catch (error) {
-      if (isAxiosError(error) && error.response?.status === 451) {
-        setSubmitErrorMessage(
-          "Please complete KYC and data-processing consent before submitting an application.",
-        );
-        return;
-      }
-
-      setSubmitErrorMessage(
-        getApiErrorMessage(error, "Failed to submit application. Please try again."),
-      );
-    }
-  };
 
   const guestLabel = useMemo(
     () => (guestCount === 1 ? "1 guest" : `${guestCount} guests`),
     [guestCount],
   );
 
-  const submitting = submitMutation.isPending;
   const ctaLabel = listing.instantBookingEnabled ? "Book instantly" : "Request to book";
+
+  const resetAndClose = () => {
+    setOpen(false);
+    setCheckIn("");
+    setCheckOut("");
+    setGuestCount(1);
+    setMessage("");
+    setStep("details");
+    setClientSecret(null);
+  };
+
+  const handleContinueToPayment = async () => {
+    setSubmitAttempted(true);
+    if (!detailsValid || !user) return;
+
+    setSubmitErrorMessage(null);
+    try {
+      const result = await setupIntentMutation.mutateAsync(listing.id);
+      setClientSecret(result.clientSecret);
+      setStep("payment");
+    } catch (error) {
+      setSubmitErrorMessage(
+        getApiErrorMessage(error, "Couldn't start secure payment setup. Please try again."),
+      );
+    }
+  };
+
+  const stripeOptions = useMemo(
+    () =>
+      clientSecret
+        ? {
+            clientSecret,
+            appearance: { theme: "stripe" as const, variables: { borderRadius: "8px" } },
+          }
+        : null,
+    [clientSecret],
+  );
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -229,21 +219,19 @@ export const ApplyDialog = ({
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>
-            {listing.instantBookingEnabled
-              ? "Confirm your dates"
-              : "Request these dates"}
+            {step === "payment"
+              ? "Review & confirm"
+              : listing.instantBookingEnabled
+                ? "Confirm your dates"
+                : "Request these dates"}
           </DialogTitle>
         </DialogHeader>
 
-        {submitting ? (
-          <div className="py-12">
-            <Loader label="Submitting application…" />
-          </div>
-        ) : (
+        {step === "details" && (
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              void handleSubmit();
+              void handleContinueToPayment();
             }}
             className="space-y-4"
           >
@@ -262,9 +250,6 @@ export const ApplyDialog = ({
               onChange={(next) => {
                 setCheckIn(next.checkIn);
                 setCheckOut(next.checkOut);
-                // Picking *any* date wipes the error state immediately so
-                // the user doesn't have to click submit again to see
-                // whether their next pick fixed things.
                 if (submitAttempted) setSubmitAttempted(false);
               }}
               minStayDays={minStay}
@@ -280,13 +265,6 @@ export const ApplyDialog = ({
               </p>
             )}
 
-            {/*
-             * Guest stepper. Airbnb-style: bounded by the listing's
-             * `houseRules.maxGuests` so the tenant can't request more
-             * heads than the host advertised. Decrement is disabled at 1
-             * (a booking with 0 guests is meaningless); increment is
-             * disabled once we reach the listed maximum.
-             */}
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <Label
@@ -302,10 +280,7 @@ export const ApplyDialog = ({
               </div>
               <div className="flex items-center justify-between rounded-lg border bg-background px-3 py-2">
                 <div>
-                  <p
-                    id="apply-dialog-guest-count"
-                    className="text-sm font-medium"
-                  >
+                  <p id="apply-dialog-guest-count" className="text-sm font-medium">
                     {guestLabel}
                   </p>
                   <p className="text-[11px] text-muted-foreground">
@@ -318,9 +293,7 @@ export const ApplyDialog = ({
                     size="icon"
                     variant="outline"
                     className="h-8 w-8 rounded-full"
-                    onClick={() =>
-                      setGuestCount((prev) => Math.max(1, prev - 1))
-                    }
+                    onClick={() => setGuestCount((prev) => Math.max(1, prev - 1))}
                     disabled={!canDecrementGuests}
                     aria-label="Decrease guest count"
                   >
@@ -340,9 +313,7 @@ export const ApplyDialog = ({
                     size="icon"
                     variant="outline"
                     className="h-8 w-8 rounded-full"
-                    onClick={() =>
-                      setGuestCount((prev) => Math.min(maxGuests, prev + 1))
-                    }
+                    onClick={() => setGuestCount((prev) => Math.min(maxGuests, prev + 1))}
                     disabled={!canIncrementGuests}
                     aria-label="Increase guest count"
                   >
@@ -352,20 +323,10 @@ export const ApplyDialog = ({
               </div>
             </div>
 
-            {/*
-             * Cover note. Optional. We trim whitespace on submit and
-             * send `null` when empty so the host doesn't see a blank
-             * "Message from <guest>" section on the detail dialog.
-             */}
             <div className="space-y-2">
-              <Label
-                htmlFor="apply-dialog-message"
-                className="text-sm font-medium"
-              >
+              <Label htmlFor="apply-dialog-message" className="text-sm font-medium">
                 Message to the host{" "}
-                <span className="text-muted-foreground font-normal">
-                  (optional)
-                </span>
+                <span className="text-muted-foreground font-normal">(optional)</span>
               </Label>
               <Textarea
                 id="apply-dialog-message"
@@ -377,20 +338,13 @@ export const ApplyDialog = ({
                 className={cn(messageTooLong && "border-destructive")}
               />
               <div className="flex items-center justify-between text-[11px]">
-                <span
-                  className={cn(
-                    "text-muted-foreground",
-                    messageTooLong && "text-destructive",
-                  )}
-                >
+                <span className={cn("text-muted-foreground", messageTooLong && "text-destructive")}>
                   Hosts read these to decide who they accept.
                 </span>
                 <span
                   className={cn(
                     "tabular-nums",
-                    messageTooLong
-                      ? "text-destructive font-medium"
-                      : "text-muted-foreground",
+                    messageTooLong ? "text-destructive font-medium" : "text-muted-foreground",
                   )}
                 >
                   {messageLength}/{MESSAGE_MAX_LENGTH}
@@ -398,45 +352,317 @@ export const ApplyDialog = ({
               </div>
             </div>
 
-            <div className="flex items-start gap-2 rounded-md bg-muted/40 p-2 text-[11px] text-muted-foreground">
-              <ShieldCheck className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-              <span>
-                {listing.instantBookingEnabled
-                  ? "You won't be charged here. After the host confirms the Truth Surface, you'll review the final terms (deposit + insurance) and pay on the deal page."
-                  : "You won't be charged here. The host has 72 hours to accept. Once they do, you'll review the final terms and pay on the deal page."}
-              </span>
-            </div>
-
-            {submitErrorMessage && (
-              <Alert variant="destructive">{submitErrorMessage}</Alert>
+            {datesValid && (
+              <PriceBreakdown
+                preview={preview.data}
+                loading={preview.isLoading}
+                error={preview.isError}
+              />
             )}
+
+            {submitErrorMessage && <Alert variant="destructive">{submitErrorMessage}</Alert>}
 
             <Button
               type="submit"
-              className={cn(
-                "w-full gap-2",
-                // Soft-disabled look: keeps the click hot so the form's
-                // onSubmit can flip the date field into its error state.
-                // We only hard-disable while the message is over-length
-                // (the textarea has its own visible counter, so a fully
-                // dead button is unambiguous there).
-                !canSubmit && "opacity-60",
-              )}
-              aria-disabled={!canSubmit}
-              disabled={messageTooLong}
-              title={!canSubmit ? "Pick valid check-in and check-out dates first." : undefined}
+              className={cn("w-full gap-2", !detailsValid && "opacity-60")}
+              aria-disabled={!detailsValid}
+              disabled={messageTooLong || setupIntentMutation.isPending}
+              title={!detailsValid ? "Pick valid check-in and check-out dates first." : undefined}
             >
-              <Send className="h-4 w-4" />
-              {ctaLabel}
+              <CreditCard className="h-4 w-4" />
+              {setupIntentMutation.isPending ? "Preparing…" : "Continue to payment"}
             </Button>
 
             <p className="text-[11px] text-muted-foreground">
-              Submitting binds you to the listing's house rules and cancellation
-              policy if the host accepts.
+              You won't be charged now. Your card is charged only if the host accepts.
             </p>
           </form>
+        )}
+
+        {step === "payment" && (
+          <div className="space-y-4">
+            <PriceBreakdown
+              preview={preview.data}
+              loading={preview.isLoading}
+              error={preview.isError}
+            />
+
+            {!stripePromise ? (
+              <Alert variant="destructive">
+                Stripe is not configured. Please set VITE_STRIPE_PUBLISHABLE_KEY.
+              </Alert>
+            ) : stripeOptions ? (
+              <Elements stripe={stripePromise} options={stripeOptions}>
+                <PaymentConsentStep
+                  listingId={listing.id}
+                  instantBooking={listing.instantBookingEnabled}
+                  totalCents={preview.data?.totalPayableCents ?? null}
+                  checkIn={checkIn}
+                  checkOut={checkOut}
+                  guestCount={guestCount}
+                  message={message}
+                  userId={user?.userId ?? null}
+                  ctaLabel={ctaLabel}
+                  onBack={() => setStep("details")}
+                  onDone={(nextPath) => {
+                    resetAndClose();
+                    if (nextPath) navigate(nextPath);
+                  }}
+                />
+              </Elements>
+            ) : (
+              <div className="py-8">
+                <Loader label="Preparing secure payment…" />
+              </div>
+            )}
+          </div>
         )}
       </DialogContent>
     </Dialog>
   );
 };
+
+function PriceBreakdown({
+  preview,
+  loading,
+  error,
+}: {
+  preview: ReservationPreviewDto | undefined;
+  loading: boolean;
+  error: boolean;
+}) {
+  if (loading) {
+    return (
+      <div className="rounded-lg border p-4">
+        <Loader label="Calculating your price…" />
+      </div>
+    );
+  }
+
+  if (error || !preview) {
+    return (
+      <Alert variant="destructive" className="text-sm">
+        Couldn't load the price breakdown. Please re-check your dates.
+      </Alert>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-medium">Price breakdown</h3>
+        <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium">
+          {tierLabel(preview.tier)} tenant
+        </span>
+      </div>
+      <div className="space-y-2 text-sm">
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">First month's rent</span>
+          <span>{formatMoney(preview.firstMonthRentCents)}</span>
+        </div>
+        <div className="flex justify-between">
+          <span className="text-muted-foreground">Security deposit</span>
+          <span>{formatMoney(preview.depositCents)}</span>
+        </div>
+        {preview.insuranceFeeCents > 0 && (
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Insurance premium</span>
+            <span>{formatMoney(preview.insuranceFeeCents)}</span>
+          </div>
+        )}
+        {preview.serviceFeeCents > 0 && (
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Service fee</span>
+            <span>{formatMoney(preview.serviceFeeCents)}</span>
+          </div>
+        )}
+        <div className="border-t pt-2 flex justify-between font-semibold">
+          <span>Total charged on approval</span>
+          <span>{formatMoney(preview.totalPayableCents)}</span>
+        </div>
+      </div>
+      {preview.depositReason && (
+        <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
+          <ShieldCheck className="h-3.5 w-3.5 mt-0.5 shrink-0 text-emerald-600" />
+          {preview.depositReason}
+        </p>
+      )}
+      <p className="flex items-start gap-1.5 border-t pt-2 text-[11px] text-muted-foreground">
+        <Lock className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+        Your first month's rent and deposit are paid directly to the host through
+        Stripe. Lagedra only collects its service fee and the insurance premium —
+        we never hold your funds. The host returns your deposit directly after
+        move-out.
+      </p>
+    </div>
+  );
+}
+
+function PaymentConsentStep({
+  listingId,
+  instantBooking,
+  totalCents,
+  checkIn,
+  checkOut,
+  guestCount,
+  message,
+  userId,
+  ctaLabel,
+  onBack,
+  onDone,
+}: {
+  listingId: string;
+  instantBooking: boolean;
+  totalCents: number | null;
+  checkIn: string;
+  checkOut: string;
+  guestCount: number;
+  message: string;
+  userId: string | null;
+  ctaLabel: string;
+  onBack: () => void;
+  onDone: (nextPath: string | null) => void;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const submitMutation = useSubmitApplication();
+  const [consentChecked, setConsentChecked] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [processing, setProcessing] = useState(false);
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!stripe || !elements || !userId) return;
+    if (!consentChecked) {
+      setError("Please agree to the Truth Surface terms to continue.");
+      return;
+    }
+
+    setProcessing(true);
+    setError(null);
+
+    try {
+      const { error: submitError } = await elements.submit();
+      if (submitError) {
+        setError(submitError.message ?? "Please check your card details.");
+        setProcessing(false);
+        return;
+      }
+
+      // Confirm the SetupIntent off-session so we get a reusable pm_ token.
+      // No money moves here — the host's approval charges it later.
+      const { error: confirmError, setupIntent } = await stripe.confirmSetup({
+        elements,
+        redirect: "if_required",
+      });
+
+      if (confirmError) {
+        setError(confirmError.message ?? "Couldn't save your card. Please try again.");
+        setProcessing(false);
+        return;
+      }
+
+      const paymentMethodId =
+        typeof setupIntent?.payment_method === "string"
+          ? setupIntent.payment_method
+          : (setupIntent?.payment_method?.id ?? null);
+
+      if (!paymentMethodId) {
+        setError("Couldn't confirm your saved card. Please try again.");
+        setProcessing(false);
+        return;
+      }
+
+      await privacyApi.ensureRequiredConsents(userId);
+
+      const trimmedMessage = message.trim();
+      const result = await submitMutation.mutateAsync({
+        listingId,
+        requestedCheckIn: checkIn,
+        requestedCheckOut: checkOut,
+        guestCount,
+        message: trimmedMessage.length > 0 ? trimmedMessage : null,
+        stripePaymentMethodId: paymentMethodId,
+        truthSurfaceConsentGiven: true,
+        consentVersion: BOOKING_CONSENT_VERSION,
+      });
+
+      onDone(result?.nextPath ?? null);
+    } catch (err) {
+      if (isAxiosError(err) && err.response?.status === 451) {
+        setError(
+          "Please complete KYC and data-processing consent before submitting a request.",
+        );
+        setProcessing(false);
+        return;
+      }
+      setError(getApiErrorMessage(err, "Failed to submit your request. Please try again."));
+      setProcessing(false);
+    }
+  };
+
+  const payLabel =
+    totalCents != null ? `${ctaLabel} · ${formatMoney(totalCents)} on approval` : ctaLabel;
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="space-y-2">
+        <Label className="flex items-center gap-2 text-sm font-medium">
+          <CreditCard className="h-4 w-4 text-muted-foreground" />
+          Payment method
+        </Label>
+        <PaymentElement />
+        <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
+          <Lock className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+          Your card is securely saved with Stripe. We never store card details and
+          you're only charged if the host accepts.
+        </p>
+      </div>
+
+      <label className="flex items-start gap-2 rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground cursor-pointer">
+        <Checkbox
+          checked={consentChecked}
+          onCheckedChange={(checked) => {
+            setConsentChecked(checked);
+            if (checked) setError(null);
+          }}
+          className="mt-0.5"
+        />
+        <span>
+          I agree to the Truth Surface agreement and the listing's house rules and
+          cancellation policy. When the host accepts, this seals an immutable,
+          signed record of the deal and authorises the deposit + first month's
+          rent + fees to be charged to my saved card. My rent and deposit are paid
+          directly to the host via Stripe (Lagedra never holds your funds). After
+          move-out the host returns my deposit directly, less any agreed or
+          arbitrated deductions; the booking is only marked complete once the host
+          confirms the deposit was returned and I confirm I received it. If it
+          isn't returned, I can raise an arbitration case.
+        </span>
+      </label>
+
+      {error && <Alert variant="destructive" className="text-sm">{error}</Alert>}
+
+      <div className="flex items-center gap-2">
+        <Button type="button" variant="outline" className="gap-2" onClick={onBack} disabled={processing}>
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </Button>
+        <Button
+          type="submit"
+          className="flex-1 gap-2"
+          disabled={!stripe || !elements || processing || !consentChecked}
+        >
+          <Send className="h-4 w-4" />
+          {processing ? "Submitting…" : payLabel}
+        </Button>
+      </div>
+
+      <p className="text-[11px] text-muted-foreground">
+        {instantBooking
+          ? "Instant book: your card is charged immediately once the agreement seals."
+          : "The host has 72 hours to accept. Your card is charged only when they do."}
+      </p>
+    </form>
+  );
+}

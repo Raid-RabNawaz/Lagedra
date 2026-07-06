@@ -45,6 +45,17 @@ public sealed class DealPaymentConfirmationConfiguration
         builder.Property(c => c.TruthSurfaceSnapshotId);
         builder.HasIndex(c => c.TruthSurfaceSnapshotId);
 
+        // Deposit return handshake (non-custodial, host-held).
+        builder.Property(c => c.MoveOutInitiatedAt);
+        builder.Property(c => c.MoveOutInitiatedByUserId);
+        builder.Property(c => c.HostConfirmedDepositReturnedAt);
+        builder.Property(c => c.TenantConfirmedDepositReceivedAt);
+        builder.Property(c => c.DepositReturnAmountCents);
+        builder.Property(c => c.DepositReturnMethod).HasMaxLength(50);
+        builder.Property(c => c.DepositReturnNote).HasMaxLength(2000);
+        builder.Property(c => c.DepositReturnSettledAt);
+        builder.Property(c => c.DepositReturnReminderSentAt);
+
         builder.HasIndex(c => c.Status);
 
         builder.Ignore(c => c.DomainEvents);

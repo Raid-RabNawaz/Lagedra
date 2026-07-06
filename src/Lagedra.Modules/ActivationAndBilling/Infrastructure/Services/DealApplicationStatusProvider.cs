@@ -39,10 +39,13 @@ public sealed class DealApplicationStatusProvider(BillingDbContext dbContext) : 
 
     public async Task<DealApplicationDetailsDto?> GetDealDetailsAsync(Guid dealId, CancellationToken ct = default)
     {
+        // Accept Approved and PaymentFailed: a sealed Truth Surface / payment
+        // retry can run while the booking sits in PaymentFailed.
         var app = await dbContext.DealApplications
             .AsNoTracking()
             .FirstOrDefaultAsync(a => a.DealId == dealId
-                                      && a.Status == DealApplicationStatus.Approved, ct)
+                                      && (a.Status == DealApplicationStatus.Approved
+                                          || a.Status == DealApplicationStatus.PaymentFailed), ct)
             .ConfigureAwait(false);
 
         if (app is null)
@@ -62,6 +65,12 @@ public sealed class DealApplicationStatusProvider(BillingDbContext dbContext) : 
             app.FirstMonthRentCents,
             app.DepositAmountCents,
             app.InsuranceFeeCents,
-            app.JurisdictionWarning);
+            app.JurisdictionWarning,
+            app.GuestCount,
+            app.Message,
+            app.ServiceFeeCents,
+            app.TotalPayableSnapshotCents,
+            app.TenantVerificationTierAtRequest,
+            app.DepositReason);
     }
 }

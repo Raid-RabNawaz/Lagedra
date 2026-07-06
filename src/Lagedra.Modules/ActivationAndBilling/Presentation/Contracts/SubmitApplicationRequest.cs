@@ -16,8 +16,19 @@ public sealed record SubmitApplicationRequest(
     /// </summary>
     string? Message = null,
     /// <summary>
-    /// Phase 16.9 — optional Stripe `pm_…` id captured during the apply
-    /// dialog's SetupIntent step. When supplied, the host's approve action
-    /// will charge it off-session and the tenant skips the checkout page.
+    /// Stripe `pm_…` id captured during the apply dialog's SetupIntent step.
+    /// Required under the predetermined-deposit flow (BookingFlow.V2): the host
+    /// charges it off-session on approval and the tenant skips a checkout step.
     /// </summary>
-    string? StripePaymentMethodId = null);
+    string? StripePaymentMethodId = null,
+    /// <summary>
+    /// Tenant's Truth Surface consent given up-front at request time. Required
+    /// under the predetermined-deposit flow. The IP/User-Agent are captured
+    /// server-side from the request, not trusted from the client.
+    /// </summary>
+    bool TruthSurfaceConsentGiven = false,
+    /// <summary>
+    /// Version identifier of the consent text the tenant agreed to. When null
+    /// the server records its current consent version.
+    /// </summary>
+    string? ConsentVersion = null);

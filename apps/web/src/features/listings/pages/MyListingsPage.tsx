@@ -26,13 +26,14 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { FilterTabs } from "@/components/shared/FilterTabs";
 import { PageHeader } from "@/components/shared/PageHeader";
 import { CardGridSkeleton } from "@/components/shared/ListSkeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { ErrorState } from "@/components/shared/ErrorState";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Building2 } from "lucide-react";
+import { Building2, CheckCircle2 } from "lucide-react";
+import { HostChannelSyncButton } from "@/features/channels/components/HostChannelSyncButton";
 import { formatMoney, formatDate } from "@/utils/format";
 import { cn } from "@/lib/utils";
 
@@ -72,6 +73,7 @@ export const MyListingsPage = () => {
   const [tab, setTab] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
+  const [syncNote, setSyncNote] = useState<string | null>(null);
 
   // Memoise so identity is stable across renders (otherwise the `useMemo`s
   // below would recompute every render due to a fresh `[]` reference).
@@ -91,6 +93,8 @@ export const MyListingsPage = () => {
       return true;
     });
   }, [items, tab, search]);
+
+  const activeTabLabel = tabs.find((t) => t.value === tab)?.label ?? "All";
 
   const submitMutation = useMutation({
     mutationFn: (id: string) => listingApi.submitForReview(id),
@@ -143,6 +147,16 @@ export const MyListingsPage = () => {
         title="My listings"
         description="Manage your properties and publish to the marketplace."
       >
+        <HostChannelSyncButton
+          onSynced={(msg) => {
+            setActionError(null);
+            setSyncNote(msg);
+          }}
+          onError={(msg) => {
+            setSyncNote(null);
+            setActionError(msg);
+          }}
+        />
         <Link to="/app/listings/new" className={cn(buttonVariants({ variant: "accent" }))}>
           <Plus className="h-4 w-4" />
           New listing
@@ -152,6 +166,13 @@ export const MyListingsPage = () => {
       {actionError && (
         <Alert variant="destructive">
           <AlertDescription>{actionError}</AlertDescription>
+        </Alert>
+      )}
+
+      {syncNote && (
+        <Alert variant="success">
+          <CheckCircle2 className="h-4 w-4" />
+          <AlertDescription>{syncNote}</AlertDescription>
         </Alert>
       )}
 
@@ -173,27 +194,21 @@ export const MyListingsPage = () => {
           </Link>
         </EmptyState>
       ) : (
-        <Tabs value={tab} onValueChange={(v) => setTab(v as StatusFilter)}>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <TabsList className="overflow-x-auto">
-              {tabs.map((t) => (
-                <TabsTrigger key={t.value} value={t.value} className="gap-1.5">
-                  {t.label}
-                  <span
-                    className={cn(
-                      "rounded-full px-1.5 text-[10px] font-semibold tabular-nums",
-                      tab === t.value
-                        ? "bg-foreground text-background"
-                        : "bg-muted text-muted-foreground",
-                    )}
-                  >
-                    {counts[t.value] ?? 0}
-                  </span>
-                </TabsTrigger>
-              ))}
-            </TabsList>
+        <div className="space-y-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <FilterTabs
+              aria-label="Filter listings by status"
+              options={tabs.map((t) => ({
+                value: t.value,
+                label: t.label,
+                count: counts[t.value] ?? 0,
+              }))}
+              value={tab}
+              onChange={setTab}
+              className="lg:flex-1"
+            />
 
-            <div className="relative w-full sm:max-w-sm">
+            <div className="relative w-full lg:w-72 lg:shrink-0">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 value={search}
@@ -214,54 +229,50 @@ export const MyListingsPage = () => {
             </div>
           </div>
 
-          {tabs.map((t) => (
-            <TabsContent key={t.value} value={t.value} className="mt-4">
-              {filtered.length === 0 ? (
-                <EmptyState
-                  title={search ? "No matching listings" : `No ${t.label.toLowerCase()} listings`}
-                  description={
-                    search
-                      ? "Try a different search term or clear filters."
-                      : t.value === "Draft"
-                        ? "Drafts will appear here while you finish setting them up."
-                        : t.value === "InReview"
-                          ? "Listings you submit will sit here while an admin reviews them."
-                          : t.value === "Denied"
-                            ? "Listings the admin asked you to fix will appear here."
-                            : t.value === "Published"
-                              ? "Once an admin approves your submission, it will show up here."
-                              : t.value === "Activated"
-                                ? "Activated listings have an active billing subscription."
-                                : t.value === "Closed"
-                                  ? "Listings you close will be moved here."
-                                  : "Try adjusting your filter."
-                  }
+          {filtered.length === 0 ? (
+            <EmptyState
+              title={search ? "No matching listings" : `No ${activeTabLabel.toLowerCase()} listings`}
+              description={
+                search
+                  ? "Try a different search term or clear filters."
+                  : tab === "Draft"
+                    ? "Drafts will appear here while you finish setting them up."
+                    : tab === "InReview"
+                      ? "Listings you submit will sit here while an admin reviews them."
+                      : tab === "Denied"
+                        ? "Listings the admin asked you to fix will appear here."
+                        : tab === "Published"
+                          ? "Once an admin approves your submission, it will show up here."
+                          : tab === "Activated"
+                            ? "Activated listings have an active billing subscription."
+                            : tab === "Closed"
+                              ? "Listings you close will be moved here."
+                              : "Create your first listing to appear in search results."
+              }
+            />
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {filtered.map((l) => (
+                <ListingRowCard
+                  key={l.id}
+                  listing={l}
+                  onSubmitForReview={() => submitMutation.mutate(l.id)}
+                  onClose={() => {
+                    if (window.confirm("Close this listing? It will no longer appear in search.")) {
+                      closeMutation.mutate(l.id);
+                    }
+                  }}
+                  onDelete={() => {
+                    if (window.confirm("Delete this listing permanently? This cannot be undone.")) {
+                      deleteMutation.mutate(l.id);
+                    }
+                  }}
+                  isMutating={isMutating}
                 />
-              ) : (
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                  {filtered.map((l) => (
-                    <ListingRowCard
-                      key={l.id}
-                      listing={l}
-                      onSubmitForReview={() => submitMutation.mutate(l.id)}
-                      onClose={() => {
-                        if (window.confirm("Close this listing? It will no longer appear in search.")) {
-                          closeMutation.mutate(l.id);
-                        }
-                      }}
-                      onDelete={() => {
-                        if (window.confirm("Delete this listing permanently? This cannot be undone.")) {
-                          deleteMutation.mutate(l.id);
-                        }
-                      }}
-                      isMutating={isMutating}
-                    />
-                  ))}
-                </div>
-              )}
-            </TabsContent>
-          ))}
-        </Tabs>
+              ))}
+            </div>
+          )}
+        </div>
       )}
     </div>
   );

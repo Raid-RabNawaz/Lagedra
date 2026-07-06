@@ -10,12 +10,19 @@ export function dealHeading(phase: DealPhase): string {
   switch (phase) {
     case "TruthSurface":
       return "Truth Surface";
+    // The backend phase is still called "Checkout", but "checkout" reads as
+    // the end of a stay. This step is really the deposit + first-month
+    // payment that activates the booking, so we surface it as "Payment".
     case "Checkout":
-      return "Checkout";
+      return "Payment";
     case "Active":
       return "Active";
+    case "AwaitingDepositReturn":
+      return "Deposit return";
     case "Closed":
       return "Completed";
+    case "PaymentFailed":
+      return "Payment failed";
     case "Cancelled":
       return "Cancelled";
     default:

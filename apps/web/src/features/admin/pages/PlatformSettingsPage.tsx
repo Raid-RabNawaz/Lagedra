@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { adminApi } from "@/features/admin/services/adminApi";
 import type { PlatformSettingDto } from "@/api/types";
+import { ProtocolFeeReconciliationBanner } from "@/features/admin/components/ProtocolFeeReconciliationBanner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,7 +34,7 @@ const groupMeta: Record<string, { label: string; description: string; order: num
   service_fee: {
     label: "Platform service fee (paid by tenant)",
     description:
-      "Service fee added to the tenant's checkout total, as a percentage of the first month's rent. Set to 0% to disable it.",
+      "Service fee added to the tenant's payment total, as a percentage of the first month's rent. Set to 0% to disable it.",
     order: 1.5,
   },
   stripe: {
@@ -43,7 +44,7 @@ const groupMeta: Record<string, { label: string; description: string; order: num
   },
   payment: {
     label: "Tenant payment timing",
-    description: "Grace, reminder, and auto-cancel windows for tenant checkout payments.",
+    description: "Grace, reminder, and auto-cancel windows for tenant payments.",
     order: 3,
   },
   host_platform_payment: {
@@ -178,6 +179,8 @@ export const PlatformSettingsPage = () => {
           activity within a few minutes and do not retroactively alter existing deals or cases.
         </p>
       </div>
+
+      <ProtocolFeeReconciliationBanner />
 
       {error && (
         <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive">

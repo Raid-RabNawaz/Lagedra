@@ -18,13 +18,13 @@ import {
 } from "@/features/applications/hooks/useApplications";
 import { useListingDetail } from "@/features/listings/hooks/useListings";
 import { ApplicationStatusBadge } from "@/features/applications/components/ApplicationStatusBadge";
+import { HostPayoutReadinessNotice } from "@/components/shared/HostPayoutReadinessNotice";
 import { useAuthStore } from "@/app/auth/authStore";
 import { isAdmin } from "@/app/auth/permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Alert } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -35,6 +35,10 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Loader } from "@/components/shared/Loader";
+import {
+  BOOKING_CONSENT_VERSION,
+  tierLabel,
+} from "@/features/applications/lib/bookingConsent";
 import { formatDate, formatMoney } from "@/utils/format";
 import { cn } from "@/lib/utils";
 import {
@@ -56,7 +60,7 @@ export const ApplicationDetailPage = () => {
   const rejectMutation = useRejectApplication();
   const user = useAuthStore((s) => s.user);
 
-  const [depositInput, setDepositInput] = useState("");
+  const [consentChecked, setConsentChecked] = useState(false);
   const [approveOpen, setApproveOpen] = useState(false);
 
   if (isLoading) return <Loader fullPage label="Loading application..." />;
@@ -109,16 +113,16 @@ export const ApplicationDetailPage = () => {
   const canDecide = isApplicationLandlord || isPlatformAdmin;
 
   const isPending = application.status === "Pending";
-  const maxDeposit = listing?.maxDepositCents ?? 0;
-  const depositCents = Math.round(Number(depositInput) * 100);
-  const isValidDeposit = depositCents > 0 && depositCents <= maxDeposit;
 
   const handleApprove = async () => {
-    if (!isValidDeposit) return;
+    if (!consentChecked) return;
     try {
       await approveMutation.mutateAsync({
         id: application.applicationId,
-        payload: { depositAmountCents: depositCents },
+        payload: {
+          truthSurfaceConsentGiven: true,
+          consentVersion: BOOKING_CONSENT_VERSION,
+        },
       });
       setApproveOpen(false);
     } catch {
@@ -195,10 +199,22 @@ export const ApplicationDetailPage = () => {
               </div>
             )}
             {application.depositAmountCents != null && (
-              <div className="flex items-center gap-2 text-sm">
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
-                <span className="font-medium">Deposit:</span>
-                {formatMoney(application.depositAmountCents)}
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2 text-sm">
+                  <DollarSign className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-medium">Deposit:</span>
+                  {formatMoney(application.depositAmountCents)}
+                  {application.tenantVerificationTier && (
+                    <span className="text-xs text-muted-foreground">
+                      ({tierLabel(application.tenantVerificationTier)} tenant)
+                    </span>
+                  )}
+                </div>
+                {application.depositReason && (
+                  <p className="pl-6 text-xs text-muted-foreground">
+                    {application.depositReason}
+                  </p>
+                )}
               </div>
             )}
             {application.insuranceFeeCents != null && (
@@ -277,29 +293,56 @@ export const ApplicationDetailPage = () => {
                   Approve
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-sm">
+              <DialogContent className="sm:max-w-md">
                 <DialogHeader>
-                  <DialogTitle>Approve application</DialogTitle>
+                  <DialogTitle>Accept booking request</DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="deposit">Deposit amount ($)</Label>
-                    <Input
-                      id="deposit"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      max={maxDeposit / 100}
-                      value={depositInput}
-                      onChange={(e) => setDepositInput(e.target.value)}
-                      placeholder={`Max: ${formatMoney(maxDeposit)}`}
-                    />
-                    {depositInput && !isValidDeposit && (
-                      <p className="text-xs text-destructive">
-                        Must be greater than $0 and at most {formatMoney(maxDeposit)}
+                  <div className="space-y-1 rounded-md border bg-muted/30 p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground">
+                        Security deposit
+                        {application.tenantVerificationTier
+                          ? ` (${tierLabel(application.tenantVerificationTier)} tenant)`
+                          : ""}
+                      </span>
+                      <span className="text-sm font-semibold">
+                        {application.depositAmountCents != null
+                          ? formatMoney(application.depositAmountCents)
+                          : "—"}
+                      </span>
+                    </div>
+                    {application.depositReason && (
+                      <p className="text-xs text-muted-foreground">
+                        {application.depositReason}
                       </p>
                     )}
+                    <p className="pt-1 text-xs text-muted-foreground">
+                      The deposit is predetermined by your listing's
+                      verification-tier rules and can't be changed here.
+                    </p>
                   </div>
+
+                  <HostPayoutReadinessNotice />
+
+                  <label className="flex items-start gap-2 text-xs text-muted-foreground cursor-pointer">
+                    <Checkbox
+                      checked={consentChecked}
+                      onCheckedChange={setConsentChecked}
+                      className="mt-0.5"
+                    />
+                    <span>
+                      I agree to the Truth Surface agreement for this booking.
+                      Accepting seals an immutable signed record and automatically
+                      charges the guest's saved card (deposit + first month's rent
+                      + fees) and activates the booking. The rent and deposit are
+                      paid directly to my Stripe account; Lagedra only deducts its
+                      service fee and the insurance premium. I return the deposit to
+                      the guest directly after move-out, and the booking only
+                      completes once I confirm the return and the guest confirms
+                      receipt.
+                    </span>
+                  </label>
 
                   {approveMutation.isError && (
                     <Alert variant="destructive">
@@ -313,9 +356,9 @@ export const ApplicationDetailPage = () => {
                   <Button
                     className="w-full"
                     onClick={handleApprove}
-                    disabled={!isValidDeposit || approveMutation.isPending}
+                    disabled={!consentChecked || approveMutation.isPending}
                   >
-                    {approveMutation.isPending ? "Approving..." : "Confirm approval"}
+                    {approveMutation.isPending ? "Sealing…" : "Accept & seal"}
                   </Button>
                 </div>
               </DialogContent>

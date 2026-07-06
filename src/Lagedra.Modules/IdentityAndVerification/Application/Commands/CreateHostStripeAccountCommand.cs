@@ -11,7 +11,9 @@ namespace Lagedra.Modules.IdentityAndVerification.Application.Commands;
 
 public sealed record CreateHostStripeAccountCommand(
     Guid HostUserId,
-    string Email) : IRequest<Result<HostStripeStatusDto>>;
+    string Email,
+    Uri? ReturnUrl = null,
+    Uri? RefreshUrl = null) : IRequest<Result<HostStripeStatusDto>>;
 
 public sealed class CreateHostStripeAccountCommandHandler(
     IdentityDbContext dbContext,
@@ -32,14 +34,23 @@ public sealed class CreateHostStripeAccountCommandHandler(
         if (existing is not null)
         {
             var link = await stripeService
-                .CreateAccountOnboardingLinkAsync(existing.StripeAccountId, ct: cancellationToken)
+                .CreateAccountOnboardingLinkAsync(
+                    existing.StripeAccountId,
+                    request.ReturnUrl,
+                    request.RefreshUrl,
+                    cancellationToken)
                 .ConfigureAwait(false);
 
             return Result<HostStripeStatusDto>.Success(MapToDto(existing, link));
         }
 
         var result = await stripeService
-            .CreateConnectedAccountAsync(request.HostUserId, request.Email, cancellationToken)
+            .CreateConnectedAccountAsync(
+                request.HostUserId,
+                request.Email,
+                request.ReturnUrl,
+                request.RefreshUrl,
+                cancellationToken)
             .ConfigureAwait(false);
 
         var account = HostStripeAccount.Create(request.HostUserId, result.AccountId, clock);
@@ -51,5 +62,5 @@ public sealed class CreateHostStripeAccountCommandHandler(
 
     private static HostStripeStatusDto MapToDto(HostStripeAccount a, Uri? onboardingUrl) =>
         new(a.Id, a.HostUserId, a.StripeAccountId, a.OnboardingStatus,
-            a.ChargesEnabled, a.PayoutsEnabled, onboardingUrl);
+            a.ChargesEnabled, a.PayoutsEnabled, a.TaxStatus, a.BankAccountStatus, onboardingUrl);
 }

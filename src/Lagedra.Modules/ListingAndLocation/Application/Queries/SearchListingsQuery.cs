@@ -22,6 +22,7 @@ public sealed record SearchListingsQuery(
     PropertyType? PropertyType,
     int? MinBedrooms,
     int? MinBathrooms,
+    int? MinGuests,
     int? MinStayDays,
     int? MaxStayDays,
     long? MinPriceCents,
@@ -76,6 +77,15 @@ public sealed class SearchListingsQueryHandler(ListingsDbContext dbContext)
         if (request.MinBathrooms.HasValue)
         {
             query = query.Where(l => l.Bathrooms >= request.MinBathrooms.Value);
+        }
+
+        // Occupancy: keep listings that can host at least this many people.
+        // Mid-term rentals have hard per-property occupancy caps (house rules),
+        // so a listing without house rules (no declared cap) is excluded rather
+        // than assumed to fit.
+        if (request.MinGuests is > 0)
+        {
+            query = query.Where(l => l.HouseRules != null && l.HouseRules.MaxGuests >= request.MinGuests.Value);
         }
 
         if (request.MinPriceCents.HasValue)

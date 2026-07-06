@@ -1,4 +1,5 @@
 using Lagedra.Modules.ActivationAndBilling.Application.DTOs;
+using Lagedra.Modules.ActivationAndBilling.Application.Services;
 using Lagedra.Modules.ActivationAndBilling.Domain.Aggregates;
 using Lagedra.Modules.ActivationAndBilling.Domain.Enums;
 using Lagedra.Modules.ActivationAndBilling.Infrastructure.Persistence;
@@ -27,7 +28,8 @@ public sealed record SubmitPartnerDirectApplicationCommand(
 
 public sealed class SubmitPartnerDirectApplicationCommandHandler(
     BillingDbContext dbContext,
-    IListingProvider listingProvider)
+    IListingProvider listingProvider,
+    IReservationPricingService reservationPricingService)
     : IRequestHandler<SubmitPartnerDirectApplicationCommand, Result<DealApplicationDto>>
 {
     private static readonly Error ListingNotFound =
@@ -83,6 +85,18 @@ public sealed class SubmitPartnerDirectApplicationCommandHandler(
             return Result<DealApplicationDto>.Failure(DatesUnavailable);
         }
 
+        // Partner direct reservations always price at the partner-guaranteed
+        // tier (the partner is vouching for the guest), snapshotted up-front.
+        var pricing = await reservationPricingService
+            .ComputeAsync(
+                listing,
+                request.TenantUserId,
+                duration,
+                forcedTier: TenantVerificationTier.PartnerGuaranteed,
+                forcedPartnerOrganizationId: request.PartnerOrganizationId,
+                cancellationToken: cancellationToken)
+            .ConfigureAwait(false);
+
         var application = DealApplication.Submit(
             request.ListingId,
             request.TenantUserId,
@@ -91,19 +105,12 @@ public sealed class SubmitPartnerDirectApplicationCommandHandler(
             request.RequestedCheckOut,
             partnerOrganizationId: request.PartnerOrganizationId,
             isPartnerReferred: true,
-            source: DealApplicationSource.PartnerDirectReservation);
+            source: DealApplicationSource.PartnerDirectReservation,
+            depositSnapshot: pricing.ToSnapshot());
 
         dbContext.DealApplications.Add(application);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        return Result<DealApplicationDto>.Success(MapToDto(application));
+        return Result<DealApplicationDto>.Success(DealApplicationDtoMapper.ToDto(application));
     }
-
-    private static DealApplicationDto MapToDto(DealApplication a) =>
-        new(a.Id, a.ListingId, a.TenantUserId, a.LandlordUserId,
-            a.Status, a.DealId, a.SubmittedAt, a.DecidedAt,
-            a.RequestedCheckIn, a.RequestedCheckOut, a.StayDurationDays,
-            a.DepositAmountCents, a.InsuranceFeeCents, a.FirstMonthRentCents,
-            a.PartnerOrganizationId, a.IsPartnerReferred, a.JurisdictionWarning, a.Source,
-            a.GuestCount, a.Message);
 }

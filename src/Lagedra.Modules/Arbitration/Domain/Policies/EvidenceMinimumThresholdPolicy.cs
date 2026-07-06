@@ -13,6 +13,7 @@ public static class EvidenceMinimumThresholdPolicy
         [ArbitrationCategory.CategoryE] = 3,
         [ArbitrationCategory.CategoryF] = 2,
         [ArbitrationCategory.CategoryG] = 1,
+        [ArbitrationCategory.DepositReturn] = 2,
         [ArbitrationCategory.Other] = 1
     };
 

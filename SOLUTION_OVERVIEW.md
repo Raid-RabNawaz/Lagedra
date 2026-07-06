@@ -89,7 +89,7 @@ Lagedra is a **modular monolith** following **Clean Architecture** principles. E
 | CQRS/Bus | MediatR 12 (in-process) |
 | Auth | ASP.NET Identity + JWT (self-hosted) with refresh tokens |
 | Email | MailKit + MimeKit via Brevo SMTP relay |
-| Payments | Stripe (`Stripe.net`) — protocol fee only |
+| Payments | Stripe (`Stripe.net`) Connect — non-custodial: rent + deposit settle directly to the host's connected account (destination charge, `on_behalf_of`); platform only collects its service fee + insurance premium at checkout and the host protocol fee via subscription |
 | Maps/Geocoding | Google Maps Platform (Geocoding + Address Validation APIs) |
 | KYC/Identity | Persona (liveness, document auth, synthetic ID detection) |
 | Background Jobs | Quartz.NET 3.x with PostgreSQL persistent job store |
@@ -845,40 +845,42 @@ If jurisdiction pack updates after sealing:
   ↓ TruthSurfaceSupersededEvent
 ```
 
-### 6. Payment Confirmation Flow
+### 6. Payment Confirmation Flow (Non-custodial — Stripe Connect destination charges)
 
 ```
-After Truth Surface confirmed, DealPaymentConfirmation created automatically:
-  → Financial breakdown: FirstMonthRent + Deposit + InsuranceFee + ProtocolFee
-  → TotalTenantPayment = FirstMonthRent + Deposit + InsuranceFee
-  → TotalHostPlatformPayment = MonthlyProtocolFee
-  → Grace period: 3 days (configurable)
+After both parties confirm the Truth Surface, DealPaymentConfirmation is created automatically:
+  → Financial breakdown: FirstMonthRent + Deposit + InsuranceFee + ServiceFee
+    (MonthlyProtocolFee tracked for display only)
+  → TotalTenantPayment        = FirstMonthRent + Deposit + InsuranceFee + ServiceFee
+  → ApplicationFee (platform) = InsuranceFee + ServiceFee
+  → Host receives             = FirstMonthRent + Deposit  (settled to connected account)
+  → MonthlyProtocolFee is billed to the HOST later via Stripe subscription — never at checkout
 
-Tenant views payment details (GET /v1/deals/{dealId}/payment/details)
-  → Shows host bank info (decrypted)
+Tenant pays via Stripe as a destination charge with on_behalf_of = host's connected account
+(the host is the settlement merchant of record — the platform never holds these funds):
+  → Card-on-file: host approval fires an immediate off-session charge (ChargeOffSessionDestinationAsync)
+  → Otherwise: tenant completes payment at /checkout (CreateDestinationPaymentIntentAsync)
+  ↓ payment_intent.succeeded webhook (matched by StripePaymentIntentId)
+  ↓ ConfirmByStripe → PaymentConfirmedEvent → deal activation pipeline
   ↓
-Tenant makes payment offline (bank transfer, etc.)
+Stripe routes rent + deposit to the host's connected account and the application fee
+(service + insurance) to the platform.
   ↓
-Host confirms receipt (POST /v1/deals/{dealId}/payment/confirm)
-  ↓ PaymentConfirmedEvent
-  ↓
-Host pays platform fee (POST /v1/deals/{dealId}/payment/confirm-platform-payment)
-  → Recorded separately
-  ↓
-— OR if tenant disagrees —
-  ↓
-Tenant disputes (POST /v1/deals/{dealId}/payment/dispute)
-  → Rate-limited: 3 disputes per 30 days
-  → Includes reason and optional evidence manifest
-  ↓ PaymentDisputedEvent
-  ↓
-Admin resolves (POST /v1/admin/deals/{dealId}/resolve-payment-dispute)
-  → PaymentValid = true/false
-  ↓ PaymentDisputeResolvedEvent
+On activation, OnDealActivatedCreateHostSubscriptionHandler starts the host's monthly
+protocol-fee subscription (the only place the protocol fee is charged).
 
-If grace period expires without confirmation:
-  → PaymentConfirmationTimeoutJob sends reminders
-  → Eventually auto-cancels if not resolved
+— Off-session decline / requires_action —
+  ↓ BookingPaymentFailedEvent → tenant retries at /checkout → activation
+
+— Refunds (cancellation / deposit return) —
+  → RefundPaymentIntentAsync(reverseTransfer: true) claws the rent/deposit back from the
+    host's connected account; the platform retains its service/insurance fee
+    (refundApplicationFee: false).
+  ↓ charge.refunded webhook → confirmation marked refunded / partially_refunded
+
+— Months 2+ rent —
+  → Paid directly by the tenant to the host using the host's saved free-text instructions
+    (GET /v1/deals/{dealId}/payment/details) — entirely outside the platform.
 ```
 
 ### 7. Billing & Subscription Flow

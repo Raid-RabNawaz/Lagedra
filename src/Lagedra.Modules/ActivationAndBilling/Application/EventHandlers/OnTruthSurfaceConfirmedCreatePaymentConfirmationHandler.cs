@@ -97,10 +97,40 @@ public sealed partial class OnTruthSurfaceConfirmedCreatePaymentConfirmationHand
 
             if (!chargeResult.Charged)
             {
-                LogCardOnFileFallback(
-                    logger, application.Id, chargeResult.FailureReason ?? "unknown");
+                await HandleChargeFailureAsync(
+                    application, chargeDealId, chargeResult.FailureReason ?? "unknown", ct)
+                    .ConfigureAwait(false);
             }
         }
+    }
+
+    /// <summary>
+    /// Off-session charge failed after the Truth Surface was sealed. The
+    /// snapshot stays Locked (it's a valid signed agreement); the booking moves
+    /// to PaymentFailed and the payment row to Failed so the tenant can update
+    /// their card and retry against the same sealed snapshot. Idempotent — a
+    /// repeat failure on an already-failed booking won't re-notify or duplicate.
+    /// </summary>
+    private async Task HandleChargeFailureAsync(
+        DealApplication application,
+        Guid dealId,
+        string failureReason,
+        CancellationToken ct)
+    {
+        LogCardOnFileFallback(logger, application.Id, failureReason);
+
+        var confirmation = await dbContext.DealPaymentConfirmations
+            .FirstOrDefaultAsync(c => c.DealId == dealId, ct)
+            .ConfigureAwait(false);
+
+        confirmation?.MarkFailed(clock, failureReason);
+
+        // Only flips + raises BookingPaymentFailedEvent on the first transition
+        // (Approved → PaymentFailed); a re-run on an already-failed booking is a
+        // no-op so the tenant/host aren't spammed on every retry attempt.
+        application.MarkPaymentFailed(failureReason);
+
+        await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 
     private async Task<long> ResolveMonthlyProtocolFeeAsync(CancellationToken ct)

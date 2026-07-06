@@ -6,6 +6,7 @@ import type {
   ArbitrationStatus,
   ArbitrationTier,
   ArbitrationCategory,
+  ArbitrationFeeCheckoutDto,
   IssueDecisionRequest,
 } from "@/api/types";
 
@@ -25,6 +26,15 @@ export const arbitrationApi = {
 
   async getCase(caseId: string): Promise<CaseDto> {
     const response = await http.get<CaseDto>(endpoints.arbitration.getCase(caseId));
+    return response.data;
+  },
+
+  async createFilingFeeCheckout(
+    caseId: string,
+  ): Promise<ArbitrationFeeCheckoutDto> {
+    const response = await http.post<ArbitrationFeeCheckoutDto>(
+      endpoints.arbitration.filingFeeCheckout(caseId),
+    );
     return response.data;
   },
 

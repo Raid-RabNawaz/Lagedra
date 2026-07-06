@@ -1,6 +1,7 @@
 using Lagedra.Infrastructure.Eventing;
 using Lagedra.SharedKernel.Integration;
 using Lagedra.TruthSurface.Application.EventHandlers;
+using Lagedra.TruthSurface.Application.Services;
 using Lagedra.SharedKernel.Integration.Events;
 using Lagedra.TruthSurface.Domain.Events;
 using Lagedra.TruthSurface.Infrastructure.Persistence;
@@ -28,6 +29,7 @@ public static class TruthSurfaceModuleRegistration
 
         services.AddScoped<SnapshotRepository>();
         services.AddScoped<ITruthSurfaceStatusProvider, TruthSurfaceStatusProvider>();
+        services.AddScoped<ITruthSurfaceSnapshotBuilder, TruthSurfaceSnapshotBuilder>();
 
         services.AddDomainEventHandler<TruthSurfaceInitiatedEvent, OnTruthSurfaceInitiatedNotify>();
         services.AddDomainEventHandler<TruthSurfaceConfirmedEvent, OnTruthSurfaceConfirmedNotify>();

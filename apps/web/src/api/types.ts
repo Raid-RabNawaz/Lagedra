@@ -294,6 +294,10 @@ export type ListingDetailsDto = {
   suggestedDepositLowCents?: number | null;
   suggestedDepositHighCents?: number | null;
   defaultDepositCents?: number | null;
+  // Predetermined per-verification-tier deposits. Null falls back to maxDepositCents.
+  depositUnverifiedCents?: number | null;
+  depositBackgroundVerifiedCents?: number | null;
+  depositPartnerGuaranteedCents?: number | null;
   houseRules?: HouseRulesDto | null;
   cancellationPolicy?: CancellationPolicyDto | null;
   amenities: ListingAmenityDto[];
@@ -324,6 +328,13 @@ export type ListingReviewItemDto = {
   photoCount: number;
   submittedForReviewAt?: string | null;
   createdAt: string;
+  hostDisplayName?: string | null;
+  hostProfilePhotoUrl?: string | null;
+  hostIsGovernmentIdVerified: boolean;
+  hostIsPhoneVerified: boolean;
+  hostResponseRatePercent?: number | null;
+  hostMemberSince?: string | null;
+  hostProfileCompletenessPercent: number;
 };
 
 export type DenyListingRequest = {
@@ -347,6 +358,7 @@ export type SearchListingsParams = {
   propertyType?: PropertyType;
   minBedrooms?: number;
   minBathrooms?: number;
+  minGuests?: number;
   minPriceCents?: number;
   maxPriceCents?: number;
   minStayDays?: number;
@@ -421,6 +433,9 @@ export type CreateListingRequest = {
   instantBookingEnabled: boolean;
   virtualTourUrl?: string | null;
   defaultDepositCents?: number | null;
+  depositUnverifiedCents?: number | null;
+  depositBackgroundVerifiedCents?: number | null;
+  depositPartnerGuaranteedCents?: number | null;
 };
 
 // ── Import from URL (opt-in create-listing pre-fill) ───────────
@@ -486,6 +501,9 @@ export type UpdateListingRequest = {
   virtualTourUrl?: string | null;
   defaultDepositCents?: number | null;
   clearDefaultDeposit?: boolean;
+  depositUnverifiedCents?: number | null;
+  depositBackgroundVerifiedCents?: number | null;
+  depositPartnerGuaranteedCents?: number | null;
 };
 
 export type SetApproxLocationRequest = {
@@ -541,6 +559,9 @@ export type TruthSurfaceDto = {
   createdAt: string;
   sealedAt: string | null;
   proof: SnapshotProofDto | null;
+  /** Set once sealed — the agreement is locked and immutable. */
+  isLocked?: boolean;
+  lockedAt?: string | null;
 };
 
 export type CreateSnapshotRequest = {
@@ -681,7 +702,19 @@ export type SubmitLandlordResponseRequest = {
 
 // ── Applications & Deals ──────────────────────────────────────
 
-export type DealApplicationStatus = "Pending" | "Approved" | "Rejected" | "Cancelled";
+export type DealApplicationStatus =
+  | "Pending"
+  | "Approved"
+  | "Rejected"
+  | "Cancelled"
+  | "Expired"
+  | "PaymentFailed";
+
+/** Tenant verification level that drives the predetermined deposit. */
+export type TenantVerificationTier =
+  | "Unverified"
+  | "BackgroundVerified"
+  | "PartnerGuaranteed";
 
 export type DealApplicationDto = {
   applicationId: string;
@@ -705,6 +738,37 @@ export type DealApplicationDto = {
   guestCount: number;
   /** Airbnb-style cover note from the tenant. Null when none was provided. */
   message: string | null;
+  // Predetermined-deposit snapshot + Truth Surface consent surfacing.
+  serviceFeeCents?: number | null;
+  totalPayableSnapshotCents?: number | null;
+  tenantVerificationTier?: TenantVerificationTier | null;
+  depositReason?: string | null;
+  truthSurfaceSnapshotId?: string | null;
+  tenantConsentGiven?: boolean;
+  hostConsentGiven?: boolean;
+  // Listing context for inbox cards. Populated by list endpoints (e.g. the
+  // tenant "my applications" view); may be null on command results.
+  listingTitle?: string | null;
+  listingCoverPhotoUri?: string | null;
+  listingCity?: string | null;
+};
+
+/**
+ * Full price breakdown returned by `GET /v1/applications/preview` so the
+ * tenant sees the predetermined deposit (and why), rent, fees and the total
+ * they'll be charged on host approval — before submitting the request.
+ */
+export type ReservationPreviewDto = {
+  listingId: string;
+  tier: TenantVerificationTier;
+  depositCents: number;
+  depositReason: string;
+  firstMonthRentCents: number;
+  insuranceFeeCents: number;
+  serviceFeeCents: number;
+  monthlyProtocolFeeCents: number;
+  totalPayableCents: number;
+  stayDurationDays: number;
 };
 
 /**
@@ -735,16 +799,24 @@ export type SubmitApplicationRequest = {
    */
   message?: string | null;
   /**
-   * Phase 16.9 — optional Stripe `pm_…` id captured during the apply
-   * dialog's SetupIntent step. When supplied, the host's approve action
-   * (or instant-book) charges this card off-session and the tenant
-   * skips the checkout page entirely.
+   * Optional Stripe `pm_…` id captured during the apply dialog's
+   * SetupIntent step. Required under the predetermined-deposit flow so the
+   * host's approve action charges this card off-session.
    */
   stripePaymentMethodId?: string | null;
+  /** Tenant's Truth Surface consent, captured at request time. */
+  truthSurfaceConsentGiven?: boolean;
+  /** Version of the consent text the tenant agreed to. */
+  consentVersion?: string | null;
 };
 
 export type ApproveApplicationRequest = {
-  depositAmountCents: number;
+  /**
+   * The host's Truth Surface consent. No deposit is entered here — it was
+   * predetermined per verification tier and snapshotted at request time.
+   */
+  truthSurfaceConsentGiven: boolean;
+  consentVersion?: string | null;
 };
 
 /**
@@ -762,6 +834,16 @@ export type BookingSetupIntentResult = {
 
 export type StripeOnboardingStatus = "Pending" | "Completed" | "Restricted";
 
+/**
+ * Normalized state of a Stripe Connect requirement group (tax forms W-9/W-8, or
+ * the external bank account), derived during account status sync.
+ */
+export type HostAccountRequirementStatus =
+  | "Unknown"
+  | "Pending"
+  | "Verified"
+  | "Restricted";
+
 export type HostStripeStatusDto = {
   id: string;
   hostUserId: string;
@@ -769,6 +851,8 @@ export type HostStripeStatusDto = {
   onboardingStatus: StripeOnboardingStatus;
   chargesEnabled: boolean;
   payoutsEnabled: boolean;
+  taxStatus: HostAccountRequirementStatus;
+  bankAccountStatus: HostAccountRequirementStatus;
   onboardingUrl: string | null;
 };
 
@@ -779,6 +863,56 @@ export type HostPaymentDetailsDto = {
 
 export type SavePaymentDetailsRequest = {
   paymentInfo: string;
+};
+
+// ── Channel integrations (OwnerRez & other PMS) ──────────────
+
+/** Lifecycle of a host's connection to an external channel / PMS. */
+export type ChannelConnectionStatus =
+  | "PendingActivation"
+  | "Active"
+  | "Error"
+  | "Disabled";
+
+/** An installed channel provider the host can connect to. */
+export type ChannelProviderDto = {
+  providerKey: string;
+};
+
+export type ChannelConnectionDto = {
+  id: string;
+  providerKey: string;
+  externalAccountId: string;
+  displayName: string;
+  status: ChannelConnectionStatus | string;
+  lastContentSyncAt: string | null;
+  lastBookingSyncAt: string | null;
+  lastError: string | null;
+  createdAt: string;
+};
+
+/** A listing pulled from a channel and (once imported) linked to a Lagedra draft. */
+export type ChannelListingMapDto = {
+  id: string;
+  providerListingId: string;
+  listingId: string | null;
+  title: string | null;
+  lastImportedAt: string | null;
+};
+
+/** Summary returned after an on-demand content sync. */
+export type ChannelSyncResultDto = {
+  pulled: number;
+  created: number;
+  updated: number;
+};
+
+export type ConnectChannelRequest = {
+  providerKey: string;
+  externalAccountId: string;
+  displayName: string;
+  username?: string | null;
+  secret?: string | null;
 };
 
 // ── Checkout ─────────────────────────────────────────────────
@@ -802,8 +936,12 @@ export type BillingAccountStatus = "Inactive" | "Active" | "Suspended" | "Closed
 
 export type PaymentConfirmationStatus =
   | "Pending"
+  | "PaymentMethodProvided"
+  | "CapturePending"
   | "Confirmed"
   | "Disputed"
+  | "Failed"
+  | "Refunded"
   | "Rejected"
   | "Cancelled";
 
@@ -815,6 +953,19 @@ export type DamageClaimStatus =
   | "Rejected"
   | "Settled";
 
+export type InvoiceStatus = "Pending" | "Paid" | "Failed" | "Disputed";
+
+export type InvoiceDto = {
+  invoiceId: string;
+  dealId: string;
+  listingTitle: string | null;
+  periodStart: string;
+  periodEnd: string;
+  amountCents: number;
+  status: InvoiceStatus;
+  createdAt: string;
+};
+
 export type BillingStatusDto = {
   billingAccountId: string;
   dealId: string;
@@ -825,6 +976,20 @@ export type BillingStatusDto = {
   stripeSubscriptionId: string | null;
   totalInvoices: number;
   paidInvoices: number;
+  invoices: InvoiceDto[];
+};
+
+/**
+ * Consolidated view of the recurring monthly platform fees a host is charged
+ * across all of their active bookings, plus the full deduction history.
+ */
+export type HostBillingStatementDto = {
+  activeBookingCount: number;
+  currentMonthlyFeeCents: number;
+  projectedMonthlyTotalCents: number;
+  totalPaidToDateCents: number;
+  totalOutstandingCents: number;
+  invoices: InvoiceDto[];
 };
 
 export type ProrationQuoteDto = {
@@ -854,6 +1019,19 @@ export type PaymentConfirmationDto = {
   monthlyProtocolFeeCents: number;
   hostPaidPlatform: boolean;
   hostPaidPlatformAt: string | null;
+  serviceFeeCents?: number;
+  /** Raw Stripe PI status — present after an off-session capture attempt. */
+  stripePaymentStatus?: string | null;
+  // Deposit return handshake (non-custodial, host-held).
+  moveOutInitiatedAt?: string | null;
+  hostConfirmedDepositReturnedAt?: string | null;
+  tenantConfirmedDepositReceivedAt?: string | null;
+  depositReturnAmountCents?: number | null;
+  depositReturnMethod?: string | null;
+  depositReturnNote?: string | null;
+  depositReturnSettledAt?: string | null;
+  /** Deposit minus approved/settled damage deductions — what the host should return. */
+  netReturnableDepositCents?: number | null;
 };
 
 export type PaymentDetailsDto = {
@@ -893,6 +1071,12 @@ export type DisputePaymentRequest = {
 
 export type CancelBookingRequest = {
   reason: string;
+};
+
+export type ConfirmDepositReturnRequest = {
+  returnedAmountCents: number;
+  method?: string | null;
+  note?: string | null;
 };
 
 export type FileDamageClaimRequest = {
@@ -1066,6 +1250,8 @@ export type DealPhase =
   | "TruthSurface"
   | "Checkout"
   | "Active"
+  | "PaymentFailed"
+  | "AwaitingDepositReturn"
   | "Closed"
   | "Cancelled";
 
@@ -1091,6 +1277,9 @@ export type DealSummaryDto = {
   billingStatus: BillingAccountStatus | null;
   paymentStatus: PaymentConfirmationStatus | null;
   createdAt: string;
+  tenantVerificationTier?: TenantVerificationTier | null;
+  depositReason?: string | null;
+  truthSurfaceLocked?: boolean | null;
 };
 
 // ── Notifications ────────────────────────────────────────────
@@ -1237,6 +1426,7 @@ export type DownloadUrlDto = {
 // ── Arbitration ─────────────────────────────────────────────
 
 export type ArbitrationStatus =
+  | "PendingPayment"
   | "Filed"
   | "EvidencePending"
   | "EvidenceComplete"
@@ -1253,6 +1443,7 @@ export type ArbitrationCategory =
   | "CategoryE"
   | "CategoryF"
   | "CategoryG"
+  | "DepositReturn"
   | "Other";
 
 export type ArbitrationTier = "ProtocolAdjudication" | "BindingArbitration";
@@ -1323,6 +1514,16 @@ export type CaseDto = {
   /** Verdict from before an appeal; shown while case is back in review. */
   priorDecision: DecisionDto | null;
   evidenceSlots: EvidenceSlotDto[] | null;
+};
+
+/** Stripe Elements client material for paying an arbitration filing fee. */
+export type ArbitrationFeeCheckoutDto = {
+  clientSecret: string;
+  paymentIntentId: string;
+  paymentStatus: string;
+  amountCents: number;
+  currency: string;
+  caseStatus: ArbitrationStatus;
 };
 
 export type IssueDecisionRequest = {
@@ -1816,4 +2017,19 @@ export type PlatformSettingDto = {
 export type UpdatePlatformSettingRequest = {
   value: string;
   description?: string | null;
+};
+
+export type ProtocolFeeReconciliationIssue =
+  | "price_not_configured"
+  | "stripe_error"
+  | "no_unit_amount"
+  | "drift";
+
+export type ProtocolFeeReconciliationDto = {
+  priceConfigured: boolean;
+  stripePriceId: string | null;
+  configuredMonthlyFeeCents: number;
+  stripePriceAmountCents: number | null;
+  inSync: boolean;
+  issue: ProtocolFeeReconciliationIssue | null;
 };

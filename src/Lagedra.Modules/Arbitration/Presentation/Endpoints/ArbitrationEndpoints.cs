@@ -25,6 +25,7 @@ public static class ArbitrationEndpoints
 
         group.MapPost("/", FileCase)
             .RequireRateLimiting(RateLimitingSetup.DisputeCapPolicy);
+        group.MapPost("/{caseId:guid}/filing-fee/checkout", CreateFilingFeeCheckout);
         group.MapPost("/{caseId:guid}/evidence", AttachEvidence);
         group.MapPost("/{caseId:guid}/evidence-complete", MarkEvidenceComplete)
             .RequireAuthorization("RequirePlatformAdmin");
@@ -57,6 +58,23 @@ public static class ArbitrationEndpoints
 
         return result.IsSuccess
             ? Results.Created($"/v1/arbitration/cases/{result.Value.CaseId}", result.Value)
+            : ArbitrationResults.ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> CreateFilingFeeCheckout(
+        [FromRoute] Guid caseId,
+        HttpContext httpContext,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var userId = GetUserId(httpContext);
+
+        var result = await mediator.Send(
+            new CreateArbitrationFeeCheckoutCommand(caseId, userId), ct)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
             : ArbitrationResults.ToErrorResult(result.Error);
     }
 

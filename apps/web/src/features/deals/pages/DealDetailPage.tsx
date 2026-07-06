@@ -14,6 +14,7 @@ import {
   ShieldCheck,
   BookOpen,
   Scale,
+  Lock,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -22,9 +23,11 @@ import { Loader } from "@/components/shared/Loader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { DealTimeline } from "@/features/deals/components/DealTimeline";
 import { DealPhaseBadge } from "@/features/deals/components/DealPhaseBadge";
+import { DepositReturnPanel } from "@/features/deals/components/DepositReturnPanel";
 import { useMyDeals } from "@/features/deals/hooks/useDeals";
 import { useSnapshotByDealId } from "@/features/truth-surface/hooks/useTruthSurface";
 import { useAuthStore } from "@/app/auth/authStore";
+import { tierLabel } from "@/features/applications/lib/bookingConsent";
 import { formatDate, formatMoney } from "@/utils/format";
 import type { DealSummaryDto, DealPhase, TruthSurfaceDto } from "@/api/types";
 
@@ -51,11 +54,23 @@ function nextStepMessage(
     case "TruthSurface":
       return "Both parties need to confirm the truth surface to proceed.";
     case "Checkout":
-      if (isLandlord) return "The tenant is completing checkout.";
-      if (isTenant) return "Finish your checkout to proceed.";
-      return "The tenant is completing checkout.";
+      if (isLandlord) return "The tenant is completing payment.";
+      if (isTenant) return "Finish your payment to proceed.";
+      return "The tenant is completing payment.";
     case "Active":
       return "This deal is active. You can view billing details and invoices.";
+    case "AwaitingDepositReturn":
+      if (isLandlord)
+        return "The stay has ended. Return the deposit to your guest directly, then confirm it below to complete the deal.";
+      if (isTenant)
+        return "The stay has ended. Confirm you received your deposit back to complete the deal — or open a dispute if you didn't.";
+      return "The stay has ended and the deposit return is being confirmed.";
+    case "PaymentFailed":
+      if (isTenant)
+        return "Your agreement is sealed, but the deposit payment failed. Update your card to finish activating the booking.";
+      if (isLandlord)
+        return "The agreement is sealed, but the guest's deposit payment failed. They've been asked to update their card.";
+      return "The deposit payment failed and is awaiting a retry.";
     case "Closed":
       return "This deal has been completed.";
     case "Cancelled":
@@ -143,7 +158,7 @@ function PrimaryAction({ deal, isLandlord, isTenant, truthSurface }: Perspective
           <Link to={`/app/deals/${deal.dealId}/checkout`}>
             <Button className="w-full gap-2">
               <CreditCard className="h-4 w-4" />
-              Go to Checkout
+              Go to Payment
             </Button>
           </Link>
         );
@@ -164,6 +179,26 @@ function PrimaryAction({ deal, isLandlord, isTenant, truthSurface }: Perspective
             <ArrowRight className="h-4 w-4 ml-auto" />
           </Button>
         </Link>
+      );
+
+    case "PaymentFailed":
+      if (isTenant) {
+        return (
+          <Link to={`/app/deals/${deal.dealId}/checkout`}>
+            <Button variant="destructive" className="w-full gap-2">
+              <CreditCard className="h-4 w-4" />
+              Update card & retry payment
+            </Button>
+          </Link>
+        );
+      }
+      return (
+        <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3">
+          <Clock className="h-4 w-4 text-destructive shrink-0" />
+          <p className="text-sm text-destructive">
+            Waiting for the guest to update their card and retry payment.
+          </p>
+        </div>
       );
 
     default:
@@ -238,10 +273,12 @@ export function DealDetailPage() {
     );
   }
 
-  const showInquiry = ["TruthSurface", "Checkout", "Active", "Closed"].includes(deal.dealPhase);
-  const showPayment = ["Checkout", "Active", "Closed"].includes(deal.dealPhase);
-  const showBilling = ["Active", "Closed"].includes(deal.dealPhase);
-  const showCompliance = ["Active", "Closed"].includes(deal.dealPhase);
+  const showInquiry = ["TruthSurface", "Checkout", "Active", "PaymentFailed", "AwaitingDepositReturn", "Closed"].includes(deal.dealPhase);
+  const showPayment = ["Checkout", "Active", "PaymentFailed", "AwaitingDepositReturn", "Closed"].includes(deal.dealPhase);
+  const showBilling = ["Active", "AwaitingDepositReturn", "Closed"].includes(deal.dealPhase);
+  const showCompliance = ["Active", "AwaitingDepositReturn", "Closed"].includes(deal.dealPhase);
+
+  const truthSurfaceLocked = deal.truthSurfaceLocked ?? truthSurface?.isLocked ?? false;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -298,6 +335,34 @@ export function DealDetailPage() {
               </span>
             )}
           </div>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            {deal.tenantVerificationTier && (
+              <Badge variant="secondary" className="gap-1 text-[10px]">
+                <ShieldCheck className="h-3 w-3" />
+                {tierLabel(deal.tenantVerificationTier)} tenant
+              </Badge>
+            )}
+            {truthSurfaceLocked && (
+              <Badge variant="outline" className="gap-1 text-[10px]">
+                <Lock className="h-3 w-3" />
+                Agreement sealed
+              </Badge>
+            )}
+            {deal.paymentStatus && (
+              <Badge
+                variant={
+                  deal.paymentStatus === "Confirmed"
+                    ? "success"
+                    : deal.paymentStatus === "Failed"
+                      ? "destructive"
+                      : "secondary"
+                }
+                className="text-[10px]"
+              >
+                Payment: {deal.paymentStatus}
+              </Badge>
+            )}
+          </div>
         </div>
       </div>
 
@@ -307,6 +372,15 @@ export function DealDetailPage() {
         isTenant={isTenant}
         truthSurface={truthSurface ?? null}
       />
+
+      {(deal.dealPhase === "Active" ||
+        deal.dealPhase === "AwaitingDepositReturn") && (
+        <DepositReturnPanel
+          deal={deal}
+          isLandlord={isLandlord}
+          isTenant={isTenant}
+        />
+      )}
 
       {/* Section links */}
       <div className="grid gap-3">
@@ -414,6 +488,11 @@ export function DealDetailPage() {
                 <div>
                   <p className="text-muted-foreground">Security Deposit</p>
                   <p className="font-medium">{formatMoney(deal.depositAmountCents)}</p>
+                  {deal.depositReason && (
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {deal.depositReason}
+                    </p>
+                  )}
                 </div>
               )}
               <div>
@@ -421,7 +500,7 @@ export function DealDetailPage() {
                 <p className="font-medium">{deal.stayDurationDays} days</p>
               </div>
               <div>
-                <p className="text-muted-foreground">Total Due at Checkout</p>
+                <p className="text-muted-foreground">Total Due Now</p>
                 <p className="font-medium">{formatMoney(deal.totalAmountCents)}</p>
               </div>
             </div>

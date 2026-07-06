@@ -11,4 +11,5 @@ public sealed record BillingStatusDto(
     string? StripeCustomerId,
     string? StripeSubscriptionId,
     int TotalInvoices,
-    int PaidInvoices);
+    int PaidInvoices,
+    IReadOnlyList<InvoiceDto> Invoices);

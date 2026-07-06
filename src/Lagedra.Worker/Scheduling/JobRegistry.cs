@@ -31,6 +31,7 @@ internal static class JobRegistry
         // ActivationAndBilling
         Register<BillingReconciliationJob>(q, "0 0 4 * * ?");
         Register<PaymentConfirmationTimeoutJob>(q, "0 0 * * * ?");
+        Register<ExpireStaleBookingRequestsJob>(q, "0 30 * * * ?");
         Register<HostPlatformPaymentEnforcementJob>(q, "0 0 8 * * ?");
 
         // InsuranceIntegration

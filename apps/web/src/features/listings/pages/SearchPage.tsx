@@ -11,6 +11,7 @@ import {
   DollarSign,
   Bed,
   Bath,
+  Users,
   Home,
   Calendar,
   Sparkles,
@@ -84,6 +85,7 @@ export const SearchPage = () => {
   const [propertyType, setPropertyType] = useState<PropertyType | "">("");
   const [minBedrooms, setMinBedrooms] = useState<string>("");
   const [minBathrooms, setMinBathrooms] = useState<string>("");
+  const [guests, setGuests] = useState<string>("");
   const [minPrice, setMinPrice] = useState<string>("");
   const [maxPrice, setMaxPrice] = useState<string>("");
   const [minStayDays, setMinStayDays] = useState<string>("");
@@ -110,12 +112,19 @@ export const SearchPage = () => {
   useEffect(() => {
     const kw = searchParams.get("keyword");
     const pt = searchParams.get("propertyType") as PropertyType | null;
+    const g = searchParams.get("guests");
     if (kw) {
       setKeyword(kw);
       setSearchKeyword(kw);
     }
     if (pt && propertyTypes.includes(pt)) {
       setPropertyType(pt);
+    }
+    // Hero search bar hands off the party size as `guests`; the API filter is
+    // `minGuests` ("listing fits at least this many").
+    const gNum = g ? Number(g) : NaN;
+    if (Number.isInteger(gNum) && gNum > 0) {
+      setGuests(String(gNum));
     }
     // intentionally only run on initial mount — URL params seed initial filters
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -129,6 +138,7 @@ export const SearchPage = () => {
     if (propertyType) p.propertyType = propertyType;
     if (minBedrooms) p.minBedrooms = Number(minBedrooms);
     if (minBathrooms) p.minBathrooms = Number(minBathrooms);
+    if (guests) p.minGuests = Number(guests);
     const minPriceN = Number(minPrice);
     if (minPrice && !Number.isNaN(minPriceN) && minPriceN > 0) p.minPriceCents = minPriceN * 100;
     const maxPriceN = Number(maxPrice);
@@ -154,6 +164,7 @@ export const SearchPage = () => {
     propertyType,
     minBedrooms,
     minBathrooms,
+    guests,
     minPrice,
     maxPrice,
     minStayDays,
@@ -245,6 +256,7 @@ export const SearchPage = () => {
     (propertyType ? 1 : 0) +
     (minBedrooms ? 1 : 0) +
     (minBathrooms ? 1 : 0) +
+    (guests ? 1 : 0) +
     (minPrice ? 1 : 0) +
     (maxPrice ? 1 : 0) +
     (minStayDays ? 1 : 0) +
@@ -264,6 +276,7 @@ export const SearchPage = () => {
     setPropertyType("");
     setMinBedrooms("");
     setMinBathrooms("");
+    setGuests("");
     setMinPrice("");
     setMaxPrice("");
     setMinStayDays("");
@@ -317,6 +330,16 @@ export const SearchPage = () => {
       label: `${minBathrooms}+ baths`,
       onClear: () => {
         setMinBathrooms("");
+        setPage(1);
+      },
+    });
+  }
+  if (guests) {
+    chips.push({
+      key: "guests",
+      label: `${guests} guest${guests === "1" ? "" : "s"}`,
+      onClear: () => {
+        setGuests("");
         setPage(1);
       },
     });
@@ -689,6 +712,25 @@ export const SearchPage = () => {
                       <option value="2">2+</option>
                       <option value="2.5">2.5+</option>
                       <option value="3">3+</option>
+                    </Select>
+                  </FilterField>
+                  <FilterField label="Guests" icon={<Users className="h-3 w-3" />}>
+                    <Select
+                      value={guests}
+                      onChange={(e) => {
+                        setGuests(e.target.value);
+                        setPage(1);
+                      }}
+                      className="h-9"
+                    >
+                      <option value="">Any</option>
+                      <option value="1">1 guest</option>
+                      <option value="2">2 guests</option>
+                      <option value="3">3 guests</option>
+                      <option value="4">4 guests</option>
+                      <option value="5">5 guests</option>
+                      <option value="6">6 guests</option>
+                      <option value="8">8+ guests</option>
                     </Select>
                   </FilterField>
                 </div>

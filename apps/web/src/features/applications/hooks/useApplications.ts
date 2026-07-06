@@ -28,6 +28,26 @@ export function useApplicationDetail(id: string | undefined) {
   });
 }
 
+/**
+ * Reservation price breakdown shown in the apply dialog before the tenant
+ * submits: predetermined deposit for their verification tier (+ reason),
+ * rent, fees and the total they'll be charged on host approval. Only runs
+ * once a valid date range is selected.
+ */
+export function useReservationPreview(
+  listingId: string | undefined,
+  checkIn: string,
+  checkOut: string,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: ["reservation-preview", listingId, checkIn, checkOut],
+    queryFn: () => applicationApi.preview(listingId!, checkIn, checkOut),
+    enabled: Boolean(listingId) && enabled && Boolean(checkIn) && Boolean(checkOut),
+    staleTime: 60_000,
+  });
+}
+
 export function useSubmitApplication() {
   const queryClient = useQueryClient();
 

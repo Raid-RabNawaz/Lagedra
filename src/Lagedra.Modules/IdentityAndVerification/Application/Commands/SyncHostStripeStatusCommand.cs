@@ -57,7 +57,8 @@ public sealed class SyncHostStripeStatusCommandHandler(
 
         return Result<HostStripeStatusDto>.Success(
             new HostStripeStatusDto(account.Id, account.HostUserId, account.StripeAccountId,
-                account.OnboardingStatus, account.ChargesEnabled, account.PayoutsEnabled, null));
+                account.OnboardingStatus, account.ChargesEnabled, account.PayoutsEnabled,
+                account.TaxStatus, account.BankAccountStatus, null));
     }
 
     private async Task SyncFromStripe(HostStripeAccount account, CancellationToken ct)
@@ -66,6 +67,15 @@ public sealed class SyncHostStripeStatusCommandHandler(
             .GetAccountStatusAsync(account.StripeAccountId, ct)
             .ConfigureAwait(false);
 
-        account.SyncStatus(status.ChargesEnabled, status.PayoutsEnabled, status.DetailsSubmitted, clock);
+        account.SyncStatus(
+            status.ChargesEnabled,
+            status.PayoutsEnabled,
+            status.DetailsSubmitted,
+            status.HasExternalAccount,
+            status.HasOutstandingTaxRequirement,
+            status.TaxRequirementPastDue,
+            status.TaxRequirementPendingVerification,
+            status.IsRestricted,
+            clock);
     }
 }

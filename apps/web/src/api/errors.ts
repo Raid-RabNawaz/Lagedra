@@ -5,7 +5,7 @@ const DEFAULT_MESSAGE = "Something went wrong. Please try again.";
 
 const FORBIDDEN_FALLBACK_BY_PREFIX: Record<string, string> = {
   "Application.": "You do not have access to this application.",
-  "Checkout.": "You are not authorized to use this checkout.",
+  "Checkout.": "You are not authorized to use this payment.",
   "Cancel.": "You are not authorized to cancel this booking.",
   "DamageClaim.": "You are not authorized to file a damage claim for this deal.",
   "PaymentConfirmation.":
@@ -28,7 +28,7 @@ const BAD_REQUEST_FALLBACK_BY_PREFIX: Record<string, string> = {
 
 const NOT_FOUND_FALLBACK_BY_PREFIX: Record<string, string> = {
   "Application.": "Application not found.",
-  "Checkout.": "Checkout details not found for this deal.",
+  "Checkout.": "Payment details not found for this deal.",
   "PaymentConfirmation.": "Payment information not found for this deal.",
   "BillingAccount.": "Billing account not found for this deal.",
   "Inquiry.": "No inquiry session found for this deal.",

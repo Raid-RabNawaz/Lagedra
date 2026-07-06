@@ -45,6 +45,38 @@ public sealed class DealPaymentConfirmation : AggregateRoot<Guid>
     /// </summary>
     public Guid? TruthSurfaceSnapshotId { get; private set; }
 
+    // ---- Deposit return handshake (non-custodial, host-held) ----
+    // Lagedra never holds the deposit; the host returns it directly after
+    // move-out. A deal is only "Completed" once BOTH the host confirms the
+    // deposit was returned and the tenant confirms it was received.
+
+    /// <summary>When either party started the move-out / deposit-return handshake.</summary>
+    public DateTime? MoveOutInitiatedAt { get; private set; }
+
+    /// <summary>Which participant started move-out.</summary>
+    public Guid? MoveOutInitiatedByUserId { get; private set; }
+
+    /// <summary>When the host confirmed they returned the deposit to the tenant.</summary>
+    public DateTime? HostConfirmedDepositReturnedAt { get; private set; }
+
+    /// <summary>When the tenant confirmed they received their deposit back.</summary>
+    public DateTime? TenantConfirmedDepositReceivedAt { get; private set; }
+
+    /// <summary>Amount the host states they returned (net of agreed/arbitrated deductions).</summary>
+    public long? DepositReturnAmountCents { get; private set; }
+
+    /// <summary>How the host returned the deposit (e.g. bank transfer, Zelle, cash, PlatformStripe).</summary>
+    public string? DepositReturnMethod { get; private set; }
+
+    /// <summary>Optional host note attached to the deposit return (reference, breakdown, etc.).</summary>
+    public string? DepositReturnNote { get; private set; }
+
+    /// <summary>Set once both parties have confirmed; this is the "deal completed" marker.</summary>
+    public DateTime? DepositReturnSettledAt { get; private set; }
+
+    /// <summary>Last time a deposit-return nudge was sent (throttles the reminder job).</summary>
+    public DateTime? DepositReturnReminderSentAt { get; private set; }
+
     private DealPaymentConfirmation() { }
 
     public static DealPaymentConfirmation Create(
@@ -107,6 +139,48 @@ public sealed class DealPaymentConfirmation : AggregateRoot<Guid>
         ArgumentNullException.ThrowIfNull(clock);
 
         StripePaymentStatus = "failed";
+        Status = PaymentConfirmationStatus.Failed;
+        UpdatedAt = clock.UtcNow;
+    }
+
+    /// <summary>
+    /// Marks the off-session capture as failed (booking will not activate).
+    /// Optionally records the Stripe status string. Idempotent — safe to call
+    /// on an already-failed row when a retry charge fails again.
+    /// </summary>
+    public void MarkFailed(IClock clock, string? stripePaymentStatus = null)
+    {
+        ArgumentNullException.ThrowIfNull(clock);
+
+        Status = PaymentConfirmationStatus.Failed;
+        StripePaymentStatus = stripePaymentStatus ?? StripePaymentStatus ?? "failed";
+        UpdatedAt = clock.UtcNow;
+    }
+
+    /// <summary>
+    /// Records that the tenant has provided a payment method but no money has
+    /// moved yet (request submitted, awaiting host approval).
+    /// </summary>
+    public void MarkPaymentMethodProvided(IClock clock)
+    {
+        ArgumentNullException.ThrowIfNull(clock);
+
+        Status = PaymentConfirmationStatus.PaymentMethodProvided;
+        UpdatedAt = clock.UtcNow;
+    }
+
+    /// <summary>
+    /// Records that an off-session capture is in flight (Stripe "processing"
+    /// or "requires_capture"). The booking activates once it settles.
+    /// </summary>
+    public void MarkCapturePending(string paymentIntentId, string stripeStatus, IClock clock)
+    {
+        ArgumentNullException.ThrowIfNull(clock);
+        ArgumentException.ThrowIfNullOrWhiteSpace(paymentIntentId);
+
+        StripePaymentIntentId = paymentIntentId;
+        StripePaymentStatus = stripeStatus;
+        Status = PaymentConfirmationStatus.CapturePending;
         UpdatedAt = clock.UtcNow;
     }
 
@@ -214,6 +288,168 @@ public sealed class DealPaymentConfirmation : AggregateRoot<Guid>
         UpdatedAt = clock.UtcNow;
 
         AddDomainEvent(new PaymentCancelledEvent(DealId, reason));
+    }
+
+    /// <summary>
+    /// Opens the move-out / deposit-return handshake. Either participant may
+    /// start it once the booking is active (payment confirmed). Idempotent:
+    /// re-calling keeps the original initiator/timestamp.
+    /// </summary>
+    public void BeginMoveOut(Guid initiatedByUserId, IClock clock)
+    {
+        ArgumentNullException.ThrowIfNull(clock);
+
+        if (Status != PaymentConfirmationStatus.Confirmed)
+        {
+            throw new InvalidOperationException(
+                $"Move-out can only begin on a confirmed booking (status '{Status}').");
+        }
+
+        if (MoveOutInitiatedAt is not null)
+        {
+            return;
+        }
+
+        MoveOutInitiatedAt = clock.UtcNow;
+        MoveOutInitiatedByUserId = initiatedByUserId;
+        UpdatedAt = clock.UtcNow;
+    }
+
+    /// <summary>
+    /// Host confirms they returned the deposit directly to the tenant. Records
+    /// the returned amount and how it was sent. Settles the handshake when the
+    /// tenant has also confirmed receipt. No-op once already settled.
+    /// </summary>
+    public void ConfirmDepositReturnedByHost(
+        long returnedAmountCents,
+        string? method,
+        string? note,
+        IClock clock)
+    {
+        ArgumentNullException.ThrowIfNull(clock);
+        ArgumentOutOfRangeException.ThrowIfNegative(returnedAmountCents);
+
+        if (Status != PaymentConfirmationStatus.Confirmed)
+        {
+            throw new InvalidOperationException(
+                $"Cannot confirm a deposit return in status '{Status}'.");
+        }
+
+        if (DepositAmountCents <= 0)
+        {
+            throw new InvalidOperationException("This booking has no deposit to return.");
+        }
+
+        if (DepositReturnSettledAt is not null)
+        {
+            return;
+        }
+
+        HostConfirmedDepositReturnedAt ??= clock.UtcNow;
+        DepositReturnAmountCents = returnedAmountCents;
+        DepositReturnMethod = method;
+        DepositReturnNote = note;
+        UpdatedAt = clock.UtcNow;
+
+        TrySettleDepositReturn(clock);
+    }
+
+    /// <summary>
+    /// Tenant confirms they received their deposit back. Settles the handshake
+    /// when the host has also confirmed the return. No-op once already settled.
+    /// </summary>
+    public void ConfirmDepositReceivedByTenant(IClock clock)
+    {
+        ArgumentNullException.ThrowIfNull(clock);
+
+        if (Status != PaymentConfirmationStatus.Confirmed)
+        {
+            throw new InvalidOperationException(
+                $"Cannot confirm a deposit receipt in status '{Status}'.");
+        }
+
+        if (DepositAmountCents <= 0)
+        {
+            throw new InvalidOperationException("This booking has no deposit to return.");
+        }
+
+        if (DepositReturnSettledAt is not null)
+        {
+            return;
+        }
+
+        TenantConfirmedDepositReceivedAt ??= clock.UtcNow;
+        UpdatedAt = clock.UtcNow;
+
+        TrySettleDepositReturn(clock);
+    }
+
+    /// <summary>
+    /// Admin / arbitration-enforced fallback: the platform recovered and
+    /// returned the deposit (e.g. Stripe reverse-transfer). Records both sides
+    /// as satisfied and settles the handshake. No-op once already settled.
+    /// </summary>
+    public void MarkDepositReturnedByPlatform(long returnedAmountCents, IClock clock)
+    {
+        ArgumentNullException.ThrowIfNull(clock);
+        ArgumentOutOfRangeException.ThrowIfNegative(returnedAmountCents);
+
+        if (DepositReturnSettledAt is not null)
+        {
+            return;
+        }
+
+        var now = clock.UtcNow;
+        HostConfirmedDepositReturnedAt ??= now;
+        TenantConfirmedDepositReceivedAt ??= now;
+        DepositReturnAmountCents = returnedAmountCents;
+        DepositReturnMethod = "PlatformStripe";
+        UpdatedAt = now;
+
+        TrySettleDepositReturn(clock);
+    }
+
+    private void TrySettleDepositReturn(IClock clock)
+    {
+        if (DepositReturnSettledAt is not null)
+        {
+            return;
+        }
+
+        if (HostConfirmedDepositReturnedAt is null || TenantConfirmedDepositReceivedAt is null)
+        {
+            return;
+        }
+
+        DepositReturnSettledAt = clock.UtcNow;
+        AddDomainEvent(new DepositReturnSettledEvent(DealId, DepositReturnSettledAt.Value));
+    }
+
+    /// <summary>
+    /// Whether an open (unsettled) deposit-return handshake is due for a nudge:
+    /// the booking is confirmed, has a deposit, is not yet settled, and no
+    /// reminder has been sent within <paramref name="reminderIntervalDays"/>.
+    /// </summary>
+    public bool DepositReturnReminderDue(IClock clock, int reminderIntervalDays)
+    {
+        ArgumentNullException.ThrowIfNull(clock);
+
+        if (Status != PaymentConfirmationStatus.Confirmed
+            || DepositAmountCents <= 0
+            || DepositReturnSettledAt is not null)
+        {
+            return false;
+        }
+
+        return DepositReturnReminderSentAt is null
+            || clock.UtcNow > DepositReturnReminderSentAt.Value.AddDays(reminderIntervalDays);
+    }
+
+    public void MarkDepositReturnReminderSent(IClock clock)
+    {
+        ArgumentNullException.ThrowIfNull(clock);
+        DepositReturnReminderSentAt = clock.UtcNow;
+        UpdatedAt = clock.UtcNow;
     }
 
     public void MarkReminderSent(IClock clock)

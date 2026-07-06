@@ -1,6 +1,6 @@
 using Lagedra.Modules.ActivationAndBilling.Application.DTOs;
-using Lagedra.Modules.ActivationAndBilling.Domain.Aggregates;
 using Lagedra.Modules.ActivationAndBilling.Infrastructure.Persistence;
+using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Results;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -11,7 +11,8 @@ public sealed record ListMyApplicationsQuery(
     Guid UserId) : IRequest<Result<IReadOnlyList<DealApplicationDto>>>;
 
 public sealed class ListMyApplicationsQueryHandler(
-    BillingDbContext dbContext)
+    BillingDbContext dbContext,
+    IListingProvider listingProvider)
     : IRequestHandler<ListMyApplicationsQuery, Result<IReadOnlyList<DealApplicationDto>>>
 {
     public async Task<Result<IReadOnlyList<DealApplicationDto>>> Handle(
@@ -27,18 +28,39 @@ public sealed class ListMyApplicationsQueryHandler(
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
+        // Enrich each row with the listing's title / cover / city so inbox
+        // cards can render the property identity. This matters most for the
+        // tenant "my applications" view: the tenant doesn't own these listings
+        // and so can't resolve them client-side (it previously fell back to a
+        // bare "Property" placeholder).
+        var listingIds = applications
+            .Select(a => a.ListingId)
+            .Distinct()
+            .ToList();
+
+        var summaries = listingIds.Count == 0
+            ? Array.Empty<ListingSummaryInfoDto>()
+            : await listingProvider
+                .GetListingSummariesAsync(listingIds, cancellationToken)
+                .ConfigureAwait(false);
+
+        var summaryById = summaries.ToDictionary(s => s.Id);
+
         IReadOnlyList<DealApplicationDto> dtos = applications
-            .Select(MapToDto)
+            .Select(a =>
+            {
+                var dto = DealApplicationDtoMapper.ToDto(a);
+                return summaryById.TryGetValue(a.ListingId, out var summary)
+                    ? dto with
+                    {
+                        ListingTitle = summary.Title,
+                        ListingCoverPhotoUri = summary.CoverPhotoUri,
+                        ListingCity = summary.City,
+                    }
+                    : dto;
+            })
             .ToList();
 
         return Result<IReadOnlyList<DealApplicationDto>>.Success(dtos);
     }
-
-    private static DealApplicationDto MapToDto(DealApplication a) =>
-        new(a.Id, a.ListingId, a.TenantUserId, a.LandlordUserId,
-            a.Status, a.DealId, a.SubmittedAt, a.DecidedAt,
-            a.RequestedCheckIn, a.RequestedCheckOut, a.StayDurationDays,
-            a.DepositAmountCents, a.InsuranceFeeCents, a.FirstMonthRentCents,
-            a.PartnerOrganizationId, a.IsPartnerReferred, a.JurisdictionWarning, a.Source,
-            a.GuestCount, a.Message);
 }

@@ -51,6 +51,7 @@ const memberHostingGroup: NavGroup = {
   items: [
     { to: "/app/listings", label: "My listings", icon: "Building2", end: true },
     { to: "/app/listings/new", label: "Create listing", icon: "Plus" },
+    { to: "/app/channels", label: "Import (OwnerRez)", icon: "Link2" },
     { to: "/app/inquiries", label: "Guest inquiries", icon: "MessageSquare" },
     { to: "/app/applications", label: "Booking requests", icon: "Inbox" },
     { to: "/app/deals", label: "Bookings", icon: "CalendarCheck" },
@@ -153,7 +154,7 @@ const memberAccountGroup: NavGroup = {
     { to: "/app/profile", label: "Profile", icon: "User" },
     { to: "/app/notifications", label: "Notifications", icon: "Bell" },
     { to: "/app/notification-preferences", label: "Notification settings", icon: "SlidersHorizontal" },
-    { to: "/app/payout-setup", label: "Payout setup", icon: "Wallet" },
+    { to: "/app/payout-setup", label: "Payout setup (Stripe)", icon: "Wallet" },
     { to: "/app/saved", label: "Saved listings", icon: "Heart" },
     { to: "/app/trust-ledger", label: "Trust Ledger", icon: "BookOpen" },
   ],
@@ -176,7 +177,7 @@ const memberHostAccountGroup: NavGroup = {
     { to: "/app/profile", label: "Profile", icon: "User" },
     { to: "/app/notifications", label: "Notifications", icon: "Bell" },
     { to: "/app/notification-preferences", label: "Notification settings", icon: "SlidersHorizontal" },
-    { to: "/app/payout-setup", label: "Payout setup", icon: "Wallet" },
+    { to: "/app/payout-setup", label: "Payout setup (Stripe)", icon: "Wallet" },
     { to: "/app/trust-ledger", label: "Trust Ledger", icon: "BookOpen" },
   ],
 };

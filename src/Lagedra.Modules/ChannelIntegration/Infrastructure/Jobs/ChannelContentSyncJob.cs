@@ -1,9 +1,6 @@
-using Lagedra.Infrastructure.External.Channels;
 using Lagedra.Modules.ChannelIntegration.Domain.Enums;
 using Lagedra.Modules.ChannelIntegration.Infrastructure.Persistence;
 using Lagedra.Modules.ChannelIntegration.Infrastructure.Services;
-using Lagedra.SharedKernel.Security;
-using Lagedra.SharedKernel.Time;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Quartz;
@@ -11,16 +8,15 @@ using Quartz;
 namespace Lagedra.Modules.ChannelIntegration.Infrastructure.Jobs;
 
 /// <summary>
-/// Pulls listing content from every active channel connection and (once wired)
-/// upserts it into Lagedra's catalog. Provider-agnostic: each connection is
-/// routed to its IChannelProvider by ProviderKey.
+/// Pulls listing content from every active channel connection and upserts it
+/// into Lagedra's catalog as draft listings. Provider-agnostic: each connection
+/// is routed to its IChannelProvider by ProviderKey, then materialised through
+/// <see cref="ChannelContentImporter"/>.
 /// </summary>
 [DisallowConcurrentExecution]
 public sealed partial class ChannelContentSyncJob(
     ChannelDbContext dbContext,
-    IChannelProviderRegistry providers,
-    IEncryptionService encryption,
-    IClock clock,
+    ChannelContentImporter importer,
     ILogger<ChannelContentSyncJob> logger) : IJob
 {
     public async Task Execute(IJobExecutionContext context)
@@ -41,36 +37,21 @@ public sealed partial class ChannelContentSyncJob(
 
         foreach (var connection in connections)
         {
-            var provider = providers.Resolve(connection.ProviderKey);
-            if (provider is null)
+            try
             {
-                LogNoProvider(logger, connection.ProviderKey, connection.Id);
-                continue;
+                await importer.SyncAsync(connection, ct).ConfigureAwait(false);
             }
-
-            var listings = await provider
-                .PullListingsAsync(connection.ToCredentials(encryption), ct)
-                .ConfigureAwait(false);
-
-            // TODO: upsert each snapshot into ListingAndLocation via a SharedKernel
-            // importer, then reconcile ChannelListingMap rows (ProviderListingId -> ListingId).
-            connection.RecordContentSync(clock);
-            LogSynced(logger, connection.Id, connection.ProviderKey, listings.Count);
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // One bad connection must never abort the whole batch.
+                LogConnectionFailed(logger, connection.Id, ex);
+            }
         }
-
-        await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "No active channel connections to content-sync")]
     private static partial void LogNothing(ILogger logger);
 
-    [LoggerMessage(
-        Level = LogLevel.Warning,
-        Message = "No channel provider registered for key '{ProviderKey}' (connection {ConnectionId}) — skipping")]
-    private static partial void LogNoProvider(ILogger logger, string providerKey, Guid connectionId);
-
-    [LoggerMessage(
-        Level = LogLevel.Information,
-        Message = "Content-synced connection {ConnectionId} ({ProviderKey}); pulled {Count} listing(s)")]
-    private static partial void LogSynced(ILogger logger, Guid connectionId, string providerKey, int count);
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Content sync failed for connection {ConnectionId}")]
+    private static partial void LogConnectionFailed(ILogger logger, Guid connectionId, Exception ex);
 }

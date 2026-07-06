@@ -6,6 +6,8 @@ const config: Record<DealApplicationStatus, { label: string; variant: "default" 
   Approved: { label: "Approved", variant: "accent" },
   Rejected: { label: "Rejected", variant: "destructive" },
   Cancelled: { label: "Cancelled", variant: "default" },
+  Expired: { label: "Expired", variant: "default" },
+  PaymentFailed: { label: "Payment failed", variant: "destructive" },
 };
 
 type Props = {

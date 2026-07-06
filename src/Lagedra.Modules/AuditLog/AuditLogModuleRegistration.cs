@@ -1,4 +1,6 @@
 using Lagedra.Modules.AuditLog.Infrastructure.Persistence;
+using Lagedra.Modules.AuditLog.Infrastructure.Services;
+using Lagedra.SharedKernel.Integration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,6 +18,8 @@ public static class AuditLogModuleRegistration
 
         services.AddDbContext<AuditDbContext>(options =>
             options.UseNpgsql(configuration.GetConnectionString("Default")));
+
+        services.AddScoped<IAuditTrailWriter, AuditTrailWriter>();
 
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(AuditLogModuleRegistration).Assembly));

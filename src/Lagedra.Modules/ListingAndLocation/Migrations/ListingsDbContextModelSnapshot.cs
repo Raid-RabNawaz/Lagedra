@@ -84,6 +84,15 @@ namespace ListingAndLocation.Migrations
                     b.Property<DateTime?>("DeletedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<long?>("DepositBackgroundVerifiedCents")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("DepositPartnerGuaranteedCents")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("DepositUnverifiedCents")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasMaxLength(5000)

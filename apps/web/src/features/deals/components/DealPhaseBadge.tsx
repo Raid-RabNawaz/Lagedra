@@ -9,7 +9,9 @@ const phaseVariant: Record<
   TruthSurface: "accent",
   Checkout: "default",
   Active: "success",
+  AwaitingDepositReturn: "accent",
   Closed: "secondary",
+  PaymentFailed: "destructive",
   Cancelled: "destructive",
 };
 

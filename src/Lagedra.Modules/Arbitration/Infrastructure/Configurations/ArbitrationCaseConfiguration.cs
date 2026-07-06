@@ -34,6 +34,9 @@ public sealed class ArbitrationCaseConfiguration : IEntityTypeConfiguration<Arbi
 
         builder.HasIndex(c => c.Status);
 
+        builder.Property(c => c.FilingFeePaymentIntentId).HasMaxLength(255);
+        builder.Property(c => c.FilingFeePaidAt);
+
         builder.Property(c => c.FiledAt).IsRequired();
         builder.Property(c => c.DecisionSummary).HasMaxLength(4000);
         builder.Property(c => c.AwardAmount).HasPrecision(18, 2);

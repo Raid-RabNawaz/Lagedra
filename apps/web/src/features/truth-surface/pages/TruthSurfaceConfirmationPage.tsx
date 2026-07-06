@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
   ArrowLeft,
@@ -18,6 +18,7 @@ import {
 import { useMyDeals } from "@/features/deals/hooks/useDeals";
 import { TruthSurfaceStatusBadge } from "@/features/truth-surface/components/TruthSurfaceStatusBadge";
 import { TruthSnapshotViewer } from "@/features/truth-surface/components/TruthSnapshotViewer";
+import { AgreementDocument } from "@/features/truth-surface/components/AgreementDocument";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -25,73 +26,8 @@ import { Alert } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
 import { Loader } from "@/components/shared/Loader";
-import { formatDate, formatMoney } from "@/utils/format";
+import { formatDate } from "@/utils/format";
 import type { ConfirmingParty } from "@/api/types";
-
-type CanonicalLine = {
-  key: string;
-  label: string;
-  value: string;
-};
-
-function parseCanonicalContent(raw: string | undefined): CanonicalLine[] {
-  if (!raw) {
-    return [];
-  }
-  try {
-    const obj = JSON.parse(raw) as Record<string, unknown>;
-    return flattenObject(obj);
-  } catch {
-    return [{ key: "content", label: "Content", value: raw }];
-  }
-}
-
-function flattenObject(
-  obj: Record<string, unknown>,
-  prefix = "",
-): CanonicalLine[] {
-  const lines: CanonicalLine[] = [];
-  for (const [key, value] of Object.entries(obj)) {
-    const fullKey = prefix ? `${prefix}.${key}` : key;
-    const label = humanize(key);
-    if (value !== null && typeof value === "object" && !Array.isArray(value)) {
-      lines.push(
-        ...flattenObject(value as Record<string, unknown>, fullKey),
-      );
-    } else {
-      lines.push({ key: fullKey, label, value: formatValue(key, value) });
-    }
-  }
-  return lines;
-}
-
-function humanize(key: string): string {
-  return key
-    .replace(/([A-Z])/g, " $1")
-    .replace(/[_-]/g, " ")
-    .replace(/^\s/, "")
-    .replace(/\b\w/g, (c) => c.toUpperCase())
-    .trim();
-}
-
-function formatValue(key: string, value: unknown): string {
-  if (value === null || value === undefined) {
-    return "—";
-  }
-  if (typeof value === "boolean") {
-    return value ? "Yes" : "No";
-  }
-  if (typeof value === "number") {
-    if (key.toLowerCase().endsWith("cents")) {
-      return formatMoney(value);
-    }
-    return String(value);
-  }
-  if (Array.isArray(value)) {
-    return value.length === 0 ? "—" : value.map(String).join(", ");
-  }
-  return String(value);
-}
 
 export const TruthSurfaceConfirmationPage = () => {
   const { snapshotId } = useParams<{ snapshotId: string }>();
@@ -104,11 +40,6 @@ export const TruthSurfaceConfirmationPage = () => {
   const deal = deals?.find((d) => d.dealId === snapshot?.dealId);
   const isLandlord = !!user && !!deal && user.userId === deal.landlordUserId;
   const isTenant = !!user && !!deal && user.userId === deal.tenantUserId;
-
-  const lines = useMemo(
-    () => parseCanonicalContent(snapshot?.canonicalContent ?? undefined),
-    [snapshot?.canonicalContent],
-  );
 
   const [termsConfirmed, setTermsConfirmed] = useState(false);
   const [platformAccepted, setPlatformAccepted] = useState(false);
@@ -178,18 +109,13 @@ export const TruthSurfaceConfirmationPage = () => {
       </Link>
 
       <div className="flex items-center gap-3 mb-2">
-        <h1 className="text-2xl font-bold tracking-tight">Truth Surface</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Booking agreement</h1>
         <TruthSurfaceStatusBadge status={snapshot.status} />
       </div>
       <p className="text-sm text-muted-foreground mb-6">
-        Snapshot{" "}
-        <code className="text-xs font-mono bg-muted px-1 py-0.5 rounded">
-          {snapshot.snapshotId.slice(0, 8)}...
-        </code>
-        {" "}for deal{" "}
-        <code className="text-xs font-mono bg-muted px-1 py-0.5 rounded">
-          {snapshot.dealId.slice(0, 8)}...
-        </code>
+        {isSealed
+          ? "This is the binding, cryptographically sealed agreement for your booking. Both parties have signed the terms below."
+          : "Review the terms below carefully. Confirming seals this as the binding, cryptographically signed agreement for your booking."}
       </p>
 
       {/* System notice after confirmation */}
@@ -230,27 +156,10 @@ export const TruthSurfaceConfirmationPage = () => {
         )}
       </div>
 
-      {/* Deal terms summary (read-only) */}
-      {lines.length > 0 && (
-        <Card className="mb-6">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Deal Terms</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="divide-y">
-              {lines.map((line) => (
-                <div
-                  key={line.key}
-                  className="flex items-center justify-between py-2.5 text-sm"
-                >
-                  <span className="text-muted-foreground">{line.label}</span>
-                  <span className="font-medium text-right ml-4">{line.value}</span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Agreement terms (curated, read-only) */}
+      <div className="mb-6">
+        <AgreementDocument canonicalContent={snapshot.canonicalContent} />
+      </div>
 
       {/* Cryptographic proof viewer */}
       <div className="mb-6">
@@ -350,7 +259,7 @@ export const TruthSurfaceConfirmationPage = () => {
                 <Link to={`/app/deals/${snapshot.dealId}/checkout`}>
                   <Button size="lg" className="gap-2">
                     <CreditCard className="h-4 w-4" />
-                    Proceed to Checkout
+                    Proceed to Payment
                     <ArrowRight className="h-4 w-4" />
                   </Button>
                 </Link>

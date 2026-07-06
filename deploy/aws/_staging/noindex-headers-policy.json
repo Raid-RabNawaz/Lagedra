@@ -1,0 +1,14 @@
+{
+  "Name": "lagedra-staging-noindex",
+  "Comment": "Adds X-Robots-Tag noindex for staging.lagedra.com",
+  "CustomHeadersConfig": {
+    "Quantity": 1,
+    "Items": [
+      {
+        "Header": "X-Robots-Tag",
+        "Value": "noindex, nofollow",
+        "Override": true
+      }
+    ]
+  }
+}

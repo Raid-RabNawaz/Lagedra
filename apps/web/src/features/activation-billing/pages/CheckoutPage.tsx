@@ -206,15 +206,14 @@ export default function CheckoutPage() {
   // Lazy-init Stripe.js exactly once the first time we need it. `useMemo`
   // with empty deps keeps the same Promise across renders, so the Elements
   // provider sees a stable reference.
+  const checkoutClientSecret = checkout?.clientSecret ?? null;
   const stripePromise = useMemo(
     () =>
-      checkout?.clientSecret && appConfig.stripePublishableKey
+      checkoutClientSecret && appConfig.stripePublishableKey
         ? loadStripe(appConfig.stripePublishableKey)
         : null,
-    // We intentionally only init this once `checkout` first has a clientSecret —
-    // re-creating loadStripe on every render would tear down Stripe Elements.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [Boolean(checkout?.clientSecret)],
+    // Stable once a client secret exists — re-creating loadStripe tears down Elements.
+    [checkoutClientSecret, appConfig.stripePublishableKey],
   );
 
   const handleStartCheckout = useCallback(() => {
@@ -235,7 +234,7 @@ export default function CheckoutPage() {
   }
 
   if (statusLoading) {
-    return <Loader label="Loading checkout..." />;
+    return <Loader label="Loading payment..." />;
   }
 
   if (isForbiddenError(statusError)) {
@@ -253,7 +252,7 @@ export default function CheckoutPage() {
           <span className="ml-2 text-sm">
             {getApiErrorMessage(
               statusError,
-              "Only the deal's tenant can complete checkout.",
+              "Only the deal's tenant can complete payment.",
             )}
           </span>
         </Alert>
@@ -282,7 +281,7 @@ export default function CheckoutPage() {
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <span className="ml-2 text-sm">
-            Checkout is not yet available for this deal. The application must be
+            Payment is not yet available for this deal. The application must be
             approved before you can pay.
           </span>
         </Alert>
@@ -300,6 +299,20 @@ export default function CheckoutPage() {
       }
     : null;
 
+  // Under the predetermined-deposit flow the deposit is charged off-session
+  // when the host accepts. If that charge declined, the PaymentIntent comes
+  // back needing a fresh card / authentication — surface it as a retry.
+  const retryStatuses = [
+    "requires_payment_method",
+    "requires_action",
+    "requires_confirmation",
+    "canceled",
+  ];
+  const paymentNeedsRetry =
+    !!checkoutStatus &&
+    checkoutStatus.status !== "succeeded" &&
+    retryStatuses.includes(checkoutStatus.status);
+
   return (
     <div className="mx-auto max-w-lg px-4 py-8 sm:px-6 lg:px-8">
       <Link
@@ -310,11 +323,28 @@ export default function CheckoutPage() {
         Back to deal
       </Link>
 
-      <h1 className="text-2xl font-bold tracking-tight mb-2">Checkout</h1>
+      <h1 className="text-2xl font-bold tracking-tight mb-2">
+        {paymentNeedsRetry ? "Retry payment" : "Payment"}
+      </h1>
       <p className="text-sm text-muted-foreground mb-6">
-        Complete your payment to activate the deal. Funds are securely processed
-        by Stripe.
+        {paymentNeedsRetry
+          ? "Your agreement is sealed, but the deposit charge didn't go through. Update your card below to finish activating the booking. Funds are securely processed by Stripe."
+          : "Complete your payment to activate the deal. Funds are securely processed by Stripe."}
       </p>
+
+      {paymentNeedsRetry && (
+        <Alert variant="destructive" className="mb-6 text-sm">
+          <AlertCircle className="h-4 w-4" />
+          <span className="ml-2">
+            The deposit payment failed
+            {checkoutStatus?.status === "requires_action"
+              ? " and needs additional authentication"
+              : ""}
+            . You won't lose your sealed agreement — just retry with a valid card
+            to activate the booking.
+          </span>
+        </Alert>
+      )}
 
       {checkoutStatus && (
         <div className="mb-6">
@@ -385,7 +415,7 @@ export default function CheckoutPage() {
                   <span>
                     {getApiErrorMessage(
                       createCheckout.error,
-                      "Failed to create checkout. Please try again.",
+                      "Failed to start payment. Please try again.",
                     )}
                   </span>
                 </div>
@@ -413,9 +443,10 @@ export default function CheckoutPage() {
       <div className="mt-6 rounded-lg bg-muted/50 p-4 text-xs text-muted-foreground flex items-start gap-2">
         <Lock className="h-4 w-4 shrink-0 mt-0.5" />
         <p>
-          Your payment is securely processed by Stripe. Lagedra collects the
-          total amount, deducts the platform fee and insurance premium, and
-          transfers the remainder directly to the host's account.
+          Your payment is securely processed by Stripe. The host is paid
+          directly through Stripe — your rent and deposit go straight to their
+          account, while Lagedra only collects its service fee and the insurance
+          premium.
         </p>
       </div>
     </div>

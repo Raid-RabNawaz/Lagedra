@@ -61,6 +61,23 @@ public static class ChannelEndpoints
             return ToHttpResult(result);
         });
 
+        // Pull the host's listings from the provider now (rather than waiting for
+        // the scheduled job) and import them into Lagedra as drafts.
+        group.MapPost("/{id:guid}/sync", async (Guid id, ClaimsPrincipal user, ISender sender) =>
+        {
+            var result = await sender.Send(new SyncChannelConnectionCommand(id, GetUserId(user)))
+                .ConfigureAwait(false);
+            return ToHttpResult(result);
+        });
+
+        // The listings pulled for a connection + their imported Lagedra ids.
+        group.MapGet("/{id:guid}/listings", async (Guid id, ClaimsPrincipal user, ISender sender) =>
+        {
+            var result = await sender.Send(new ListChannelListingsQuery(id, GetUserId(user)))
+                .ConfigureAwait(false);
+            return ToHttpResult(result);
+        });
+
         group.MapPost("/{id:guid}/disable", async (Guid id, ClaimsPrincipal user, ISender sender) =>
         {
             var result = await sender.Send(new SetChannelStatusCommand(id, GetUserId(user), Enable: false))

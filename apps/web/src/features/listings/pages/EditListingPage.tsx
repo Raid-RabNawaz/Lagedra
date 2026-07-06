@@ -1,4 +1,4 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from "react";
 import {
@@ -54,6 +54,10 @@ const LocationPickerMap = lazy(() =>
   })),
 );
 import { useAuthStore } from "@/app/auth/authStore";
+import {
+  computeProfileCompleteness,
+  MIN_HOST_PROFILE_COMPLETENESS,
+} from "@/features/auth/lib/profileCompleteness";
 import { roles } from "@/app/auth/roles";
 import { listingApi } from "@/features/listings/services/listingApi";
 import { ListingForm } from "@/features/listings/components/ListingForm";
@@ -63,6 +67,8 @@ import { toUpdateListingRequest } from "@/features/listings/lib/toListingRequest
 import type { ListingFormValues } from "@/features/listings/lib/listingFormSchema";
 import { getApiErrorMessage } from "@/api/errors";
 import { Loader } from "@/components/shared/Loader";
+import { HostPayoutReadinessNotice } from "@/components/shared/HostPayoutReadinessNotice";
+import { useHostPayoutReadiness } from "@/features/host-onboarding/hooks/useHostStripe";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -75,6 +81,7 @@ import { cn } from "@/lib/utils";
 export const EditListingPage = () => {
   const { id } = useParams<{ id: string }>();
   const user = useAuthStore((s) => s.user);
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const defs = useListingDefinitions();
 
@@ -475,8 +482,11 @@ export const EditListingPage = () => {
     },
   });
 
+  const { ready: payoutsReady, settled: payoutSettled } = useHostPayoutReadiness();
+
   // ── Derived state (safe before early returns; falls back when listing is null) ──
   const hasLocation = listing ? listing.latitude != null && listing.longitude != null : false;
+  const hasPreciseAddress = listing ? Boolean(listing.preciseAddress) : false;
   const hasPhotos = listing ? listing.photos.length > 0 : false;
   const hasDescription = listing ? (listing.description ?? "").trim().length > 0 : false;
   const hasRent = listing ? (listing.monthlyRentCents ?? 0) > 0 : false;
@@ -485,8 +495,27 @@ export const EditListingPage = () => {
   const isInReview = listing?.status === "InReview";
   const isEditable = isDraft || isDenied;
 
-  // Mirror server-side rule (Listing.SubmitForReview() requires Draft|Denied + ApproxGeoPoint).
-  const canSubmit = isEditable && hasLocation;
+  // Mirror the server-side rule: SubmitForReview() requires Draft|Denied +
+  // ApproxGeoPoint + a locked precise address (so the binding agreement never
+  // seals with a blank city — Listing.PreciseAddressRequired), and the listing
+  // can only go live once the host has a payout destination
+  // (Listing.PayoutSetupRequired). Don't block while the payout lookup is
+  // still in flight so we never flash a false "blocked" state.
+  const payoutBlocks = payoutSettled && !payoutsReady;
+
+  // Mirror the server-side host-profile gate: a faceless host can't go live,
+  // because guests need to see who they're renting from before authorising a
+  // payment (Listing.HostProfileIncomplete). Computed from the signed-in user's
+  // profile with the same field set the backend enforces. Memoised so the
+  // derived `canSubmit` stays referentially stable for the submit callback.
+  const profileCompleteness = useMemo(
+    () => computeProfileCompleteness(user),
+    [user],
+  );
+  const profileComplete = profileCompleteness.meetsListingThreshold;
+
+  const canSubmit =
+    isEditable && hasLocation && hasPreciseAddress && !payoutBlocks && profileComplete;
   const submitLabel = isDenied ? "Resubmit for review" : "Submit for review";
   const submitBlockedReason = !listing
     ? ""
@@ -496,7 +525,13 @@ export const EditListingPage = () => {
         : `Already ${listing.status.toLowerCase()}.`
       : !hasLocation
         ? "Set the approximate location below before submitting."
-        : "";
+        : !hasPreciseAddress
+          ? "Add the full property address (including city) below before submitting."
+          : payoutBlocks
+            ? "Set up your payout details before submitting this listing."
+            : !profileComplete
+              ? `Complete at least ${MIN_HOST_PROFILE_COMPLETENESS}% of your host profile before submitting (you're at ${profileCompleteness.percent}%).`
+              : "";
 
   const scrollToId = useCallback((targetId: string) => {
     const el = document.getElementById(targetId);
@@ -597,6 +632,22 @@ export const EditListingPage = () => {
         </div>
       </div>
 
+      {isEditable && (
+        <HostPayoutReadinessNotice
+          message={
+            <>
+              You haven&apos;t set up payouts yet. Guests pay through Lagedra, so
+              this listing can only go live once there&apos;s a payout
+              destination for the rent and deposit.{" "}
+              <Link to="/app/payout-setup" className="font-medium underline">
+                Set up payouts
+              </Link>{" "}
+              first, then submit for review.
+            </>
+          }
+        />
+      )}
+
       {isInReview && (
         <Alert>
           <Clock className="h-4 w-4" />
@@ -670,6 +721,30 @@ export const EditListingPage = () => {
               detail="Drop a pin or look up an address so tenants can see the general area."
               jumpLabel="Add location"
               onJump={() => scrollToId("location")}
+            />
+            <ChecklistRow
+              done={hasPreciseAddress}
+              required
+              label="Add the full property address"
+              detail="The city becomes part of the binding booking agreement, so the address (including city) is required. It stays private and is only shared with confirmed tenants."
+              jumpLabel="Add address"
+              onJump={() => scrollToId("precise-address")}
+            />
+            <ChecklistRow
+              done={profileComplete}
+              required
+              label={`Complete your host profile (${profileCompleteness.percent}%)`}
+              detail={
+                profileComplete
+                  ? "Guests can see who they're renting from."
+                  : `Guests need to see who they're renting from before authorising a payment. Reach at least ${MIN_HOST_PROFILE_COMPLETENESS}%${
+                      profileCompleteness.missing.length > 0
+                        ? ` — add: ${profileCompleteness.missing.join(", ")}.`
+                        : "."
+                    }`
+              }
+              jumpLabel="Edit profile"
+              onJump={() => navigate("/profile")}
             />
             <ChecklistRow
               done={hasPhotos}
@@ -866,21 +941,28 @@ export const EditListingPage = () => {
           </CardContent>
         </Card>
 
-        {(listing.status === "Published" || listing.preciseAddress) && (
-          <Card className="lg:col-span-2 scroll-mt-24">
+        {(isEditable || listing.status === "Published" || listing.preciseAddress) && (
+          <Card id="precise-address" className="lg:col-span-2 scroll-mt-24">
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
                 <Lock className="h-5 w-5" />
                 Precise address
-                {listing.preciseAddress && (
+                {listing.preciseAddress ? (
                   <Badge variant="secondary" className="ml-2">
                     <CheckCircle2 className="h-3 w-3 mr-1" />
                     Locked
                   </Badge>
+                ) : (
+                  isEditable && (
+                    <Badge variant="destructive" className="ml-2">Required</Badge>
+                  )
                 )}
               </CardTitle>
               <CardDescription>
-                Lock the full address to proceed toward activation. This is shared only with confirmed tenants.
+                Lock the full address before submitting for review. The city
+                becomes part of the binding booking agreement, so it can&apos;t
+                be left blank. The exact street address stays private and is
+                shared only with confirmed tenants.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">

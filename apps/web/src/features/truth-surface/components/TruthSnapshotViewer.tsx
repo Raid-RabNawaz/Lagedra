@@ -49,17 +49,12 @@ export const TruthSnapshotViewer = ({ snapshot }: Props) => {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Every term in this agreement is sealed with a tamper-evident
+          signature. Use the controls below to verify integrity or download a
+          copy for your records.
+        </p>
         <div className="grid grid-cols-2 gap-3 text-sm">
-          <div>
-            <span className="text-muted-foreground">Protocol version</span>
-            <p className="font-mono text-xs mt-0.5">{snapshot.protocolVersion}</p>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Jurisdiction pack</span>
-            <p className="font-mono text-xs mt-0.5">
-              {snapshot.jurisdictionPackVersion}
-            </p>
-          </div>
           <div>
             <span className="text-muted-foreground">Landlord confirmed</span>
             <div className="mt-0.5">

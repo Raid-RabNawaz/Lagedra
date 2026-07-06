@@ -1,5 +1,6 @@
 import { endpoints } from "@/api/endpoints";
 import { http } from "@/api/http";
+import { stripeConnectReturnUrls } from "@/features/host-onboarding/lib/stripeConnectUrls";
 import type {
   HostStripeStatusDto,
   HostPaymentDetailsDto,
@@ -10,6 +11,7 @@ export const hostStripeApi = {
   async onboard(): Promise<HostStripeStatusDto> {
     const response = await http.post<HostStripeStatusDto>(
       endpoints.hostPayouts.start,
+      stripeConnectReturnUrls(),
     );
     return response.data;
   },
@@ -17,6 +19,7 @@ export const hostStripeApi = {
   async refreshLink(): Promise<{ onboardingUrl: string }> {
     const response = await http.post<{ onboardingUrl: string }>(
       endpoints.hostPayouts.refreshLink,
+      stripeConnectReturnUrls(),
     );
     return response.data;
   },

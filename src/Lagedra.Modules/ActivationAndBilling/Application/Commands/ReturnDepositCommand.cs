@@ -73,9 +73,15 @@ public sealed partial class ReturnDepositCommandHandler(
         try
         {
             var idempotencyKey = $"deposit-return-deal-{request.DealId}";
+            // Non-custodial (Option A): the deposit was transferred to the host's
+            // connected account at booking, so reverse the transfer to pull it back
+            // before refunding the tenant. The platform keeps its service/insurance
+            // fee, so the application fee is not refunded.
             var refund = await stripeService.RefundPaymentIntentAsync(
                 confirmation.StripePaymentIntentId,
                 returnAmount,
+                reverseTransfer: true,
+                refundApplicationFee: false,
                 idempotencyKey,
                 cancellationToken).ConfigureAwait(false);
 

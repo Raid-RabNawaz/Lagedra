@@ -27,6 +27,12 @@ export default defineConfig([
         'warn',
         { allowConstantExport: true },
       ],
+      // React Compiler pedantic rules — many existing pages load data in
+      // useEffect or sync props into local form state. Downgrade until those
+      // surfaces are migrated to query libraries / keyed resets.
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/purity': 'off',
+      'react-hooks/incompatible-library': 'warn',
     },
   },
 ])

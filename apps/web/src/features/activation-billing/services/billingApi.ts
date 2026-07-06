@@ -2,6 +2,7 @@ import { endpoints } from "@/api/endpoints";
 import { http } from "@/api/http";
 import type {
   BillingStatusDto,
+  HostBillingStatementDto,
   ProrationQuoteDto,
   PaymentConfirmationDto,
   PaymentDetailsDto,
@@ -9,6 +10,7 @@ import type {
   DamageClaimDto,
   DisputePaymentRequest,
   CancelBookingRequest,
+  ConfirmDepositReturnRequest,
   FileDamageClaimRequest,
 } from "@/api/types";
 
@@ -16,6 +18,13 @@ export const billingApi = {
   async getBillingStatus(dealId: string): Promise<BillingStatusDto> {
     const response = await http.get<BillingStatusDto>(
       endpoints.billing.status(dealId),
+    );
+    return response.data;
+  },
+
+  async getHostStatement(): Promise<HostBillingStatementDto> {
+    const response = await http.get<HostBillingStatementDto>(
+      endpoints.billing.hostStatement,
     );
     return response.data;
   },
@@ -105,6 +114,40 @@ export const billingApi = {
     const response = await http.post<DamageClaimDto>(
       endpoints.payment.damageClaim(dealId),
       payload,
+    );
+    return response.data;
+  },
+
+  async beginMoveOut(dealId: string): Promise<PaymentConfirmationDto> {
+    const response = await http.post<PaymentConfirmationDto>(
+      endpoints.payment.beginMoveOut(dealId),
+    );
+    return response.data;
+  },
+
+  async confirmDepositReturnedByHost(
+    dealId: string,
+    payload: ConfirmDepositReturnRequest,
+  ): Promise<PaymentConfirmationDto> {
+    const response = await http.post<PaymentConfirmationDto>(
+      endpoints.payment.depositReturnHostConfirm(dealId),
+      payload,
+    );
+    return response.data;
+  },
+
+  async confirmDepositReceivedByTenant(
+    dealId: string,
+  ): Promise<PaymentConfirmationDto> {
+    const response = await http.post<PaymentConfirmationDto>(
+      endpoints.payment.depositReturnTenantConfirm(dealId),
+    );
+    return response.data;
+  },
+
+  async forceDepositReturn(dealId: string): Promise<PaymentConfirmationDto> {
+    const response = await http.post<PaymentConfirmationDto>(
+      endpoints.payment.forceDepositReturn(dealId),
     );
     return response.data;
   },

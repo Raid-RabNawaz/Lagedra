@@ -46,11 +46,26 @@ public sealed class GetDealBillingStatusQueryHandler(
                     "You do not have access to this deal's billing account."));
         }
 
+        var invoices = account.Invoices
+            .Select(i => new InvoiceDto(
+                i.Id,
+                account.DealId,
+                ListingTitle: null,
+                i.PeriodStart,
+                i.PeriodEnd,
+                i.AmountCents,
+                i.Status,
+                i.CreatedAt))
+            .OrderByDescending(i => i.PeriodStart)
+            .ThenByDescending(i => i.CreatedAt)
+            .ToList();
+
         return Result<BillingStatusDto>.Success(
             new BillingStatusDto(account.Id, account.DealId, account.Status,
                 account.StartDate, account.EndDate,
                 account.StripeCustomerId, account.StripeSubscriptionId,
                 account.Invoices.Count,
-                account.Invoices.Count(i => i.Status == InvoiceStatus.Paid)));
+                account.Invoices.Count(i => i.Status == InvoiceStatus.Paid),
+                invoices));
     }
 }

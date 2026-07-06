@@ -18,6 +18,17 @@ public sealed class ArbitrationCase : AggregateRoot<Guid>
     public ArbitrationCategory Category { get; private set; }
     public ArbitrationStatus Status { get; private set; }
     public long FilingFeeCents { get; private set; }
+
+    /// <summary>
+    /// Stripe PaymentIntent collecting the filing fee from the filer. Null until
+    /// a checkout is started. The fee is the platform's own adjudication revenue,
+    /// so it settles into the platform balance (no host/Connect involvement).
+    /// </summary>
+    public string? FilingFeePaymentIntentId { get; private set; }
+
+    /// <summary>When the filing fee was confirmed paid (case became active).</summary>
+    public DateTime? FilingFeePaidAt { get; private set; }
+
     public DateTime FiledAt { get; private set; }
     public DateTime? EvidenceCompleteAt { get; private set; }
     public DateTime? DecisionDueAt { get; private set; }
@@ -41,6 +52,7 @@ public sealed class ArbitrationCase : AggregateRoot<Guid>
         ArgumentOutOfRangeException.ThrowIfNegative(filingFeeCents);
 
         var now = DateTime.UtcNow;
+        var feeRequired = filingFeeCents > 0;
         var arbitrationCase = new ArbitrationCase
         {
             Id = Guid.NewGuid(),
@@ -49,13 +61,57 @@ public sealed class ArbitrationCase : AggregateRoot<Guid>
             Tier = tier,
             Category = category,
             FilingFeeCents = filingFeeCents,
-            Status = ArbitrationStatus.Filed,
+            // Pay-to-activate: a case with a fee stays inert in PendingPayment
+            // until the filer pays. A zero-fee case (admin set the fee to 0) is
+            // active immediately.
+            Status = feeRequired ? ArbitrationStatus.PendingPayment : ArbitrationStatus.Filed,
             FiledAt = now,
             CreatedAt = now
         };
 
-        arbitrationCase.AddDomainEvent(new CaseFiledEvent(arbitrationCase.Id, dealId, now));
+        if (!feeRequired)
+        {
+            arbitrationCase.FilingFeePaidAt = now;
+            arbitrationCase.AddDomainEvent(new CaseFiledEvent(arbitrationCase.Id, dealId, now));
+        }
+
         return arbitrationCase;
+    }
+
+    /// <summary>
+    /// Records the Stripe PaymentIntent that will collect the filing fee. Only
+    /// valid while the case is awaiting payment.
+    /// </summary>
+    public void RecordFilingFeePaymentIntent(string paymentIntentId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(paymentIntentId);
+
+        if (Status != ArbitrationStatus.PendingPayment)
+        {
+            throw new InvalidOperationException(
+                $"Cannot attach a filing-fee payment intent in status '{Status}'.");
+        }
+
+        FilingFeePaymentIntentId = paymentIntentId;
+    }
+
+    /// <summary>
+    /// Marks the filing fee as paid and activates the case. Idempotent: a no-op
+    /// if the case has already moved past <see cref="ArbitrationStatus.PendingPayment"/>
+    /// (e.g. a duplicate webhook delivery).
+    /// </summary>
+    public void MarkFilingFeePaid()
+    {
+        if (Status != ArbitrationStatus.PendingPayment)
+        {
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+        Status = ArbitrationStatus.Filed;
+        FilingFeePaidAt = now;
+
+        AddDomainEvent(new CaseFiledEvent(Id, DealId, now));
     }
 
     public void AttachEvidence(string slotType, Guid submittedBy, Guid evidenceManifestId)
@@ -101,7 +157,7 @@ public sealed class ArbitrationCase : AggregateRoot<Guid>
 
     public void AssignArbitrator(Guid arbitratorUserId, int concurrentCaseCount)
     {
-        if (Status is ArbitrationStatus.Decided or ArbitrationStatus.Appealed)
+        if (Status is ArbitrationStatus.PendingPayment or ArbitrationStatus.Decided or ArbitrationStatus.Appealed)
         {
             throw new InvalidOperationException($"Cannot assign arbitrator in status '{Status}'.");
         }

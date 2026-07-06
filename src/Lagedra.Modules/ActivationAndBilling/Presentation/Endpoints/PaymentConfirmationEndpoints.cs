@@ -31,11 +31,18 @@ public static class PaymentConfirmationEndpoints
         group.MapPost("/cancel", CancelBooking);
         group.MapPost("/damage-claim", FileDamageClaim);
 
+        // Deposit return handshake (non-custodial, host-held).
+        group.MapPost("/begin-move-out", BeginMoveOut);
+        group.MapPost("/deposit-return/host-confirm", ConfirmDepositReturnedByHost);
+        group.MapPost("/deposit-return/tenant-confirm", ConfirmDepositReceivedByTenant);
+
         var admin = app.MapGroup("/v1/admin/deals/{dealId:guid}")
             .WithTags("PaymentConfirmation-Admin")
             .RequireAuthorization();
 
         admin.MapPost("/resolve-payment-dispute", ResolvePaymentDispute);
+        admin.MapPost("/force-deposit-return", ForceDepositReturn)
+            .RequireAuthorization("RequirePlatformAdmin");
 
         return app;
     }
@@ -169,6 +176,73 @@ public static class PaymentConfirmationEndpoints
 
         var result = await mediator
             .Send(new CancelBookingCommand(dealId, userId, request.Reason), ct)
+            .ConfigureAwait(false);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> BeginMoveOut(
+        [FromRoute] Guid dealId,
+        ClaimsPrincipal user,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var userId = GetUserId(user);
+        var isAdmin = user.IsInRole("PlatformAdmin");
+        var result = await mediator
+            .Send(new BeginMoveOutCommand(dealId, userId, isAdmin), ct)
+            .ConfigureAwait(false);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> ConfirmDepositReturnedByHost(
+        [FromRoute] Guid dealId,
+        [FromBody] ConfirmDepositReturnRequest request,
+        ClaimsPrincipal user,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var userId = GetUserId(user);
+        var result = await mediator
+            .Send(new ConfirmDepositReturnedByHostCommand(
+                dealId, userId, request.ReturnedAmountCents, request.Method, request.Note), ct)
+            .ConfigureAwait(false);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> ConfirmDepositReceivedByTenant(
+        [FromRoute] Guid dealId,
+        ClaimsPrincipal user,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var userId = GetUserId(user);
+        var result = await mediator
+            .Send(new ConfirmDepositReceivedByTenantCommand(dealId, userId), ct)
+            .ConfigureAwait(false);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> ForceDepositReturn(
+        [FromRoute] Guid dealId,
+        ClaimsPrincipal user,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var userId = GetUserId(user);
+        var result = await mediator
+            .Send(new ForceDepositReturnCommand(dealId, userId), ct)
             .ConfigureAwait(false);
 
         return result.IsSuccess

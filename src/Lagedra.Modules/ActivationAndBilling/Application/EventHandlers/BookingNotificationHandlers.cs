@@ -53,24 +53,21 @@ public sealed class OnApplicationSubmittedNotify(
             .TrimEnd('/');
 
         // Pull listing context so the email subject + body can show the
-        // host *what* they're approving, and so /host/approve can pre-fill
-        // a sensible default deposit. Best-effort: a missing listing
-        // (e.g. concurrent unpublish) just falls back to placeholders.
+        // host *what* they're approving. The deposit is no longer prefilled —
+        // it's predetermined per verification tier and already snapshotted on
+        // the request. Best-effort: a missing listing (e.g. concurrent
+        // unpublish) just falls back to a placeholder title.
         var listing = await listingProvider
             .GetListingDetailsAsync(e.ListingId, ct)
             .ConfigureAwait(false);
 
         var listingTitle = listing?.Title ?? "your listing";
-        var defaultDepositCents = listing?.DefaultDepositCents
-            ?? listing?.MaxDepositCents
-            ?? 0;
 
         var approveUrl = BuildApproveUrl(
             frontendUrl,
             approveToken,
             e.ApplicationId,
-            listingTitle,
-            defaultDepositCents);
+            listingTitle);
 
         await m.Send(new NotifyUserCommand(
             app.LandlordUserId, "application_submitted",
@@ -85,7 +82,6 @@ public sealed class OnApplicationSubmittedNotify(
                 ["approveTokenTtlHours"] = OneTapTtlHours.ToString(CultureInfo.InvariantCulture),
                 ["approveUrl"] = approveUrl,
                 ["frontendUrl"] = frontendUrl,
-                ["defaultDepositCents"] = defaultDepositCents.ToString(CultureInfo.InvariantCulture),
             },
             Channels.EmailAndInApp, e.ListingId, "Listing"), ct).ConfigureAwait(false);
     }
@@ -94,8 +90,7 @@ public sealed class OnApplicationSubmittedNotify(
         string frontendUrl,
         string token,
         Guid applicationId,
-        string listingTitle,
-        long defaultDepositCents)
+        string listingTitle)
     {
         // Manual query construction so we don't depend on UriBuilder's
         // legacy quirks (e.g. it strips port 80) and so the values land
@@ -105,11 +100,6 @@ public sealed class OnApplicationSubmittedNotify(
         sb.Append("?token=").Append(Uri.EscapeDataString(token));
         sb.Append("&applicationId=").Append(applicationId.ToString("D"));
         sb.Append("&listingTitle=").Append(Uri.EscapeDataString(listingTitle));
-        if (defaultDepositCents > 0)
-        {
-            sb.Append("&depositCents=")
-              .Append(defaultDepositCents.ToString(CultureInfo.InvariantCulture));
-        }
         return sb.ToString();
     }
 }
@@ -141,6 +131,76 @@ public sealed class OnApplicationRejectedNotify(IMediator m)
             "Unfortunately, your booking application was not accepted by the host.",
             new() { ["applicationId"] = e.ApplicationId.ToString(), ["listingId"] = e.ListingId.ToString() },
             Channels.EmailAndInApp, e.ListingId, "Listing"), ct).ConfigureAwait(false);
+    }
+}
+
+public sealed class OnApplicationExpiredNotify(IMediator m)
+    : IDomainEventHandler<ApplicationExpiredEvent>
+{
+    public async Task Handle(ApplicationExpiredEvent e, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        await m.Send(new NotifyUserCommand(
+            e.TenantUserId, "application_expired",
+            "Request Expired",
+            "Your booking request expired because the host didn't respond in time. " +
+            "You can send a new request or explore other listings.",
+            new() { ["applicationId"] = e.ApplicationId.ToString(), ["listingId"] = e.ListingId.ToString() },
+            Channels.EmailAndInApp, e.ListingId, "Listing"), ct).ConfigureAwait(false);
+    }
+}
+
+public sealed class OnApplicationSupersededNotify(IMediator m)
+    : IDomainEventHandler<ApplicationSupersededEvent>
+{
+    public async Task Handle(ApplicationSupersededEvent e, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+        await m.Send(new NotifyUserCommand(
+            e.TenantUserId, "application_superseded",
+            "Dates No Longer Available",
+            "The host confirmed another booking for dates that overlap your request, " +
+            "so your request was closed. You can request different dates on this listing.",
+            new() { ["applicationId"] = e.ApplicationId.ToString(), ["listingId"] = e.ListingId.ToString() },
+            Channels.EmailAndInApp, e.ListingId, "Listing"), ct).ConfigureAwait(false);
+    }
+}
+
+public sealed class OnBookingPaymentFailedNotify(IMediator m)
+    : IDomainEventHandler<BookingPaymentFailedEvent>
+{
+    public async Task Handle(BookingPaymentFailedEvent e, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+
+        // Tenant: actionable — the agreement is sealed but the charge didn't
+        // go through, so prompt them to update their card and retry.
+        await m.Send(new NotifyUserCommand(
+            e.TenantUserId, "booking_payment_failed",
+            "Payment Failed — Action Needed",
+            "Your host accepted your request, but we couldn't complete the payment. " +
+            "Please update your payment method to confirm the booking.",
+            new()
+            {
+                ["dealId"] = e.DealId.ToString(),
+                ["listingId"] = e.ListingId.ToString(),
+                ["reason"] = e.Reason,
+            },
+            Channels.EmailAndInApp, e.DealId, "Deal"), ct).ConfigureAwait(false);
+
+        // Host: informational — the booking isn't active yet because payment
+        // failed; we're following up with the tenant.
+        await m.Send(new NotifyUserCommand(
+            e.LandlordUserId, "booking_payment_failed_host",
+            "Booking Not Yet Active",
+            "You accepted a request, but the tenant's payment failed so the booking " +
+            "isn't active yet. We've asked them to update their payment method.",
+            new()
+            {
+                ["dealId"] = e.DealId.ToString(),
+                ["listingId"] = e.ListingId.ToString(),
+            },
+            Channels.EmailAndInApp, e.DealId, "Deal"), ct).ConfigureAwait(false);
     }
 }
 

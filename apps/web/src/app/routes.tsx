@@ -1,5 +1,5 @@
 import { lazy } from "react";
-import { Navigate, createBrowserRouter } from "react-router-dom";
+import { Navigate, createBrowserRouter, useLocation } from "react-router-dom";
 import { RequireAuth } from "@/app/auth/RequireAuth";
 import { RequireMember } from "@/app/auth/RequireMember";
 import { RequireRole } from "@/app/auth/RequireRole";
@@ -56,12 +56,14 @@ const HostInquiriesPage = lazy(() => import("@/features/inquiry/pages/HostInquir
 const MyInquiriesPage = lazy(() => import("@/features/inquiry/pages/MyInquiriesPage").then((m) => ({ default: m.MyInquiriesPage })));
 const TruthSurfaceConfirmationPage = lazy(() => import("@/features/truth-surface/pages/TruthSurfaceConfirmationPage").then((m) => ({ default: m.TruthSurfaceConfirmationPage })));
 const BillingPage = lazy(() => import("@/features/activation-billing/pages/BillingPage").then((m) => ({ default: m.BillingPage })));
+const HostBillingStatementPage = lazy(() => import("@/features/activation-billing/pages/HostBillingStatementPage").then((m) => ({ default: m.HostBillingStatementPage })));
 const CheckoutPage = lazy(() => import("@/features/activation-billing/pages/CheckoutPage"));
 const PaymentMethodPage = lazy(() => import("@/features/activation-billing/pages/PaymentMethodPage").then((m) => ({ default: m.PaymentMethodPage })));
 const VerificationPage = lazy(() => import("@/features/verification/pages/VerificationPage").then((m) => ({ default: m.VerificationPage })));
 const NotificationsPage = lazy(() => import("@/features/notifications/pages/NotificationsPage").then((m) => ({ default: m.NotificationsPage })));
 const NotificationPreferencesPage = lazy(() => import("@/features/notifications/pages/NotificationPreferencesPage").then((m) => ({ default: m.NotificationPreferencesPage })));
 const HostStripeOnboardingPage = lazy(() => import("@/features/host-onboarding/pages/HostStripeOnboardingPage"));
+const ChannelsPage = lazy(() => import("@/features/channels/pages/ChannelsPage").then((m) => ({ default: m.ChannelsPage })));
 const DealTruthSurfacePage = lazy(() => import("@/features/truth-surface/pages/DealTruthSurfacePage").then((m) => ({ default: m.DealTruthSurfacePage })));
 const CreateTruthSurfacePage = lazy(() => import("@/features/truth-surface/pages/CreateTruthSurfacePage").then((m) => ({ default: m.CreateTruthSurfacePage })));
 const MyDealsPage = lazy(() => import("@/features/deals/pages/MyDealsPage").then((m) => ({ default: m.MyDealsPage })));
@@ -80,6 +82,12 @@ const PartnerGuestsPage = lazy(() => import("@/features/partners/pages/PartnerGu
 const PartnerEndorsementsPage = lazy(() => import("@/features/partners/pages/PartnerEndorsementsPage").then((m) => ({ default: m.PartnerEndorsementsPage })));
 const PartnerLayoutGuard = lazy(() => import("@/features/partners/components/PartnerLayoutGuard").then((m) => ({ default: m.PartnerLayoutGuard })));
 const PartnerVerificationPage = lazy(() => import("@/features/admin/pages/PartnerVerificationPage").then((m) => ({ default: m.PartnerVerificationPage })));
+
+/** Legacy password-reset emails pointed at /reset-password; preserve query params. */
+function LegacyResetPasswordRedirect() {
+  const { search } = useLocation();
+  return <Navigate to={`/auth/reset-password${search}`} replace />;
+}
 
 export const router = createBrowserRouter([
   {
@@ -103,6 +111,13 @@ export const router = createBrowserRouter([
   {
     path: "/host/approve",
     element: <LazyPage><HostApprovePage /></LazyPage>,
+    errorElement: <RouteErrorBoundary />,
+  },
+
+  // Legacy forgot-password emails used /reset-password (missing /auth prefix)
+  {
+    path: "/reset-password",
+    element: <LegacyResetPasswordRedirect />,
     errorElement: <RouteErrorBoundary />,
   },
 
@@ -178,7 +193,9 @@ export const router = createBrowserRouter([
               { path: "listings/:id/edit", element: <LazyPage><EditListingPage /></LazyPage> },
               { path: "applications", element: <LazyPage><ApplicationsPage /></LazyPage> },
               { path: "inquiries", element: <LazyPage><HostInquiriesPage /></LazyPage> },
+              { path: "channels", element: <LazyPage><ChannelsPage /></LazyPage> },
               { path: "payout-setup", element: <LazyPage><HostStripeOnboardingPage /></LazyPage> },
+              { path: "billing", element: <LazyPage><HostBillingStatementPage /></LazyPage> },
               { path: "stripe-onboarding", element: <Navigate to="/app/payout-setup" replace /> },
             ],
           },

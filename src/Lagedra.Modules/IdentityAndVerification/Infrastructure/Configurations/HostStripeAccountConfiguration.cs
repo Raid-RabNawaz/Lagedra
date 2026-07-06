@@ -1,4 +1,5 @@
 using Lagedra.Modules.IdentityAndVerification.Domain.Entities;
+using Lagedra.Modules.IdentityAndVerification.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -28,5 +29,19 @@ public sealed class HostStripeAccountConfiguration : IEntityTypeConfiguration<Ho
 
         builder.Property(h => h.ChargesEnabled).IsRequired();
         builder.Property(h => h.PayoutsEnabled).IsRequired();
+
+        // Stored as string with an "Unknown" default so the migration back-fills
+        // existing rows safely (behaviour-neutral; populated on next status sync).
+        builder.Property(h => h.TaxStatus)
+            .HasConversion<string>()
+            .HasMaxLength(30)
+            .HasDefaultValue(HostAccountRequirementStatus.Unknown)
+            .IsRequired();
+
+        builder.Property(h => h.BankAccountStatus)
+            .HasConversion<string>()
+            .HasMaxLength(30)
+            .HasDefaultValue(HostAccountRequirementStatus.Unknown)
+            .IsRequired();
     }
 }

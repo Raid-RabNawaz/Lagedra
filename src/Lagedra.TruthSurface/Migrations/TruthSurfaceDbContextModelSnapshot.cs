@@ -113,8 +113,31 @@ namespace Lagedra.TruthSurface.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
+                    b.Property<DateTime?>("HostConsentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("HostConsentIp")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("HostConsentUserAgent")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<Guid?>("HostConsentUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("HostConsentVersion")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
                     b.Property<bool>("InquiryClosed")
                         .HasColumnType("boolean");
+
+                    b.Property<bool>("IsLocked")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<string>("JurisdictionPackVersion")
                         .IsRequired()
@@ -123,6 +146,9 @@ namespace Lagedra.TruthSurface.Migrations
 
                     b.Property<bool>("LandlordConfirmed")
                         .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("LockedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("ProtocolVersion")
                         .IsRequired()
@@ -146,6 +172,24 @@ namespace Lagedra.TruthSurface.Migrations
 
                     b.Property<bool>("TenantConfirmed")
                         .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("TenantConsentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TenantConsentIp")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("TenantConsentUserAgent")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<Guid?>("TenantConsentUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TenantConsentVersion")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");

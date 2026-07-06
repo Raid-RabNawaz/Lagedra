@@ -91,10 +91,22 @@ export const JurisdictionPackVersionsPage = () => {
     try {
       const detail = await adminApi.getPackVersionDetails(packId, versionId);
       setVersionDetail(detail);
-      setDepositCaps(detail.depositCapRules.map(({ id: _, ...rest }) => rest));
-      setFieldGating(detail.fieldGatingRules.map(({ id: _, ...rest }) => rest));
-      setEvidenceSchedules(detail.evidenceSchedules.map(({ id: _, ...rest }) => rest));
-      setEffectiveDateRules(detail.effectiveDateRules.map(({ id: _, ...rest }) => rest));
+      setDepositCaps(detail.depositCapRules.map(({ id, ...rest }) => {
+        void id;
+        return rest;
+      }));
+      setFieldGating(detail.fieldGatingRules.map(({ id, ...rest }) => {
+        void id;
+        return rest;
+      }));
+      setEvidenceSchedules(detail.evidenceSchedules.map(({ id, ...rest }) => {
+        void id;
+        return rest;
+      }));
+      setEffectiveDateRules(detail.effectiveDateRules.map(({ id, ...rest }) => {
+        void id;
+        return rest;
+      }));
     } catch {
       setError("Failed to load version details.");
     }

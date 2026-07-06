@@ -21,6 +21,7 @@ public static class ApplicationEndpoints
 
         group.MapPost("/", SubmitApplication);
         group.MapPost("/setup-intent", CreateBookingSetupIntent);
+        group.MapGet("/preview", GetReservationPreview);
         group.MapGet("/mine", ListMyApplications);
         group.MapPost("/{id:guid}/approve", ApproveApplication);
         group.MapPost("/{id:guid}/reject", RejectApplication);
@@ -46,6 +47,24 @@ public static class ApplicationEndpoints
             : ToErrorResult(result.Error);
     }
 
+    private static async Task<IResult> GetReservationPreview(
+        [FromQuery] Guid listingId,
+        [FromQuery] DateOnly checkIn,
+        [FromQuery] DateOnly checkOut,
+        ClaimsPrincipal user,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var tenantUserId = GetUserId(user);
+        var result = await mediator
+            .Send(new GetReservationPreviewQuery(listingId, tenantUserId, checkIn, checkOut), ct)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
+    }
+
     private static async Task<IResult> ListMyApplications(
         ClaimsPrincipal user,
         IMediator mediator,
@@ -63,6 +82,7 @@ public static class ApplicationEndpoints
     private static async Task<IResult> SubmitApplication(
         [FromBody] SubmitApplicationRequest request,
         ClaimsPrincipal user,
+        HttpContext httpContext,
         IMediator mediator,
         CancellationToken ct)
     {
@@ -72,7 +92,11 @@ public static class ApplicationEndpoints
                 request.ListingId, tenantUserId,
                 request.RequestedCheckIn, request.RequestedCheckOut,
                 request.GuestCount, request.Message,
-                request.StripePaymentMethodId), ct)
+                request.StripePaymentMethodId,
+                request.TruthSurfaceConsentGiven,
+                request.ConsentVersion,
+                GetClientIp(httpContext),
+                GetUserAgent(httpContext)), ct)
             .ConfigureAwait(true);
 
         return result.IsSuccess
@@ -86,12 +110,21 @@ public static class ApplicationEndpoints
         [FromRoute] Guid id,
         [FromBody] ApproveApplicationRequest request,
         ClaimsPrincipal user,
+        HttpContext httpContext,
         IMediator mediator,
         CancellationToken ct)
     {
+        ArgumentNullException.ThrowIfNull(request);
+
         var userId = GetUserId(user);
         var result = await mediator.Send(
-            new ApproveDealApplicationCommand(id, userId, request.DepositAmountCents), ct)
+            new ApproveDealApplicationCommand(
+                id,
+                userId,
+                request.TruthSurfaceConsentGiven,
+                request.ConsentVersion,
+                GetClientIp(httpContext),
+                GetUserAgent(httpContext)), ct)
             .ConfigureAwait(true);
 
         return result.IsSuccess
@@ -148,6 +181,17 @@ public static class ApplicationEndpoints
     private static Guid GetUserId(ClaimsPrincipal user) =>
         Guid.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)
             ?? throw new InvalidOperationException("User ID claim not found."));
+
+    private static string? GetClientIp(HttpContext httpContext) =>
+        httpContext.Connection.RemoteIpAddress?.ToString();
+
+    private static string? GetUserAgent(HttpContext httpContext)
+    {
+        var ua = httpContext.Request.Headers.UserAgent.ToString();
+        return string.IsNullOrWhiteSpace(ua)
+            ? null
+            : (ua.Length > 512 ? ua[..512] : ua);
+    }
 
     private static IResult ToErrorResult(Error error)
     {

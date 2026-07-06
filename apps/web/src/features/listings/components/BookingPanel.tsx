@@ -243,7 +243,7 @@ export const BookingPanel = ({ listing, isProspectiveGuest }: Props) => {
           )}
           <Separator className="my-2" />
           <div className="flex items-center justify-between font-semibold">
-            <span>Due at checkout</span>
+            <span>Due at booking</span>
             <span>{formatMoney(quote.data.totalCents)}</span>
           </div>
           {quote.data.protocolFeeCents > 0 && (
