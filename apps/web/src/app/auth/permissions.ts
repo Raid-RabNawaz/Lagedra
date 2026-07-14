@@ -51,7 +51,7 @@ const memberHostingGroup: NavGroup = {
   items: [
     { to: "/app/listings", label: "My listings", icon: "Building2", end: true },
     { to: "/app/listings/new", label: "Create listing", icon: "Plus" },
-    { to: "/app/channels", label: "Import (OwnerRez)", icon: "Link2" },
+    { to: "/app/channels", label: "Import (PMS)", icon: "Link2" },
     { to: "/app/inquiries", label: "Guest inquiries", icon: "MessageSquare" },
     { to: "/app/applications", label: "Booking requests", icon: "Inbox" },
     { to: "/app/deals", label: "Bookings", icon: "CalendarCheck" },
@@ -63,7 +63,7 @@ const arbitratorCasesGroup: NavGroup = {
   label: "Arbitration",
   items: [
     { to: "/app/arbitration", label: "My cases", icon: "Scale" },
-    { to: "/app/jurisdiction-packs", label: "Jurisdiction Packs", icon: "BookOpen" },
+    { to: "/app/lease-agreements", label: "Lease Agreements", icon: "BookOpen" },
   ],
 };
 
@@ -108,7 +108,7 @@ const adminConfigGroup: NavGroup = {
   label: "Admin · Configuration",
   items: [
     { to: "/app/admin/definitions", label: "Definitions", icon: "Settings" },
-    { to: "/app/admin/jurisdiction-packs", label: "Jurisdiction packs", icon: "BookOpen" },
+    { to: "/app/admin/lease-agreements", label: "Lease agreements", icon: "BookOpen" },
     { to: "/app/admin/dual-control", label: "Dual control", icon: "ShieldCheck" },
     { to: "/app/admin/settings", label: "Fees & settings", icon: "SlidersHorizontal" },
   ],
@@ -123,6 +123,7 @@ const partnerGroup: NavGroup = {
     { to: "/app/partner/reservations", label: "Reservations", icon: "CalendarCheck" },
     { to: "/app/partner/guests", label: "Invite guests", icon: "Mail" },
     { to: "/app/partner/endorsements", label: "Endorsements", icon: "ShieldCheck" },
+    { to: "/app/partner/inquiries", label: "Inquiries", icon: "MessageSquare" },
   ],
 };
 
@@ -311,7 +312,7 @@ const roleBottomTabs: Record<UserRole, NavItem[]> = {
 const guestBottomTabs: NavItem[] = [
   { to: "/listings", label: "Explore", icon: "Search", end: true },
   { to: "/auth/login", label: "Sign in", icon: "LogIn" },
-  { to: "/auth/register", label: "Sign up", icon: "UserPlus" },
+  { to: "/join", label: "Sign up", icon: "UserPlus" },
 ];
 
 const memberModeBottomTabs: Record<AppMode, NavItem[]> = {

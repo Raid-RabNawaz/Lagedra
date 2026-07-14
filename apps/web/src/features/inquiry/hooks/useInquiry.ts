@@ -2,8 +2,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { inquiryApi } from "@/features/inquiry/services/inquiryApi";
 import type {
   InquiryCategory,
+  InquiryDto,
   SubmitInquiryQuestionRequest,
   SubmitLandlordResponseRequest,
+  ProposeInquiryOfferRequest,
+  CounterInquiryOfferRequest,
 } from "@/api/types";
 
 export function useInquiryThread(dealId: string | undefined) {
@@ -186,7 +189,29 @@ export function useSubmitSessionAnswer() {
       sessionId: string;
       payload: SubmitLandlordResponseRequest;
     }) => inquiryApi.submitSessionAnswer(sessionId, payload),
-    onSuccess: (_data, variables) => {
+    onSuccess: (answer, variables) => {
+      queryClient.setQueryData<InquiryDto>(
+        ["inquiry", "by-session", variables.sessionId],
+        (current) => {
+          if (!current) return current;
+          return {
+            ...current,
+            questions: current.questions.map((q) =>
+              q.questionId === variables.payload.questionId
+                ? {
+                    ...q,
+                    answer: {
+                      answerId: answer.answerId,
+                      responseType: answer.responseType,
+                      answerValue: answer.answerValue,
+                      answeredAt: answer.answeredAt,
+                    },
+                  }
+                : q,
+            ),
+          };
+        },
+      );
       void queryClient.invalidateQueries({
         queryKey: ["inquiry", "by-session", variables.sessionId],
       });
@@ -194,6 +219,152 @@ export function useSubmitSessionAnswer() {
         queryKey: ["inquiry", "host-inbox"],
       });
     },
+  });
+}
+
+function invalidateOfferQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  sessionId: string,
+) {
+  void queryClient.invalidateQueries({
+    queryKey: ["inquiry", "by-session", sessionId],
+  });
+  void queryClient.invalidateQueries({ queryKey: ["inquiry", "host-inbox"] });
+  void queryClient.invalidateQueries({ queryKey: ["inquiry", "tenant-inbox"] });
+  void queryClient.invalidateQueries({ queryKey: ["reservation-preview"] });
+}
+
+export function useProposeInquiryOffer() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      sessionId,
+      payload,
+    }: {
+      sessionId: string;
+      payload: ProposeInquiryOfferRequest;
+    }) => inquiryApi.proposeOffer(sessionId, payload),
+    onSuccess: (_data, variables) => {
+      invalidateOfferQueries(queryClient, variables.sessionId);
+    },
+  });
+}
+
+export function useAcceptInquiryOffer() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      sessionId,
+      offerId,
+    }: {
+      sessionId: string;
+      offerId: string;
+    }) => inquiryApi.acceptOffer(sessionId, offerId),
+    onSuccess: (_data, variables) => {
+      invalidateOfferQueries(queryClient, variables.sessionId);
+    },
+  });
+}
+
+export function useCounterInquiryOffer() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      sessionId,
+      offerId,
+      payload,
+    }: {
+      sessionId: string;
+      offerId: string;
+      payload: CounterInquiryOfferRequest;
+    }) => inquiryApi.counterOffer(sessionId, offerId, payload),
+    onSuccess: (_data, variables) => {
+      invalidateOfferQueries(queryClient, variables.sessionId);
+    },
+  });
+}
+
+export function useWithdrawAcceptedInquiryOffer() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (sessionId: string) =>
+      inquiryApi.withdrawAcceptedOffer(sessionId),
+    onSuccess: (_data, sessionId) => {
+      invalidateOfferQueries(queryClient, sessionId);
+    },
+  });
+}
+
+function invalidatePartnerQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  sessionId: string,
+) {
+  void queryClient.invalidateQueries({
+    queryKey: ["inquiry", "by-session", sessionId],
+  });
+  void queryClient.invalidateQueries({ queryKey: ["inquiry", "host-inbox"] });
+  void queryClient.invalidateQueries({ queryKey: ["inquiry", "tenant-inbox"] });
+  void queryClient.invalidateQueries({ queryKey: ["inquiry", "partner-inbox"] });
+}
+
+export function useAddInquiryPartner() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      sessionId,
+      organizationId,
+    }: {
+      sessionId: string;
+      organizationId: string;
+    }) => inquiryApi.addPartner(sessionId, organizationId),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["inquiry", "by-session", data.sessionId], data);
+      invalidatePartnerQueries(queryClient, data.sessionId);
+    },
+  });
+}
+
+export function useRemoveInquiryPartner() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (sessionId: string) => inquiryApi.removePartner(sessionId),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["inquiry", "by-session", data.sessionId], data);
+      invalidatePartnerQueries(queryClient, data.sessionId);
+    },
+  });
+}
+
+export function useStartPartnerListingInquiry() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      listingId,
+      tenantUserId,
+    }: {
+      listingId: string;
+      tenantUserId: string;
+    }) => inquiryApi.startPartnerListingInquiry(listingId, tenantUserId),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["inquiry", "by-session", data.sessionId], data);
+      invalidatePartnerQueries(queryClient, data.sessionId);
+    },
+  });
+}
+
+export function usePartnerInquiries() {
+  return useQuery({
+    queryKey: ["inquiry", "partner-inbox"],
+    queryFn: () => inquiryApi.listPartnerInquiries(),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
   });
 }
 

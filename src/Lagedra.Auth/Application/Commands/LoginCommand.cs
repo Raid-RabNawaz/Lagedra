@@ -4,6 +4,7 @@ using Lagedra.Auth.Application.Services;
 using Lagedra.Auth.Domain;
 using Lagedra.Auth.Infrastructure.Seed;
 using Lagedra.SharedKernel.Results;
+using Lagedra.SharedKernel.Settings;
 using Lagedra.SharedKernel.Time;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
@@ -18,10 +19,16 @@ public sealed class LoginCommandHandler(
     JwtTokenService jwtTokenService,
     RefreshTokenService refreshTokenService,
     IClock clock,
-    IOptions<SuperAdminSettings> superAdminOptions)
+    IOptions<SuperAdminSettings> superAdminOptions,
+    IPlatformSettingsService platformSettings)
     : IRequestHandler<LoginCommand, Result<AuthResultDto>>
 {
     private readonly SuperAdminSettings _superAdmin = superAdminOptions.Value;
+
+    // Operational roles that must keep working while the platform is in
+    // pre-launch mode (e.g. to run the platform and flip the flag off).
+    private static readonly HashSet<UserRole> PreLaunchExemptRoles =
+        [UserRole.PlatformAdmin, UserRole.Arbitrator];
 
     public async Task<Result<AuthResultDto>> Handle(LoginCommand request, CancellationToken cancellationToken)
     {
@@ -57,7 +64,26 @@ public sealed class LoginCommandHandler(
             return AuthErrors.InvalidCredentials;
         }
 
+        if (!await CanSignInDuringPreLaunchAsync(user, cancellationToken).ConfigureAwait(true))
+        {
+            return AuthErrors.PreLaunchRestricted;
+        }
+
         return await BuildTokenResultAsync(user, request.IpAddress, cancellationToken).ConfigureAwait(true);
+    }
+
+    private async Task<bool> CanSignInDuringPreLaunchAsync(ApplicationUser user, CancellationToken ct)
+    {
+        if (PreLaunchExemptRoles.Contains(user.Role))
+        {
+            return true;
+        }
+
+        var preLaunch = await platformSettings
+            .GetBoolAsync(PlatformSettingKeys.PreLaunchEnabled, defaultValue: false, ct)
+            .ConfigureAwait(true);
+
+        return !preLaunch;
     }
 
     private bool IsSuperAdminRequest(LoginCommand request) =>

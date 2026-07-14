@@ -42,7 +42,8 @@ public sealed record ListingDetailsDto(
     DateTime UpdatedAt,
     string? RejectionReason = null,
     DateTime? SubmittedForReviewAt = null,
-    DateTime? ReviewedAt = null);
+    DateTime? ReviewedAt = null,
+    LeaseTermsDto? LeaseTerms = null);
 
 public sealed record AddressDto(
     string Street,

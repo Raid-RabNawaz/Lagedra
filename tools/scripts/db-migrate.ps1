@@ -22,7 +22,7 @@ $migrations = @(
     @{ Project = "src/Lagedra.Modules/InsuranceIntegration";               Context = "InsuranceDbContext" }
     @{ Project = "src/Lagedra.Modules/ComplianceMonitoring";               Context = "ComplianceDbContext" }
     @{ Project = "src/Lagedra.Modules/Arbitration";                        Context = "ArbitrationDbContext" }
-    @{ Project = "src/Lagedra.Modules/JurisdictionPacks";                  Context = "JurisdictionDbContext" }
+    @{ Project = "src/Lagedra.Modules/LeaseAgreements";                    Context = "LeaseAgreementDbContext" }
     @{ Project = "src/Lagedra.Modules/Evidence";                           Context = "EvidenceDbContext" }
     @{ Project = "src/Lagedra.Modules/Privacy";                            Context = "PrivacyDbContext" }
     @{ Project = "src/Lagedra.Modules/Notifications";                      Context = "NotificationDbContext" }

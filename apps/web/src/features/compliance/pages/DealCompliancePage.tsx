@@ -1,6 +1,5 @@
 import { useParams, Link } from "react-router-dom";
 import {
-  ArrowLeft,
   ShieldCheck,
   ShieldAlert,
   ShieldX,
@@ -12,6 +11,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { BackLink } from "@/components/shared/BackLink";
 import { Loader } from "@/components/shared/Loader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { useAuthStore } from "@/app/auth/authStore";
@@ -121,12 +121,11 @@ export function DealCompliancePage() {
         title="Compliance data unavailable"
         description="Could not load compliance information for this deal."
       >
-        <Link to={`/app/deals/${dealId}`}>
-          <Button variant="outline" size="sm">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to deal
-          </Button>
-        </Link>
+        <BackLink
+          fallbackTo={`/app/deals/${dealId}`}
+          variant="button"
+          label="Back to deal"
+        />
       </EmptyState>
     );
   }
@@ -135,13 +134,7 @@ export function DealCompliancePage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <Link
-        to={`/app/deals/${dealId}`}
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to deal
-      </Link>
+      <BackLink fallbackTo={`/app/deals/${dealId}`} label="Back to deal" />
 
       <div className="flex items-center gap-3">
         <ComplianceIcon

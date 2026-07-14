@@ -46,6 +46,12 @@ public sealed partial class NotificationProcessingJob(
                             .ConfigureAwait(false);
                         break;
 
+                    case NotificationChannel.Sms:
+                        await mediator
+                            .Send(new SendSmsNotificationCommand(notification.Id), ct)
+                            .ConfigureAwait(false);
+                        break;
+
                     case NotificationChannel.InApp:
                         notification.Payload.TryGetValue("title", out var title);
                         notification.Payload.TryGetValue("body", out var body);

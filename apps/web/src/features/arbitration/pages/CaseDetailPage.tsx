@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
-  ArrowLeft,
   Gavel,
   AlertTriangle,
   ExternalLink,
@@ -11,6 +10,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { BackLink } from "@/components/shared/BackLink";
 import { Loader } from "@/components/shared/Loader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { formatDate, formatMoney } from "@/utils/format";
@@ -186,12 +186,11 @@ export function CaseDetailPage() {
         title="Case not found"
         description="This case may not exist or you may not have access."
       >
-        <Link to="/app/arbitration">
-          <Button variant="outline" size="sm">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to cases
-          </Button>
-        </Link>
+        <BackLink
+          fallbackTo="/app/arbitration"
+          variant="button"
+          label="Back to cases"
+        />
       </EmptyState>
     );
   }
@@ -217,13 +216,7 @@ export function CaseDetailPage() {
   return (
     <div className="mx-auto max-w-4xl space-y-6 pb-12">
       <div className="flex items-center justify-between gap-3">
-        <Link
-          to="/app/arbitration"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          All cases
-        </Link>
+        <BackLink fallbackTo="/app/arbitration" label="All cases" />
         {userIsAdmin && (
           <Link to="/app/admin/arbitration-backlog">
             <Button variant="outline" size="sm">

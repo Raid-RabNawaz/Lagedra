@@ -133,11 +133,33 @@ public sealed partial class ComplianceSignalProcessorJob(
                 break;
 
             case "PositiveReview":
+                var revieweeId = ParseRevieweeUserId(payload) ?? tenantId;
+                if (revieweeId == Guid.Empty)
+                {
+                    break;
+                }
+
                 await mediator.Send(new RecordLedgerEntryCommand(
-                    tenantId,
+                    revieweeId,
                     Domain.TrustLedgerEntryType.PositiveReview,
                     dealId,
                     payload ?? "Positive review received",
+                    true), ct)
+                    .ConfigureAwait(false);
+                break;
+
+            case "ReviewConcern":
+                var concernRevieweeId = ParseRevieweeUserId(payload) ?? tenantId;
+                if (concernRevieweeId == Guid.Empty)
+                {
+                    break;
+                }
+
+                await mediator.Send(new RecordLedgerEntryCommand(
+                    concernRevieweeId,
+                    Domain.TrustLedgerEntryType.ReviewConcern,
+                    dealId,
+                    payload ?? "Low stay rating recorded",
                     true), ct)
                     .ConfigureAwait(false);
                 break;
@@ -152,6 +174,29 @@ public sealed partial class ComplianceSignalProcessorJob(
                     .ConfigureAwait(false);
                 break;
         }
+    }
+
+    private static Guid? ParseRevieweeUserId(string? payload)
+    {
+        if (string.IsNullOrWhiteSpace(payload))
+        {
+            return null;
+        }
+
+        const string prefix = "revieweeUserId=";
+        var start = payload.IndexOf(prefix, StringComparison.OrdinalIgnoreCase);
+        if (start < 0)
+        {
+            return null;
+        }
+
+        var valueStart = start + prefix.Length;
+        var valueEnd = payload.IndexOf(';', valueStart);
+        var raw = valueEnd < 0
+            ? payload[valueStart..]
+            : payload[valueStart..valueEnd];
+
+        return Guid.TryParse(raw.Trim(), out var id) ? id : null;
     }
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "No unprocessed compliance signals")]

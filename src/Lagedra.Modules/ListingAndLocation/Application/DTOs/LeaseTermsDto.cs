@@ -1,0 +1,26 @@
+namespace Lagedra.Modules.ListingAndLocation.Application.DTOs;
+
+public sealed record LeaseTermsDto(
+    int RentDueDayOfMonth = 1,
+    long NsfFirstFeeCents = 2500,
+    long NsfSubsequentFeeCents = 3500,
+    decimal LateFeePercent = 5m,
+    int LateFeeGraceDays = 3,
+    string? UtilitiesResponsibility = null,
+    bool YardMaintenanceByTenant = false,
+    bool Furnished = false,
+    string? IncludedAppliancesNotes = null,
+    int KeyCount = 1,
+    int MailboxKeyCount = 0,
+    long KeyReplacementFeeCents = 20000,
+    long LockoutFeeCents = 20000,
+    int ParkingSpaceCount = 0,
+    string? ParkingDescription = null,
+    bool ParkingIncludedInRent = true,
+    int MaxGuestConsecutiveDays = 7,
+    long RentersInsuranceMinLiabilityCents = 100_000_00,
+    int EarlyTerminationFeeMonths = 2,
+    bool BuiltBefore1978 = false,
+    string? LeadPaintKnowledge = null,
+    bool RentCapJustCauseExempt = false,
+    string? PaymentMethods = null);

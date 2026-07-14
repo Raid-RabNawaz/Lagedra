@@ -24,7 +24,7 @@ COPY src/Lagedra.Modules/VerificationAndRisk/VerificationAndRisk.csproj         
 COPY src/Lagedra.Modules/InsuranceIntegration/InsuranceIntegration.csproj         src/Lagedra.Modules/InsuranceIntegration/
 COPY src/Lagedra.Modules/ComplianceMonitoring/ComplianceMonitoring.csproj         src/Lagedra.Modules/ComplianceMonitoring/
 COPY src/Lagedra.Modules/Arbitration/Arbitration.csproj                           src/Lagedra.Modules/Arbitration/
-COPY src/Lagedra.Modules/JurisdictionPacks/JurisdictionPacks.csproj               src/Lagedra.Modules/JurisdictionPacks/
+COPY src/Lagedra.Modules/LeaseAgreements/LeaseAgreements.csproj                   src/Lagedra.Modules/LeaseAgreements/
 COPY src/Lagedra.Modules/Evidence/Evidence.csproj                                 src/Lagedra.Modules/Evidence/
 COPY src/Lagedra.Modules/Privacy/Privacy.csproj                                   src/Lagedra.Modules/Privacy/
 COPY src/Lagedra.Modules/Notifications/Notifications.csproj                       src/Lagedra.Modules/Notifications/
@@ -34,6 +34,7 @@ COPY src/Lagedra.Modules/PartnerNetwork/PartnerNetwork.csproj                   
 COPY src/Lagedra.Modules/AuditLog/AuditLog.csproj                               src/Lagedra.Modules/AuditLog/
 COPY src/Lagedra.Modules/Analytics/Analytics.csproj                             src/Lagedra.Modules/Analytics/
 COPY src/Lagedra.Modules/ChannelIntegration/ChannelIntegration.csproj           src/Lagedra.Modules/ChannelIntegration/
+COPY src/Lagedra.Modules/Reviews/Reviews.csproj                                 src/Lagedra.Modules/Reviews/
 
 # Test projects
 COPY tests/Lagedra.Tests.Unit/Lagedra.Tests.Unit.csproj                       tests/Lagedra.Tests.Unit/

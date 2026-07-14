@@ -34,6 +34,10 @@ public sealed class PartnerOrganizationConfiguration
         builder.Property(o => o.EndorsementTermsAcceptedAt).IsRequired();
         builder.Property(o => o.EndorsementTermsAcceptedByUserId).IsRequired();
 
+        builder.Property(o => o.StripeCustomerId)
+            .HasMaxLength(64)
+            .IsRequired(false);
+
         builder.HasIndex(o => o.Status);
 
         builder.Ignore(o => o.DomainEvents);

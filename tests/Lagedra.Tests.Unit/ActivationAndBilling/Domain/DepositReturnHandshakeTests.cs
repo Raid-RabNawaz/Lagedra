@@ -15,6 +15,7 @@ public class DepositReturnHandshakeTests
     private static readonly Guid Deal = Guid.NewGuid();
     private static readonly Guid Host = Guid.NewGuid();
     private static readonly Guid Tenant = Guid.NewGuid();
+    private static readonly Guid DamageEvidence = Guid.NewGuid();
 
     private sealed class MutableClock : IClock
     {
@@ -71,7 +72,7 @@ public class DepositReturnHandshakeTests
         var clock = new MutableClock();
         var confirmation = ConfirmedWithDeposit(clock);
 
-        confirmation.ConfirmDepositReturnedByHost(200_000, "Zelle", "ref#42", clock);
+        confirmation.ConfirmDepositReturnedByHost(200_000, "Zelle", "ref#42", null, clock);
 
         confirmation.HostConfirmedDepositReturnedAt.Should().NotBeNull();
         confirmation.DepositReturnAmountCents.Should().Be(200_000);
@@ -95,11 +96,39 @@ public class DepositReturnHandshakeTests
         confirmation.ConfirmDepositReceivedByTenant(clock);
         confirmation.DepositReturnSettledAt.Should().BeNull();
 
-        confirmation.ConfirmDepositReturnedByHost(150_000, "Cash", null, clock);
+        confirmation.ConfirmDepositReturnedByHost(
+            150_000, "Cash", "Broken lamp — replaced", DamageEvidence, clock);
 
         confirmation.DepositReturnSettledAt.Should().NotBeNull();
+        confirmation.DepositReturnEvidenceManifestId.Should().Be(DamageEvidence);
         confirmation.DomainEvents.OfType<DepositReturnSettledEvent>()
             .Should().ContainSingle();
+    }
+
+    [Fact]
+    public void Partial_return_requires_deduction_reason()
+    {
+        var clock = new MutableClock();
+        var confirmation = ConfirmedWithDeposit(clock);
+
+        var act = () => confirmation.ConfirmDepositReturnedByHost(
+            150_000, "Cash", null, DamageEvidence, clock);
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*reason*");
+    }
+
+    [Fact]
+    public void Partial_return_requires_damage_evidence()
+    {
+        var clock = new MutableClock();
+        var confirmation = ConfirmedWithDeposit(clock);
+
+        var act = () => confirmation.ConfirmDepositReturnedByHost(
+            150_000, "Cash", "Wall damage", null, clock);
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*damage photo*");
     }
 
     [Fact]
@@ -108,14 +137,14 @@ public class DepositReturnHandshakeTests
         var clock = new MutableClock();
         var confirmation = ConfirmedWithDeposit(clock);
 
-        confirmation.ConfirmDepositReturnedByHost(200_000, "Zelle", null, clock);
+        confirmation.ConfirmDepositReturnedByHost(200_000, "Zelle", null, null, clock);
         confirmation.ConfirmDepositReceivedByTenant(clock);
         var settledAt = confirmation.DepositReturnSettledAt;
         confirmation.ClearDomainEvents();
 
         // A late duplicate host confirm must not change the settled amount,
         // move the settled timestamp, or re-raise the completion event.
-        confirmation.ConfirmDepositReturnedByHost(999_999, "Other", "late", clock);
+        confirmation.ConfirmDepositReturnedByHost(999_999, "Other", "late", null, clock);
 
         confirmation.DepositReturnAmountCents.Should().Be(200_000);
         confirmation.DepositReturnSettledAt.Should().Be(settledAt);
@@ -128,7 +157,7 @@ public class DepositReturnHandshakeTests
         var clock = new MutableClock();
         var noDeposit = ConfirmedWithDeposit(clock, deposit: 0);
 
-        var act = () => noDeposit.ConfirmDepositReturnedByHost(0, "Cash", null, clock);
+        var act = () => noDeposit.ConfirmDepositReturnedByHost(0, "Cash", null, null, clock);
 
         act.Should().Throw<InvalidOperationException>();
     }

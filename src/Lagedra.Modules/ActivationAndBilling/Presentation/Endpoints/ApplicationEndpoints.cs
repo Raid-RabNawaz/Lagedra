@@ -25,6 +25,7 @@ public static class ApplicationEndpoints
         group.MapGet("/mine", ListMyApplications);
         group.MapPost("/{id:guid}/approve", ApproveApplication);
         group.MapPost("/{id:guid}/reject", RejectApplication);
+        group.MapPost("/{id:guid}/attach-payment", AttachApplicationPayment);
         group.MapGet("/{id:guid}", GetApplication);
         group.MapGet("/listing/{listingId:guid}", ListApplicationsForListing);
 
@@ -140,6 +141,33 @@ public static class ApplicationEndpoints
     {
         var userId = GetUserId(user);
         var result = await mediator.Send(new RejectDealApplicationCommand(id, userId), ct)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> AttachApplicationPayment(
+        [FromRoute] Guid id,
+        [FromBody] AttachApplicationPaymentRequest request,
+        ClaimsPrincipal user,
+        HttpContext httpContext,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var userId = GetUserId(user);
+        var result = await mediator.Send(
+            new AttachApplicationPaymentCommand(
+                id,
+                userId,
+                request.StripePaymentMethodId,
+                request.TruthSurfaceConsentGiven,
+                request.ConsentVersion,
+                GetClientIp(httpContext),
+                GetUserAgent(httpContext)), ct)
             .ConfigureAwait(true);
 
         return result.IsSuccess

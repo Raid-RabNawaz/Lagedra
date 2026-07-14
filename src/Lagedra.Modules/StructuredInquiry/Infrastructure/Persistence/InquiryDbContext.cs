@@ -16,6 +16,7 @@ public sealed class InquiryDbContext(
     public DbSet<InquirySession> Sessions => Set<InquirySession>();
     public DbSet<InquiryQuestion> Questions => Set<InquiryQuestion>();
     public DbSet<InquiryAnswer> Answers => Set<InquiryAnswer>();
+    public DbSet<InquiryOffer> Offers => Set<InquiryOffer>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

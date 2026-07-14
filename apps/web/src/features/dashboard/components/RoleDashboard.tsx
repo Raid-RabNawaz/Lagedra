@@ -73,7 +73,7 @@ function RoleQuickActions({ role }: { role: string }) {
   if (role === roles.arbitrator) {
     actions = [
       { label: "My cases", description: "Review and resolve disputes", to: "/app/arbitration", icon: Scale },
-      { label: "Jurisdiction packs", description: "Manage legal packs", to: "/app/jurisdiction-packs", icon: BookOpen },
+      { label: "Lease agreements", description: "Manage lease templates", to: "/app/lease-agreements", icon: BookOpen },
     ];
   } else if (isAdmin(role)) {
     actions = [

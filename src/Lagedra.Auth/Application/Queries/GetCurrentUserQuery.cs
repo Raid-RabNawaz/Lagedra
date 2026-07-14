@@ -50,5 +50,19 @@ public sealed class GetCurrentUserQueryHandler(UserManager<ApplicationUser> user
             ResponseRatePercent: user.ResponseRatePercent,
             ResponseTimeMinutes: user.ResponseTimeMinutes,
             MemberSince: user.CreatedAt,
-            LastLoginAt: user.LastLoginAt);
+            LastLoginAt: user.LastLoginAt,
+            MailingStreet: user.MailingStreet,
+            MailingCity: user.MailingCity,
+            MailingState: user.MailingState,
+            MailingZip: user.MailingZip,
+            MailingCountry: user.MailingCountry,
+            NoticeAddressSameAsMailing: user.NoticeAddressSameAsMailing,
+            NoticeStreet: user.NoticeStreet,
+            NoticeCity: user.NoticeCity,
+            NoticeState: user.NoticeState,
+            NoticeZip: user.NoticeZip,
+            NoticeCountry: user.NoticeCountry,
+            BrokerName: user.BrokerName,
+            BrokerDreLicense: user.BrokerDreLicense,
+            BrokerScopeNotes: user.BrokerScopeNotes);
 }

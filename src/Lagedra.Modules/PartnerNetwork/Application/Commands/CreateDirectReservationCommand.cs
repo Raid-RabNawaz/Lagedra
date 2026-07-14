@@ -1,36 +1,33 @@
 using Lagedra.Modules.PartnerNetwork.Application.Authorization;
 using Lagedra.Modules.PartnerNetwork.Application.DTOs;
 using Lagedra.Modules.PartnerNetwork.Domain.Entities;
+using Lagedra.Modules.PartnerNetwork.Domain.Enums;
 using Lagedra.Modules.PartnerNetwork.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Results;
 using Lagedra.SharedKernel.Time;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 
 namespace Lagedra.Modules.PartnerNetwork.Application.Commands;
 
 /// <summary>
 /// Creates a <see cref="DirectReservation"/> AND a real <c>DealApplication</c>
-/// (via the SharedKernel <see cref="IPartnerDirectBookingService"/>) for a guest
-/// who already has a Lagedra account (Phase 18.7).
+/// for an endorsed member of the partner organization.
 ///
-/// If the guest does NOT have an account yet, the partner must call
-/// <c>POST /v1/partners/{id}/invites</c> first (which creates the user + reservation
-/// in one shot) — the standalone reservation endpoint deliberately does NOT auto-invite
-/// to keep the two responsibilities separable.
-///
-/// Authorization: caller must be a verified-org admin via
-/// <see cref="IPartnerAccessService.RequireVerifiedOrgAdminAsync"/>.
+/// The member must already have an Approved endorsement for this org.
+/// Invite + endorse first via <c>InvitePartnerGuestCommand</c> when needed.
 /// </summary>
 public sealed record CreateDirectReservationCommand(
     Guid OrganizationId,
-    string GuestName,
-    string GuestEmail,
+    Guid TenantUserId,
     Guid ListingId,
+    string PayerType,
     Guid ReservedByUserId,
     bool ReservedByIsPlatformAdmin,
     DateOnly? RequestedCheckIn = null,
-    DateOnly? RequestedCheckOut = null) : IRequest<Result<DirectReservationConversionDto>>;
+    DateOnly? RequestedCheckOut = null,
+    string? StripePaymentMethodId = null) : IRequest<Result<DirectReservationConversionDto>>;
 
 public sealed record DirectReservationConversionDto(
     DirectReservationDto Reservation,
@@ -40,20 +37,48 @@ public sealed record DirectReservationConversionDto(
 public sealed class CreateDirectReservationCommandHandler(
     PartnerDbContext dbContext,
     IPartnerAccessService accessService,
-    IUserLookupService userLookup,
+    IUserDirectoryService userDirectory,
     IPartnerDirectBookingService bookingService,
     IClock clock)
     : IRequestHandler<CreateDirectReservationCommand, Result<DirectReservationConversionDto>>
 {
-    private static readonly Error GuestNotInvited = new(
-        "Reservation.GuestNotInvited",
-        "No Lagedra account exists for that guest email. Use POST /v1/partners/{id}/invites first to create the user account.");
+    private static readonly Error MemberRequired = new(
+        "Reservation.MemberRequired",
+        "Select an endorsed member before creating a reservation.");
+
+    private static readonly Error MemberNotEndorsed = new(
+        "Reservation.MemberNotEndorsed",
+        "You can only book for members with an approved endorsement from your organization.");
+
+    private static readonly Error InvalidPayerType = new(
+        "Reservation.InvalidPayerType",
+        "Payer type must be Tenant or PartnerOrganization.");
+
+    private static readonly Error PartnerPaymentRequired = new(
+        "Reservation.PartnerPaymentRequired",
+        "Attach a company payment method when the partner organization pays.");
 
     public async Task<Result<DirectReservationConversionDto>> Handle(
         CreateDirectReservationCommand request,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        if (request.TenantUserId == Guid.Empty)
+        {
+            return Result<DirectReservationConversionDto>.Failure(MemberRequired);
+        }
+
+        if (!TryParsePayerType(request.PayerType, out var payerType))
+        {
+            return Result<DirectReservationConversionDto>.Failure(InvalidPayerType);
+        }
+
+        if (payerType == PartnerDirectBookingPayerType.PartnerOrganization
+            && string.IsNullOrWhiteSpace(request.StripePaymentMethodId))
+        {
+            return Result<DirectReservationConversionDto>.Failure(PartnerPaymentRequired);
+        }
 
         var authzResult = await accessService.RequireVerifiedOrgAdminAsync(
             request.ReservedByUserId,
@@ -66,13 +91,49 @@ public sealed class CreateDirectReservationCommandHandler(
             return Result<DirectReservationConversionDto>.Failure(authzResult.Error);
         }
 
-        var tenantUserId = await userLookup
-            .FindUserIdByEmailAsync(request.GuestEmail, cancellationToken)
+        var endorsed = await dbContext.Endorsements
+            .AsNoTracking()
+            .AnyAsync(
+                e => e.OrganizationId == request.OrganizationId
+                  && e.TenantUserId == request.TenantUserId
+                  && e.Status == PartnerEndorsementStatus.Approved,
+                cancellationToken)
             .ConfigureAwait(false);
 
-        if (tenantUserId is null)
+        if (!endorsed)
         {
-            return Result<DirectReservationConversionDto>.Failure(GuestNotInvited);
+            return Result<DirectReservationConversionDto>.Failure(MemberNotEndorsed);
+        }
+
+        var directory = await userDirectory
+            .GetEntriesAsync([request.TenantUserId], cancellationToken)
+            .ConfigureAwait(false);
+
+        if (!directory.TryGetValue(request.TenantUserId, out var member))
+        {
+            return Result<DirectReservationConversionDto>.Failure(MemberNotEndorsed);
+        }
+
+        var invite = await dbContext.GuestInvites
+            .AsNoTracking()
+            .Where(i => i.OrganizationId == request.OrganizationId
+                     && i.InvitedUserId == request.TenantUserId)
+            .OrderByDescending(i => i.InvitedAt)
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var guestName = !string.IsNullOrWhiteSpace(invite?.FullName)
+            ? invite!.FullName
+            : member.DisplayName;
+        var guestEmail = !string.IsNullOrWhiteSpace(member.Email)
+            ? member.Email
+            : invite?.Email ?? string.Empty;
+
+        if (string.IsNullOrWhiteSpace(guestEmail))
+        {
+            return Result<DirectReservationConversionDto>.Failure(
+                new Error("Reservation.MemberEmailMissing",
+                    "Could not resolve an email for the selected member."));
         }
 
         var (checkIn, checkOut) = ResolveDates(request);
@@ -80,10 +141,13 @@ public sealed class CreateDirectReservationCommandHandler(
         var bookingResult = await bookingService.SubmitAsync(
             new PartnerDirectBookingRequest(
                 request.ListingId,
-                tenantUserId.Value,
+                request.TenantUserId,
                 request.OrganizationId,
                 checkIn,
-                checkOut),
+                checkOut,
+                payerType,
+                request.ReservedByUserId,
+                request.StripePaymentMethodId),
             cancellationToken).ConfigureAwait(false);
 
         if (bookingResult.IsFailure)
@@ -92,7 +156,7 @@ public sealed class CreateDirectReservationCommandHandler(
         }
 
         var reservation = DirectReservation.Create(
-            request.OrganizationId, request.GuestName, request.GuestEmail,
+            request.OrganizationId, guestName, guestEmail,
             request.ListingId, request.ReservedByUserId, clock);
 
         reservation.LinkDealApplication(bookingResult.Value.ApplicationId, clock);
@@ -108,11 +172,6 @@ public sealed class CreateDirectReservationCommandHandler(
             TruthSurfacePending: true));
     }
 
-    /// <summary>
-    /// Defaults: when the partner does not specify dates, book a 30-day stay starting
-    /// 7 days from today (UTC). Listing-level min/max-stay is still enforced inside
-    /// the booking service.
-    /// </summary>
     private (DateOnly CheckIn, DateOnly CheckOut) ResolveDates(CreateDirectReservationCommand request)
     {
         var today = DateOnly.FromDateTime(clock.UtcNow.Date);
@@ -121,5 +180,24 @@ public sealed class CreateDirectReservationCommandHandler(
 
         return (request.RequestedCheckIn ?? defaultCheckIn,
                 request.RequestedCheckOut ?? defaultCheckOut);
+    }
+
+    private static bool TryParsePayerType(string? raw, out PartnerDirectBookingPayerType payerType)
+    {
+        if (string.Equals(raw, "Tenant", StringComparison.OrdinalIgnoreCase))
+        {
+            payerType = PartnerDirectBookingPayerType.Tenant;
+            return true;
+        }
+
+        if (string.Equals(raw, "PartnerOrganization", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(raw, "Partner", StringComparison.OrdinalIgnoreCase))
+        {
+            payerType = PartnerDirectBookingPayerType.PartnerOrganization;
+            return true;
+        }
+
+        payerType = PartnerDirectBookingPayerType.Tenant;
+        return false;
     }
 }

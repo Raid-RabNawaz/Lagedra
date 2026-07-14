@@ -8,4 +8,5 @@ public sealed class EmailMessage
     public required string HtmlBody { get; init; }
     public string? PlainTextBody { get; init; }
     public string? ReplyTo { get; init; }
+    public IReadOnlyList<EmailAttachment>? Attachments { get; init; }
 }

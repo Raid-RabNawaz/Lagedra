@@ -42,14 +42,6 @@ public sealed class RejectDealApplicationCommandHandler(
 
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        return Result<DealApplicationDto>.Success(MapToDto(application));
+        return Result<DealApplicationDto>.Success(DealApplicationDtoMapper.ToDto(application));
     }
-
-    private static DealApplicationDto MapToDto(DealApplication a) =>
-        new(a.Id, a.ListingId, a.TenantUserId, a.LandlordUserId,
-            a.Status, a.DealId, a.SubmittedAt, a.DecidedAt,
-            a.RequestedCheckIn, a.RequestedCheckOut, a.StayDurationDays,
-            a.DepositAmountCents, a.InsuranceFeeCents, a.FirstMonthRentCents,
-            a.PartnerOrganizationId, a.IsPartnerReferred, a.JurisdictionWarning, a.Source,
-            a.GuestCount, a.Message);
 }

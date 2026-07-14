@@ -56,6 +56,7 @@ public sealed class StartListingInquiryCommandHandler(
             .AsNoTracking()
             .Include(s => s.Questions)
                 .ThenInclude(q => q.Answer)
+            .Include(s => s.Offers)
             .Where(s => s.ListingId == request.ListingId
                 && s.TenantUserId == request.TenantUserId
                 && s.Status == InquirySessionStatus.Open)
@@ -65,7 +66,8 @@ public sealed class StartListingInquiryCommandHandler(
 
         if (existing is not null)
         {
-            return Result<InquiryDto>.Success(MapToDto(existing));
+            return Result<InquiryDto>.Success(
+                InquiryDtoMapper.ToDto(existing, landlordUserId: listing.LandlordUserId));
         }
 
         var session = InquirySession.CreateForListing(
@@ -74,22 +76,7 @@ public sealed class StartListingInquiryCommandHandler(
         dbContext.Sessions.Add(session);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        return Result<InquiryDto>.Success(MapToDto(session));
+        return Result<InquiryDto>.Success(
+            InquiryDtoMapper.ToDto(session, landlordUserId: listing.LandlordUserId));
     }
-
-    private static InquiryDto MapToDto(InquirySession s) =>
-        new(s.Id, s.DealId, s.ListingId, s.TenantUserId, s.Status,
-            s.UnlockedByLandlordAt, s.ClosedAt, s.CreatedAt,
-            s.Questions.Select(q => new InquiryQuestionDto(
-                q.Id,
-                q.PredefinedQuestionId,
-                q.Category,
-                q.SubmittedAt,
-                q.Answer is not null
-                    ? new InquiryAnswerDto(q.Answer.Id, q.Answer.ResponseType,
-                        q.Answer.AnswerValue, q.Answer.AnsweredAt)
-                    : null,
-                q.CustomText,
-                q.OpenQuestionText))
-            .ToList());
 }

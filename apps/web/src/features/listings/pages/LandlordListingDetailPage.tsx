@@ -2,7 +2,6 @@ import { lazy, Suspense, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowLeft,
   Pencil,
   ExternalLink,
   Send,
@@ -34,6 +33,7 @@ import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Separator } from "@/components/ui/separator";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { BackLink } from "@/components/shared/BackLink";
 import { Loader } from "@/components/shared/Loader";
 import { formatMoney, formatDate } from "@/utils/format";
 import { cn } from "@/lib/utils";
@@ -121,10 +121,12 @@ export const LandlordListingDetailPage = () => {
     return (
       <div className="text-center py-16">
         <p className="text-destructive font-medium">Listing not found or failed to load.</p>
-        <Link to="/app/listings" className={cn(buttonVariants({ variant: "outline" }), "mt-4")}>
-          <ArrowLeft className="h-4 w-4" />
-          Back to my listings
-        </Link>
+        <BackLink
+          fallbackTo="/app/listings"
+          variant="button"
+          label="Back to my listings"
+          className="mt-4"
+        />
       </div>
     );
   }
@@ -173,13 +175,7 @@ export const LandlordListingDetailPage = () => {
   return (
     <div className="space-y-6">
       <div>
-        <Link
-          to="/app/listings"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to my listings
-        </Link>
+        <BackLink fallbackTo="/app/listings" label="Back to my listings" />
       </div>
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">

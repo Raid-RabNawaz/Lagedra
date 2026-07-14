@@ -62,6 +62,8 @@ public sealed class GetReservationPreviewQueryHandler(
             pricing.ServiceFeeCents,
             pricing.MonthlyProtocolFeeCents,
             pricing.TotalPayableCents,
-            duration));
+            duration,
+            pricing.IsNegotiatedOffer,
+            pricing.NegotiatedOfferId));
     }
 }

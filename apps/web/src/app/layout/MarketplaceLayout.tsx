@@ -92,7 +92,7 @@ export const MarketplaceLayout = () => {
                   Sign in
                 </Link>
                 <Link
-                  to="/auth/register"
+                  to="/join"
                   className={cn(
                     buttonVariants({ variant: "default", size: "sm" }),
                     "gap-1.5 rounded-full px-5 font-semibold",

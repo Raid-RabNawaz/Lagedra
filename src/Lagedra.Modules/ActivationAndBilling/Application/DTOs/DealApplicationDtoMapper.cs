@@ -10,7 +10,9 @@ namespace Lagedra.Modules.ActivationAndBilling.Application.DTOs;
 /// </summary>
 internal static class DealApplicationDtoMapper
 {
-    public static DealApplicationDto ToDto(DealApplication a)
+    public static DealApplicationDto ToDto(
+        DealApplication a,
+        string? partnerOrganizationName = null)
     {
         ArgumentNullException.ThrowIfNull(a);
 
@@ -24,6 +26,14 @@ internal static class DealApplicationDtoMapper
             a.ServiceFeeCents, a.TotalPayableSnapshotCents,
             a.TenantVerificationTierAtRequest, a.DepositReason,
             a.TruthSurfaceSnapshotId,
-            a.TenantTruthSurfaceConsentGiven, a.HostTruthSurfaceConsentGiven);
+            a.TenantTruthSurfaceConsentGiven, a.HostTruthSurfaceConsentGiven,
+            ListingTitle: null,
+            ListingCoverPhotoUri: null,
+            ListingCity: null,
+            a.PayerType,
+            a.PayerUserId,
+            HasPaymentMethod: !string.IsNullOrWhiteSpace(a.StripePaymentMethodId),
+            IsPaymentReady: a.IsPaymentReady,
+            PartnerOrganizationName: partnerOrganizationName);
     }
 }

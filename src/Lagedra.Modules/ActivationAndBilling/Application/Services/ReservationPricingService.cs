@@ -12,6 +12,8 @@ namespace Lagedra.Modules.ActivationAndBilling.Application.Services;
 /// quotes insurance + platform service fee, and totals the tenant payable. Used
 /// by both the reservation-preview query and the submit command so the figure
 /// the tenant sees is exactly what gets snapshotted and charged.
+/// When an accepted inquiry offer exists, rent and deposit come from that offer
+/// instead of listing/tier defaults; fees are still derived from the negotiated rent.
 /// </summary>
 public interface IReservationPricingService
 {
@@ -39,8 +41,11 @@ public sealed record ReservationPricing(
     long InsuranceFeeCents,
     long ServiceFeeCents,
     long MonthlyProtocolFeeCents,
-    long TotalPayableCents)
+    long TotalPayableCents,
+    Guid? NegotiatedOfferId = null)
 {
+    public bool IsNegotiatedOffer => NegotiatedOfferId is not null;
+
     public ReservationDepositSnapshot ToSnapshot() => new(
         Tier,
         DepositCents,
@@ -53,7 +58,8 @@ public sealed record ReservationPricing(
 public sealed class ReservationPricingService(
     ITenantVerificationTierResolver tierResolver,
     IInsuranceFeeCalculator insuranceFeeCalculator,
-    IPlatformSettingsService settings)
+    IPlatformSettingsService settings,
+    IAcceptedInquiryOfferProvider acceptedOfferProvider)
     : IReservationPricingService
 {
     public async Task<ReservationPricing> ComputeAsync(
@@ -83,38 +89,63 @@ public sealed class ReservationPricingService(
             partnerOrganizationId = resolved.PartnerOrganizationId;
         }
 
-        var depositSelection = DepositSelectionService.Select(
-            tier,
-            listing.MaxDepositCents,
-            listing.DepositUnverifiedCents,
-            listing.DepositBackgroundVerifiedCents,
-            listing.DepositPartnerGuaranteedCents);
-
-        var insuranceQuote = await insuranceFeeCalculator
-            .CalculateFeeAsync(listing.MonthlyRentCents, stayDurationDays, cancellationToken)
+        var acceptedOffer = await acceptedOfferProvider
+            .GetAcceptedOfferAsync(listing.Id, tenantUserId, cancellationToken)
             .ConfigureAwait(false);
 
-        var serviceFee = await ResolveServiceFeeAsync(listing.MonthlyRentCents, cancellationToken)
+        long rentCents;
+        long depositCents;
+        string depositReason;
+        Guid? negotiatedOfferId;
+
+        if (acceptedOffer is not null)
+        {
+            rentCents = acceptedOffer.RentCents;
+            depositCents = acceptedOffer.DepositCents;
+            depositReason = $"NegotiatedOffer:{acceptedOffer.OfferId}";
+            negotiatedOfferId = acceptedOffer.OfferId;
+        }
+        else
+        {
+            var depositSelection = DepositSelectionService.Select(
+                tier,
+                listing.MaxDepositCents,
+                listing.DepositUnverifiedCents,
+                listing.DepositBackgroundVerifiedCents,
+                listing.DepositPartnerGuaranteedCents);
+
+            rentCents = listing.MonthlyRentCents;
+            depositCents = depositSelection.AmountCents;
+            depositReason = depositSelection.Reason;
+            negotiatedOfferId = null;
+        }
+
+        var insuranceQuote = await insuranceFeeCalculator
+            .CalculateFeeAsync(rentCents, stayDurationDays, cancellationToken)
+            .ConfigureAwait(false);
+
+        var serviceFee = await ResolveServiceFeeAsync(rentCents, cancellationToken)
             .ConfigureAwait(false);
 
         var protocolFee = await ResolveMonthlyProtocolFeeAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        var total = depositSelection.AmountCents
-            + listing.MonthlyRentCents
+        var total = depositCents
+            + rentCents
             + insuranceQuote.FeeCents
             + serviceFee;
 
         return new ReservationPricing(
             tier,
             partnerOrganizationId,
-            depositSelection.AmountCents,
-            depositSelection.Reason,
-            listing.MonthlyRentCents,
+            depositCents,
+            depositReason,
+            rentCents,
             insuranceQuote.FeeCents,
             serviceFee,
             protocolFee,
-            total);
+            total,
+            negotiatedOfferId);
     }
 
     private async Task<long> ResolveServiceFeeAsync(long rentBaseCents, CancellationToken ct)

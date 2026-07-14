@@ -1,4 +1,5 @@
 using Lagedra.Modules.ActivationAndBilling.Application.Commands;
+using Lagedra.Modules.ActivationAndBilling.Domain.Enums;
 using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Results;
 using MediatR;
@@ -14,12 +15,21 @@ public sealed class PartnerDirectBookingService(ISender sender)
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        var payerType = request.PayerType switch
+        {
+            PartnerDirectBookingPayerType.PartnerOrganization => ApplicationPayerType.PartnerOrganization,
+            _ => ApplicationPayerType.Tenant,
+        };
+
         var result = await sender.Send(new SubmitPartnerDirectApplicationCommand(
             request.ListingId,
             request.TenantUserId,
             request.PartnerOrganizationId,
             request.RequestedCheckIn,
-            request.RequestedCheckOut), ct).ConfigureAwait(false);
+            request.RequestedCheckOut,
+            payerType,
+            request.PayerUserId,
+            request.StripePaymentMethodId), ct).ConfigureAwait(false);
 
         if (result.IsFailure)
         {

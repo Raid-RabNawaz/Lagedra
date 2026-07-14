@@ -20,6 +20,31 @@ public sealed record ListingHouseRulesDto(
     string? LeavingInstructions,
     string? AdditionalRules);
 
+public sealed record ListingLeaseTermsDto(
+    int RentDueDayOfMonth,
+    long NsfFirstFeeCents,
+    long NsfSubsequentFeeCents,
+    decimal LateFeePercent,
+    int LateFeeGraceDays,
+    string? UtilitiesResponsibility,
+    bool YardMaintenanceByTenant,
+    bool Furnished,
+    string? IncludedAppliancesNotes,
+    int KeyCount,
+    int MailboxKeyCount,
+    long KeyReplacementFeeCents,
+    long LockoutFeeCents,
+    int ParkingSpaceCount,
+    string? ParkingDescription,
+    bool ParkingIncludedInRent,
+    int MaxGuestConsecutiveDays,
+    long RentersInsuranceMinLiabilityCents,
+    int EarlyTerminationFeeMonths,
+    bool BuiltBefore1978,
+    string? LeadPaintKnowledge,
+    bool RentCapJustCauseExempt,
+    string? PaymentMethods);
+
 public sealed record ListingAddressDto(
     string Street,
     string City,
@@ -57,7 +82,8 @@ public sealed record ListingDetailsDto(
     // Predetermined per-verification-tier deposits. Null falls back to MaxDepositCents.
     long? DepositUnverifiedCents = null,
     long? DepositBackgroundVerifiedCents = null,
-    long? DepositPartnerGuaranteedCents = null);
+    long? DepositPartnerGuaranteedCents = null,
+    ListingLeaseTermsDto? LeaseTerms = null);
 
 public sealed record ListingSummaryInfoDto(
     Guid Id,

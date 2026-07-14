@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowLeft, FolderMinus, Heart, Plus, X } from "lucide-react";
+import { FolderMinus, Heart, Plus, X } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { listingApi } from "@/features/listings/services/listingApi";
 import { ListingCard } from "@/features/listings/components/ListingCard";
@@ -10,6 +10,7 @@ import {
   savedCollectionsKey,
   savedListingsListKey,
 } from "@/features/listings/hooks/useSavedListings";
+import { BackLink } from "@/components/shared/BackLink";
 import { Loader } from "@/components/shared/Loader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { ErrorState } from "@/components/shared/ErrorState";
@@ -128,13 +129,7 @@ export const SavedListingsPage = () => {
   return (
     <div>
       <div className="mb-6">
-        <Link
-          to="/listings"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-3"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Browse listings
-        </Link>
+        <BackLink fallbackTo="/listings" label="Browse listings" className="mb-3" />
         <h1 className="text-2xl font-bold tracking-tight">Saved listings</h1>
       </div>
 

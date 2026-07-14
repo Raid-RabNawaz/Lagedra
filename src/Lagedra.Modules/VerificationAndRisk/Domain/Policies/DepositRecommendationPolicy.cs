@@ -3,7 +3,7 @@ using Lagedra.Modules.VerificationAndRisk.Domain.Enums;
 namespace Lagedra.Modules.VerificationAndRisk.Domain.Policies;
 
 /// <summary>
-/// Deposit band = f(VerificationClass, InsuranceState, JurisdictionCap).
+/// Deposit band = f(VerificationClass, InsuranceState, JurisdictionCap, optional stay reputation).
 /// Returns (lowCents, highCents) as a percentage of the jurisdiction cap.
 ///
 /// <para>Sourcing of <see cref="InsuranceStatus.InstitutionBacked"/> (Phase 18 — Option A):
@@ -13,13 +13,23 @@ namespace Lagedra.Modules.VerificationAndRisk.Domain.Policies;
 /// for the tenant. The two paths produce the SAME band by deliberate design — there is no
 /// "double discount" for being both endorsed and insured. The user-facing label
 /// distinguishes the two via <c>ProtectionTier</c> on the read model, but pricing does not.</para>
+///
+/// <para>Stay reputation is a soft nudge only: with at least
+/// <see cref="MinReviewsForReputationNudge"/> published reviews, a strong average (≥4.5)
+/// trims the band by up to 5% of the jurisdiction cap, and a weak average (≤2.5) raises
+/// it by the same amount. Reputation never changes <see cref="VerificationClass"/> itself.</para>
 /// </summary>
 public static class DepositRecommendationPolicy
 {
+    public const int MinReviewsForReputationNudge = 3;
+    public const decimal ReputationNudgeFraction = 0.05m;
+
     public static (long LowCents, long HighCents) Recommend(
         VerificationClass verificationClass,
         InsuranceStatus insuranceStatus,
-        long jurisdictionCapCents)
+        long jurisdictionCapCents,
+        double? reputationAverage = null,
+        int reputationReviewCount = 0)
     {
         if (jurisdictionCapCents < 0)
         {
@@ -44,6 +54,47 @@ public static class DepositRecommendationPolicy
 
         var low = (long)(lowPct * jurisdictionCapCents);
         var high = (long)(highPct * jurisdictionCapCents);
+
+        var nudge = ResolveReputationNudgeCents(
+            jurisdictionCapCents,
+            reputationAverage,
+            reputationReviewCount);
+        if (nudge != 0)
+        {
+            low = Math.Clamp(low + nudge, 0, jurisdictionCapCents);
+            high = Math.Clamp(high + nudge, low, jurisdictionCapCents);
+        }
+
         return (low, high);
+    }
+
+    /// <summary>
+    /// Negative cents lowers the deposit band (strong reputation);
+    /// positive cents raises it (weak reputation).
+    /// </summary>
+    public static long ResolveReputationNudgeCents(
+        long jurisdictionCapCents,
+        double? reputationAverage,
+        int reputationReviewCount)
+    {
+        if (reputationReviewCount < MinReviewsForReputationNudge
+            || reputationAverage is not double avg
+            || avg is < 1 or > 5)
+        {
+            return 0;
+        }
+
+        var magnitude = (long)(ReputationNudgeFraction * jurisdictionCapCents);
+        if (avg >= 4.5)
+        {
+            return -magnitude;
+        }
+
+        if (avg <= 2.5)
+        {
+            return magnitude;
+        }
+
+        return 0;
     }
 }

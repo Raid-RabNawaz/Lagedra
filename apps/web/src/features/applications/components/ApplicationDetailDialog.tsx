@@ -241,10 +241,37 @@ export const ApplicationDetailDialog = ({
             </section>
           )}
 
-          {application.isPartnerReferred && (
-            <Badge variant="outline" className="w-fit">
-              Partner-referred booking
-            </Badge>
+          {(application.isPartnerReferred ||
+            application.source === "PartnerDirectReservation" ||
+            application.partnerOrganizationId) && (
+            <div className="flex flex-wrap gap-2">
+              <Badge variant="outline" className="w-fit">
+                {application.source === "PartnerDirectReservation"
+                  ? "Partner direct reservation"
+                  : "Partner-referred booking"}
+              </Badge>
+              {application.partnerOrganizationName && (
+                <Badge variant="secondary" className="w-fit">
+                  {application.partnerOrganizationName}
+                </Badge>
+              )}
+              {application.payerType === "PartnerOrganization" ? (
+                <Badge variant="outline" className="w-fit">
+                  Company pays
+                </Badge>
+              ) : application.partnerOrganizationId ? (
+                <Badge variant="outline" className="w-fit">
+                  Member pays
+                </Badge>
+              ) : null}
+              {application.status === "Pending" &&
+                application.isPaymentReady === false &&
+                application.partnerOrganizationId && (
+                  <Badge variant="secondary" className="w-fit">
+                    Waiting for member
+                  </Badge>
+                )}
+            </div>
           )}
 
           {application.jurisdictionWarning && (

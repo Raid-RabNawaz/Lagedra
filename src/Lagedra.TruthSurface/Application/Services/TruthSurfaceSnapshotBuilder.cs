@@ -49,7 +49,7 @@ public sealed class TruthSurfaceSnapshotBuilder(
     IListingProvider listingProvider,
     IHostProfileProvider hostProfileProvider,
     IVerificationSignalProvider verificationSignalProvider,
-    IJurisdictionPackProvider jurisdictionPackProvider,
+    ILeaseAgreementTemplateProvider leaseAgreementTemplateProvider,
     IPartnerEndorsementProvider partnerEndorsementProvider,
     IUserInsuranceStatusProvider insuranceStatusProvider,
     IPlatformSettingsService settings)
@@ -70,13 +70,13 @@ public sealed class TruthSurfaceSnapshotBuilder(
     /// hashed consent block. Changes only affect new snapshots; older hashes
     /// are unaffected.
     /// </summary>
-    private const string CanonicalSchemaVersion = "2.4";
+    private const string CanonicalSchemaVersion = "2.5";
 
     /// <summary>Fallback deposit-return window (days after move-out) when the platform setting is unset.</summary>
-    private const int DefaultDepositReturnWindowDays = 14;
+    private const int DefaultDepositReturnWindowDays = 21;
 
     private const string DefaultJurisdictionCode = "US-DEFAULT";
-    private const string DefaultJurisdictionPackVersion = "default-v0";
+    private const string DefaultLeaseTemplateVersion = "default-v0";
 
     private static readonly JsonSerializerOptions s_jsonOptions = new()
     {
@@ -164,19 +164,19 @@ public sealed class TruthSurfaceSnapshotBuilder(
             ? listing!.JurisdictionCode!
             : DefaultJurisdictionCode;
 
-        var pack = await jurisdictionPackProvider
-            .GetActivePackAsync(jurisdictionCode, cancellationToken)
+        var leaseTemplate = await leaseAgreementTemplateProvider
+            .GetActiveTemplateAsync(jurisdictionCode, cancellationToken)
             .ConfigureAwait(false);
 
-        var jurisdictionPackVersion = pack is not null
-            ? $"{jurisdictionCode}@v{pack.VersionNumber}"
-            : DefaultJurisdictionPackVersion;
+        var jurisdictionPackVersion = leaseTemplate is not null
+            ? $"{jurisdictionCode}@v{leaseTemplate.VersionNumber}"
+            : DefaultLeaseTemplateVersion;
 
         var monthlyProtocolFeeCents = await ResolveProtocolFeeAsync(cancellationToken)
             .ConfigureAwait(false);
 
         var depositReturnWindowDays = (int)await settings
-            .GetLongAsync(PlatformSettingKeys.DamageClaimFilingDeadlineDays,
+            .GetLongAsync(PlatformSettingKeys.DepositReturnWindowDays,
                 DefaultDepositReturnWindowDays, cancellationToken)
             .ConfigureAwait(false);
 
@@ -185,7 +185,7 @@ public sealed class TruthSurfaceSnapshotBuilder(
         var canonicalContent = BuildCanonicalContent(
             snapshotId,
             jurisdictionCode,
-            pack,
+            leaseTemplate,
             jurisdictionPackVersion,
             monthlyProtocolFeeCents,
             depositReturnWindowDays,
@@ -239,7 +239,7 @@ public sealed class TruthSurfaceSnapshotBuilder(
     private static string BuildCanonicalContent(
         Guid snapshotId,
         string jurisdictionCode,
-        JurisdictionPackInfo? pack,
+        LeaseAgreementTemplateInfo? leaseTemplate,
         string jurisdictionPackVersion,
         long monthlyProtocolFeeCents,
         int depositReturnWindowDays,
@@ -351,10 +351,12 @@ public sealed class TruthSurfaceSnapshotBuilder(
             {
                 ["code"] = jurisdictionCode,
                 ["packVersion"] = jurisdictionPackVersion,
-                ["packId"] = pack?.PackId.ToString(),
-                ["packVersionId"] = pack?.ActiveVersionId.ToString(),
-                ["packVersionNumber"] = pack?.VersionNumber,
-                ["packEffectiveDate"] = pack?.EffectiveDate?.ToString("o", CultureInfo.InvariantCulture),
+                ["leaseTemplateVersion"] = jurisdictionPackVersion,
+                ["leaseTemplateId"] = leaseTemplate?.TemplateId.ToString(),
+                ["leaseTemplateVersionId"] = leaseTemplate?.ActiveVersionId.ToString(),
+                ["leaseTemplateVersionNumber"] = leaseTemplate?.VersionNumber,
+                ["leaseTemplateTitle"] = leaseTemplate?.Title,
+                ["leaseTemplateEffectiveDate"] = leaseTemplate?.EffectiveDate?.ToString("o", CultureInfo.InvariantCulture),
                 ["warning"] = deal.JurisdictionWarning
             },
 

@@ -11,6 +11,5 @@ public sealed record RevokeEndorsementRequest(string Reason);
 public sealed record InvitePartnerGuestRequest(
     string Email,
     string FullName,
-    Guid? ListingId,
     bool WithEndorsement,
     string? EndorsementNote);

@@ -24,12 +24,12 @@ public sealed class GetInquiryThreadQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        var participants = await dealStatusProvider
+            .GetParticipantsAsync(request.DealId, cancellationToken)
+            .ConfigureAwait(false);
+
         if (!request.IsAdmin)
         {
-            var participants = await dealStatusProvider
-                .GetParticipantsAsync(request.DealId, cancellationToken)
-                .ConfigureAwait(false);
-
             if (participants is null)
             {
                 return Result<InquiryDto>.Failure(
@@ -49,6 +49,7 @@ public sealed class GetInquiryThreadQueryHandler(
             .AsNoTracking()
             .Include(s => s.Questions)
                 .ThenInclude(q => q.Answer)
+            .Include(s => s.Offers)
             .OrderByDescending(s => s.CreatedAt)
             .FirstOrDefaultAsync(s => s.DealId == request.DealId, cancellationToken)
             .ConfigureAwait(false);
@@ -59,22 +60,7 @@ public sealed class GetInquiryThreadQueryHandler(
                 new Error("Inquiry.NotFound", "No inquiry session found for this deal."));
         }
 
-        return Result<InquiryDto>.Success(MapToDto(session));
+        return Result<InquiryDto>.Success(
+            InquiryDtoMapper.ToDto(session, landlordUserId: participants?.LandlordUserId));
     }
-
-    private static InquiryDto MapToDto(InquirySession s) =>
-        new(s.Id, s.DealId, s.ListingId, s.TenantUserId, s.Status,
-            s.UnlockedByLandlordAt, s.ClosedAt, s.CreatedAt,
-            s.Questions.Select(q => new InquiryQuestionDto(
-                q.Id,
-                q.PredefinedQuestionId,
-                q.Category,
-                q.SubmittedAt,
-                q.Answer is not null
-                    ? new InquiryAnswerDto(q.Answer.Id, q.Answer.ResponseType,
-                        q.Answer.AnswerValue, q.Answer.AnsweredAt)
-                    : null,
-                q.CustomText,
-                q.OpenQuestionText))
-            .ToList());
 }

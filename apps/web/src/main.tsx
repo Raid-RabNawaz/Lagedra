@@ -4,6 +4,7 @@ import "./index.css";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { AuthProvider } from "@/app/auth/AuthProvider";
+import { PublicConfigProvider } from "@/app/config/PublicConfigProvider";
 import { ErrorBoundary } from "@/app/layout/ErrorBoundary";
 import { App } from "@/app/App";
 import { appConfig } from "@/app/config";
@@ -37,9 +38,11 @@ const queryClient = new QueryClient({
 
 const appTree = (
   <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <App />
-    </AuthProvider>
+    <PublicConfigProvider>
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    </PublicConfigProvider>
   </QueryClientProvider>
 );
 

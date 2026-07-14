@@ -106,11 +106,14 @@ public static class AuthModuleRegistration
         services.AddHttpClient();
         services.AddScoped<AuthDataSeeder>();
         services.AddScoped<IUserEmailResolver, UserEmailResolver>();
+        services.AddScoped<IUserPhoneResolver, UserPhoneResolver>();
         services.AddScoped<IHostProfileProvider, HostProfileProvider>();
+        services.AddScoped<ILeasePartyProfileProvider, LeasePartyProfileProvider>();
         services.AddScoped<IUserVerificationFlagUpdater, UserVerificationFlagUpdater>();
         services.AddScoped<IUserStatusProvider, UserStatusProvider>();
         services.AddScoped<IIdentityInvitationService, IdentityInvitationService>();
         services.AddScoped<IUserLookupService, UserLookupService>();
+        services.AddScoped<IUserDirectoryService, UserDirectoryService>();
         services.AddScoped<IArbitratorPanelProvider, ArbitratorPanelProvider>();
         services.AddScoped<IUserStripeProfileService, UserStripeProfileService>();
 

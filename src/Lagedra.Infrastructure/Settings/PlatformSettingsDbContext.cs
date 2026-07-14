@@ -53,7 +53,13 @@ public sealed class PlatformSettingsDbContext(DbContextOptions<PlatformSettingsD
             Seed(PlatformSettingKeys.CancellationInsuranceRefundDeadlineDays, "30",
                 "Days after cancellation within which insurance premium refund is eligible"),
             Seed(PlatformSettingKeys.DamageClaimFilingDeadlineDays, "14",
-                "Days after check-out within which a damage claim can be filed"));
+                "Days after check-out within which a damage claim can be filed"),
+            Seed(PlatformSettingKeys.DepositReturnWindowDays, "21",
+                "Days after move-out within which the host must return the deposit or provide an itemized statement of deductions (CA Civil Code §1950.5)"),
+            Seed(PlatformSettingKeys.ReviewWindowDays, "14",
+                "Days after stay completion within which host and guest may submit double-blind reviews"),
+            Seed(PlatformSettingKeys.ReviewReminderIntervalDays, "3",
+                "Days between reminder notifications for parties who have not submitted a stay review"));
     }
 
     private static object Seed(string key, string value, string description) => new

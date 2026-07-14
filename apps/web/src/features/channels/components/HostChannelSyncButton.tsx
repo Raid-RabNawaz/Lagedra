@@ -53,12 +53,12 @@ export function HostChannelSyncButton({
 
       onSynced?.(
         pulled === 0
-          ? "No OwnerRez listings found to import yet."
-          : `Synced from OwnerRez — ${created} new draft${created === 1 ? "" : "s"}, ${updated} updated.`,
+          ? "No PMS listings found to import yet."
+          : `Synced from your PMS — ${created} new draft${created === 1 ? "" : "s"}, ${updated} updated.`,
       );
     } catch (e) {
       onError?.(
-        (e as Error)?.message ?? "Could not sync from OwnerRez. Please try again.",
+        (e as Error)?.message ?? "Could not sync from your PMS. Please try again.",
       );
     } finally {
       setBusy(false);
@@ -70,10 +70,10 @@ export function HostChannelSyncButton({
       variant="outline"
       onClick={handleSync}
       disabled={busy}
-      title="Re-pull your listings from OwnerRez"
+      title="Re-pull your listings from connected PMS channels"
     >
       <RefreshCw className={busy ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
-      {busy ? "Syncing..." : "Sync from OwnerRez"}
+      {busy ? "Syncing..." : "Sync from PMS"}
     </Button>
   );
 }

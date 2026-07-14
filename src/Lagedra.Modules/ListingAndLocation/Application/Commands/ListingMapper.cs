@@ -90,10 +90,40 @@ internal static class ListingMapper
             listing.UpdatedAt,
             listing.RejectionReason,
             listing.SubmittedForReviewAt,
-            listing.ReviewedAt);
+            listing.ReviewedAt,
+            listing.LeaseTerms is { } lt
+                ? new LeaseTermsDto(
+                    lt.RentDueDayOfMonth,
+                    lt.NsfFirstFeeCents,
+                    lt.NsfSubsequentFeeCents,
+                    lt.LateFeePercent,
+                    lt.LateFeeGraceDays,
+                    lt.UtilitiesResponsibility,
+                    lt.YardMaintenanceByTenant,
+                    lt.Furnished,
+                    lt.IncludedAppliancesNotes,
+                    lt.KeyCount,
+                    lt.MailboxKeyCount,
+                    lt.KeyReplacementFeeCents,
+                    lt.LockoutFeeCents,
+                    lt.ParkingSpaceCount,
+                    lt.ParkingDescription,
+                    lt.ParkingIncludedInRent,
+                    lt.MaxGuestConsecutiveDays,
+                    lt.RentersInsuranceMinLiabilityCents,
+                    lt.EarlyTerminationFeeMonths,
+                    lt.BuiltBefore1978,
+                    lt.LeadPaintKnowledge,
+                    lt.RentCapJustCauseExempt,
+                    lt.PaymentMethods)
+                : null);
     }
 
-    public static ListingSummaryDto ToSummary(Listing listing, int? qualityScore = null)
+    public static ListingSummaryDto ToSummary(
+        Listing listing,
+        int? qualityScore = null,
+        double? hostAverageRating = null,
+        int hostReviewCount = 0)
     {
         ArgumentNullException.ThrowIfNull(listing);
 
@@ -113,6 +143,8 @@ internal static class ListingMapper
                 ?? listing.Photos.OrderBy(p => p.SortOrder).FirstOrDefault()?.Url,
             qualityScore,
             listing.CreatedAt,
-            listing.DefaultDepositCents);
+            listing.DefaultDepositCents,
+            hostAverageRating,
+            hostReviewCount);
     }
 }

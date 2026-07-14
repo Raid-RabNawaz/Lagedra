@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
-  ArrowLeft,
   Receipt,
   CalendarCheck,
   DollarSign,
@@ -21,6 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { BackLink } from "@/components/shared/BackLink";
 import { Loader } from "@/components/shared/Loader";
 import { getApiErrorMessage } from "@/api/errors";
 import { formatDate, formatMoney } from "@/utils/format";
@@ -34,13 +34,7 @@ export const HostBillingStatementPage = () => {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
-      <Link
-        to="/app"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to dashboard
-      </Link>
+      <BackLink fallbackTo="/app" label="Back to dashboard" className="mb-6" />
 
       <div className="mb-6">
         <h1 className="text-2xl font-bold tracking-tight">Platform fees</h1>

@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { isAxiosError } from "axios";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
-  ArrowLeft,
   Shield,
   CheckCircle2,
   Clock,
@@ -35,11 +34,13 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
+import { BackLink } from "@/components/shared/BackLink";
 import { Loader } from "@/components/shared/Loader";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatMoney } from "@/utils/format";
+import { getApiErrorMessage } from "@/api/errors";
 import { ProtectionTierBadge } from "@/features/partners/components/ProtectionTierBadge";
 import { TenantEndorsementsPanel } from "@/features/partners/components/TenantEndorsementsPanel";
 
@@ -72,6 +73,7 @@ function classConfig(level: VerificationClassLevel) {
 const AUTO_DISMISS_MS = 5_000;
 
 export const VerificationPage = () => {
+  const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const userId = user?.userId;
 
@@ -103,6 +105,18 @@ export const VerificationPage = () => {
     return () => window.clearTimeout(t);
   }, [emailCooldownSec]);
 
+  // Phone OTP verification
+  const [phoneCode, setPhoneCode] = useState("");
+  const [sendingPhoneCode, setSendingPhoneCode] = useState(false);
+  const [confirmingPhoneCode, setConfirmingPhoneCode] = useState(false);
+  const [phoneCodeSent, setPhoneCodeSent] = useState(false);
+  const [phoneCooldownSec, setPhoneCooldownSec] = useState(0);
+  useEffect(() => {
+    if (phoneCooldownSec <= 0) return;
+    const t = window.setTimeout(() => setPhoneCooldownSec((n) => n - 1), 1_000);
+    return () => window.clearTimeout(t);
+  }, [phoneCooldownSec]);
+
   // Auto-dismiss success/error toasts inline.
   useEffect(() => {
     if (!actionSuccess) return;
@@ -127,11 +141,11 @@ export const VerificationPage = () => {
   const phoneVerified = Boolean(user?.isPhoneVerified);
   const govIdVerified = Boolean(user?.isGovernmentIdVerified) || isVerified;
 
-  // Phone verification has no backend flow yet — it's a future surface.
-  // We don't punish the progress meter for something the user can't act on.
-  const phoneStepEnabled = false;
-  const totalSteps = phoneStepEnabled ? 3 : 2;
-  const completedSteps = (emailVerified ? 1 : 0) + (govIdVerified ? 1 : 0) + (phoneStepEnabled && phoneVerified ? 1 : 0);
+  const phoneStepEnabled = true;
+  const hasPhoneNumber = Boolean(user?.phoneNumber?.trim());
+  const totalSteps = 3;
+  const completedSteps =
+    (emailVerified ? 1 : 0) + (govIdVerified ? 1 : 0) + (phoneVerified ? 1 : 0);
 
   const verClass = verificationStatus?.verificationClass ?? riskView?.verificationClass;
   const classInfo = verClass ? classConfig(verClass) : null;
@@ -143,6 +157,16 @@ export const VerificationPage = () => {
         body: `We sent a verification link to ${user?.email ?? "your inbox"}. Open it to confirm this address.`,
         href: "#email",
         cta: "Resend verification email",
+      };
+    }
+    if (!phoneVerified) {
+      return {
+        title: hasPhoneNumber ? "Verify your phone" : "Add a phone number",
+        body: hasPhoneNumber
+          ? `We'll text a 6-digit code to ${user?.phoneNumber}. Enter it below to confirm this number.`
+          : "Add a phone number in your profile, then return here to verify it by SMS.",
+        href: hasPhoneNumber ? "#phone" : "/app/profile",
+        cta: hasPhoneNumber ? "Send verification code" : "Open profile",
       };
     }
     if (canStartKyc) {
@@ -178,7 +202,18 @@ export const VerificationPage = () => {
       };
     }
     return null;
-  }, [emailVerified, canStartKyc, isPending, kycStatus, isVerified, classInfo, user?.email]);
+  }, [
+    emailVerified,
+    phoneVerified,
+    hasPhoneNumber,
+    canStartKyc,
+    isPending,
+    kycStatus,
+    isVerified,
+    classInfo,
+    user?.email,
+    user?.phoneNumber,
+  ]);
 
   if (isLoading) {
     return <Loader fullPage label="Loading verification status..." />;
@@ -263,17 +298,48 @@ export const VerificationPage = () => {
     }
   };
 
+  const handleSendPhoneCode = async () => {
+    if (!hasPhoneNumber || sendingPhoneCode || phoneCooldownSec > 0 || phoneVerified) return;
+    setSendingPhoneCode(true);
+    setActionError(null);
+    setActionSuccess(null);
+    try {
+      await authApi.sendPhoneVerificationCode();
+      setPhoneCodeSent(true);
+      setPhoneCooldownSec(60);
+      setActionSuccess(`We sent a verification code to ${user?.phoneNumber}.`);
+    } catch (e) {
+      setActionError(getApiErrorMessage(e) || "Could not send the verification code.");
+    } finally {
+      setSendingPhoneCode(false);
+    }
+  };
+
+  const handleConfirmPhoneCode = async () => {
+    const code = phoneCode.trim();
+    if (!code || confirmingPhoneCode || phoneVerified) return;
+    setConfirmingPhoneCode(true);
+    setActionError(null);
+    setActionSuccess(null);
+    try {
+      await authApi.confirmPhoneVerificationCode(code);
+      const me = await authApi.getCurrentUser();
+      useAuthStore.getState().setUser(me);
+      setPhoneCode("");
+      setPhoneCodeSent(false);
+      setActionSuccess("Phone number verified.");
+    } catch (e) {
+      setActionError(getApiErrorMessage(e) || "Could not verify the code.");
+    } finally {
+      setConfirmingPhoneCode(false);
+    }
+  };
+
   return (
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <Link
-          to="/app/profile"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to profile
-        </Link>
+        <BackLink fallbackTo="/app/profile" className="mb-4" />
         <h1 className="text-3xl font-bold tracking-tight">Verification</h1>
         <p className="mt-1 text-muted-foreground">
           Complete the steps below to raise your trust class and unlock lower deposits.
@@ -318,7 +384,23 @@ export const VerificationPage = () => {
             {nextStep.cta && (
               <Button
                 variant="default"
-                onClick={() => scrollToAnchor(nextStep.href)}
+                onClick={() => {
+                  if (nextStep.href.startsWith("/")) {
+                    void navigate(nextStep.href);
+                    return;
+                  }
+                  if (nextStep.cta === "Send verification code") {
+                    void handleSendPhoneCode();
+                    scrollToAnchor("#phone");
+                    return;
+                  }
+                  if (nextStep.cta === "Resend verification email") {
+                    void handleResendVerification();
+                    scrollToAnchor("#email");
+                    return;
+                  }
+                  scrollToAnchor(nextStep.href);
+                }}
                 className="shrink-0 gap-2"
               >
                 {nextStep.cta}
@@ -374,7 +456,13 @@ export const VerificationPage = () => {
               <StepIndicator
                 label="Phone"
                 done={phoneVerified}
-                description={phoneVerified ? "Verified" : "Add in profile settings"}
+                description={
+                  phoneVerified
+                    ? "Verified"
+                    : hasPhoneNumber
+                      ? "Confirm via SMS"
+                      : "Add in profile settings"
+                }
                 onClick={() => scrollToAnchor("#phone")}
               />
             )}
@@ -608,8 +696,8 @@ export const VerificationPage = () => {
         </CardContent>
       </Card>
 
-      {/* Phone (placeholder until real flow ships) */}
-      <Card id="phone" className="border-dashed">
+      {/* Phone OTP */}
+      <Card id="phone">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
@@ -618,20 +706,95 @@ export const VerificationPage = () => {
                 Phone verification
               </CardTitle>
               <CardDescription className="mt-1">
-                We're rolling out SMS verification. Until then, your phone number on file is used as-is.
+                Confirm your number with a one-time SMS code. Verified phones receive booking alerts.
               </CardDescription>
             </div>
-            <Badge variant="secondary">Coming soon</Badge>
+            {phoneVerified ? (
+              <Badge variant="default" className="gap-1">
+                <CheckCircle2 className="h-3 w-3" />
+                Verified
+              </Badge>
+            ) : (
+              <Badge variant="secondary">Not verified</Badge>
+            )}
           </div>
         </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Add or update your phone number in your{" "}
-            <Link to="/app/profile" className="text-primary hover:underline">
-              profile
-            </Link>{" "}
-            so we're ready to verify it the moment SMS verification ships.
-          </p>
+        <CardContent className="space-y-4">
+          {phoneVerified ? (
+            <p className="text-sm text-muted-foreground">
+              {user?.phoneNumber} is verified. Change the number in your{" "}
+              <Link to="/app/profile" className="text-primary hover:underline">
+                profile
+              </Link>{" "}
+              to re-verify.
+            </p>
+          ) : !hasPhoneNumber ? (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Add a phone number in E.164 format (e.g. +14155552671) on your profile first.
+              </p>
+              <Button type="button" onClick={() => navigate("/app/profile")}>
+                Open profile
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Number on file: <span className="font-medium text-foreground">{user?.phoneNumber}</span>
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  onClick={() => void handleSendPhoneCode()}
+                  disabled={sendingPhoneCode || phoneCooldownSec > 0}
+                >
+                  {sendingPhoneCode ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Sending…
+                    </>
+                  ) : phoneCooldownSec > 0 ? (
+                    `Resend in ${phoneCooldownSec}s`
+                  ) : phoneCodeSent ? (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4" />
+                      Resend code
+                    </>
+                  ) : (
+                    <>
+                      <Send className="mr-2 h-4 w-4" />
+                      Send verification code
+                    </>
+                  )}
+                </Button>
+              </div>
+              {(phoneCodeSent || phoneCode.length > 0) && (
+                <div className="space-y-2 max-w-xs">
+                  <Label htmlFor="phone-otp">Verification code</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="phone-otp"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      placeholder="6-digit code"
+                      value={phoneCode}
+                      onChange={(e) => setPhoneCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                      maxLength={6}
+                    />
+                    <Button
+                      onClick={() => void handleConfirmPhoneCode()}
+                      disabled={phoneCode.trim().length < 4 || confirmingPhoneCode}
+                    >
+                      {confirmingPhoneCode ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        "Confirm"
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 

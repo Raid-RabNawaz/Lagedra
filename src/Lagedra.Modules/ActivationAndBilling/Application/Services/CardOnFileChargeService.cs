@@ -1,5 +1,6 @@
 using Lagedra.Infrastructure.External.Payments;
 using Lagedra.Modules.ActivationAndBilling.Domain.Aggregates;
+using Lagedra.Modules.ActivationAndBilling.Domain.Enums;
 using Lagedra.Modules.ActivationAndBilling.Domain.Services;
 using Lagedra.Modules.ActivationAndBilling.Domain.ValueObjects;
 using Lagedra.Modules.ActivationAndBilling.Infrastructure.Persistence;
@@ -40,6 +41,7 @@ public sealed partial class CardOnFileChargeService(
     BillingDbContext dbContext,
     IStripeService stripeService,
     IUserStripeProfileService userStripeProfile,
+    IPartnerOrganizationBillingProfile partnerOrgBilling,
     IHostStripeAccountProvider hostStripeProvider,
     IClock clock,
     ILogger<CardOnFileChargeService> logger)
@@ -62,15 +64,11 @@ public sealed partial class CardOnFileChargeService(
             return new CardOnFileChargeResult(false, null, "no-payment-method");
         }
 
-        var profile = await userStripeProfile
-            .GetAsync(application.TenantUserId, cancellationToken)
+        var customerId = await ResolvePayerCustomerIdAsync(application, cancellationToken)
             .ConfigureAwait(false);
 
-        if (profile is null || string.IsNullOrEmpty(profile.StripeCustomerId))
+        if (string.IsNullOrEmpty(customerId))
         {
-            // The PM was attached to *some* customer when the SetupIntent
-            // ran; if the cached id is gone (e.g. rare DB rollback) skip
-            // off-session and let the standard checkout flow handle it.
             LogMissingCustomer(logger, application.Id, application.TenantUserId);
             return new CardOnFileChargeResult(false, null, "missing-customer");
         }
@@ -87,9 +85,20 @@ public sealed partial class CardOnFileChargeService(
             ["dealId"] = dealId.ToString(),
             ["tenantUserId"] = application.TenantUserId.ToString(),
             ["landlordUserId"] = application.LandlordUserId.ToString(),
+            ["payerType"] = application.PayerType.ToString(),
             ["payoutModel"] = "stripe-connect",
             ["bookingFlow"] = "v2",
         };
+
+        if (application.PartnerOrganizationId is { } partnerOrgId)
+        {
+            metadata["partnerOrganizationId"] = partnerOrgId.ToString();
+        }
+
+        if (application.PayerUserId is { } payerUserId)
+        {
+            metadata["payerUserId"] = payerUserId.ToString();
+        }
 
         var hostStripe = await hostStripeProvider
             .GetByHostUserIdAsync(application.LandlordUserId, cancellationToken)
@@ -104,7 +113,7 @@ public sealed partial class CardOnFileChargeService(
         try
         {
             charge = await stripeService.ChargeOffSessionDestinationAsync(
-                profile.StripeCustomerId,
+                customerId,
                 application.StripePaymentMethodId,
                 totalAmountCents,
                 "usd",
@@ -144,6 +153,25 @@ public sealed partial class CardOnFileChargeService(
             cancellationToken).ConfigureAwait(false);
 
         return new CardOnFileChargeResult(true, charge.PaymentIntentId, null);
+    }
+
+    private async Task<string?> ResolvePayerCustomerIdAsync(
+        DealApplication application,
+        CancellationToken cancellationToken)
+    {
+        if (application.PayerType == ApplicationPayerType.PartnerOrganization
+            && application.PartnerOrganizationId is { } orgId)
+        {
+            return await partnerOrgBilling
+                .GetStripeCustomerIdAsync(orgId, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        var profile = await userStripeProfile
+            .GetAsync(application.TenantUserId, cancellationToken)
+            .ConfigureAwait(false);
+
+        return profile?.StripeCustomerId;
     }
 
     private async Task PersistConfirmationAsync(
@@ -189,7 +217,7 @@ public sealed partial class CardOnFileChargeService(
 
     [LoggerMessage(
         Level = LogLevel.Warning,
-        Message = "Card-on-file: tenant {TenantUserId} on application {ApplicationId} has no cached Stripe customer; falling back to standard checkout")]
+        Message = "Card-on-file: payer for application {ApplicationId} (tenant {TenantUserId}) has no cached Stripe customer; falling back to standard checkout")]
     private static partial void LogMissingCustomer(
         ILogger logger, Guid applicationId, Guid tenantUserId);
 

@@ -6,6 +6,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Mail, Lock, ArrowRight } from "lucide-react";
 import { authApi } from "@/features/auth/services/authApi";
 import { useAuthStore } from "@/app/auth/authStore";
+import { usePublicConfigStore } from "@/app/config/publicConfigStore";
+import { getApiErrorMessage } from "@/api/errors";
 import { appConfig } from "@/app/config";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +26,7 @@ type FormData = z.infer<typeof schema>;
 export const LoginPage = () => {
   const [serverError, setServerError] = useState<string | null>(null);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const preLaunchEnabled = usePublicConfigStore((s) => s.preLaunchEnabled);
   const setUser = useAuthStore((state) => state.setUser);
   const navigate = useNavigate();
   const location = useLocation();
@@ -45,8 +48,13 @@ export const LoginPage = () => {
     try {
       await authApi.login(data);
       await completeLogin();
-    } catch {
-      setServerError("Login failed. Check your credentials and try again.");
+    } catch (error) {
+      setServerError(
+        getApiErrorMessage(
+          error,
+          "Login failed. Check your credentials and try again.",
+        ),
+      );
     }
   });
 
@@ -56,8 +64,10 @@ export const LoginPage = () => {
     try {
       await authApi.externalLogin({ provider: "Google", idToken });
       await completeLogin();
-    } catch {
-      setServerError("Google sign-in failed. Please try again.");
+    } catch (error) {
+      setServerError(
+        getApiErrorMessage(error, "Google sign-in failed. Please try again."),
+      );
     } finally {
       setGoogleLoading(false);
     }
@@ -74,7 +84,7 @@ export const LoginPage = () => {
         </p>
       </div>
 
-      {appConfig.googleClientId && (
+      {appConfig.googleClientId && !preLaunchEnabled && (
         <>
           <GoogleSignInButton
             onSuccess={handleGoogleLogin}
@@ -156,7 +166,7 @@ export const LoginPage = () => {
 
       <p className="text-center text-sm text-muted-foreground">
         Don&apos;t have an account?{" "}
-        <Link to="/auth/register" className="font-medium text-foreground hover:underline">
+        <Link to="/join" className="font-medium text-foreground hover:underline">
           Sign up
         </Link>
       </p>

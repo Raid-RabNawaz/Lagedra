@@ -1,7 +1,6 @@
 import { useState } from "react";
-import { useParams, Link, Navigate } from "react-router-dom";
+import { useParams, Navigate, Link } from "react-router-dom";
 import {
-  ArrowLeft,
   CreditCard,
   Clock,
   DollarSign,
@@ -49,6 +48,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { BackLink } from "@/components/shared/BackLink";
 import { Loader } from "@/components/shared/Loader";
 import { formatDate, formatMoney } from "@/utils/format";
 
@@ -157,13 +157,7 @@ export const BillingPage = () => {
   if (isAccessDenied) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
-        <Link
-          to="/app/deals"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to deals
-        </Link>
+        <BackLink fallbackTo="/app/deals" label="Back to deals" className="mb-6" />
         <Alert variant="destructive">
           <Lock className="h-4 w-4" />
           <span className="ml-2 text-sm">
@@ -179,13 +173,11 @@ export const BillingPage = () => {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
-      <Link
-        to={dealId ? `/app/deals/${dealId}` : "/app/deals"}
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to deal
-      </Link>
+      <BackLink
+        fallbackTo={dealId ? `/app/deals/${dealId}` : "/app/deals"}
+        label="Back to deal"
+        className="mb-6"
+      />
 
       <h1 className="text-2xl font-bold tracking-tight mb-6">
         Billing & Payments

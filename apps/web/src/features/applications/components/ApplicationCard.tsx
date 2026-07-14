@@ -39,6 +39,7 @@ import {
   tierLabel,
 } from "@/features/applications/lib/bookingConsent";
 import { getApiErrorMessage } from "@/api/errors";
+import { StarRatingDisplay } from "@/features/reviews/components/StarRating";
 import type { DealApplicationDto } from "@/api/types";
 
 type Props = {
@@ -57,6 +58,11 @@ export const ApplicationCard = ({
   const isHostView = perspective === "host";
   const stayLabel = `${application.requestedCheckIn} → ${application.requestedCheckOut}`;
   const isPending = application.status === "Pending";
+  const isPartnerDirect =
+    application.source === "PartnerDirectReservation" ||
+    Boolean(application.partnerOrganizationId);
+  const paymentReady = application.isPaymentReady === true;
+  const canApprovePartnerRequest = !isPartnerDirect || paymentReady;
 
   const [showApproveForm, setShowApproveForm] = useState(false);
   const [showRejectConfirm, setShowRejectConfirm] = useState(false);
@@ -74,6 +80,7 @@ export const ApplicationCard = ({
   const {
     query: counterpartyQuery,
     profile: counterpartyProfile,
+    reputation: counterpartyReputation,
     name: counterpartyName,
     location: counterpartyLocation,
     initials: counterpartyInitials,
@@ -203,6 +210,14 @@ export const ApplicationCard = ({
                         ID
                       </Badge>
                     )}
+                    {counterpartyReputation &&
+                      counterpartyReputation.reviewCount > 0 && (
+                        <StarRatingDisplay
+                          average={counterpartyReputation.averageOverall}
+                          count={counterpartyReputation.reviewCount}
+                          className="text-xs"
+                        />
+                      )}
                   </div>
                   {counterpartyLocation && (
                     <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
@@ -244,6 +259,39 @@ export const ApplicationCard = ({
                 <p className="text-xs font-medium text-amber-600">
                   {application.jurisdictionWarning}
                 </p>
+              )}
+
+              {(application.isPartnerReferred ||
+                application.source === "PartnerDirectReservation" ||
+                application.partnerOrganizationId) && (
+                <div className="flex flex-wrap gap-1.5">
+                  <Badge variant="outline" className="text-[10px]">
+                    {application.source === "PartnerDirectReservation"
+                      ? "Partner direct"
+                      : "Partner referred"}
+                  </Badge>
+                  {application.partnerOrganizationName && (
+                    <Badge variant="secondary" className="text-[10px]">
+                      {application.partnerOrganizationName}
+                    </Badge>
+                  )}
+                  {application.payerType === "PartnerOrganization" ? (
+                    <Badge variant="outline" className="text-[10px]">
+                      Company pays
+                    </Badge>
+                  ) : application.partnerOrganizationId ? (
+                    <Badge variant="outline" className="text-[10px]">
+                      Member pays
+                    </Badge>
+                  ) : null}
+                  {isPending &&
+                    application.partnerOrganizationId &&
+                    application.isPaymentReady === false && (
+                      <Badge variant="secondary" className="text-[10px]">
+                        Waiting for member
+                      </Badge>
+                    )}
+                </div>
               )}
             </div>
 
@@ -315,10 +363,17 @@ export const ApplicationCard = ({
 
           {isHostView && isPending && (
             <div className="relative z-10 rounded-b-[inherit] border-t px-4 py-3" onClick={stop}>
+              {isPartnerDirect && !paymentReady && (
+                <p className="mb-2 text-xs text-muted-foreground">
+                  Waiting for the member to complete payment authorization and Truth Surface
+                  consent before you can accept.
+                </p>
+              )}
               {!showApproveForm && !showRejectConfirm && (
                 <div className="flex items-center gap-2">
                   <Button
                     size="sm"
+                    disabled={!canApprovePartnerRequest}
                     onClick={() => {
                       setActionError(null);
                       setShowApproveForm(true);

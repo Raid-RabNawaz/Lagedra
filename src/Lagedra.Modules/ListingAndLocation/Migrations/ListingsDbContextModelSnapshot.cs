@@ -706,6 +706,117 @@ namespace ListingAndLocation.Migrations
                                 .HasForeignKey("ListingId");
                         });
 
+                    b.OwnsOne("Lagedra.Modules.ListingAndLocation.Domain.ValueObjects.LeaseTerms", "LeaseTerms", b1 =>
+                        {
+                            b1.Property<Guid>("ListingId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<bool>("BuiltBefore1978")
+                                .HasColumnType("boolean")
+                                .HasColumnName("lease_built_before_1978");
+
+                            b1.Property<int>("EarlyTerminationFeeMonths")
+                                .HasColumnType("integer")
+                                .HasColumnName("lease_early_termination_fee_months");
+
+                            b1.Property<bool>("Furnished")
+                                .HasColumnType("boolean")
+                                .HasColumnName("lease_furnished");
+
+                            b1.Property<string>("IncludedAppliancesNotes")
+                                .HasMaxLength(500)
+                                .HasColumnType("character varying(500)")
+                                .HasColumnName("lease_included_appliances");
+
+                            b1.Property<int>("KeyCount")
+                                .HasColumnType("integer")
+                                .HasColumnName("lease_key_count");
+
+                            b1.Property<long>("KeyReplacementFeeCents")
+                                .HasColumnType("bigint")
+                                .HasColumnName("lease_key_replacement_fee_cents");
+
+                            b1.Property<int>("LateFeeGraceDays")
+                                .HasColumnType("integer")
+                                .HasColumnName("lease_late_fee_grace_days");
+
+                            b1.Property<decimal>("LateFeePercent")
+                                .HasPrecision(5, 2)
+                                .HasColumnType("numeric(5,2)")
+                                .HasColumnName("lease_late_fee_percent");
+
+                            b1.Property<string>("LeadPaintKnowledge")
+                                .HasMaxLength(1000)
+                                .HasColumnType("character varying(1000)")
+                                .HasColumnName("lease_lead_paint_knowledge");
+
+                            b1.Property<long>("LockoutFeeCents")
+                                .HasColumnType("bigint")
+                                .HasColumnName("lease_lockout_fee_cents");
+
+                            b1.Property<int>("MailboxKeyCount")
+                                .HasColumnType("integer")
+                                .HasColumnName("lease_mailbox_key_count");
+
+                            b1.Property<int>("MaxGuestConsecutiveDays")
+                                .HasColumnType("integer")
+                                .HasColumnName("lease_max_guest_consecutive_days");
+
+                            b1.Property<long>("NsfFirstFeeCents")
+                                .HasColumnType("bigint")
+                                .HasColumnName("lease_nsf_first_fee_cents");
+
+                            b1.Property<long>("NsfSubsequentFeeCents")
+                                .HasColumnType("bigint")
+                                .HasColumnName("lease_nsf_subsequent_fee_cents");
+
+                            b1.Property<string>("ParkingDescription")
+                                .HasMaxLength(300)
+                                .HasColumnType("character varying(300)")
+                                .HasColumnName("lease_parking_description");
+
+                            b1.Property<bool>("ParkingIncludedInRent")
+                                .HasColumnType("boolean")
+                                .HasColumnName("lease_parking_included_in_rent");
+
+                            b1.Property<int>("ParkingSpaceCount")
+                                .HasColumnType("integer")
+                                .HasColumnName("lease_parking_space_count");
+
+                            b1.Property<string>("PaymentMethods")
+                                .HasMaxLength(500)
+                                .HasColumnType("character varying(500)")
+                                .HasColumnName("lease_payment_methods");
+
+                            b1.Property<bool>("RentCapJustCauseExempt")
+                                .HasColumnType("boolean")
+                                .HasColumnName("lease_rent_cap_just_cause_exempt");
+
+                            b1.Property<int>("RentDueDayOfMonth")
+                                .HasColumnType("integer")
+                                .HasColumnName("lease_rent_due_day");
+
+                            b1.Property<long>("RentersInsuranceMinLiabilityCents")
+                                .HasColumnType("bigint")
+                                .HasColumnName("lease_renters_insurance_min_cents");
+
+                            b1.Property<string>("UtilitiesResponsibility")
+                                .HasMaxLength(500)
+                                .HasColumnType("character varying(500)")
+                                .HasColumnName("lease_utilities_responsibility");
+
+                            b1.Property<bool>("YardMaintenanceByTenant")
+                                .HasColumnType("boolean")
+                                .HasColumnName("lease_yard_maintenance_by_tenant");
+
+                            b1.HasKey("ListingId");
+
+                            b1.ToTable("listings", "listings");
+
+                            b1.WithOwner()
+                                .HasForeignKey("ListingId");
+                        });
+
                     b.OwnsOne("Lagedra.Modules.ListingAndLocation.Domain.ValueObjects.StayRange", "StayRange", b1 =>
                         {
                             b1.Property<Guid>("ListingId")
@@ -732,6 +843,8 @@ namespace ListingAndLocation.Migrations
                     b.Navigation("CancellationPolicy");
 
                     b.Navigation("HouseRules");
+
+                    b.Navigation("LeaseTerms");
 
                     b.Navigation("PreciseAddress");
 

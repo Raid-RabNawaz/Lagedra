@@ -40,6 +40,7 @@ public sealed class ListMyTenantInquiriesQueryHandler(
                 s.ListingId,
                 s.Status,
                 s.DealId,
+                s.PartnerOrganizationId,
                 s.CreatedAt,
                 Questions = s.Questions
                     .Select(q => new
@@ -114,7 +115,8 @@ public sealed class ListMyTenantInquiriesQueryHandler(
                     r.CreatedAt,
                     lastActivity,
                     r.Questions.Count,
-                    unansweredByHost);
+                    unansweredByHost,
+                    r.PartnerOrganizationId);
             })
             .OrderByDescending(s => s.LastActivityAt)
             .ToList();

@@ -4,9 +4,11 @@ using Lagedra.Modules.ListingAndLocation.Domain.Aggregates;
 using Lagedra.Modules.ListingAndLocation.Domain.Enums;
 using Lagedra.Modules.ListingAndLocation.Domain.ValueObjects;
 using Lagedra.Modules.ListingAndLocation.Infrastructure.Persistence;
+using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Results;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Lagedra.Modules.ListingAndLocation.Application.Queries;
 
@@ -36,7 +38,9 @@ public sealed record SearchListingsQuery(
     int Page = 1,
     int PageSize = 20) : IRequest<Result<SearchListingsResultDto>>;
 
-public sealed class SearchListingsQueryHandler(ListingsDbContext dbContext)
+public sealed class SearchListingsQueryHandler(
+    ListingsDbContext dbContext,
+    IServiceProvider serviceProvider)
     : IRequestHandler<SearchListingsQuery, Result<SearchListingsResultDto>>
 {
     private const double KmPerDegreeLat = 111.0;
@@ -191,7 +195,10 @@ public sealed class SearchListingsQueryHandler(ListingsDbContext dbContext)
                 .ConfigureAwait(false);
         }
 
-        var items = listings.Select(l => ListingMapper.ToSummary(l)).ToList();
+        var reputationProvider = serviceProvider.GetService<IReviewReputationProvider>();
+        var items = await ListingSummaryEnricher
+            .ToSummariesAsync(listings, reputationProvider, cancellationToken)
+            .ConfigureAwait(false);
 
         return Result<SearchListingsResultDto>.Success(
             new SearchListingsResultDto(items, totalCount));

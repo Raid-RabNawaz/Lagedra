@@ -7,7 +7,13 @@ namespace Lagedra.Modules.Notifications.Domain.Aggregates;
 public sealed class Notification : AggregateRoot<Guid>
 {
     public Guid RecipientUserId { get; private set; }
-    public string RecipientEmail { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// Channel-specific destination: email address for Email, E.164 phone for Sms.
+    /// Unused for InApp (may be empty).
+    /// </summary>
+    public string RecipientAddress { get; private set; } = string.Empty;
+
     public NotificationChannel Channel { get; private set; }
     public string TemplateId { get; private set; } = string.Empty;
     public NotificationStatus Status { get; private set; }
@@ -21,13 +27,13 @@ public sealed class Notification : AggregateRoot<Guid>
 
     public static Notification Queue(
         Guid recipientUserId,
-        string recipientEmail,
+        string recipientAddress,
         NotificationChannel channel,
         string templateId,
         Dictionary<string, string> payload,
         DateTime? scheduledAt = null)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(recipientEmail);
+        ArgumentException.ThrowIfNullOrWhiteSpace(recipientAddress);
         ArgumentException.ThrowIfNullOrWhiteSpace(templateId);
         ArgumentNullException.ThrowIfNull(payload);
 
@@ -35,7 +41,7 @@ public sealed class Notification : AggregateRoot<Guid>
         {
             Id = Guid.NewGuid(),
             RecipientUserId = recipientUserId,
-            RecipientEmail = recipientEmail,
+            RecipientAddress = recipientAddress,
             Channel = channel,
             TemplateId = templateId,
             Status = NotificationStatus.Queued,

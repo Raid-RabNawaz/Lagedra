@@ -31,6 +31,8 @@ public static class AuthEndpoints
         group.MapPost("/reset-password", ResetPassword).AllowAnonymous();
         group.MapGet("/me", GetMe).RequireAuthorization();
         group.MapPut("/me", UpdateProfile).RequireAuthorization();
+        group.MapPost("/phone/send-code", SendPhoneCode).RequireAuthorization();
+        group.MapPost("/phone/confirm", ConfirmPhoneCode).RequireAuthorization();
         group.MapPost("/me/profile-photo", UploadProfilePhoto)
             .RequireAuthorization()
             .DisableAntiforgery()
@@ -55,7 +57,19 @@ public static class AuthEndpoints
         CancellationToken ct)
     {
         var result = await mediator.Send(
-            new RegisterUserCommand(request.Email, request.Password, request.Role), ct).ConfigureAwait(true);
+            new RegisterUserCommand(
+                request.Email,
+                request.Password,
+                request.Role,
+                request.FullName,
+                request.CompanyName,
+                request.Phone,
+                request.City,
+                request.SignupType,
+                request.PortfolioSize,
+                request.HousingType,
+                request.PlacementsPerYear),
+            ct).ConfigureAwait(true);
 
         if (!result.IsSuccess)
         {
@@ -64,20 +78,32 @@ public static class AuthEndpoints
 
         var dto = result.Value;
 
+        if (dto.IsPreLaunch)
+        {
+            return Results.Ok(new
+            {
+                userId = dto.UserId,
+                preLaunch = true,
+                message = "You're on the founding-partner list. Check your inbox — we'll be in touch soon."
+            });
+        }
+
         if (env.IsDevelopment())
         {
             return Results.Ok(new
             {
                 userId = dto.UserId,
+                preLaunch = false,
                 message = "Registration successful. Check your email to verify your account.",
                 dev_verificationToken = dto.VerificationToken,
-                dev_verificationUrl = dto.VerificationUrl.ToString()
+                dev_verificationUrl = dto.VerificationUrl?.ToString()
             });
         }
 
         return Results.Ok(new
         {
             userId = dto.UserId,
+            preLaunch = false,
             message = "Registration successful. Check your email to verify your account."
         });
     }
@@ -138,8 +164,15 @@ public static class AuthEndpoints
     {
         var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
         var result = await mediator.Send(new LoginCommand(request.Email, request.Password, ip), ct).ConfigureAwait(true);
-        return result.IsSuccess
-            ? Results.Ok(result.Value)
+        if (result.IsSuccess)
+        {
+            return Results.Ok(result.Value);
+        }
+
+        // Surface the "launching soon" message (403) so the SPA can show it,
+        // while keeping bad credentials an opaque 401.
+        return result.Error.Code == "Auth.PreLaunchRestricted"
+            ? Results.Json(new { error = result.Error.Code, detail = result.Error.Description }, statusCode: StatusCodes.Status403Forbidden)
             : Results.Unauthorized();
     }
 
@@ -251,15 +284,77 @@ public static class AuthEndpoints
                 request.City,
                 request.State,
                 request.Country,
-                request.Occupation,
                 request.Languages,
+                request.Occupation,
                 request.DateOfBirth,
                 request.EmergencyContactName,
-                request.EmergencyContactPhone),
+                request.EmergencyContactPhone,
+                request.MailingStreet,
+                request.MailingCity,
+                request.MailingState,
+                request.MailingZip,
+                request.MailingCountry,
+                request.NoticeAddressSameAsMailing,
+                request.NoticeStreet,
+                request.NoticeCity,
+                request.NoticeState,
+                request.NoticeZip,
+                request.NoticeCountry,
+                request.BrokerName,
+                request.BrokerDreLicense,
+                request.BrokerScopeNotes),
             ct).ConfigureAwait(true);
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
+            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+    }
+
+    private static async Task<IResult> SendPhoneCode(
+        ClaimsPrincipal principal,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var userId = GetUserId(principal);
+        if (userId is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        var result = await mediator
+            .Send(new SendPhoneVerificationCommand(userId.Value), ct)
+            .ConfigureAwait(true);
+
+        if (result.IsSuccess)
+        {
+            return Results.Ok(new { message = "Verification code sent." });
+        }
+
+        return result.Error.Code == "Auth.PhoneCodeRateLimited"
+            ? Results.Json(
+                new { error = result.Error.Code, detail = result.Error.Description },
+                statusCode: StatusCodes.Status429TooManyRequests)
+            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+    }
+
+    private static async Task<IResult> ConfirmPhoneCode(
+        [FromBody] ConfirmPhoneVerificationRequest request,
+        ClaimsPrincipal principal,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var userId = GetUserId(principal);
+        if (userId is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        var result = await mediator
+            .Send(new ConfirmPhoneVerificationCommand(userId.Value, request.Code), ct)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(new { message = "Phone number verified." })
             : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
     }
 

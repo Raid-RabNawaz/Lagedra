@@ -23,13 +23,14 @@
     <ProjectReference Include="..\Lagedra.Modules\ComplianceMonitoring\ComplianceMonitoring.csproj" />
     <ProjectReference Include="..\Lagedra.Modules\Arbitration\Arbitration.csproj" />
     <ProjectReference Include="..\Lagedra.Modules\Evidence\Evidence.csproj" />
-    <ProjectReference Include="..\Lagedra.Modules\JurisdictionPacks\JurisdictionPacks.csproj" />
+    <ProjectReference Include="..\Lagedra.Modules\LeaseAgreements\LeaseAgreements.csproj" />
     <ProjectReference Include="..\Lagedra.Modules\Notifications\Notifications.csproj" />
     <ProjectReference Include="..\Lagedra.Modules\Privacy\Privacy.csproj" />
     <ProjectReference Include="..\Lagedra.Modules\AntiAbuseAndIntegrity\AntiAbuseAndIntegrity.csproj" />
     <ProjectReference Include="..\Lagedra.Modules\ContentManagement\ContentManagement.csproj" />
     <ProjectReference Include="..\Lagedra.Modules\PartnerNetwork\PartnerNetwork.csproj" />
     <ProjectReference Include="..\Lagedra.Modules\ChannelIntegration\ChannelIntegration.csproj" />
+    <ProjectReference Include="..\Lagedra.Modules\Reviews\Reviews.csproj" />
   </ItemGroup>
 
   <ItemGroup>

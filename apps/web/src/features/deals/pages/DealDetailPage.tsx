@@ -1,6 +1,5 @@
 import { useParams, Link } from "react-router-dom";
 import {
-  ArrowLeft,
   ArrowRight,
   MessageSquare,
   FileCheck,
@@ -19,11 +18,13 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { BackLink } from "@/components/shared/BackLink";
 import { Loader } from "@/components/shared/Loader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { DealTimeline } from "@/features/deals/components/DealTimeline";
 import { DealPhaseBadge } from "@/features/deals/components/DealPhaseBadge";
 import { DepositReturnPanel } from "@/features/deals/components/DepositReturnPanel";
+import { LeaveStayReviewPanel } from "@/features/reviews/components/LeaveStayReviewPanel";
 import { useMyDeals } from "@/features/deals/hooks/useDeals";
 import { useSnapshotByDealId } from "@/features/truth-surface/hooks/useTruthSurface";
 import { useAuthStore } from "@/app/auth/authStore";
@@ -61,9 +62,9 @@ function nextStepMessage(
       return "This deal is active. You can view billing details and invoices.";
     case "AwaitingDepositReturn":
       if (isLandlord)
-        return "The stay has ended. Return the deposit to your guest directly, then confirm it below to complete the deal.";
+        return "The stay has ended. Return the deposit (or an itemized statement of deductions) within 21 days of move-out, then confirm it below. If you return less than the full amount, include a reason and a damage photo.";
       if (isTenant)
-        return "The stay has ended. Confirm you received your deposit back to complete the deal — or open a dispute if you didn't.";
+        return "The stay has ended. Confirm you received your deposit back to complete the deal — or open a dispute if you didn't. Hosts generally have 21 days to return the deposit.";
       return "The stay has ended and the deposit return is being confirmed.";
     case "PaymentFailed":
       if (isTenant)
@@ -263,12 +264,7 @@ export function DealDetailPage() {
         title="Deal not found"
         description="This deal may no longer exist or you may not have access."
       >
-        <Link to="/app/deals">
-          <Button variant="outline" size="sm">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to deals
-          </Button>
-        </Link>
+        <BackLink fallbackTo="/app/deals" variant="button" label="Back to deals" />
       </EmptyState>
     );
   }
@@ -282,13 +278,10 @@ export function DealDetailPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <Link
-        to="/app/deals"
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        {isLandlord ? "My Deals" : "My Reservations"}
-      </Link>
+      <BackLink
+        fallbackTo="/app/deals"
+        label={isLandlord ? "My Deals" : "My Reservations"}
+      />
 
       {/* Header */}
       <div className="flex gap-4">
@@ -380,6 +373,10 @@ export function DealDetailPage() {
           isLandlord={isLandlord}
           isTenant={isTenant}
         />
+      )}
+
+      {deal.dealPhase === "Closed" && (
+        <LeaveStayReviewPanel dealId={deal.dealId} />
       )}
 
       {/* Section links */}

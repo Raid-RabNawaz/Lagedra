@@ -54,6 +54,16 @@ const groupMeta: Record<string, { label: string; description: string; order: num
   },
   cancellation: { label: "Cancellation", description: "", order: 5 },
   damage_claim: { label: "Damage claims", description: "", order: 6 },
+  deposit_return: {
+    label: "Deposit return",
+    description: "Statutory window for hosts to return deposits or itemize deductions.",
+    order: 7,
+  },
+  review: {
+    label: "Reviews",
+    description: "Double-blind stay review window after a booking completes.",
+    order: 8,
+  },
   other: { label: "Other settings", description: "", order: 99 },
 };
 

@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { Bed, Bath, Calendar, ImageOff } from "lucide-react";
+import { Bed, Bath, Calendar, ImageOff, Star } from "lucide-react";
 import type { ListingSummaryDto } from "@/api/types";
 import { Badge } from "@/components/ui/badge";
 import { SaveButton } from "@/features/listings/components/SaveButton";
@@ -31,6 +31,9 @@ export function ListingCard({ listing, className }: ListingCardProps) {
       : listing.minStayDays
         ? `${listing.minStayDays}+ days`
         : null;
+
+  const reviewCount = listing.hostReviewCount ?? 0;
+  const average = listing.hostAverageRating;
 
   return (
     <Link
@@ -66,14 +69,27 @@ export function ListingCard({ listing, className }: ListingCardProps) {
         </div>
 
         <div className="p-4">
-          <h3 className="font-semibold leading-tight line-clamp-1 text-foreground transition-colors group-hover:text-primary">
-            {listing.title}
-          </h3>
+          <div className="flex items-start justify-between gap-2">
+            <h3 className="font-semibold leading-tight line-clamp-1 text-foreground transition-colors group-hover:text-primary">
+              {listing.title}
+            </h3>
+            {reviewCount > 0 && average != null && (
+              <span className="inline-flex shrink-0 items-center gap-0.5 text-xs font-medium tabular-nums text-foreground">
+                <Star className="h-3.5 w-3.5 fill-amber-500 text-amber-500" />
+                {average.toFixed(1)}
+                <span className="font-normal text-muted-foreground">
+                  ({reviewCount})
+                </span>
+              </span>
+            )}
+          </div>
 
           <div className="mt-2 flex items-center gap-3 text-sm text-muted-foreground">
             <span className="flex items-center gap-1">
               <Bed className="h-3.5 w-3.5" />
-              {listing.bedrooms === 0 ? "Studio" : `${listing.bedrooms} bed${listing.bedrooms > 1 ? "s" : ""}`}
+              {listing.bedrooms === 0
+                ? "Studio"
+                : `${listing.bedrooms} bed${listing.bedrooms > 1 ? "s" : ""}`}
             </span>
             <span className="flex items-center gap-1">
               <Bath className="h-3.5 w-3.5" />

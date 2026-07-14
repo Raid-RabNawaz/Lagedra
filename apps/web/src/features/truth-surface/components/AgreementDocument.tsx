@@ -301,10 +301,13 @@ export const AgreementDocument = ({ canonicalContent, compact = false }: Props) 
           <div className="py-2 text-sm text-muted-foreground">
             Lagedra never holds the deposit. The tenant pays it directly to the
             host, who holds it for the stay and returns it directly after
-            move-out, less any agreed or arbitrated deductions. The booking is
-            only marked complete once both parties confirm the deposit was
-            returned by the host and received by the tenant. Any shortfall or
-            dispute is resolved through arbitration.
+            move-out, less any agreed or arbitrated deductions. By law the host
+            must return the deposit — or provide an itemized statement of
+            deductions — within the return window above. If the host returns
+            less than the full deposit, they must provide a valid reason and a
+            photo of the damage. The booking is only marked complete once both
+            parties confirm the deposit was returned by the host and received by
+            the tenant. Any shortfall or dispute is resolved through arbitration.
           </div>
         </Section>
       )}

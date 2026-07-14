@@ -83,6 +83,33 @@ public sealed class ListingProvider(ListingsDbContext db) : IListingProvider
             .OrderBy(n => n, StringComparer.Ordinal)
             .ToList();
 
+        ListingLeaseTermsDto? leaseTerms = listing.LeaseTerms is null
+            ? null
+            : new ListingLeaseTermsDto(
+                listing.LeaseTerms.RentDueDayOfMonth,
+                listing.LeaseTerms.NsfFirstFeeCents,
+                listing.LeaseTerms.NsfSubsequentFeeCents,
+                listing.LeaseTerms.LateFeePercent,
+                listing.LeaseTerms.LateFeeGraceDays,
+                listing.LeaseTerms.UtilitiesResponsibility,
+                listing.LeaseTerms.YardMaintenanceByTenant,
+                listing.LeaseTerms.Furnished,
+                listing.LeaseTerms.IncludedAppliancesNotes,
+                listing.LeaseTerms.KeyCount,
+                listing.LeaseTerms.MailboxKeyCount,
+                listing.LeaseTerms.KeyReplacementFeeCents,
+                listing.LeaseTerms.LockoutFeeCents,
+                listing.LeaseTerms.ParkingSpaceCount,
+                listing.LeaseTerms.ParkingDescription,
+                listing.LeaseTerms.ParkingIncludedInRent,
+                listing.LeaseTerms.MaxGuestConsecutiveDays,
+                listing.LeaseTerms.RentersInsuranceMinLiabilityCents,
+                listing.LeaseTerms.EarlyTerminationFeeMonths,
+                listing.LeaseTerms.BuiltBefore1978,
+                listing.LeaseTerms.LeadPaintKnowledge,
+                listing.LeaseTerms.RentCapJustCauseExempt,
+                listing.LeaseTerms.PaymentMethods);
+
         return new ListingDetailsDto(
             listing.Id,
             listing.LandlordUserId,
@@ -108,7 +135,8 @@ public sealed class ListingProvider(ListingsDbContext db) : IListingProvider
             listing.DefaultDepositCents,
             listing.DepositUnverifiedCents,
             listing.DepositBackgroundVerifiedCents,
-            listing.DepositPartnerGuaranteedCents);
+            listing.DepositPartnerGuaranteedCents,
+            leaseTerms);
     }
 
     public async Task<bool> IsAvailableAsync(

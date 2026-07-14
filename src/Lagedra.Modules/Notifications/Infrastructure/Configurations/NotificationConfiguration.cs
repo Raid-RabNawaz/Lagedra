@@ -16,7 +16,7 @@ public sealed class NotificationConfiguration : IEntityTypeConfiguration<Notific
         builder.Property(n => n.RecipientUserId).IsRequired();
         builder.HasIndex(n => n.RecipientUserId);
 
-        builder.Property(n => n.RecipientEmail).HasMaxLength(320).IsRequired();
+        builder.Property(n => n.RecipientAddress).HasMaxLength(320).IsRequired();
 
         builder.Property(n => n.Channel)
             .HasConversion<string>()

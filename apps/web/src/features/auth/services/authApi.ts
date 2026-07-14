@@ -133,4 +133,16 @@ export const authApi = {
     );
     return response.data;
   },
+
+  async sendPhoneVerificationCode(): Promise<{ message: string }> {
+    const response = await http.post<{ message: string }>(endpoints.auth.sendPhoneCode);
+    return response.data;
+  },
+
+  async confirmPhoneVerificationCode(code: string): Promise<{ message: string }> {
+    const response = await http.post<{ message: string }>(endpoints.auth.confirmPhoneCode, {
+      code,
+    });
+    return response.data;
+  },
 };

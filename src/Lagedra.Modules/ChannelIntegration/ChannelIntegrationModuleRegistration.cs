@@ -25,6 +25,7 @@ public static class ChannelIntegrationModuleRegistration
         // Pulls + imports external listing content into Lagedra (shared by the
         // scheduled content-sync job and the on-demand "sync now" command).
         services.AddScoped<ChannelContentImporter>();
+        services.AddScoped<ChannelBookingUpdateReconciler>();
 
         // Cross-module hook: ActivationAndBilling pushes paid bookings here.
         services.AddScoped<IChannelBookingPublisher, ChannelBookingPublisher>();

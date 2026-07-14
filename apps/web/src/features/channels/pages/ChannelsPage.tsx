@@ -41,6 +41,16 @@ import {
 } from "lucide-react";
 
 const OWNERREZ_PROVIDER_KEY = "ownerrez";
+const HOSTAWAY_PROVIDER_KEY = "hostaway";
+
+const PROVIDER_LABELS: Record<string, string> = {
+  [OWNERREZ_PROVIDER_KEY]: "OwnerRez",
+  [HOSTAWAY_PROVIDER_KEY]: "Hostaway",
+};
+
+function providerLabel(key: string): string {
+  return PROVIDER_LABELS[key.toLowerCase()] ?? key;
+}
 
 export function ChannelsPage() {
   const { data: connections, isLoading } = useChannelConnections();
@@ -48,15 +58,18 @@ export function ChannelsPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Import from OwnerRez</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Import from your PMS</h1>
         <p className="mt-1 text-muted-foreground">
-          Connect your OwnerRez account and Lagedra will pull your properties in
+          Connect OwnerRez or Hostaway and Lagedra will pull your properties in
           as draft listings. Review and publish each one — once live, paid
-          bookings are pushed back to OwnerRez automatically.
+          bookings are pushed back to your PMS automatically.
         </p>
       </div>
 
-      <ConnectOwnerRezCard hasConnection={(connections?.length ?? 0) > 0} />
+      <div className="grid gap-4">
+        <ConnectOwnerRezCard />
+        <ConnectHostawayCard />
+      </div>
 
       <Separator />
 
@@ -67,7 +80,7 @@ export function ChannelsPage() {
         ) : !connections || connections.length === 0 ? (
           <EmptyState
             title="No channels connected yet"
-            description="Connect OwnerRez above to import your listings into Lagedra."
+            description="Connect OwnerRez or Hostaway above to import your listings into Lagedra."
           />
         ) : (
           connections.map((c) => <ConnectionCard key={c.id} connection={c} />)
@@ -79,7 +92,7 @@ export function ChannelsPage() {
   );
 }
 
-function ConnectOwnerRezCard({ hasConnection }: { hasConnection: boolean }) {
+function ConnectOwnerRezCard() {
   const connect = useConnectChannel();
   const sync = useSyncChannel();
 
@@ -106,7 +119,6 @@ function ConnectOwnerRezCard({ hasConnection }: { hasConnection: boolean }) {
         displayName: displayName.trim() || "OwnerRez",
       });
 
-      // Connect → import in a single host action.
       const result = await sync.mutateAsync(connection.id);
       setDisplayName("");
       setAdvertiserId("");
@@ -131,9 +143,7 @@ function ConnectOwnerRezCard({ hasConnection }: { hasConnection: boolean }) {
           Connect OwnerRez
         </CardTitle>
         <CardDescription>
-          {hasConnection
-            ? "Add another OwnerRez account to import more properties."
-            : "Enter your OwnerRez advertiser ID to link your account."}
+          Enter your OwnerRez advertiser ID to link your account.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -152,9 +162,9 @@ function ConnectOwnerRezCard({ hasConnection }: { hasConnection: boolean }) {
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label htmlFor="advertiserId">OwnerRez advertiser ID</Label>
+            <Label htmlFor="or-advertiserId">OwnerRez advertiser ID</Label>
             <Input
-              id="advertiserId"
+              id="or-advertiserId"
               placeholder="ora-12345"
               value={advertiserId}
               onChange={(e) => setAdvertiserId(e.target.value)}
@@ -162,9 +172,9 @@ function ConnectOwnerRezCard({ hasConnection }: { hasConnection: boolean }) {
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="displayName">Label (optional)</Label>
+            <Label htmlFor="or-displayName">Label (optional)</Label>
             <Input
-              id="displayName"
+              id="or-displayName"
               placeholder="My OwnerRez account"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
@@ -181,7 +191,146 @@ function ConnectOwnerRezCard({ hasConnection }: { hasConnection: boolean }) {
         <p className="text-xs text-muted-foreground">
           Find your advertiser ID in OwnerRez under Settings → API / Channel
           integrations. Lagedra connects as your distribution channel — you
-          don't need to share your OwnerRez password.
+          don&apos;t need to share your OwnerRez password.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ConnectHostawayCard() {
+  const connect = useConnectChannel();
+  const sync = useSyncChannel();
+
+  const [displayName, setDisplayName] = useState("");
+  const [accountId, setAccountId] = useState("");
+  const [clientSecret, setClientSecret] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const busy = connect.isPending || sync.isPending;
+
+  const handleConnect = async () => {
+    setError(null);
+    setSuccess(null);
+
+    if (!accountId.trim()) {
+      setError("Enter your Hostaway account ID.");
+      return;
+    }
+    if (!/^\d+$/.test(accountId.trim())) {
+      setError("Hostaway account ID must be numeric.");
+      return;
+    }
+    if (!clientSecret.trim()) {
+      setError("Enter your Hostaway API client secret.");
+      return;
+    }
+
+    try {
+      const connection = await connect.mutateAsync({
+        providerKey: HOSTAWAY_PROVIDER_KEY,
+        externalAccountId: accountId.trim(),
+        displayName: displayName.trim() || "Hostaway",
+        secret: clientSecret.trim(),
+      });
+
+      const result = await sync.mutateAsync(connection.id);
+      setDisplayName("");
+      setAccountId("");
+      setClientSecret("");
+
+      const importPart =
+        result.pulled > 0
+          ? `Imported ${result.created} new and updated ${result.updated} listing(s) as drafts.`
+          : "No listings were found yet — try syncing again once listings are active in Hostaway.";
+      const webhookPart =
+        result.webhookRegistered === true
+          ? " Live booking updates are connected automatically."
+          : result.webhookRegistered === false
+            ? " Listing sync worked, but webhook registration failed — try Sync again shortly."
+            : "";
+      setSuccess(`Connected. ${importPart}${webhookPart}`);
+    } catch (e) {
+      setError(
+        (e as Error)?.message ??
+          "Could not connect to Hostaway. Check your account ID and API secret.",
+      );
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center gap-2">
+          <Plug className="h-5 w-5" />
+          Connect Hostaway
+        </CardTitle>
+        <CardDescription>
+          Enter your Hostaway account ID and API client secret.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {error && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        {success && (
+          <Alert variant="success">
+            <CheckCircle2 className="h-4 w-4" />
+            <AlertDescription>{success}</AlertDescription>
+          </Alert>
+        )}
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="ha-accountId">Hostaway account ID</Label>
+            <Input
+              id="ha-accountId"
+              placeholder="12345"
+              value={accountId}
+              onChange={(e) => setAccountId(e.target.value)}
+              autoComplete="off"
+              inputMode="numeric"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="ha-displayName">Label (optional)</Label>
+            <Input
+              id="ha-displayName"
+              placeholder="My Hostaway account"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              autoComplete="off"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="ha-secret">API client secret</Label>
+          <Input
+            id="ha-secret"
+            type="password"
+            placeholder="Paste your Hostaway API client secret"
+            value={clientSecret}
+            onChange={(e) => setClientSecret(e.target.value)}
+            autoComplete="off"
+          />
+        </div>
+
+        <Button onClick={handleConnect} disabled={busy} className="gap-2">
+          <Link2 className="h-4 w-4" />
+          {busy ? "Connecting & importing..." : "Connect & import listings"}
+        </Button>
+
+        <p className="text-xs text-muted-foreground">
+          Create an API client in Hostaway under Settings → Hostaway API. Your
+          account ID is the <code className="text-[11px]">client_id</code>; the
+          secret is encrypted at rest and never shown again. When you connect,
+          Lagedra imports your listings and registers live booking updates for
+          you automatically (on staging/production).
         </p>
       </CardContent>
     </Card>
@@ -196,6 +345,7 @@ function ConnectionCard({ connection }: { connection: ChannelConnectionDto }) {
 
   const disabled = connection.status === "Disabled";
   const busy = sync.isPending || setEnabled.isPending;
+  const label = providerLabel(connection.providerKey);
 
   const handleSync = async () => {
     setError(null);
@@ -226,7 +376,7 @@ function ConnectionCard({ connection }: { connection: ChannelConnectionDto }) {
               {connection.displayName}
             </CardTitle>
             <CardDescription className="mt-0.5">
-              {connection.providerKey} · {connection.externalAccountId}
+              {label} · {connection.externalAccountId}
             </CardDescription>
           </div>
           <StatusBadge status={connection.status} />
@@ -283,13 +433,19 @@ function ConnectionCard({ connection }: { connection: ChannelConnectionDto }) {
           </Button>
         </div>
 
-        {expanded && <ImportedListings connectionId={connection.id} />}
+        {expanded && <ImportedListings connectionId={connection.id} providerLabel={label} />}
       </CardContent>
     </Card>
   );
 }
 
-function ImportedListings({ connectionId }: { connectionId: string }) {
+function ImportedListings({
+  connectionId,
+  providerLabel: label,
+}: {
+  connectionId: string;
+  providerLabel: string;
+}) {
   const { data, isLoading } = useChannelListings(connectionId);
 
   if (isLoading) {
@@ -299,7 +455,7 @@ function ImportedListings({ connectionId }: { connectionId: string }) {
   if (!data || data.length === 0) {
     return (
       <p className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-        Nothing imported yet. Run a sync to pull listings from OwnerRez.
+        Nothing imported yet. Run a sync to pull listings from {label}.
       </p>
     );
   }
@@ -364,8 +520,8 @@ function HowItWorks() {
       <p className="font-medium text-foreground text-sm">How it works</p>
       <ul className="list-disc pl-4 space-y-1">
         <li>
-          Lagedra connects to OwnerRez as a distribution channel and pulls your
-          property content, photos, and rates.
+          Lagedra connects to your PMS and pulls property content, photos, and
+          rates.
         </li>
         <li>
           Imported properties land as <strong>draft listings</strong> — review
@@ -373,11 +529,10 @@ function HowItWorks() {
         </li>
         <li>
           Once a listing is live and a guest pays through Lagedra, the booking is
-          pushed back to OwnerRez so your calendar stays in sync.
+          pushed back to your PMS so your calendar stays in sync.
         </li>
         <li>
-          Re-run a sync any time to pick up new properties or content changes
-          from OwnerRez.
+          Re-run a sync any time to pick up new properties or content changes.
         </li>
       </ul>
     </div>

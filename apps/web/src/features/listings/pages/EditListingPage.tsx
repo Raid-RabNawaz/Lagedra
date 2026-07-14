@@ -2,7 +2,6 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from "react";
 import {
-  ArrowLeft,
   MapPin,
   Lock,
   ImagePlus,
@@ -65,6 +64,7 @@ import { useListingDefinitions } from "@/features/listings/hooks/useListingDefin
 import { listingDetailsToFormValues } from "@/features/listings/lib/mapListingToForm";
 import { toUpdateListingRequest } from "@/features/listings/lib/toListingRequests";
 import type { ListingFormValues } from "@/features/listings/lib/listingFormSchema";
+import { BackLink } from "@/components/shared/BackLink";
 import { getApiErrorMessage } from "@/api/errors";
 import { Loader } from "@/components/shared/Loader";
 import { HostPayoutReadinessNotice } from "@/components/shared/HostPayoutReadinessNotice";
@@ -565,9 +565,7 @@ export const EditListingPage = () => {
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>Listing not found or failed to load.</AlertDescription>
         </Alert>
-        <Link to="/app/listings" className="text-sm text-accent underline">
-          Back to my listings
-        </Link>
+        <BackLink fallbackTo="/app/listings" label="Back to my listings" />
       </div>
     );
   }
@@ -588,13 +586,7 @@ export const EditListingPage = () => {
     <div className="space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <Link
-            to="/app/listings"
-            className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-2"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            My listings
-          </Link>
+          <BackLink fallbackTo="/app/listings" label="My listings" className="mb-2" />
           <h1 className="text-3xl font-bold tracking-tight">Edit listing</h1>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <Badge variant="secondary">{listing.status}</Badge>

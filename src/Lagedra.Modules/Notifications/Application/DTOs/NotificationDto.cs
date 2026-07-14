@@ -5,7 +5,7 @@ namespace Lagedra.Modules.Notifications.Application.DTOs;
 public sealed record NotificationDto(
     Guid Id,
     Guid RecipientUserId,
-    string RecipientEmail,
+    string RecipientAddress,
     NotificationChannel Channel,
     string TemplateId,
     NotificationStatus Status,

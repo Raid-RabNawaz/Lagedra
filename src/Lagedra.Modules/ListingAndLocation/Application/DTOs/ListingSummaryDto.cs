@@ -17,4 +17,6 @@ public sealed record ListingSummaryDto(
     Uri? CoverPhotoUrl,
     int? QualityScore,
     DateTime CreatedAt,
-    long? DefaultDepositCents = null);
+    long? DefaultDepositCents = null,
+    double? HostAverageRating = null,
+    int HostReviewCount = 0);

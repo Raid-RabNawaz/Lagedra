@@ -1,9 +1,10 @@
 import { useState, useMemo } from "react";
-import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, CreditCard, ShieldCheck } from "lucide-react";
+import { useParams } from "react-router-dom";
+import { CreditCard, ShieldCheck } from "lucide-react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { appConfig } from "@/app/config";
+import { BackLink } from "@/components/shared/BackLink";
 import { NonCustodialDisclaimer } from "@/features/activation-billing/components/NonCustodialDisclaimer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -116,13 +117,11 @@ export const PaymentMethodPage = () => {
 
   return (
     <div className="mx-auto max-w-lg px-4 py-8 sm:px-6 lg:px-8">
-      <Link
-        to={dealId ? `/app/deals/${dealId}/billing` : "/app"}
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to billing
-      </Link>
+      <BackLink
+        fallbackTo={dealId ? `/app/deals/${dealId}/billing` : "/app"}
+        label="Back to billing"
+        className="mb-6"
+      />
 
       <h1 className="text-2xl font-bold tracking-tight mb-6">
         Payment Method

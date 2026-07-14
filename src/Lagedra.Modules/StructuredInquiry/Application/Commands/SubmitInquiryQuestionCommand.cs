@@ -69,13 +69,13 @@ public sealed class SubmitInquiryQuestionCommandHandler(
             request.Category,
             request.PredefinedQuestionId,
             request.CustomQuestionText,
-            request.OpenQuestionText);
+            request.OpenQuestionText,
+            request.CallerUserId,
+            InquiryQuestionAuthorRole.Tenant,
+            participants.LandlordUserId);
         dbContext.Entry(question).State = EntityState.Added;
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        return Result<InquiryQuestionDto>.Success(
-            new InquiryQuestionDto(question.Id, question.PredefinedQuestionId,
-                question.Category, question.SubmittedAt, null,
-                question.CustomText, question.OpenQuestionText));
+        return Result<InquiryQuestionDto>.Success(InquiryDtoMapper.ToQuestionDto(question));
     }
 }

@@ -1,9 +1,10 @@
-using Lagedra.Modules.ListingAndLocation.Application.Commands;
 using Lagedra.Modules.ListingAndLocation.Application.DTOs;
 using Lagedra.Modules.ListingAndLocation.Infrastructure.Persistence;
+using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Results;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Lagedra.Modules.ListingAndLocation.Application.Queries;
 
@@ -13,7 +14,9 @@ public sealed record GetSavedListingsQuery(
     int Page = 1,
     int PageSize = 20) : IRequest<Result<IReadOnlyList<ListingSummaryDto>>>;
 
-public sealed class GetSavedListingsQueryHandler(ListingsDbContext dbContext)
+public sealed class GetSavedListingsQueryHandler(
+    ListingsDbContext dbContext,
+    IServiceProvider serviceProvider)
     : IRequestHandler<GetSavedListingsQuery, Result<IReadOnlyList<ListingSummaryDto>>>
 {
     public async Task<Result<IReadOnlyList<ListingSummaryDto>>> Handle(
@@ -46,11 +49,16 @@ public sealed class GetSavedListingsQueryHandler(ListingsDbContext dbContext)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        IReadOnlyList<ListingSummaryDto> results = savedListingIds
+        var ordered = savedListingIds
             .Select(id => listings.FirstOrDefault(l => l.Id == id))
             .Where(l => l is not null)
-            .Select(l => ListingMapper.ToSummary(l!))
+            .Cast<Domain.Aggregates.Listing>()
             .ToList();
+
+        var reputationProvider = serviceProvider.GetService<IReviewReputationProvider>();
+        var results = await ListingSummaryEnricher
+            .ToSummariesAsync(ordered, reputationProvider, cancellationToken)
+            .ConfigureAwait(false);
 
         return Result<IReadOnlyList<ListingSummaryDto>>.Success(results);
     }

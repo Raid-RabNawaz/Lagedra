@@ -14,13 +14,15 @@ namespace Lagedra.Modules.ChannelIntegration.Infrastructure.Jobs;
 /// <summary>
 /// Pulls booking status changes from each active channel (e.g. host-side
 /// cancellations) since the last high-water mark and reconciles them against
-/// our <see cref="ChannelBookingLink"/> rows.
+/// our <see cref="ChannelBookingLink"/> rows. Hostaway connections also receive
+/// near-real-time updates via the inbound unified webhook.
 /// </summary>
 [DisallowConcurrentExecution]
 public sealed partial class ChannelBookingUpdateJob(
     ChannelDbContext dbContext,
     IChannelProviderRegistry providers,
     IEncryptionService encryption,
+    ChannelBookingUpdateReconciler reconciler,
     IClock clock,
     ILogger<ChannelBookingUpdateJob> logger) : IJob
 {
@@ -63,25 +65,11 @@ public sealed partial class ChannelBookingUpdateJob(
                 {
                     highWater = update.ChangedAtUtc;
                 }
-
-                var link = await dbContext.BookingLinks
-                    .FirstOrDefaultAsync(
-                        b => b.ConnectionId == connection.Id
-                          && b.ProviderBookingId == update.ExternalBookingId, ct)
-                    .ConfigureAwait(false);
-
-                if (link is null)
-                {
-                    continue;
-                }
-
-                if (string.Equals(update.Status, "cancelled", StringComparison.OrdinalIgnoreCase))
-                {
-                    link.MarkCancelledRemotely(clock);
-                    // TODO: raise a cross-module cancellation so ActivationAndBilling
-                    // can void/refund the deal as appropriate.
-                }
             }
+
+            await reconciler
+                .ApplyAsync(connection.Id, connection.ProviderKey, updates, ct)
+                .ConfigureAwait(false);
 
             if (cursor is null)
             {

@@ -59,6 +59,20 @@ export type UserProfileDto = {
   responseTimeMinutes?: number | null;
   memberSince: string;
   lastLoginAt?: string | null;
+  mailingStreet?: string | null;
+  mailingCity?: string | null;
+  mailingState?: string | null;
+  mailingZip?: string | null;
+  mailingCountry?: string | null;
+  noticeAddressSameAsMailing?: boolean;
+  noticeStreet?: string | null;
+  noticeCity?: string | null;
+  noticeState?: string | null;
+  noticeZip?: string | null;
+  noticeCountry?: string | null;
+  brokerName?: string | null;
+  brokerDreLicense?: string | null;
+  brokerScopeNotes?: string | null;
 };
 
 export type LoginRequest = {
@@ -68,15 +82,29 @@ export type LoginRequest = {
 
 export type RegisterRequest = {
   email: string;
-  password: string;
   role: UserRole;
+  password?: string;
+  fullName?: string;
+  companyName?: string;
+  phone?: string;
+  city?: string;
+  /** "Host" | "Partner" — which door the user came through. */
+  signupType?: string;
+  portfolioSize?: string;
+  housingType?: string;
+  placementsPerYear?: string;
 };
 
 export type RegisterResponse = {
   userId: string;
   message: string;
+  preLaunch?: boolean;
   dev_verificationToken?: string;
   dev_verificationUrl?: string;
+};
+
+export type PublicConfigDto = {
+  preLaunchEnabled: boolean;
 };
 
 export type ExternalLoginRequest = {
@@ -119,6 +147,20 @@ export type UpdateProfileRequest = {
   dateOfBirth: string | null;
   emergencyContactName: string | null;
   emergencyContactPhone: string | null;
+  mailingStreet?: string | null;
+  mailingCity?: string | null;
+  mailingState?: string | null;
+  mailingZip?: string | null;
+  mailingCountry?: string | null;
+  noticeAddressSameAsMailing?: boolean | null;
+  noticeStreet?: string | null;
+  noticeCity?: string | null;
+  noticeState?: string | null;
+  noticeZip?: string | null;
+  noticeCountry?: string | null;
+  brokerName?: string | null;
+  brokerDreLicense?: string | null;
+  brokerScopeNotes?: string | null;
 };
 
 export type UpdateRoleRequest = {
@@ -198,6 +240,9 @@ export type ListingSummaryDto = {
    * field without an extra round trip to the listing details endpoint.
    */
   defaultDepositCents?: number | null;
+  /** Published guest→host stay-review average for this listing's host. */
+  hostAverageRating?: number | null;
+  hostReviewCount?: number;
 };
 
 export type ListingPhotoDto = {
@@ -585,6 +630,8 @@ export type ReconfirmSnapshotRequest = {
 
 export type InquirySessionStatus = "Locked" | "Open" | "Closed";
 
+export type InquiryQuestionAuthorRole = "Tenant" | "Partner";
+
 export type InquiryCategory =
   | "UtilitySpecifics"
   | "AccessibilityLayout"
@@ -618,6 +665,8 @@ export type InquiryQuestionDto = {
    * 1000 characters; rendered as the question prompt when present.
    */
   openQuestionText?: string | null;
+  submittedByUserId?: string | null;
+  submittedByRole?: InquiryQuestionAuthorRole | null;
 };
 
 /**
@@ -625,6 +674,39 @@ export type InquiryQuestionDto = {
  * deal-linked. `listingId` and `tenantUserId` are always present so the
  * UI can resolve display context without a deal round-trip.
  */
+export type InquiryOfferStatus =
+  | "Pending"
+  | "Accepted"
+  | "Superseded"
+  | "Withdrawn";
+
+export type InquiryOfferRole = "Host" | "Tenant";
+
+export type InquiryOfferDto = {
+  offerId: string;
+  proposedByUserId: string;
+  proposedByRole: InquiryOfferRole;
+  rentCents: number;
+  depositCents: number;
+  note: string | null;
+  status: InquiryOfferStatus;
+  proposedAt: string;
+  respondedAt: string | null;
+  supersedesOfferId: string | null;
+};
+
+export type ProposeInquiryOfferRequest = {
+  rentCents: number;
+  depositCents: number;
+  note?: string | null;
+};
+
+export type CounterInquiryOfferRequest = {
+  rentCents: number;
+  depositCents: number;
+  note?: string | null;
+};
+
 export type InquiryDto = {
   sessionId: string;
   dealId: string | null;
@@ -635,6 +717,12 @@ export type InquiryDto = {
   closedAt: string | null;
   createdAt: string;
   questions: InquiryQuestionDto[];
+  offers: InquiryOfferDto[];
+  acceptedOffer: InquiryOfferDto | null;
+  partnerOrganizationId?: string | null;
+  partnerOrganizationName?: string | null;
+  /** Listing host — prefer this over waiting on listing detail for role checks. */
+  landlordUserId?: string | null;
 };
 
 /**
@@ -656,6 +744,7 @@ export type HostInquirySummaryDto = {
   lastActivityAt: string;
   questionCount: number;
   unansweredCount: number;
+  partnerOrganizationId?: string | null;
 };
 
 /**
@@ -671,6 +760,25 @@ export type TenantInquirySummaryDto = {
   listingCity: string | null;
   landlordUserId: string;
   landlordDisplayName: string | null;
+  status: InquirySessionStatus;
+  dealId: string | null;
+  createdAt: string;
+  lastActivityAt: string;
+  questionCount: number;
+  unansweredByHostCount: number;
+  partnerOrganizationId?: string | null;
+};
+
+export type PartnerInquirySummaryDto = {
+  sessionId: string;
+  listingId: string;
+  listingTitle: string | null;
+  listingCoverPhotoUri: string | null;
+  listingCity: string | null;
+  tenantUserId: string;
+  tenantDisplayName: string | null;
+  partnerOrganizationId: string;
+  partnerOrganizationName: string | null;
   status: InquirySessionStatus;
   dealId: string | null;
   createdAt: string;
@@ -734,6 +842,7 @@ export type DealApplicationDto = {
   partnerOrganizationId: string | null;
   isPartnerReferred: boolean;
   jurisdictionWarning: string | null;
+  source?: DealApplicationSource;
   /** Headcount the tenant declared at submission. Defaults to 1 on legacy rows. */
   guestCount: number;
   /** Airbnb-style cover note from the tenant. Null when none was provided. */
@@ -751,6 +860,19 @@ export type DealApplicationDto = {
   listingTitle?: string | null;
   listingCoverPhotoUri?: string | null;
   listingCity?: string | null;
+  payerType?: ApplicationPayerType;
+  payerUserId?: string | null;
+  hasPaymentMethod?: boolean;
+  isPaymentReady?: boolean;
+  partnerOrganizationName?: string | null;
+};
+
+export type DealApplicationSource = "TenantSelfApply" | "PartnerDirectReservation";
+
+export type AttachApplicationPaymentRequest = {
+  stripePaymentMethodId?: string | null;
+  truthSurfaceConsentGiven: boolean;
+  consentVersion?: string | null;
 };
 
 /**
@@ -769,6 +891,8 @@ export type ReservationPreviewDto = {
   monthlyProtocolFeeCents: number;
   totalPayableCents: number;
   stayDurationDays: number;
+  isNegotiatedOffer?: boolean;
+  negotiatedOfferId?: string | null;
 };
 
 /**
@@ -865,7 +989,7 @@ export type SavePaymentDetailsRequest = {
   paymentInfo: string;
 };
 
-// ── Channel integrations (OwnerRez & other PMS) ──────────────
+// ── Channel integrations (OwnerRez, Hostaway, & other PMS) ───
 
 /** Lifecycle of a host's connection to an external channel / PMS. */
 export type ChannelConnectionStatus =
@@ -905,6 +1029,8 @@ export type ChannelSyncResultDto = {
   pulled: number;
   created: number;
   updated: number;
+  /** Hostaway only — true when inbound webhook is registered, false on failure, null if skipped. */
+  webhookRegistered?: boolean | null;
 };
 
 export type ConnectChannelRequest = {
@@ -1032,6 +1158,8 @@ export type PaymentConfirmationDto = {
   depositReturnSettledAt?: string | null;
   /** Deposit minus approved/settled damage deductions — what the host should return. */
   netReturnableDepositCents?: number | null;
+  /** Sealed damage-photo manifest when the host returned less than the full deposit. */
+  depositReturnEvidenceManifestId?: string | null;
 };
 
 export type PaymentDetailsDto = {
@@ -1077,6 +1205,8 @@ export type ConfirmDepositReturnRequest = {
   returnedAmountCents: number;
   method?: string | null;
   note?: string | null;
+  /** Required (sealed) when returnedAmountCents is less than the deposit paid. */
+  evidenceManifestId?: string | null;
 };
 
 export type FileDamageClaimRequest = {
@@ -1368,6 +1498,7 @@ export type TrustLedgerEntryType =
   | "PaymentDefault"
   | "EarlyTermination"
   | "PositiveReview"
+  | "ReviewConcern"
   | "IdentityVerified";
 
 export type TrustLedgerEntryDto = {
@@ -1732,7 +1863,74 @@ export type UpsertSeoPageRequest = {
   noIndex: boolean;
 };
 
-// ── Admin: Jurisdiction Packs ───────────────────────────────
+// ── Admin: Lease Agreement Templates ────────────────────────
+export type LeaseTemplateVersionStatus = "Draft" | "PendingApproval" | "Active" | "Deprecated";
+
+export type LeaseAgreementTemplateDto = {
+  templateId: string;
+  jurisdictionCode: string;
+  title: string;
+  activeVersionId: string | null;
+  versions: LeaseTemplateVersionSummaryDto[];
+};
+
+export type LeaseTemplateSummaryDto = {
+  templateId: string;
+  jurisdictionCode: string;
+  title: string;
+  activeVersionId: string | null;
+  versionCount: number;
+};
+
+export type PendingLeaseApprovalDto = {
+  templateId: string;
+  jurisdictionCode: string;
+  title: string;
+  versionId: string;
+  versionNumber: number;
+  effectiveDate: string | null;
+  firstApproverId: string | null;
+};
+
+export type LeaseTemplateVersionSummaryDto = {
+  templateId: string;
+  jurisdictionCode: string;
+  versionId: string;
+  versionNumber: number;
+  status: LeaseTemplateVersionStatus;
+  effectiveDate: string | null;
+  approvedAt: string | null;
+  approvedBy: string | null;
+  secondApproverId: string | null;
+};
+
+export type LeaseTemplateVersionDetailsDto = LeaseTemplateVersionSummaryDto & {
+  title: string;
+  bodyHtml: string;
+};
+
+export type LeasePlaceholderDto = {
+  key: string;
+  group: string;
+  label: string;
+  description: string;
+  example: string;
+  required: boolean;
+  token: string;
+};
+
+export type LeasePlaceholderCatalogDto = {
+  placeholders: LeasePlaceholderDto[];
+  usageExampleHtml: string;
+  usageHint: string;
+};
+
+export type UpdateLeaseTemplateDraftBody = {
+  bodyHtml: string;
+  effectiveDate?: string | null;
+  title?: string | null;
+};
+
 export type PackVersionStatus = "Draft" | "PendingApproval" | "Active" | "Deprecated";
 
 export type JurisdictionPackDto = {
@@ -1929,8 +2127,17 @@ export type PartnerGuestInviteResultDto = {
   setPasswordUrl: string | null;
   setPasswordTokenExpiresAt: string | null;
   endorsementId: string | null;
-  directReservationId: string | null;
 };
+
+export type EndorsedMemberDto = {
+  tenantUserId: string;
+  displayName: string;
+  email: string;
+  endorsementId: string;
+  approvedAt: string | null;
+};
+
+export type ApplicationPayerType = "Tenant" | "PartnerOrganization";
 
 export type RegisterPartnerRequest = {
   name: string;
@@ -1951,9 +2158,12 @@ export type GenerateReferralLinkRequest = {
 };
 
 export type CreateDirectReservationRequest = {
-  guestName: string;
-  guestEmail: string;
+  tenantUserId: string;
   listingId: string;
+  payerType: ApplicationPayerType;
+  requestedCheckIn?: string | null;
+  requestedCheckOut?: string | null;
+  stripePaymentMethodId?: string | null;
 };
 
 export type RequestEndorsementRequest = {
@@ -1977,7 +2187,6 @@ export type RevokeEndorsementRequest = {
 export type InvitePartnerGuestRequest = {
   email: string;
   fullName: string;
-  listingId?: string | null;
   withEndorsement: boolean;
   endorsementNote?: string | null;
 };
@@ -2032,4 +2241,96 @@ export type ProtocolFeeReconciliationDto = {
   stripePriceAmountCents: number | null;
   inSync: boolean;
   issue: ProtocolFeeReconciliationIssue | null;
+};
+
+// ── Reviews & ratings ─────────────────────────────────────────
+
+export type StayReviewDirection = "GuestToHost" | "HostToGuest";
+export type StayReviewStatus = "Submitted" | "Published";
+
+export type StayReviewDto = {
+  id: string;
+  dealId: string;
+  listingId: string;
+  reviewerUserId: string;
+  revieweeUserId: string;
+  direction: StayReviewDirection;
+  status: StayReviewStatus;
+  overallRating: number;
+  cleanliness?: number | null;
+  accuracy?: number | null;
+  communication?: number | null;
+  location?: number | null;
+  checkIn?: number | null;
+  value?: number | null;
+  respectHouseRules?: number | null;
+  publicComment: string;
+  submittedAt: string;
+  publishedAt?: string | null;
+};
+
+export type StayReviewWindowDto = {
+  dealId: string;
+  listingId: string;
+  opensAt: string;
+  closesAt: string;
+  guestSubmitted: boolean;
+  hostSubmitted: boolean;
+  isPublished: boolean;
+  publishedAt?: string | null;
+  canCallerSubmit: boolean;
+  callerDirection?: StayReviewDirection | null;
+  ownReview?: StayReviewDto | null;
+  peerReview?: StayReviewDto | null;
+};
+
+export type SubmitStayReviewRequest = {
+  overallRating: number;
+  publicComment: string;
+  privateFeedback?: string | null;
+  cleanliness?: number | null;
+  accuracy?: number | null;
+  communication?: number | null;
+  location?: number | null;
+  checkIn?: number | null;
+  value?: number | null;
+  respectHouseRules?: number | null;
+};
+
+export type UserReputationDto = {
+  subjectId: string;
+  averageOverall: number;
+  reviewCount: number;
+  categoryAverages: Record<string, number>;
+};
+
+export type PartnerServiceReviewDto = {
+  id: string;
+  organizationId: string;
+  reviewerUserId: string;
+  overallRating: number;
+  responsiveness: number;
+  reliability: number;
+  supportQuality: number;
+  publicComment: string;
+  submittedAt: string;
+};
+
+export type PartnerReputationDto = {
+  organizationId: string;
+  averageOverall: number;
+  reviewCount: number;
+  averageResponsiveness: number;
+  averageReliability: number;
+  averageSupportQuality: number;
+  callerCanReview: boolean;
+  callerAlreadyReviewed: boolean;
+};
+
+export type SubmitPartnerServiceReviewRequest = {
+  overallRating: number;
+  responsiveness: number;
+  reliability: number;
+  supportQuality: number;
+  publicComment: string;
 };

@@ -20,6 +20,7 @@ import {
 import { Loader } from "@/components/shared/Loader";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { FormError } from "@/components/shared/FormError";
+import { PartnerServiceReviewPanel } from "@/features/reviews/components/PartnerServiceReviewPanel";
 
 const formatDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString(undefined, { dateStyle: "medium" }) : "—";
@@ -93,7 +94,7 @@ export function TenantEndorsementsPanel() {
                 key={e.id}
                 className="flex items-start justify-between gap-3 rounded-md border p-3"
               >
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="flex items-center gap-2 font-medium">
                     <Building2 className="h-4 w-4 text-muted-foreground" />
                     {e.organizationName}
@@ -108,6 +109,14 @@ export function TenantEndorsementsPanel() {
                     <p className="mt-1 text-xs italic text-muted-foreground line-clamp-2">
                       "{e.note}"
                     </p>
+                  )}
+                  {(e.status === "Approved" ||
+                    e.status === "Revoked" ||
+                    e.status === "Expired") && (
+                    <PartnerServiceReviewPanel
+                      organizationId={e.organizationId}
+                      organizationName={e.organizationName}
+                    />
                   )}
                 </div>
                 <EndorsementStatusBadge status={e.status} />

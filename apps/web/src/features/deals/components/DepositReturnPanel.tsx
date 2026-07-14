@@ -9,6 +9,8 @@ import { Select } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Alert } from "@/components/ui/alert";
 import { Loader } from "@/components/shared/Loader";
+import { EvidenceUpload } from "@/features/arbitration/components/EvidenceUpload";
+import { useManifest } from "@/features/evidence/hooks/useEvidence";
 import {
   usePaymentStatus,
   useBeginMoveOut,
@@ -23,6 +25,8 @@ type Props = {
   isLandlord: boolean;
   isTenant: boolean;
 };
+
+const DEPOSIT_RETURN_WINDOW_DAYS = 21;
 
 const returnMethods = [
   "Bank transfer",
@@ -175,6 +179,11 @@ function HandshakeCard({
   const [method, setMethod] = useState(returnMethods[0]);
   const [note, setNote] = useState("");
   const [confirmChecked, setConfirmChecked] = useState(false);
+  const [evidenceManifestId, setEvidenceManifestId] = useState<string | undefined>();
+  const [clientError, setClientError] = useState<string | null>(null);
+
+  const { data: evidenceManifest } = useManifest(evidenceManifestId);
+  const evidenceSealed = evidenceManifest?.status === "Sealed";
 
   if (isLoading || !payment) {
     return (
@@ -190,23 +199,49 @@ function HandshakeCard({
   const tenantReceived = Boolean(payment.tenantConfirmedDepositReceivedAt);
   const settled = Boolean(payment.depositReturnSettledAt);
 
+  const depositCents = payment.depositAmountCents;
   const netCents =
     payment.netReturnableDepositCents ?? payment.depositAmountCents;
   const netDollars = (netCents / 100).toFixed(2);
   const amountValue = amountInput ?? netDollars;
+  const dollars = Number.parseFloat(amountValue);
+  const returnedCents = Number.isFinite(dollars) ? Math.round(dollars * 100) : 0;
+  const isPartialReturn = returnedCents < depositCents;
 
   const submitHostConfirm = () => {
-    const dollars = Number.parseFloat(amountValue);
-    const cents = Number.isFinite(dollars) ? Math.round(dollars * 100) : 0;
+    setClientError(null);
+
+    if (isPartialReturn) {
+      if (!note.trim()) {
+        setClientError(
+          "Add a valid reason for the deductions when returning less than the full deposit.",
+        );
+        return;
+      }
+      if (!evidenceManifestId || !evidenceSealed) {
+        setClientError(
+          "Upload and seal at least one damage photo before confirming a partial return.",
+        );
+        return;
+      }
+    }
+
     confirmReturned.mutate({
       dealId: deal.dealId,
       payload: {
-        returnedAmountCents: cents,
+        returnedAmountCents: returnedCents,
         method,
         note: note.trim() ? note.trim() : null,
+        evidenceManifestId: isPartialReturn ? evidenceManifestId! : null,
       },
     });
   };
+
+  const canSubmitHost =
+    confirmChecked &&
+    !confirmReturned.isPending &&
+    (!isPartialReturn ||
+      (Boolean(note.trim()) && Boolean(evidenceManifestId) && evidenceSealed));
 
   return (
     <Card>
@@ -246,8 +281,10 @@ function HandshakeCard({
           <div className="space-y-3 rounded-lg border p-3">
             <p className="text-sm text-muted-foreground">
               Return the deposit to your guest directly (Lagedra never holds it),
-              then record it here. The deal completes once the guest confirms
-              receipt.
+              then record it here. By law you must return the deposit — or provide
+              an itemized statement of deductions — within{" "}
+              {DEPOSIT_RETURN_WINDOW_DAYS} days of move-out. The deal completes
+              once the guest confirms receipt.
             </p>
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
@@ -277,16 +314,58 @@ function HandshakeCard({
                 </Select>
               </div>
             </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium">
-                Note <span className="text-muted-foreground">(optional)</span>
-              </label>
-              <Textarea
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                placeholder="Reference number, breakdown of any deductions, etc."
-              />
-            </div>
+
+            {isPartialReturn ? (
+              <>
+                <Alert className="text-sm">
+                  You are returning less than the{" "}
+                  {formatMoney(depositCents)} deposit paid. Provide a valid
+                  reason for the deductions and attach a photo of the damage.
+                </Alert>
+                <div>
+                  <label className="mb-1 block text-sm font-medium">
+                    Reason for deductions
+                  </label>
+                  <Textarea
+                    value={note}
+                    onChange={(e) => setNote(e.target.value)}
+                    placeholder="Describe the damage or other lawful deductions…"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium">
+                    Damage photo
+                  </label>
+                  <EvidenceUpload
+                    dealId={deal.dealId}
+                    manifestId={evidenceManifestId}
+                    manifestType="Damage"
+                    accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif"
+                    title="Damage photos"
+                    canViewFiles
+                    onManifestCreated={setEvidenceManifestId}
+                    onSealed={setEvidenceManifestId}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Upload at least one photo, then seal it before confirming.
+                  </p>
+                </div>
+              </>
+            ) : (
+              <div>
+                <label className="mb-1 block text-sm font-medium">
+                  Note{" "}
+                  <span className="text-muted-foreground">(optional)</span>
+                </label>
+                <Textarea
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                  placeholder="Reference number, etc."
+                />
+              </div>
+            )}
+
             <label className="flex items-start gap-2 text-sm">
               <Checkbox
                 checked={confirmChecked}
@@ -294,20 +373,20 @@ function HandshakeCard({
                 className="mt-0.5"
               />
               <span>
-                I confirm I returned this deposit to the guest directly.
+                I confirm I returned this deposit to the guest directly
+                {isPartialReturn
+                  ? " and that the deduction reason and damage photo are accurate."
+                  : "."}
               </span>
             </label>
 
-            {confirmReturned.isError && (
+            {(clientError || confirmReturned.isError) && (
               <Alert variant="destructive" className="text-sm">
-                {apiError(confirmReturned.error)}
+                {clientError ?? apiError(confirmReturned.error)}
               </Alert>
             )}
 
-            <Button
-              disabled={!confirmChecked || confirmReturned.isPending}
-              onClick={submitHostConfirm}
-            >
+            <Button disabled={!canSubmitHost} onClick={submitHostConfirm}>
               {confirmReturned.isPending
                 ? "Saving…"
                 : "Confirm deposit returned"}
@@ -328,7 +407,13 @@ function HandshakeCard({
             {payment.hostConfirmedDepositReturnedAt
               ? ` on ${formatDate(payment.hostConfirmedDepositReturnedAt)}`
               : ""}
-            . Waiting for the guest to confirm receipt.
+            .
+            {payment.depositReturnNote ? (
+              <span className="mt-1 block">
+                Deduction note: “{payment.depositReturnNote}”
+              </span>
+            ) : null}
+            Waiting for the guest to confirm receipt.
           </p>
         )}
 
@@ -352,6 +437,17 @@ function HandshakeCard({
                 </span>
               ) : null}
             </p>
+
+            {payment.depositReturnEvidenceManifestId && (
+              <EvidenceUpload
+                dealId={deal.dealId}
+                manifestId={payment.depositReturnEvidenceManifestId}
+                manifestType="Damage"
+                title="Damage photos on file"
+                readOnly
+                canViewFiles
+              />
+            )}
 
             {confirmReceived.isError && (
               <Alert variant="destructive" className="text-sm">
@@ -377,7 +473,9 @@ function HandshakeCard({
         {!settled && isTenant && !hostReturned && (
           <div className="space-y-2">
             <p className="text-sm text-muted-foreground">
-              Your host hasn't confirmed returning your deposit yet. We'll notify
+              Your host hasn't confirmed returning your deposit yet. By law they
+              should return it (or provide an itemized statement of deductions)
+              within {DEPOSIT_RETURN_WINDOW_DAYS} days of move-out. We'll notify
               you when they do.
             </p>
             <DisputeLink dealId={deal.dealId} />

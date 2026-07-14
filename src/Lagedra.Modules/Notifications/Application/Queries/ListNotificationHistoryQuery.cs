@@ -25,7 +25,7 @@ public sealed class ListNotificationHistoryQueryHandler(
             .Select(n => new NotificationDto(
                 n.Id,
                 n.RecipientUserId,
-                n.RecipientEmail,
+                n.RecipientAddress,
                 n.Channel,
                 n.TemplateId,
                 n.Status,

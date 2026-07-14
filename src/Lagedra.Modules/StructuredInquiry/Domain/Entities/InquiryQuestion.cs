@@ -24,6 +24,16 @@ public sealed class InquiryQuestion : Entity<Guid>
     /// </summary>
     public string? OpenQuestionText { get; private set; }
 
+    /// <summary>
+    /// Who asked. Null on legacy rows — treat as the session tenant.
+    /// </summary>
+    public Guid? SubmittedByUserId { get; private set; }
+
+    /// <summary>
+    /// Tenant or Partner. Null on legacy rows — treat as Tenant.
+    /// </summary>
+    public InquiryQuestionAuthorRole? SubmittedByRole { get; private set; }
+
     public DateTime SubmittedAt { get; private set; }
 
     public InquiryAnswer? Answer { get; private set; }
@@ -35,7 +45,9 @@ public sealed class InquiryQuestion : Entity<Guid>
         InquiryCategory category,
         Guid? predefinedQuestionId,
         string? customText = null,
-        string? openQuestionText = null)
+        string? openQuestionText = null,
+        Guid? submittedByUserId = null,
+        InquiryQuestionAuthorRole? submittedByRole = null)
     {
         if (predefinedQuestionId is null
             && string.IsNullOrWhiteSpace(customText)
@@ -53,6 +65,8 @@ public sealed class InquiryQuestion : Entity<Guid>
             PredefinedQuestionId = predefinedQuestionId,
             CustomText = customText?.Length > 500 ? customText[..500] : customText,
             OpenQuestionText = openQuestionText?.Length > 1000 ? openQuestionText[..1000] : openQuestionText,
+            SubmittedByUserId = submittedByUserId,
+            SubmittedByRole = submittedByRole ?? InquiryQuestionAuthorRole.Tenant,
             SubmittedAt = DateTime.UtcNow
         };
     }

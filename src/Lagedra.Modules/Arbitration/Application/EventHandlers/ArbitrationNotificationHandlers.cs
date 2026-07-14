@@ -11,7 +11,8 @@ namespace Lagedra.Modules.Arbitration.Application.EventHandlers;
 
 internal static class Channels
 {
-    internal static readonly NotificationChannel[] EmailAndInApp = [NotificationChannel.Email, NotificationChannel.InApp];
+    internal static readonly NotificationChannel[] EmailInAppAndSms =
+        [NotificationChannel.Email, NotificationChannel.InApp, NotificationChannel.Sms];
     internal static readonly NotificationChannel[] InAppOnly = [NotificationChannel.InApp];
 }
 
@@ -33,7 +34,7 @@ public sealed class OnCaseFiledNotify(ArbitrationDbContext db, IMediator m)
             "Arbitration Case Filed",
             "Your arbitration case has been filed and is being reviewed.",
             new() { ["caseId"] = e.CaseId.ToString(), ["dealId"] = e.DealId.ToString() },
-            Channels.EmailAndInApp, e.CaseId, "ArbitrationCase"), ct).ConfigureAwait(false);
+            Channels.EmailInAppAndSms, e.CaseId, "ArbitrationCase"), ct).ConfigureAwait(false);
     }
 }
 
@@ -55,7 +56,7 @@ public sealed class OnDecisionIssuedNotify(ArbitrationDbContext db, IMediator m)
             "Arbitration Decision Issued",
             "A decision has been issued for your arbitration case. Please review the outcome.",
             new() { ["caseId"] = e.CaseId.ToString(), ["dealId"] = e.DealId.ToString(), ["tier"] = e.Tier.ToString() },
-            Channels.EmailAndInApp, e.CaseId, "ArbitrationCase"), ct).ConfigureAwait(false);
+            Channels.EmailInAppAndSms, e.CaseId, "ArbitrationCase"), ct).ConfigureAwait(false);
     }
 }
 
@@ -96,7 +97,7 @@ public sealed class OnCaseClosedNotify(ArbitrationDbContext db, IMediator m)
             "Arbitration Case Closed",
             "Your arbitration case has been formally closed.",
             new() { ["caseId"] = e.CaseId.ToString(), ["dealId"] = e.DealId.ToString() },
-            Channels.EmailAndInApp, e.CaseId, "ArbitrationCase"), ct).ConfigureAwait(false);
+            Channels.EmailInAppAndSms, e.CaseId, "ArbitrationCase"), ct).ConfigureAwait(false);
     }
 }
 
@@ -115,7 +116,7 @@ public sealed class OnCaseAppealedNotify(ArbitrationDbContext db, IMediator m)
             "Arbitration Case Appealed",
             $"An appeal has been filed for your arbitration case. Reason: {e.Reason}",
             new() { ["caseId"] = e.CaseId.ToString(), ["dealId"] = e.DealId.ToString(), ["reason"] = e.Reason },
-            Channels.EmailAndInApp, e.CaseId, "ArbitrationCase"), ct).ConfigureAwait(false);
+            Channels.EmailInAppAndSms, e.CaseId, "ArbitrationCase"), ct).ConfigureAwait(false);
     }
 }
 

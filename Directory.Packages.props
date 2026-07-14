@@ -73,6 +73,9 @@
   <ItemGroup Label="HTML Parsing">
     <PackageVersion Include="AngleSharp" Version="1.1.2" />
   </ItemGroup>
+  <ItemGroup Label="PDF">
+    <PackageVersion Include="QuestPDF" Version="2025.7.0" />
+  </ItemGroup>
   <ItemGroup Label="AI">
     <PackageVersion Include="Microsoft.Extensions.AI" Version="10.4.1" />
   </ItemGroup>

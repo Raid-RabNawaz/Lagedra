@@ -18,12 +18,17 @@ import {
 } from "@/features/applications/hooks/useApplications";
 import { useListingDetail } from "@/features/listings/hooks/useListings";
 import { ApplicationStatusBadge } from "@/features/applications/components/ApplicationStatusBadge";
+import { ApplicationProfilePanel } from "@/features/applications/components/ApplicationProfilePanel";
+import { TrustLevelBadge } from "@/features/applications/components/TrustLevelBadge";
+import { CompletePartnerRequestPanel } from "@/features/applications/components/CompletePartnerRequestPanel";
 import { HostPayoutReadinessNotice } from "@/components/shared/HostPayoutReadinessNotice";
+import { BackLink } from "@/components/shared/BackLink";
 import { useAuthStore } from "@/app/auth/authStore";
 import { isAdmin } from "@/app/auth/permissions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
+import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Alert } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
@@ -68,13 +73,12 @@ export const ApplicationDetailPage = () => {
   if (isForbiddenError(error)) {
     return (
       <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8">
-        <Link
-          to="/app/applications"
-          className={cn(buttonVariants({ variant: "outline" }), "mb-6")}
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to applications
-        </Link>
+        <BackLink
+          fallbackTo="/app/applications"
+          variant="button"
+          label="Back to applications"
+          className="mb-6"
+        />
         <Alert variant="destructive">
           <Lock className="h-4 w-4" />
           <span className="ml-2">
@@ -96,10 +100,13 @@ export const ApplicationDetailPage = () => {
             ? "Application not found."
             : getApiErrorMessage(error, "Failed to load application.")}
         </p>
-        <Link to="/app/applications" className={cn(buttonVariants({ variant: "outline" }), "mt-4")}>
-          <ArrowLeft className="h-4 w-4" />
-          Back to applications
-        </Link>
+        <div className="mt-4 flex justify-center">
+          <BackLink
+            fallbackTo="/app/applications"
+            variant="button"
+            label="Back to applications"
+          />
+        </div>
       </div>
     );
   }
@@ -113,6 +120,15 @@ export const ApplicationDetailPage = () => {
   const canDecide = isApplicationLandlord || isPlatformAdmin;
 
   const isPending = application.status === "Pending";
+  const isPartnerDirect =
+    application.source === "PartnerDirectReservation" || Boolean(application.partnerOrganizationId);
+  const paymentReady = application.isPaymentReady === true;
+  const needsTenantAction =
+    isPending &&
+    isApplicationTenant &&
+    isPartnerDirect &&
+    (!application.tenantConsentGiven ||
+      (application.payerType !== "PartnerOrganization" && !application.hasPaymentMethod));
 
   const handleApprove = async () => {
     if (!consentChecked) return;
@@ -140,13 +156,7 @@ export const ApplicationDetailPage = () => {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
-      <Link
-        to="/app/applications"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to applications
-      </Link>
+      <BackLink fallbackTo="/app/applications" className="mb-6" />
 
       <div className="flex items-center gap-3 mb-6">
         <h1 className="text-2xl font-bold tracking-tight">Application</h1>
@@ -159,6 +169,42 @@ export const ApplicationDetailPage = () => {
           <span className="ml-2 text-sm">{application.jurisdictionWarning}</span>
         </Alert>
       )}
+
+      {canDecide && (
+        <div className="mb-6">
+          <TrustLevelBadge
+            tier={application.tenantVerificationTier}
+            detailed
+            depositReason={application.depositReason}
+          />
+        </div>
+      )}
+
+      <Card className="mb-6">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">
+            {isApplicationLandlord || isPlatformAdmin ? "Guest" : "Host"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ApplicationProfilePanel
+            userId={
+              isApplicationLandlord || isPlatformAdmin
+                ? application.tenantUserId
+                : application.landlordUserId
+            }
+            roleLabel={
+              isApplicationLandlord || isPlatformAdmin ? "Guest" : "Host"
+            }
+            profileLink={`/app/users/${
+              isApplicationLandlord || isPlatformAdmin
+                ? application.tenantUserId
+                : application.landlordUserId
+            }`}
+            showReputation
+          />
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 md:grid-cols-2">
         {/* Stay details */}
@@ -256,6 +302,43 @@ export const ApplicationDetailPage = () => {
         </>
       )}
 
+      {/* Partner attribution */}
+      {isPartnerDirect && (
+        <>
+          <Separator className="my-6" />
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Partner booking</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="outline">
+                  {application.source === "PartnerDirectReservation"
+                    ? "Partner direct reservation"
+                    : "Partner referred"}
+                </Badge>
+                {application.payerType === "PartnerOrganization" ? (
+                  <Badge variant="secondary">Company pays</Badge>
+                ) : (
+                  <Badge variant="secondary">Member pays</Badge>
+                )}
+                {isPending && (
+                  <Badge variant={paymentReady ? "success" : "secondary"}>
+                    {paymentReady ? "Ready to approve" : "Waiting for member"}
+                  </Badge>
+                )}
+              </div>
+              {application.partnerOrganizationName && (
+                <p>
+                  <span className="text-muted-foreground">Organization: </span>
+                  <span className="font-medium">{application.partnerOrganizationName}</span>
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
+
       {/* Timestamps */}
       <Separator className="my-6" />
       <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
@@ -263,19 +346,41 @@ export const ApplicationDetailPage = () => {
         {application.decidedAt && (
           <span>Decided: {formatDate(application.decidedAt)}</span>
         )}
-        {application.isPartnerReferred && (
+        {application.isPartnerReferred && !isPartnerDirect && (
           <span className="text-accent font-medium">Partner referred</span>
         )}
       </div>
 
+      {/* Tenant completes partner-created request */}
+      {needsTenantAction && (
+        <>
+          <Separator className="my-6" />
+          <CompletePartnerRequestPanel application={application} />
+        </>
+      )}
+
       {/* Viewer perspective hint for tenants */}
-      {!canDecide && isApplicationTenant && isPending && (
+      {!canDecide && isApplicationTenant && isPending && !needsTenantAction && (
         <>
           <Separator className="my-6" />
           <Alert>
             <Clock className="h-4 w-4" />
             <span className="ml-2">
               Waiting for the host to review your application.
+            </span>
+          </Alert>
+        </>
+      )}
+
+      {/* Host waiting for payment readiness */}
+      {isPending && canDecide && isPartnerDirect && !paymentReady && (
+        <>
+          <Separator className="my-6" />
+          <Alert>
+            <Clock className="h-4 w-4" />
+            <span className="ml-2">
+              Waiting for the member to complete payment authorization and Truth Surface
+              consent before you can accept this request.
             </span>
           </Alert>
         </>
@@ -288,7 +393,11 @@ export const ApplicationDetailPage = () => {
           <div className="flex gap-3">
             <Dialog open={approveOpen} onOpenChange={setApproveOpen}>
               <DialogTrigger asChild>
-                <Button variant="accent" className="gap-2">
+                <Button
+                  variant="accent"
+                  className="gap-2"
+                  disabled={isPartnerDirect && !paymentReady}
+                >
                   <CheckCircle2 className="h-4 w-4" />
                   Approve
                 </Button>

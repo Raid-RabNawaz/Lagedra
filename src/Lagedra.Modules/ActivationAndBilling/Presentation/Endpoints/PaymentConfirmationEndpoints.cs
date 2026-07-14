@@ -210,7 +210,12 @@ public static class PaymentConfirmationEndpoints
         var userId = GetUserId(user);
         var result = await mediator
             .Send(new ConfirmDepositReturnedByHostCommand(
-                dealId, userId, request.ReturnedAmountCents, request.Method, request.Note), ct)
+                dealId,
+                userId,
+                request.ReturnedAmountCents,
+                request.Method,
+                request.Note,
+                request.EvidenceManifestId), ct)
             .ConfigureAwait(false);
 
         return result.IsSuccess

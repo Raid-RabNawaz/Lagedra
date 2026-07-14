@@ -1,6 +1,5 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import {
-  ArrowLeft,
   BookOpen,
   ShieldCheck,
   ShieldAlert,
@@ -15,7 +14,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { BackLink } from "@/components/shared/BackLink";
 import { Loader } from "@/components/shared/Loader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { formatDate } from "@/utils/format";
@@ -35,6 +34,7 @@ const entryConfig: Record<
   PaymentDefault: { label: "Payment Default", icon: CreditCard, color: "text-red-500", positive: false },
   EarlyTermination: { label: "Early Termination", icon: AlertTriangle, color: "text-amber-500", positive: false },
   PositiveReview: { label: "Positive Review", icon: Star, color: "text-green-600", positive: true },
+  ReviewConcern: { label: "Review Concern", icon: AlertTriangle, color: "text-amber-500", positive: false },
   IdentityVerified: { label: "Identity Verified", icon: UserCheck, color: "text-green-600", positive: true },
 };
 
@@ -140,25 +140,18 @@ export function DealTrustLedgerPage() {
         title="Ledger unavailable"
         description="Could not load the trust ledger for this deal."
       >
-        <Link to={`/app/deals/${dealId}`}>
-          <Button variant="outline" size="sm">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to deal
-          </Button>
-        </Link>
+        <BackLink
+          fallbackTo={`/app/deals/${dealId}`}
+          variant="button"
+          label="Back to deal"
+        />
       </EmptyState>
     );
   }
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <Link
-        to={`/app/deals/${dealId}`}
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to deal
-      </Link>
+      <BackLink fallbackTo={`/app/deals/${dealId}`} label="Back to deal" />
 
       <div className="flex items-center gap-3">
         <BookOpen className="h-7 w-7 text-blue-600" />
@@ -200,25 +193,14 @@ export function UserTrustLedgerPage() {
         title="Ledger unavailable"
         description="Could not load your trust ledger."
       >
-        <Link to="/app">
-          <Button variant="outline" size="sm">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Dashboard
-          </Button>
-        </Link>
+        <BackLink fallbackTo="/app" variant="button" label="Dashboard" />
       </EmptyState>
     );
   }
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <Link
-        to="/app"
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Dashboard
-      </Link>
+      <BackLink fallbackTo="/app" label="Dashboard" />
 
       <div className="flex items-center gap-3">
         <BookOpen className="h-7 w-7 text-blue-600" />

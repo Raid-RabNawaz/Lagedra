@@ -9,21 +9,9 @@ using Microsoft.EntityFrameworkCore;
 namespace Lagedra.Modules.StructuredInquiry.Application.Queries;
 
 /// <summary>
-/// Phase 17 — fetch a single inquiry thread by its session id, regardless
-/// of whether it's currently listing-scoped or deal-scoped. Used by the
-/// generic inquiry thread page that handles both pre-booking and post-
-/// application views.
+/// Fetch a single inquiry thread by session id. Authorized for the tenant,
+/// listing/deal host, attached partner org staff, or platform admin.
 /// </summary>
-/// <remarks>
-/// Authorization rules:
-/// <list type="bullet">
-///   <item>Tenant who owns the thread → always allowed.</item>
-///   <item>Host of the listing for a pre-booking thread → allowed via
-///         <see cref="IListingProvider"/> landlord lookup.</item>
-///   <item>Host of the linked deal → allowed via <see cref="IDealApplicationStatusProvider"/>.</item>
-///   <item>Platform admin → allowed.</item>
-/// </list>
-/// </remarks>
 public sealed record GetInquiryBySessionIdQuery(
     Guid SessionId,
     Guid CallerUserId,
@@ -32,7 +20,8 @@ public sealed record GetInquiryBySessionIdQuery(
 public sealed class GetInquiryBySessionIdQueryHandler(
     InquiryDbContext dbContext,
     IListingProvider listingProvider,
-    IDealApplicationStatusProvider dealStatusProvider)
+    IDealApplicationStatusProvider dealStatusProvider,
+    IPartnerMembershipProvider membershipProvider)
     : IRequestHandler<GetInquiryBySessionIdQuery, Result<InquiryDto>>
 {
     public async Task<Result<InquiryDto>> Handle(
@@ -45,6 +34,7 @@ public sealed class GetInquiryBySessionIdQueryHandler(
             .AsNoTracking()
             .Include(s => s.Questions)
                 .ThenInclude(q => q.Answer)
+            .Include(s => s.Offers)
             .FirstOrDefaultAsync(s => s.Id == request.SessionId, cancellationToken)
             .ConfigureAwait(false);
 
@@ -61,7 +51,42 @@ public sealed class GetInquiryBySessionIdQueryHandler(
                 new Error("Inquiry.Forbidden", "You do not have access to this inquiry thread."));
         }
 
-        return Result<InquiryDto>.Success(MapToDto(session));
+        string? partnerName = null;
+        if (session.PartnerOrganizationId is { } orgId)
+        {
+            partnerName = await membershipProvider
+                .GetOrganizationNameAsync(orgId, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        var landlordUserId = await ResolveLandlordUserIdAsync(session, cancellationToken)
+            .ConfigureAwait(false);
+
+        return Result<InquiryDto>.Success(
+            InquiryDtoMapper.ToDto(session, partnerName, landlordUserId));
+    }
+
+    private async Task<Guid?> ResolveLandlordUserIdAsync(
+        InquirySession session,
+        CancellationToken ct)
+    {
+        if (session.DealId is { } dealId)
+        {
+            var participants = await dealStatusProvider
+                .GetParticipantsAsync(dealId, ct)
+                .ConfigureAwait(false);
+
+            if (participants is not null)
+            {
+                return participants.LandlordUserId;
+            }
+        }
+
+        var listing = await listingProvider
+            .GetListingDetailsAsync(session.ListingId, ct)
+            .ConfigureAwait(false);
+
+        return listing?.LandlordUserId;
     }
 
     private async Task<bool> IsAuthorizedAsync(
@@ -74,8 +99,18 @@ public sealed class GetInquiryBySessionIdQueryHandler(
             return true;
         }
 
-        // For deal-linked threads, prefer the deal participants resolver
-        // because it covers both host and tenant in a single round trip.
+        if (session.PartnerOrganizationId is { } partnerOrgId)
+        {
+            var callerOrgId = await membershipProvider
+                .GetPartnerOrganizationIdAsync(callerUserId, ct)
+                .ConfigureAwait(false);
+
+            if (callerOrgId == partnerOrgId)
+            {
+                return true;
+            }
+        }
+
         if (session.DealId is { } dealId)
         {
             var participants = await dealStatusProvider
@@ -90,29 +125,10 @@ public sealed class GetInquiryBySessionIdQueryHandler(
             }
         }
 
-        // Pre-booking threads have no deal, so fall back to the listing's
-        // landlord. This is also the path host-side polling uses to surface
-        // open inquiries on their own listings before the tenant applies.
         var listing = await listingProvider
             .GetListingDetailsAsync(session.ListingId, ct)
             .ConfigureAwait(false);
 
         return listing is not null && listing.LandlordUserId == callerUserId;
     }
-
-    private static InquiryDto MapToDto(InquirySession s) =>
-        new(s.Id, s.DealId, s.ListingId, s.TenantUserId, s.Status,
-            s.UnlockedByLandlordAt, s.ClosedAt, s.CreatedAt,
-            s.Questions.Select(q => new InquiryQuestionDto(
-                q.Id,
-                q.PredefinedQuestionId,
-                q.Category,
-                q.SubmittedAt,
-                q.Answer is not null
-                    ? new InquiryAnswerDto(q.Answer.Id, q.Answer.ResponseType,
-                        q.Answer.AnswerValue, q.Answer.AnsweredAt)
-                    : null,
-                q.CustomText,
-                q.OpenQuestionText))
-            .ToList());
 }

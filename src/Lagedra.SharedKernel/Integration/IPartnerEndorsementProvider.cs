@@ -22,6 +22,16 @@ public interface IPartnerEndorsementProvider
     Task<IReadOnlyList<ActiveEndorsementInfo>> GetActiveEndorsementsAsync(
         Guid tenantUserId,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns an endorsement id the tenant may use to leave a partner-service
+    /// review for <paramref name="organizationId"/> — any endorsement that was
+    /// Approved (including later Revoked/Expired). Null if never endorsed.
+    /// </summary>
+    Task<Guid?> GetReviewEligibleEndorsementIdAsync(
+        Guid tenantUserId,
+        Guid organizationId,
+        CancellationToken ct = default);
 }
 
 public sealed record ActiveEndorsementInfo(

@@ -9,7 +9,7 @@ namespace Lagedra.Modules.Notifications.Application.Commands;
 
 public sealed record QueueNotificationCommand(
     Guid RecipientUserId,
-    string RecipientEmail,
+    string RecipientAddress,
     NotificationChannel Channel,
     string TemplateId,
     Dictionary<string, string> Payload,
@@ -27,7 +27,7 @@ public sealed class QueueNotificationCommandHandler(
 
         var notification = Notification.Queue(
             request.RecipientUserId,
-            request.RecipientEmail,
+            request.RecipientAddress,
             request.Channel,
             request.TemplateId,
             request.Payload,
@@ -39,7 +39,7 @@ public sealed class QueueNotificationCommandHandler(
         return Result<NotificationDto>.Success(new NotificationDto(
             notification.Id,
             notification.RecipientUserId,
-            notification.RecipientEmail,
+            notification.RecipientAddress,
             notification.Channel,
             notification.TemplateId,
             notification.Status,

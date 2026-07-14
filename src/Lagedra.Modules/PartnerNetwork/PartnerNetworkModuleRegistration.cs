@@ -26,6 +26,7 @@ public static class PartnerNetworkModuleRegistration
 
         services.AddScoped<IPartnerMembershipProvider, PartnerMembershipProvider>();
         services.AddScoped<IPartnerEndorsementProvider, PartnerEndorsementProvider>();
+        services.AddScoped<IPartnerOrganizationBillingProfile, PartnerOrganizationBillingProfile>();
         services.AddScoped<IPartnerAccessService, PartnerAccessService>();
 
         services.AddMediatR(cfg =>

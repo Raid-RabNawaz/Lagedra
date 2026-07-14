@@ -96,6 +96,25 @@ public sealed class DealApplication : AggregateRoot<Guid>
     /// </summary>
     public string? StripePaymentMethodId { get; private set; }
 
+    /// <summary>
+    /// Who owns the card that will be charged on host approval.
+    /// Defaults to <see cref="ApplicationPayerType.Tenant"/> for self-apply.
+    /// </summary>
+    public ApplicationPayerType PayerType { get; private set; }
+
+    /// <summary>
+    /// Partner admin who authorized company payment when
+    /// <see cref="PayerType"/> is <see cref="ApplicationPayerType.PartnerOrganization"/>.
+    /// </summary>
+    public Guid? PayerUserId { get; private set; }
+
+    /// <summary>
+    /// True when the application has a payment method on file and the tenant
+    /// has given Truth Surface consent — the host may approve and charge.
+    /// </summary>
+    public bool IsPaymentReady =>
+        !string.IsNullOrWhiteSpace(StripePaymentMethodId) && TenantTruthSurfaceConsentGiven;
+
     // --- Tenant Truth Surface consent (captured at request time) ---
 
     public bool TenantTruthSurfaceConsentGiven { get; private set; }
@@ -127,7 +146,9 @@ public sealed class DealApplication : AggregateRoot<Guid>
         DealApplicationSource source = DealApplicationSource.TenantSelfApply,
         string? stripePaymentMethodId = null,
         ReservationDepositSnapshot? depositSnapshot = null,
-        TruthSurfaceConsentInput? tenantConsent = null)
+        TruthSurfaceConsentInput? tenantConsent = null,
+        ApplicationPayerType payerType = ApplicationPayerType.Tenant,
+        Guid? payerUserId = null)
     {
         if (requestedCheckOut <= requestedCheckIn)
         {
@@ -149,6 +170,14 @@ public sealed class DealApplication : AggregateRoot<Guid>
         if (guestCount < 1)
         {
             throw new ArgumentOutOfRangeException(nameof(guestCount), "Guest count must be at least 1.");
+        }
+
+        if (payerType == ApplicationPayerType.PartnerOrganization
+            && partnerOrganizationId is null)
+        {
+            throw new ArgumentException(
+                "Partner organization payer requires a partner organization id.",
+                nameof(partnerOrganizationId));
         }
 
         // Trim + collapse the optional cover note rather than persisting
@@ -183,6 +212,10 @@ public sealed class DealApplication : AggregateRoot<Guid>
             StripePaymentMethodId = string.IsNullOrWhiteSpace(stripePaymentMethodId)
                 ? null
                 : stripePaymentMethodId,
+            PayerType = payerType,
+            PayerUserId = payerType == ApplicationPayerType.PartnerOrganization
+                ? payerUserId
+                : null,
         };
 
         if (depositSnapshot is not null)
@@ -243,6 +276,29 @@ public sealed class DealApplication : AggregateRoot<Guid>
         TenantConsentVersion = consent.ConsentVersion;
         TenantConsentIpAddress = consent.IpAddress;
         TenantConsentUserAgent = consent.UserAgent;
+    }
+
+    /// <summary>
+    /// Attaches a payment method (and optionally tenant Truth Surface consent)
+    /// to a still-pending partner-direct request so the host can approve.
+    /// </summary>
+    public void AttachPaymentMethod(
+        string stripePaymentMethodId,
+        TruthSurfaceConsentInput? tenantConsent = null)
+    {
+        if (Status != DealApplicationStatus.Pending)
+        {
+            throw new InvalidOperationException(
+                $"Cannot attach payment in status '{Status}'.");
+        }
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(stripePaymentMethodId);
+        StripePaymentMethodId = stripePaymentMethodId.Trim();
+
+        if (tenantConsent is { Given: true })
+        {
+            RecordTenantConsent(tenantConsent);
+        }
     }
 
     /// <summary>

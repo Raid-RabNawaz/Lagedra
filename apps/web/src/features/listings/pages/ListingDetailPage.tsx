@@ -1,6 +1,5 @@
 import { useParams, Link } from "react-router-dom";
 import {
-  ArrowLeft,
   Bed,
   Bath,
   Ruler,
@@ -22,10 +21,14 @@ import {
   Clock,
   TrendingUp,
   ArrowUpRight,
+  Star,
 } from "lucide-react";
 import { useState, lazy, Suspense } from "react";
 import { useListingDetail, useSimilarListings } from "@/features/listings/hooks/useListings";
 import { usePublicProfile } from "@/features/auth/hooks/usePublicProfile";
+import { useListingReviews, useUserReputation } from "@/features/reviews/hooks/useReviews";
+import { StarRatingDisplay } from "@/features/reviews/components/StarRating";
+import { ReputationPreview } from "@/features/reviews/components/ReputationPreview";
 import { SaveButton } from "@/features/listings/components/SaveButton";
 import { BookingPanel } from "@/features/listings/components/BookingPanel";
 import { useAuthStore } from "@/app/auth/authStore";
@@ -42,6 +45,7 @@ import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { BackLink } from "@/components/shared/BackLink";
 import { Loader } from "@/components/shared/Loader";
 import { formatMoney, formatDate } from "@/utils/format";
 import { cn } from "@/lib/utils";
@@ -79,6 +83,8 @@ export const ListingDetailPage = () => {
   // host" section instead of a name + verified row.
   const hostUserId = listing?.landlordUserId;
   const hostPublic = usePublicProfile(hostUserId);
+  const { data: listingReviews } = useListingReviews(id);
+  const { data: hostReputation } = useUserReputation(hostUserId);
   const [currentPhoto, setCurrentPhoto] = useState(0);
   const [copied, setCopied] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -95,10 +101,9 @@ export const ListingDetailPage = () => {
     return (
       <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 text-center">
         <p className="text-destructive font-medium">Listing not found or failed to load.</p>
-        <Link to="/listings" className={cn(buttonVariants({ variant: "outline" }), "mt-4")}>
-          <ArrowLeft className="h-4 w-4" />
-          Back to listings
-        </Link>
+        <div className="mt-4 flex justify-center">
+          <BackLink fallbackTo="/listings" variant="button" label="Back to listings" />
+        </div>
       </div>
     );
   }
@@ -135,14 +140,7 @@ export const ListingDetailPage = () => {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-      {/* Back link */}
-      <Link
-        to="/listings"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to listings
-      </Link>
+      <BackLink fallbackTo="/listings" className="mb-4" />
 
       {/* Photo gallery */}
       <div className="mb-8 space-y-2">
@@ -268,6 +266,18 @@ export const ListingDetailPage = () => {
             <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
               {listing.title}
             </h1>
+
+            {listingReviews && listingReviews.length > 0 && (
+              <div className="mt-2">
+                <StarRatingDisplay
+                  average={
+                    listingReviews.reduce((s, r) => s + r.overallRating, 0) /
+                    listingReviews.length
+                  }
+                  count={listingReviews.length}
+                />
+              </div>
+            )}
 
             {locationText && (
               <p className="mt-1 flex items-center gap-1 text-muted-foreground">
@@ -522,6 +532,15 @@ export const ListingDetailPage = () => {
                       Host · Member since{" "}
                       {new Date(listing.hostProfile.memberSince).getFullYear()}
                     </p>
+                    {hostReputation && hostReputation.reviewCount > 0 && (
+                      <div className="mt-1">
+                        <StarRatingDisplay
+                          average={hostReputation.averageOverall}
+                          count={hostReputation.reviewCount}
+                          className="text-xs"
+                        />
+                      </div>
+                    )}
                     {/* Optional one-liner: occupation pulled from the
                         public profile, only rendered when populated so
                         we never show an empty subtitle row. */}
@@ -625,6 +644,32 @@ export const ListingDetailPage = () => {
                   </div>
                 )}
 
+                {listingReviews && listingReviews.length > 0 && (
+                  <div className="space-y-2 rounded-lg border p-3">
+                    <StarRatingDisplay
+                      average={
+                        listingReviews.reduce((s, r) => s + r.overallRating, 0) /
+                        listingReviews.length
+                      }
+                      count={listingReviews.length}
+                    />
+                    {listingReviews.slice(0, 2).map((r) => (
+                      <div key={r.id} className="border-t pt-2 text-sm">
+                        <span className="inline-flex items-center gap-1 font-medium">
+                          <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
+                          {r.overallRating}
+                        </span>
+                        <p className="mt-1 text-muted-foreground line-clamp-2">
+                          {r.publicComment}
+                        </p>
+                      </div>
+                    ))}
+                    <p className="text-[11px] text-muted-foreground">
+                      See all guest reviews below
+                    </p>
+                  </div>
+                )}
+
                 {hostUserId ? (
                   <Link
                     to={`/app/users/${hostUserId}`}
@@ -642,6 +687,34 @@ export const ListingDetailPage = () => {
           )}
         </div>
       </div>
+
+      {listingReviews && listingReviews.length > 0 && (
+        <>
+          <Separator className="my-10" />
+          <section>
+            <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-semibold">Guest reviews</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  What guests said about stays at this listing
+                </p>
+              </div>
+              <StarRatingDisplay
+                average={
+                  listingReviews.reduce((s, r) => s + r.overallRating, 0) /
+                  listingReviews.length
+                }
+                count={listingReviews.length}
+              />
+            </div>
+            <ReputationPreview
+              reviews={listingReviews}
+              maxReviews={12}
+              showCategories
+            />
+          </section>
+        </>
+      )}
 
       {/* Similar listings */}
       {similar && similar.length > 0 && (

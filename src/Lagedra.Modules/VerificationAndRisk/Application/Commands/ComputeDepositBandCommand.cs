@@ -2,6 +2,7 @@ using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Results;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 using Lagedra.Modules.VerificationAndRisk.Application.DTOs;
 using Lagedra.Modules.VerificationAndRisk.Domain.Enums;
 using Lagedra.Modules.VerificationAndRisk.Infrastructure.Persistence;
@@ -17,7 +18,7 @@ public sealed record ComputeDepositBandCommand(
 
 public sealed class ComputeDepositBandCommandHandler(
     RiskDbContext dbContext,
-    IMediator mediator)
+    IServiceProvider serviceProvider)
     : IRequestHandler<ComputeDepositBandCommand, Result<DepositBandDto>>
 {
     public async Task<Result<DepositBandDto>> Handle(
@@ -36,21 +37,30 @@ public sealed class ComputeDepositBandCommandHandler(
                 new Error("Risk.NotFound", "Risk profile not found for tenant."));
         }
 
+        // Jurisdiction deposit-cap packs were replaced by lease agreement templates.
+        // Deposit band uses the caller-supplied jurisdiction cap (typically listing MaxDepositCents).
         var capCents = request.JurisdictionCapCents;
 
-        if (!string.IsNullOrWhiteSpace(request.JurisdictionCode) && request.MonthlyRentCents.HasValue)
+        double? reputationAverage = null;
+        var reputationReviewCount = 0;
+        var reputationProvider = serviceProvider.GetService<IReviewReputationProvider>();
+        if (reputationProvider is not null)
         {
-            var capResult = await mediator
-                .Send(new GetDepositCapQuery(request.JurisdictionCode, request.MonthlyRentCents.Value), cancellationToken)
+            var reputation = await reputationProvider
+                .GetUserReputationAsync(request.TenantUserId, cancellationToken)
                 .ConfigureAwait(false);
-
-            if (capResult.IsSuccess)
+            if (reputation is not null)
             {
-                capCents = capResult.Value.MaxDepositCents;
+                reputationAverage = reputation.AverageOverall;
+                reputationReviewCount = reputation.ReviewCount;
             }
         }
 
-        profile.UpdateDepositBand(request.InsuranceStatus, capCents);
+        profile.UpdateDepositBand(
+            request.InsuranceStatus,
+            capCents,
+            reputationAverage,
+            reputationReviewCount);
 
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 

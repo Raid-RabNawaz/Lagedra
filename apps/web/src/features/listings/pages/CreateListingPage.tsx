@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, AlertTriangle, Info } from "lucide-react";
+import { AlertTriangle, Info } from "lucide-react";
 import { useAuthStore } from "@/app/auth/authStore";
 import { listingApi } from "@/features/listings/services/listingApi";
 import { ListingWizard } from "@/features/listings/components/ListingWizard";
@@ -18,6 +18,7 @@ import {
   type ListingFormValues,
 } from "@/features/listings/lib/listingFormSchema";
 import type { ImportedPhotoCandidateDto } from "@/api/types";
+import { BackLink } from "@/components/shared/BackLink";
 import { Loader } from "@/components/shared/Loader";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -145,13 +146,7 @@ export const CreateListingPage = () => {
   return (
     <div className="space-y-6">
       <div>
-        <Link
-          to="/app/listings"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to my listings
-        </Link>
+        <BackLink fallbackTo="/app/listings" label="Back to my listings" />
         <h1 className="mt-2 text-3xl font-bold tracking-tight">Create a listing</h1>
         <p className="mt-1 text-muted-foreground">
           We'll walk you through the details step by step. After you create the listing, you'll set

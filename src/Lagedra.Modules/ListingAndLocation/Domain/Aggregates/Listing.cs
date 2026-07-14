@@ -55,6 +55,7 @@ public sealed class Listing : AggregateRoot<Guid>
     /// </summary>
     public long? DepositPartnerGuaranteedCents { get; private set; }
     public HouseRules? HouseRules { get; private set; }
+    public LeaseTerms? LeaseTerms { get; private set; }
     public CancellationPolicy? CancellationPolicy { get; private set; }
     public bool InstantBookingEnabled { get; private set; }
 
@@ -244,6 +245,13 @@ public sealed class Listing : AggregateRoot<Guid>
         EnsureEditable();
         ArgumentNullException.ThrowIfNull(houseRules);
         HouseRules = houseRules;
+    }
+
+    public void SetLeaseTerms(LeaseTerms leaseTerms)
+    {
+        EnsureEditable();
+        ArgumentNullException.ThrowIfNull(leaseTerms);
+        LeaseTerms = leaseTerms;
     }
 
     public void SetCancellationPolicy(CancellationPolicy policy)

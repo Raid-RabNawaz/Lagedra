@@ -3,6 +3,7 @@ using Lagedra.Auth.Application.Errors;
 using Lagedra.Auth.Application.Services;
 using Lagedra.Auth.Domain;
 using Lagedra.SharedKernel.Results;
+using Lagedra.SharedKernel.Settings;
 using Lagedra.SharedKernel.Time;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
@@ -22,9 +23,13 @@ public sealed partial class ExternalLoginCommandHandler(
     JwtTokenService jwtTokenService,
     RefreshTokenService refreshTokenService,
     IClock clock,
+    IPlatformSettingsService platformSettings,
     ILogger<ExternalLoginCommandHandler> logger)
     : IRequestHandler<ExternalLoginCommand, Result<AuthResultDto>>
 {
+    private static readonly HashSet<UserRole> PreLaunchExemptRoles =
+        [UserRole.PlatformAdmin, UserRole.Arbitrator];
+
     [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to link {Provider} login to existing user {UserId}: {Errors}")]
     private partial void LogLinkFailed(string provider, Guid userId, string errors);
 
@@ -122,6 +127,17 @@ public sealed partial class ExternalLoginCommandHandler(
         if (!user.IsActive)
         {
             return AuthErrors.AccountInactive;
+        }
+
+        if (!PreLaunchExemptRoles.Contains(user.Role))
+        {
+            var preLaunch = await platformSettings
+                .GetBoolAsync(PlatformSettingKeys.PreLaunchEnabled, defaultValue: false, ct)
+                .ConfigureAwait(false);
+            if (preLaunch)
+            {
+                return AuthErrors.PreLaunchRestricted;
+            }
         }
 
         user.LastLoginAt = clock.UtcNow;

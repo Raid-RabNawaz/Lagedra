@@ -1,4 +1,7 @@
 export const endpoints = {
+  platform: {
+    publicConfig: "/v1/platform/public-config",
+  },
   auth: {
     register: "/v1/auth/register",
     verifyEmail: "/v1/auth/verify-email",
@@ -12,6 +15,8 @@ export const endpoints = {
     changePassword: "/v1/auth/change-password",
     me: "/v1/auth/me",
     profilePhoto: "/v1/auth/me/profile-photo",
+    sendPhoneCode: "/v1/auth/phone/send-code",
+    confirmPhoneCode: "/v1/auth/phone/confirm",
     users: "/v1/auth/users",
     userRole: (userId: string) => `/v1/auth/users/${userId}/role`,
     publicProfile: (userId: string) => `/v1/auth/users/${userId}/public-profile`,
@@ -64,6 +69,7 @@ export const endpoints = {
     detail: (id: string) => `/v1/applications/${id}`,
     approve: (id: string) => `/v1/applications/${id}/approve`,
     reject: (id: string) => `/v1/applications/${id}/reject`,
+    attachPayment: (id: string) => `/v1/applications/${id}/attach-payment`,
     forListing: (listingId: string) => `/v1/applications/listing/${listingId}`,
   },
   adminDefinitions: {
@@ -128,6 +134,15 @@ export const endpoints = {
     forceDepositReturn: (dealId: string) =>
       `/v1/admin/deals/${dealId}/force-deposit-return`,
   },
+  reviews: {
+    deal: (dealId: string) => `/v1/deals/${dealId}/reviews`,
+    userReviews: (userId: string) => `/v1/users/${userId}/reviews`,
+    userReputation: (userId: string) => `/v1/users/${userId}/reputation`,
+    listing: (listingId: string) => `/v1/listings/${listingId}/reviews`,
+    partner: (orgId: string) => `/v1/partners/organizations/${orgId}/reviews`,
+    partnerReputation: (orgId: string) =>
+      `/v1/partners/organizations/${orgId}/reputation`,
+  },
   truthSurface: {
     create: "/v1/truth-surface",
     fromDeal: (dealId: string) => `/v1/truth-surface/from-deal/${dealId}`,
@@ -153,6 +168,17 @@ export const endpoints = {
     sessionThread: (sessionId: string) => `/v1/inquiry-sessions/${sessionId}`,
     sessionQuestions: (sessionId: string) => `/v1/inquiry-sessions/${sessionId}/questions`,
     sessionAnswers: (sessionId: string) => `/v1/inquiry-sessions/${sessionId}/answers`,
+    sessionOffers: (sessionId: string) => `/v1/inquiry-sessions/${sessionId}/offers`,
+    acceptOffer: (sessionId: string, offerId: string) =>
+      `/v1/inquiry-sessions/${sessionId}/offers/${offerId}/accept`,
+    counterOffer: (sessionId: string, offerId: string) =>
+      `/v1/inquiry-sessions/${sessionId}/offers/${offerId}/counter`,
+    withdrawAcceptedOffer: (sessionId: string) =>
+      `/v1/inquiry-sessions/${sessionId}/offers/accepted/withdraw`,
+    sessionPartner: (sessionId: string) => `/v1/inquiry-sessions/${sessionId}/partner`,
+    partnerInbox: "/v1/inquiry-sessions/partner",
+    startPartnerListingInquiry: (listingId: string) =>
+      `/v1/listings/${listingId}/inquiry/partner`,
     hostInbox: "/v1/inquiry-sessions/host",
     myInbox: "/v1/inquiry-sessions/mine",
   },
@@ -241,6 +267,10 @@ export const endpoints = {
     caseload: "/v1/admin/arbitration/caseload",
     assignAuto: (caseId: string) => `/v1/admin/arbitration/cases/${caseId}/assign-auto`,
   },
+  adminLeaseAgreements: {
+    list: "/v1/admin/lease-agreements",
+    pendingApprovals: "/v1/admin/lease-agreements/pending-approvals",
+  },
   adminJurisdictionPacks: {
     list: "/v1/admin/jurisdiction-packs",
     pendingApprovals: "/v1/admin/jurisdiction-packs/pending-approvals",
@@ -297,6 +327,8 @@ export const endpoints = {
     deactivateReferralLink: (id: string, linkId: string) =>
       `/v1/partners/${id}/referral-links/${linkId}/deactivate`,
     reservations: (id: string) => `/v1/partners/${id}/reservations`,
+    setupIntent: (id: string) => `/v1/partners/${id}/setup-intent`,
+    endorsedMembers: (id: string) => `/v1/partners/${id}/endorsed-members`,
     invites: (id: string) => `/v1/partners/${id}/invites`,
     endorsements: (id: string) => `/v1/partners/${id}/endorsements`,
     approveEndorsement: (id: string, endorsementId: string) =>
@@ -313,6 +345,26 @@ export const endpoints = {
     list: "/v1/admin/partners/",
     pending: "/v1/admin/partners/pending",
     suspend: (id: string) => `/v1/admin/partners/${id}/suspend`,
+  },
+  leaseAgreements: {
+    placeholders: "/v1/lease-agreements/placeholders",
+    create: "/v1/lease-agreements",
+    addVersion: (id: string) => `/v1/lease-agreements/${id}/versions`,
+    listVersions: (id: string) => `/v1/lease-agreements/${id}/versions`,
+    versionDetails: (id: string, versionId: string) =>
+      `/v1/lease-agreements/${id}/versions/${versionId}`,
+    updateDraft: (id: string, versionId: string) =>
+      `/v1/lease-agreements/${id}/versions/${versionId}`,
+    requestApproval: (id: string, versionId: string) =>
+      `/v1/lease-agreements/${id}/versions/${versionId}/request-approval`,
+    approve: (id: string, versionId: string) =>
+      `/v1/lease-agreements/${id}/versions/${versionId}/approve`,
+    publish: (id: string, versionId: string) =>
+      `/v1/lease-agreements/${id}/versions/${versionId}/publish`,
+    deprecate: (id: string, versionId: string) =>
+      `/v1/lease-agreements/${id}/versions/${versionId}/deprecate`,
+    getByCode: (code: string) => `/v1/lease-agreements/${code}`,
+    dealPdf: (dealId: string) => `/v1/lease-agreements/deals/${dealId}/pdf`,
   },
   jurisdictionPacks: {
     create: "/v1/jurisdiction-packs",

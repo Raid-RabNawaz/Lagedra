@@ -2,6 +2,7 @@ using Lagedra.Modules.Notifications.Domain.Entities;
 using Lagedra.Modules.Notifications.Domain.Enums;
 using Lagedra.Modules.Notifications.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Email;
+using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Results;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -14,6 +15,7 @@ public sealed record SendEmailNotificationCommand(Guid NotificationId) : IReques
 public sealed partial class SendEmailNotificationCommandHandler(
     NotificationDbContext dbContext,
     IEmailService emailService,
+    IDealLeaseDocumentStore leaseDocumentStore,
     ILogger<SendEmailNotificationCommandHandler> logger)
     : IRequestHandler<SendEmailNotificationCommand, Result>
 {
@@ -46,12 +48,34 @@ public sealed partial class SendEmailNotificationCommandHandler(
 
         try
         {
+            IReadOnlyList<EmailAttachment>? attachments = null;
+            if (string.Equals(notification.TemplateId, "deal_activated", StringComparison.Ordinal)
+                && notification.Payload.TryGetValue("dealId", out var dealIdRaw)
+                && Guid.TryParse(dealIdRaw, out var dealId))
+            {
+                var leasePdf = await leaseDocumentStore.GetByDealIdAsync(dealId, cancellationToken)
+                    .ConfigureAwait(false);
+                if (leasePdf is not null)
+                {
+                    attachments =
+                    [
+                        new EmailAttachment
+                        {
+                            FileName = leasePdf.FileName,
+                            ContentType = leasePdf.ContentType,
+                            Content = leasePdf.Content
+                        }
+                    ];
+                }
+            }
+
             var emailMessage = new EmailMessage
             {
-                To = notification.RecipientEmail,
+                To = notification.RecipientAddress,
                 Subject = template.RenderSubject(notification.Payload),
                 HtmlBody = template.RenderHtmlBody(notification.Payload),
-                PlainTextBody = template.RenderPlainTextBody(notification.Payload)
+                PlainTextBody = template.RenderPlainTextBody(notification.Payload),
+                Attachments = attachments
             };
 
             await emailService.SendAsync(emailMessage, cancellationToken).ConfigureAwait(false);
@@ -59,9 +83,9 @@ public sealed partial class SendEmailNotificationCommandHandler(
             notification.MarkSent(DateTime.UtcNow);
 
             dbContext.DeliveryLogs.Add(new DeliveryLog(
-                notification.Id, brevoMessageId: null, deliveredAt: null, error: null));
+                notification.Id, providerMessageId: null, deliveredAt: null, error: null));
 
-            LogEmailSent(logger, notification.Id, notification.RecipientEmail);
+            LogEmailSent(logger, notification.Id, notification.RecipientAddress);
         }
 #pragma warning disable CA1031
         catch (Exception ex)
@@ -70,9 +94,9 @@ public sealed partial class SendEmailNotificationCommandHandler(
             notification.MarkFailed(ex.Message);
 
             dbContext.DeliveryLogs.Add(new DeliveryLog(
-                notification.Id, brevoMessageId: null, deliveredAt: null, error: ex.Message));
+                notification.Id, providerMessageId: null, deliveredAt: null, error: ex.Message));
 
-            LogEmailFailed(logger, notification.Id, notification.RecipientEmail, ex);
+            LogEmailFailed(logger, notification.Id, notification.RecipientAddress, ex);
         }
 
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -82,9 +106,9 @@ public sealed partial class SendEmailNotificationCommandHandler(
             : Result.Failure(new Error("Notification.SendFailed", notification.LastError ?? "Send failed."));
     }
 
-    [LoggerMessage(Level = LogLevel.Information, Message = "Email sent for notification {NotificationId} to {RecipientEmail}")]
-    private static partial void LogEmailSent(ILogger logger, Guid notificationId, string recipientEmail);
+    [LoggerMessage(Level = LogLevel.Information, Message = "Email sent for notification {NotificationId} to {RecipientAddress}")]
+    private static partial void LogEmailSent(ILogger logger, Guid notificationId, string recipientAddress);
 
-    [LoggerMessage(Level = LogLevel.Error, Message = "Email send failed for notification {NotificationId} to {RecipientEmail}")]
-    private static partial void LogEmailFailed(ILogger logger, Guid notificationId, string recipientEmail, Exception ex);
+    [LoggerMessage(Level = LogLevel.Error, Message = "Email send failed for notification {NotificationId} to {RecipientAddress}")]
+    private static partial void LogEmailFailed(ILogger logger, Guid notificationId, string recipientAddress, Exception ex);
 }

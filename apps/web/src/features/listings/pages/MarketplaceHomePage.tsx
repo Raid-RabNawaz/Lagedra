@@ -300,13 +300,13 @@ export const MarketplaceHomePage = () => {
           </div>
           <div className="flex items-center gap-2">
             <Link
-              to="/listings/search"
+              to="/how-it-works"
               className="rounded-full px-4 py-2 text-sm font-semibold text-white/85 hover:text-white"
             >
               How it works
             </Link>
             <Link
-              to="/auth/register"
+              to="/join"
               className="rounded-full bg-white px-5 py-2 text-sm font-semibold text-foreground transition-transform hover:scale-[1.02]"
             >
               Join now

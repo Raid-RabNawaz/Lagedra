@@ -238,7 +238,20 @@ export const ApplyDialog = ({
             <div className="rounded-lg bg-secondary p-3 space-y-1">
               <p className="text-sm font-medium">{listing.title}</p>
               <p className="text-sm text-muted-foreground">
-                {formatMoney(listing.monthlyRentCents)} / month
+                {preview.data?.isNegotiatedOffer &&
+                preview.data.firstMonthRentCents !== listing.monthlyRentCents ? (
+                  <>
+                    <span className="line-through opacity-60">
+                      {formatMoney(listing.monthlyRentCents)}
+                    </span>{" "}
+                    <span className="font-medium text-foreground">
+                      {formatMoney(preview.data.firstMonthRentCents)}
+                    </span>{" "}
+                    / month
+                  </>
+                ) : (
+                  <>{formatMoney(listing.monthlyRentCents)} / month</>
+                )}
               </p>
               <p className="text-xs text-muted-foreground">
                 Stay range: {minStay}–{maxStay} days
@@ -451,9 +464,16 @@ function PriceBreakdown({
     <div className="rounded-lg border p-4 space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-medium">Price breakdown</h3>
-        <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium">
-          {tierLabel(preview.tier)} tenant
-        </span>
+        <div className="flex items-center gap-1.5">
+          {preview.isNegotiatedOffer && (
+            <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-800">
+              Negotiated terms
+            </span>
+          )}
+          <span className="rounded-full bg-secondary px-2 py-0.5 text-[11px] font-medium">
+            {tierLabel(preview.tier)} tenant
+          </span>
+        </div>
       </div>
       <div className="space-y-2 text-sm">
         <div className="flex justify-between">
@@ -481,12 +501,17 @@ function PriceBreakdown({
           <span>{formatMoney(preview.totalPayableCents)}</span>
         </div>
       </div>
-      {preview.depositReason && (
+      {preview.isNegotiatedOffer ? (
+        <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
+          <ShieldCheck className="h-3.5 w-3.5 mt-0.5 shrink-0 text-emerald-600" />
+          Rent and deposit come from the offer you accepted on the inquiry thread.
+        </p>
+      ) : preview.depositReason ? (
         <p className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
           <ShieldCheck className="h-3.5 w-3.5 mt-0.5 shrink-0 text-emerald-600" />
           {preview.depositReason}
         </p>
-      )}
+      ) : null}
       <p className="flex items-start gap-1.5 border-t pt-2 text-[11px] text-muted-foreground">
         <Lock className="h-3.5 w-3.5 mt-0.5 shrink-0" />
         Your first month's rent and deposit are paid directly to the host through

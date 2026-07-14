@@ -13,7 +13,8 @@ public sealed record ListApplicationsForListingQuery(
 
 public sealed class ListApplicationsForListingQueryHandler(
     BillingDbContext dbContext,
-    IListingProvider listingProvider)
+    IListingProvider listingProvider,
+    IPartnerOrganizationBillingProfile partnerOrgBilling)
     : IRequestHandler<ListApplicationsForListingQuery, Result<IReadOnlyList<DealApplicationDto>>>
 {
     private static readonly Error Forbidden = new("Application.Forbidden", "You do not own this listing.");
@@ -49,8 +50,31 @@ public sealed class ListApplicationsForListingQueryHandler(
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
+        var partnerOrgIds = applications
+            .Where(a => a.PartnerOrganizationId is not null)
+            .Select(a => a.PartnerOrganizationId!.Value)
+            .Distinct()
+            .ToList();
+
+        var partnerNames = new Dictionary<Guid, string?>();
+        foreach (var orgId in partnerOrgIds)
+        {
+            partnerNames[orgId] = await partnerOrgBilling
+                .GetNameAsync(orgId, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         IReadOnlyList<DealApplicationDto> dtos = applications
-            .Select(DealApplicationDtoMapper.ToDto)
+            .Select(a =>
+            {
+                string? partnerName = null;
+                if (a.PartnerOrganizationId is { } orgId)
+                {
+                    partnerNames.TryGetValue(orgId, out partnerName);
+                }
+
+                return DealApplicationDtoMapper.ToDto(a, partnerName);
+            })
             .ToList();
 
         return Result<IReadOnlyList<DealApplicationDto>>.Success(dtos);

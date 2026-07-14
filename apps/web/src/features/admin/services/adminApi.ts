@@ -7,9 +7,9 @@ import type {
   ApplyRestrictionRequest,
   ArbitrationBacklogItemDto,
   ArbitratorCaseloadDto,
-  JurisdictionPackSummaryDto,
-  PendingPackApprovalDto,
-  JurisdictionPackDto,
+  LeaseTemplateSummaryDto,
+  PendingLeaseApprovalDto,
+  LeaseAgreementTemplateDto,
   EvidenceScanQueueItemDto,
   ManualVerificationItemDto,
   ViolationDto,
@@ -25,12 +25,19 @@ import type {
   UpdateBlogPostRequest,
   SeoPageDto,
   UpsertSeoPageRequest,
-  PackVersionSummaryDto,
-  PackVersionDetailDto,
-  UpdatePackDraftBody,
+  LeaseTemplateVersionSummaryDto,
+  LeaseTemplateVersionDetailsDto,
+  UpdateLeaseTemplateDraftBody,
+  LeasePlaceholderCatalogDto,
   PlatformSettingDto,
   UpdatePlatformSettingRequest,
   ProtocolFeeReconciliationDto,
+  JurisdictionPackDto,
+  JurisdictionPackSummaryDto,
+  PackVersionSummaryDto,
+  PackVersionDetailDto,
+  UpdatePackDraftBody,
+  PendingPackApprovalDto,
 } from "@/api/types";
 
 export const adminApi = {
@@ -174,6 +181,83 @@ export const adminApi = {
     return r.data;
   },
 
+  // Lease Agreement Templates
+  async listLeaseTemplates(): Promise<LeaseTemplateSummaryDto[]> {
+    const r = await http.get<LeaseTemplateSummaryDto[]>(endpoints.adminLeaseAgreements.list);
+    return r.data;
+  },
+  async listPendingLeaseApprovals(): Promise<PendingLeaseApprovalDto[]> {
+    const r = await http.get<PendingLeaseApprovalDto[]>(
+      endpoints.adminLeaseAgreements.pendingApprovals,
+    );
+    return r.data;
+  },
+  async getLeasePlaceholderCatalog(): Promise<LeasePlaceholderCatalogDto> {
+    const r = await http.get<LeasePlaceholderCatalogDto>(endpoints.leaseAgreements.placeholders);
+    return r.data;
+  },
+  async createLeaseTemplate(
+    jurisdictionCode: string,
+    title: string,
+  ): Promise<LeaseAgreementTemplateDto> {
+    const r = await http.post<LeaseAgreementTemplateDto>(endpoints.leaseAgreements.create, {
+      jurisdictionCode,
+      title,
+    });
+    return r.data;
+  },
+  async addLeaseTemplateVersion(templateId: string): Promise<{ versionId: string }> {
+    const r = await http.post<{ versionId: string }>(
+      endpoints.leaseAgreements.addVersion(templateId),
+    );
+    return r.data;
+  },
+  async listLeaseTemplateVersions(templateId: string): Promise<LeaseTemplateVersionSummaryDto[]> {
+    const r = await http.get<LeaseTemplateVersionSummaryDto[]>(
+      endpoints.leaseAgreements.listVersions(templateId),
+    );
+    return r.data;
+  },
+  async getLeaseTemplateVersionDetails(
+    templateId: string,
+    versionId: string,
+  ): Promise<LeaseTemplateVersionDetailsDto> {
+    const r = await http.get<LeaseTemplateVersionDetailsDto>(
+      endpoints.leaseAgreements.versionDetails(templateId, versionId),
+    );
+    return r.data;
+  },
+  async requestLeaseApproval(templateId: string, versionId: string): Promise<void> {
+    await http.post(endpoints.leaseAgreements.requestApproval(templateId, versionId));
+  },
+  async approveLeaseVersion(
+    templateId: string,
+    versionId: string,
+    approverId?: string,
+  ): Promise<void> {
+    await http.post(
+      endpoints.leaseAgreements.approve(templateId, versionId),
+      approverId ? { approverId } : {},
+    );
+  },
+  async updateLeaseTemplateDraft(
+    templateId: string,
+    versionId: string,
+    body: UpdateLeaseTemplateDraftBody,
+  ): Promise<LeaseTemplateVersionDetailsDto> {
+    const r = await http.put<LeaseTemplateVersionDetailsDto>(
+      endpoints.leaseAgreements.updateDraft(templateId, versionId),
+      body,
+    );
+    return r.data;
+  },
+  async publishLeaseVersion(templateId: string, versionId: string): Promise<void> {
+    await http.post(endpoints.leaseAgreements.publish(templateId, versionId));
+  },
+  async deprecateLeaseVersion(templateId: string, versionId: string): Promise<void> {
+    await http.post(endpoints.leaseAgreements.deprecate(templateId, versionId));
+  },
+
   // Jurisdiction Packs
   async listJurisdictionPacks(): Promise<JurisdictionPackSummaryDto[]> {
     const r = await http.get<JurisdictionPackSummaryDto[]>(endpoints.adminJurisdictionPacks.list);
@@ -192,10 +276,15 @@ export const adminApi = {
     return r.data;
   },
   async listPackVersions(packId: string): Promise<PackVersionSummaryDto[]> {
-    const r = await http.get<PackVersionSummaryDto[]>(endpoints.jurisdictionPacks.listVersions(packId));
+    const r = await http.get<PackVersionSummaryDto[]>(
+      endpoints.jurisdictionPacks.listVersions(packId),
+    );
     return r.data;
   },
-  async getPackVersionDetails(packId: string, versionId: string): Promise<PackVersionDetailDto> {
+  async getPackVersionDetails(
+    packId: string,
+    versionId: string,
+  ): Promise<PackVersionDetailDto> {
     const r = await http.get<PackVersionDetailDto>(
       endpoints.jurisdictionPacks.versionDetails(packId, versionId),
     );

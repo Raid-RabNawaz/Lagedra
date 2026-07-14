@@ -24,6 +24,10 @@ public sealed class InquiryQuestionConfiguration : IEntityTypeConfiguration<Inqu
         builder.Property(q => q.PredefinedQuestionId);
         builder.Property(q => q.CustomText).HasMaxLength(500);
         builder.Property(q => q.OpenQuestionText).HasMaxLength(1000);
+        builder.Property(q => q.SubmittedByUserId);
+        builder.Property(q => q.SubmittedByRole)
+            .HasConversion<string>()
+            .HasMaxLength(20);
 
         builder.HasOne(q => q.Answer)
             .WithOne()

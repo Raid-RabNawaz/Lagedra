@@ -43,9 +43,16 @@ public static class InquiryEndpoints
 
         sessions.MapGet("/host", ListHostInquiries);
         sessions.MapGet("/mine", ListMyTenantInquiries);
+        sessions.MapGet("/partner", ListPartnerInquiries);
         sessions.MapGet("/{sessionId:guid}", GetInquiryBySession);
         sessions.MapPost("/{sessionId:guid}/questions", SubmitQuestionToSession);
         sessions.MapPost("/{sessionId:guid}/answers", SubmitResponseToSession);
+        sessions.MapPost("/{sessionId:guid}/offers", ProposeOffer);
+        sessions.MapPost("/{sessionId:guid}/offers/{offerId:guid}/accept", AcceptOffer);
+        sessions.MapPost("/{sessionId:guid}/offers/{offerId:guid}/counter", CounterOffer);
+        sessions.MapPost("/{sessionId:guid}/offers/accepted/withdraw", WithdrawAcceptedOffer);
+        sessions.MapPost("/{sessionId:guid}/partner", AddPartner);
+        sessions.MapDelete("/{sessionId:guid}/partner", RemovePartner);
 
         // Phase 17 — listing-scoped pre-booking inquiry endpoints.
         var listings = app.MapGroup("/v1/listings/{listingId:guid}/inquiry")
@@ -54,6 +61,7 @@ public static class InquiryEndpoints
 
         listings.MapPost("", StartListingInquiry);
         listings.MapGet("/mine", GetMyListingInquiry);
+        listings.MapPost("/partner", StartPartnerListingInquiry);
 
         return app;
     }
@@ -308,6 +316,147 @@ public static class InquiryEndpoints
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> ProposeOffer(
+        [FromRoute] Guid sessionId,
+        [FromBody] ProposeInquiryOfferRequest request,
+        ClaimsPrincipal user,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetUserId(user);
+        var result = await mediator.Send(
+            new ProposeInquiryOfferCommand(
+                sessionId, userId, request.RentCents, request.DepositCents, request.Note),
+            cancellationToken)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Created($"/v1/inquiry-sessions/{sessionId}", result.Value)
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> AcceptOffer(
+        [FromRoute] Guid sessionId,
+        [FromRoute] Guid offerId,
+        ClaimsPrincipal user,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetUserId(user);
+        var result = await mediator.Send(
+            new AcceptInquiryOfferCommand(sessionId, offerId, userId),
+            cancellationToken)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> CounterOffer(
+        [FromRoute] Guid sessionId,
+        [FromRoute] Guid offerId,
+        [FromBody] CounterInquiryOfferRequest request,
+        ClaimsPrincipal user,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetUserId(user);
+        var result = await mediator.Send(
+            new CounterInquiryOfferCommand(
+                sessionId, offerId, userId, request.RentCents, request.DepositCents, request.Note),
+            cancellationToken)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> WithdrawAcceptedOffer(
+        [FromRoute] Guid sessionId,
+        ClaimsPrincipal user,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetUserId(user);
+        var result = await mediator.Send(
+            new WithdrawAcceptedInquiryOfferCommand(sessionId, userId),
+            cancellationToken)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> AddPartner(
+        [FromRoute] Guid sessionId,
+        [FromBody] AddInquiryPartnerRequest request,
+        ClaimsPrincipal user,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetUserId(user);
+        var result = await mediator.Send(
+            new AddInquiryPartnerCommand(sessionId, userId, request.OrganizationId),
+            cancellationToken)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> RemovePartner(
+        [FromRoute] Guid sessionId,
+        ClaimsPrincipal user,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetUserId(user);
+        var result = await mediator.Send(
+            new RemoveInquiryPartnerCommand(sessionId, userId),
+            cancellationToken)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> ListPartnerInquiries(
+        ClaimsPrincipal user,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetUserId(user);
+        var result = await mediator
+            .Send(new ListMyPartnerInquiriesQuery(userId), cancellationToken)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> StartPartnerListingInquiry(
+        [FromRoute] Guid listingId,
+        [FromBody] StartPartnerListingInquiryRequest request,
+        ClaimsPrincipal user,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetUserId(user);
+        var result = await mediator
+            .Send(new StartPartnerListingInquiryCommand(listingId, request.TenantUserId, userId), cancellationToken)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Created($"/v1/inquiry-sessions/{result.Value.SessionId}", result.Value)
             : ToErrorResult(result.Error);
     }
 

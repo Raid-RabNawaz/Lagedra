@@ -1,0 +1,17 @@
+{
+  "Comment": "api-staging.lagedra.com -> lagedra-alb (staging backend)",
+  "Changes": [
+    {
+      "Action": "UPSERT",
+      "ResourceRecordSet": {
+        "Name": "api-staging.lagedra.com",
+        "Type": "A",
+        "AliasTarget": {
+          "HostedZoneId": "Z368ELLRRE2KJ0",
+          "DNSName": "lagedra-alb-171081817.us-west-1.elb.amazonaws.com",
+          "EvaluateTargetHealth": true
+        }
+      }
+    }
+  ]
+}

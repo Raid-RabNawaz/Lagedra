@@ -8,7 +8,6 @@ using Lagedra.Modules.ComplianceMonitoring.Infrastructure.Jobs;
 using Lagedra.Modules.Evidence.Infrastructure.Jobs;
 using Lagedra.Modules.IdentityAndVerification.Infrastructure.Jobs;
 using Lagedra.Modules.InsuranceIntegration.Infrastructure.Jobs;
-using Lagedra.Modules.JurisdictionPacks.Infrastructure.Jobs;
 using Lagedra.Modules.ListingAndLocation.Infrastructure.Jobs;
 using Lagedra.Modules.Notifications.Infrastructure.Jobs;
 using Lagedra.Modules.PartnerNetwork.Infrastructure.Jobs;
@@ -49,9 +48,6 @@ internal static class JobRegistry
 
         // Arbitration
         Register<ArbitrationBacklogSlaJob>(q, "0 0 * * * ?");
-
-        // JurisdictionPacks
-        Register<PackEffectiveDateActivationJob>(q, "0 0 0 * * ?");
 
         // Evidence
         Register<MalwareScanPollingJob>(q, "0 */5 * * * ?");

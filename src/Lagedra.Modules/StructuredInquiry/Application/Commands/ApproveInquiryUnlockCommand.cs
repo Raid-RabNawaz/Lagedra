@@ -42,6 +42,9 @@ public sealed class ApproveInquiryUnlockCommandHandler(
         }
 
         var session = await dbContext.Sessions
+            .Include(s => s.Offers)
+            .Include(s => s.Questions)
+                .ThenInclude(q => q.Answer)
             .FirstOrDefaultAsync(s => s.DealId == request.DealId
                 && s.Status == Domain.Enums.InquirySessionStatus.Locked, cancellationToken)
             .ConfigureAwait(false);
@@ -55,10 +58,6 @@ public sealed class ApproveInquiryUnlockCommandHandler(
         session.Unlock();
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        return Result<InquiryDto>.Success(MapToDto(session));
+        return Result<InquiryDto>.Success(InquiryDtoMapper.ToDto(session));
     }
-
-    private static InquiryDto MapToDto(Domain.Aggregates.InquirySession s) =>
-        new(s.Id, s.DealId, s.ListingId, s.TenantUserId, s.Status,
-            s.UnlockedByLandlordAt, s.ClosedAt, s.CreatedAt, []);
 }

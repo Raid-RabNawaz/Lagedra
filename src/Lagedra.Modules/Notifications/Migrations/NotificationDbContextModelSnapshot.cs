@@ -90,7 +90,7 @@ namespace Notifications.Migrations
                         .IsRequired()
                         .HasColumnType("jsonb");
 
-                    b.Property<string>("RecipientEmail")
+                    b.Property<string>("RecipientAddress")
                         .IsRequired()
                         .HasMaxLength(320)
                         .HasColumnType("character varying(320)");
@@ -132,10 +132,6 @@ namespace Notifications.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<string>("BrevoMessageId")
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -154,6 +150,10 @@ namespace Notifications.Migrations
 
                     b.Property<Guid>("NotificationId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("ProviderMessageId")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -256,7 +256,7 @@ namespace Notifications.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("TemplateId")
+                    b.HasIndex("TemplateId", "Channel")
                         .IsUnique();
 
                     b.ToTable("notification_templates", "notifications");

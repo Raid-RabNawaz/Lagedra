@@ -9,7 +9,8 @@ namespace Lagedra.Modules.IdentityAndVerification.Application.EventHandlers;
 
 internal static class NotifyChannels
 {
-    internal static readonly NotificationChannel[] EmailAndInApp = [NotificationChannel.Email, NotificationChannel.InApp];
+    internal static readonly NotificationChannel[] EmailInAppAndSms =
+        [NotificationChannel.Email, NotificationChannel.InApp, NotificationChannel.Sms];
     internal static readonly NotificationChannel[] InAppOnly = [NotificationChannel.InApp];
 }
 
@@ -24,7 +25,7 @@ public sealed class OnIdentityVerifiedNotify(IMediator m)
             "Identity Verified",
             "Your identity has been successfully verified.",
             new() { ["userId"] = e.UserId.ToString() },
-            NotifyChannels.EmailAndInApp), ct).ConfigureAwait(false);
+            NotifyChannels.EmailInAppAndSms), ct).ConfigureAwait(false);
     }
 }
 
@@ -39,7 +40,7 @@ public sealed class OnIdentityVerificationFailedNotify(IMediator m)
             "Identity Verification Failed",
             $"Your identity verification could not be completed: {e.Reason}",
             new() { ["userId"] = e.UserId.ToString(), ["reason"] = e.Reason },
-            NotifyChannels.EmailAndInApp), ct).ConfigureAwait(false);
+            NotifyChannels.EmailInAppAndSms), ct).ConfigureAwait(false);
     }
 }
 

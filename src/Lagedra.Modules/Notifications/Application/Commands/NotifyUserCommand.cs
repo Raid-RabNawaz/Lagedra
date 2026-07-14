@@ -19,6 +19,7 @@ public sealed record NotifyUserCommand(
 public sealed partial class NotifyUserCommandHandler(
     IMediator mediator,
     IUserEmailResolver emailResolver,
+    IUserPhoneResolver phoneResolver,
     ILogger<NotifyUserCommandHandler> logger)
     : IRequestHandler<NotifyUserCommand, Result>
 {
@@ -49,6 +50,28 @@ public sealed partial class NotifyUserCommandHandler(
                         request.Payload), cancellationToken).ConfigureAwait(false);
                     break;
 
+                case NotificationChannel.Sms:
+                    var phone = await phoneResolver
+                        .GetPhoneAsync(request.RecipientUserId, cancellationToken)
+                        .ConfigureAwait(false);
+                    var phoneVerified = await phoneResolver
+                        .IsPhoneVerifiedAsync(request.RecipientUserId, cancellationToken)
+                        .ConfigureAwait(false);
+
+                    if (string.IsNullOrWhiteSpace(phone) || !phoneVerified)
+                    {
+                        LogPhoneNotEligible(logger, request.RecipientUserId);
+                        break;
+                    }
+
+                    await mediator.Send(new QueueNotificationCommand(
+                        request.RecipientUserId,
+                        phone,
+                        NotificationChannel.Sms,
+                        request.TemplateId,
+                        request.Payload), cancellationToken).ConfigureAwait(false);
+                    break;
+
                 case NotificationChannel.InApp:
                     await mediator.Send(new DeliverInAppNotificationCommand(
                         request.RecipientUserId,
@@ -67,4 +90,8 @@ public sealed partial class NotifyUserCommandHandler(
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "Could not resolve email for user {UserId}, skipping email notification")]
     private static partial void LogEmailNotFound(ILogger logger, Guid userId);
+
+    [LoggerMessage(Level = LogLevel.Warning,
+        Message = "No verified phone for user {UserId}, skipping SMS notification")]
+    private static partial void LogPhoneNotEligible(ILogger logger, Guid userId);
 }

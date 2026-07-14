@@ -3,10 +3,12 @@ import { endpoints } from "@/api/endpoints";
 import type {
   AddPartnerMemberRequest,
   ApproveEndorsementRequest,
+  BookingSetupIntentResult,
   CreateDirectReservationRequest,
   DirectReservationConversionDto,
   DirectReservationDto,
   DiscoveredPartnerDto,
+  EndorsedMemberDto,
   GenerateReferralLinkRequest,
   InvitePartnerGuestRequest,
   ListEndorsementsParams,
@@ -48,7 +50,10 @@ export const partnerApi = {
       return r.data ?? null;
     } catch (err) {
       const status = (err as { response?: { status?: number } })?.response?.status;
-      if (status === 404) return null;
+      // Hosts/tenants are not partner members — treat as "no membership"
+      // instead of leaving the query in an error state that can disrupt
+      // inquiry pages that only need an optional partner check.
+      if (status === 401 || status === 403 || status === 404) return null;
       throw err;
     }
   },
@@ -118,6 +123,22 @@ export const partnerApi = {
       endpoints.partners.reservations(orgId),
       req,
     );
+    return r.data;
+  },
+
+  async createSetupIntent(
+    orgId: string,
+    listingId: string,
+  ): Promise<BookingSetupIntentResult> {
+    const r = await http.post<BookingSetupIntentResult>(
+      endpoints.partners.setupIntent(orgId),
+      { listingId },
+    );
+    return r.data;
+  },
+
+  async listEndorsedMembers(orgId: string): Promise<EndorsedMemberDto[]> {
+    const r = await http.get<EndorsedMemberDto[]>(endpoints.partners.endorsedMembers(orgId));
     return r.data;
   },
 

@@ -1,6 +1,7 @@
 import { lazy } from "react";
 import { Navigate, createBrowserRouter, useLocation } from "react-router-dom";
 import { RequireAuth } from "@/app/auth/RequireAuth";
+import { RequireLaunchAccess } from "@/app/auth/RequireLaunchAccess";
 import { RequireMember } from "@/app/auth/RequireMember";
 import { RequireRole } from "@/app/auth/RequireRole";
 import { RequireArbitrationAccess } from "@/app/auth/RequireArbitrationAccess";
@@ -12,7 +13,8 @@ import { LazyPage } from "@/app/layout/LazyPage";
 import { RouteErrorBoundary } from "@/app/layout/RouteErrorBoundary";
 
 const LoginPage = lazy(() => import("@/features/auth/pages/LoginPage").then((m) => ({ default: m.LoginPage })));
-const RegisterPage = lazy(() => import("@/features/auth/pages/RegisterPage").then((m) => ({ default: m.RegisterPage })));
+const JoinPage = lazy(() => import("@/features/join/pages/JoinPage").then((m) => ({ default: m.JoinPage })));
+const HowItWorksPage = lazy(() => import("@/features/join/pages/HowItWorksPage").then((m) => ({ default: m.HowItWorksPage })));
 const VerifyEmailPage = lazy(() => import("@/features/auth/pages/VerifyEmailPage").then((m) => ({ default: m.VerifyEmailPage })));
 const ForgotPasswordPage = lazy(() => import("@/features/auth/pages/ForgotPasswordPage").then((m) => ({ default: m.ForgotPasswordPage })));
 const ResetPasswordPage = lazy(() => import("@/features/auth/pages/ResetPasswordPage").then((m) => ({ default: m.ResetPasswordPage })));
@@ -28,7 +30,7 @@ const EvidenceReviewPage = lazy(() => import("@/features/admin/pages/EvidenceRev
 const ManualVerificationPage = lazy(() => import("@/features/admin/pages/ManualVerificationPage").then((m) => ({ default: m.ManualVerificationPage })));
 const ComplianceViolationsPage = lazy(() => import("@/features/admin/pages/ComplianceViolationsPage").then((m) => ({ default: m.ComplianceViolationsPage })));
 const UserRestrictionsPage = lazy(() => import("@/features/admin/pages/UserRestrictionsPage").then((m) => ({ default: m.UserRestrictionsPage })));
-const JurisdictionPackVersionsPage = lazy(() => import("@/features/admin/pages/JurisdictionPackVersionsPage").then((m) => ({ default: m.JurisdictionPackVersionsPage })));
+const LeaseAgreementTemplatesPage = lazy(() => import("@/features/admin/pages/LeaseAgreementTemplatesPage").then((m) => ({ default: m.LeaseAgreementTemplatesPage })));
 const DualControlApprovalsPage = lazy(() => import("@/features/admin/pages/DualControlApprovalsPage").then((m) => ({ default: m.DualControlApprovalsPage })));
 const BlogPostsPage = lazy(() => import("@/features/admin/pages/BlogPostsPage").then((m) => ({ default: m.BlogPostsPage })));
 const BlogPostEditorPage = lazy(() => import("@/features/admin/pages/BlogPostEditorPage").then((m) => ({ default: m.BlogPostEditorPage })));
@@ -79,6 +81,7 @@ const PartnerMembersPage = lazy(() => import("@/features/partners/pages/PartnerM
 const PartnerReferralsPage = lazy(() => import("@/features/partners/pages/PartnerReferralsPage").then((m) => ({ default: m.PartnerReferralsPage })));
 const PartnerReservationsPage = lazy(() => import("@/features/partners/pages/PartnerReservationsPage").then((m) => ({ default: m.PartnerReservationsPage })));
 const PartnerGuestsPage = lazy(() => import("@/features/partners/pages/PartnerGuestsPage").then((m) => ({ default: m.PartnerGuestsPage })));
+const PartnerInquiriesPage = lazy(() => import("@/features/inquiry/pages/PartnerInquiriesPage").then((m) => ({ default: m.PartnerInquiriesPage })));
 const PartnerEndorsementsPage = lazy(() => import("@/features/partners/pages/PartnerEndorsementsPage").then((m) => ({ default: m.PartnerEndorsementsPage })));
 const PartnerLayoutGuard = lazy(() => import("@/features/partners/components/PartnerLayoutGuard").then((m) => ({ default: m.PartnerLayoutGuard })));
 const PartnerVerificationPage = lazy(() => import("@/features/admin/pages/PartnerVerificationPage").then((m) => ({ default: m.PartnerVerificationPage })));
@@ -96,15 +99,35 @@ export const router = createBrowserRouter([
     errorElement: <RouteErrorBoundary />,
   },
 
-  // Public marketplace routes
+  // Public marketplace routes. Gated by RequireLaunchAccess so that while
+  // pre-launch is on, browsing is closed to everyone except operational staff —
+  // non-staff visitors are bounced to the join flow (the only allowed pages).
   {
-    element: <MarketplaceLayout />,
+    element: <RequireLaunchAccess />,
     errorElement: <RouteErrorBoundary />,
     children: [
-      { path: "/listings", element: <LazyPage><MarketplaceHomePage /></LazyPage> },
-      { path: "/listings/search", element: <LazyPage><SearchPage /></LazyPage> },
-      { path: "/listings/:id", element: <LazyPage><ListingDetailPage /></LazyPage> },
+      {
+        element: <MarketplaceLayout />,
+        errorElement: <RouteErrorBoundary />,
+        children: [
+          { path: "/listings", element: <LazyPage><MarketplaceHomePage /></LazyPage> },
+          { path: "/listings/search", element: <LazyPage><SearchPage /></LazyPage> },
+          { path: "/listings/:id", element: <LazyPage><ListingDetailPage /></LazyPage> },
+        ],
+      },
     ],
+  },
+
+  // Founding-partner / pre-launch join flow (full-screen, own layout).
+  {
+    path: "/join",
+    element: <LazyPage><JoinPage /></LazyPage>,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
+    path: "/how-it-works",
+    element: <LazyPage><HowItWorksPage /></LazyPage>,
+    errorElement: <RouteErrorBoundary />,
   },
 
   // Phase 16.10 — anonymous one-tap host approval landing page
@@ -128,7 +151,7 @@ export const router = createBrowserRouter([
     errorElement: <RouteErrorBoundary />,
     children: [
       { path: "login", element: <LazyPage><LoginPage /></LazyPage> },
-      { path: "register", element: <LazyPage><RegisterPage /></LazyPage> },
+      { path: "register", element: <Navigate to="/join" replace /> },
       { path: "verify-email", element: <LazyPage><VerifyEmailPage /></LazyPage> },
       { path: "forgot-password", element: <LazyPage><ForgotPasswordPage /></LazyPage> },
       { path: "reset-password", element: <LazyPage><ResetPasswordPage /></LazyPage> },
@@ -140,6 +163,11 @@ export const router = createBrowserRouter([
     element: <RequireAuth />,
     errorElement: <RouteErrorBoundary />,
     children: [
+      {
+        // Pre-launch gate: while the launch flag is on, only operational staff
+        // reach the product; everyone else is redirected to the join flow.
+        element: <RequireLaunchAccess />,
+        children: [
       {
         path: "/app",
         element: <AppShell />,
@@ -178,10 +206,10 @@ export const router = createBrowserRouter([
             ],
           },
           {
-            path: "jurisdiction-packs",
+            path: "lease-agreements",
             element: <RequireRole allowed={[roles.arbitrator, roles.platformAdmin]} />,
             children: [
-              { index: true, element: <LazyPage><JurisdictionPackVersionsPage /></LazyPage> },
+              { index: true, element: <LazyPage><LeaseAgreementTemplatesPage /></LazyPage> },
             ],
           },
           {
@@ -225,6 +253,7 @@ export const router = createBrowserRouter([
                   { path: "reservations", element: <LazyPage><PartnerReservationsPage /></LazyPage> },
                   { path: "guests", element: <LazyPage><PartnerGuestsPage /></LazyPage> },
                   { path: "endorsements", element: <LazyPage><PartnerEndorsementsPage /></LazyPage> },
+                  { path: "inquiries", element: <LazyPage><PartnerInquiriesPage /></LazyPage> },
                 ],
               },
             ],
@@ -244,7 +273,7 @@ export const router = createBrowserRouter([
               { path: "manual-verification", element: <LazyPage><ManualVerificationPage /></LazyPage> },
               { path: "compliance-violations", element: <LazyPage><ComplianceViolationsPage /></LazyPage> },
               { path: "restrictions", element: <LazyPage><UserRestrictionsPage /></LazyPage> },
-              { path: "jurisdiction-packs", element: <LazyPage><JurisdictionPackVersionsPage /></LazyPage> },
+              { path: "lease-agreements", element: <LazyPage><LeaseAgreementTemplatesPage /></LazyPage> },
               { path: "dual-control", element: <LazyPage><DualControlApprovalsPage /></LazyPage> },
               { path: "settings", element: <LazyPage><PlatformSettingsPage /></LazyPage> },
               { path: "blog", element: <LazyPage><BlogPostsPage /></LazyPage> },
@@ -256,6 +285,8 @@ export const router = createBrowserRouter([
               { path: "listing-analytics", element: <LazyPage><ListingAnalyticsPage /></LazyPage> },
             ],
           },
+        ],
+      },
         ],
       },
     ],

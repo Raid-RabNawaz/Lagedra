@@ -100,6 +100,11 @@ public sealed partial class BeginMoveOutCommandHandler(
 
         confirmation.BeginMoveOut(request.CallerUserId, clock);
 
+        if (confirmation.DepositAmountCents <= 0)
+        {
+            confirmation.CompleteStayWithoutDeposit(clock);
+        }
+
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return Result<PaymentConfirmationDto>.Success(

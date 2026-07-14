@@ -86,6 +86,33 @@ public sealed class ListingConfiguration : IEntityTypeConfiguration<Listing>
             hr.Property(h => h.AdditionalRules).HasColumnName("house_rules_additional_rules").HasMaxLength(2000);
         });
 
+        builder.OwnsOne(l => l.LeaseTerms, lt =>
+        {
+            lt.Property(t => t.RentDueDayOfMonth).HasColumnName("lease_rent_due_day");
+            lt.Property(t => t.NsfFirstFeeCents).HasColumnName("lease_nsf_first_fee_cents");
+            lt.Property(t => t.NsfSubsequentFeeCents).HasColumnName("lease_nsf_subsequent_fee_cents");
+            lt.Property(t => t.LateFeePercent).HasColumnName("lease_late_fee_percent").HasPrecision(5, 2);
+            lt.Property(t => t.LateFeeGraceDays).HasColumnName("lease_late_fee_grace_days");
+            lt.Property(t => t.UtilitiesResponsibility).HasColumnName("lease_utilities_responsibility").HasMaxLength(500);
+            lt.Property(t => t.YardMaintenanceByTenant).HasColumnName("lease_yard_maintenance_by_tenant");
+            lt.Property(t => t.Furnished).HasColumnName("lease_furnished");
+            lt.Property(t => t.IncludedAppliancesNotes).HasColumnName("lease_included_appliances").HasMaxLength(500);
+            lt.Property(t => t.KeyCount).HasColumnName("lease_key_count");
+            lt.Property(t => t.MailboxKeyCount).HasColumnName("lease_mailbox_key_count");
+            lt.Property(t => t.KeyReplacementFeeCents).HasColumnName("lease_key_replacement_fee_cents");
+            lt.Property(t => t.LockoutFeeCents).HasColumnName("lease_lockout_fee_cents");
+            lt.Property(t => t.ParkingSpaceCount).HasColumnName("lease_parking_space_count");
+            lt.Property(t => t.ParkingDescription).HasColumnName("lease_parking_description").HasMaxLength(300);
+            lt.Property(t => t.ParkingIncludedInRent).HasColumnName("lease_parking_included_in_rent");
+            lt.Property(t => t.MaxGuestConsecutiveDays).HasColumnName("lease_max_guest_consecutive_days");
+            lt.Property(t => t.RentersInsuranceMinLiabilityCents).HasColumnName("lease_renters_insurance_min_cents");
+            lt.Property(t => t.EarlyTerminationFeeMonths).HasColumnName("lease_early_termination_fee_months");
+            lt.Property(t => t.BuiltBefore1978).HasColumnName("lease_built_before_1978");
+            lt.Property(t => t.LeadPaintKnowledge).HasColumnName("lease_lead_paint_knowledge").HasMaxLength(1000);
+            lt.Property(t => t.RentCapJustCauseExempt).HasColumnName("lease_rent_cap_just_cause_exempt");
+            lt.Property(t => t.PaymentMethods).HasColumnName("lease_payment_methods").HasMaxLength(500);
+        });
+
         builder.OwnsOne(l => l.CancellationPolicy, cp =>
         {
             cp.Property(c => c.Type).HasColumnName("cancellation_policy_type").HasConversion<string>().HasMaxLength(50);

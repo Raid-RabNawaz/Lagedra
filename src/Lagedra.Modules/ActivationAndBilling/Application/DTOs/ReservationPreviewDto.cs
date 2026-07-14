@@ -3,9 +3,9 @@ using Lagedra.SharedKernel.Integration;
 namespace Lagedra.Modules.ActivationAndBilling.Application.DTOs;
 
 /// <summary>
-/// Full price breakdown the tenant sees before submitting a reservation
-/// request: the predetermined deposit for their verification tier (+ why),
-/// rent, fees, and the total they'll be charged on host approval.
+/// Full price breakdown for the apply dialog. When
+/// <see cref="IsNegotiatedOffer"/> is true, rent and deposit come from an
+/// accepted inquiry offer rather than listing/tier defaults.
 /// </summary>
 public sealed record ReservationPreviewDto(
     Guid ListingId,
@@ -17,4 +17,6 @@ public sealed record ReservationPreviewDto(
     long ServiceFeeCents,
     long MonthlyProtocolFeeCents,
     long TotalPayableCents,
-    int StayDurationDays);
+    int StayDurationDays,
+    bool IsNegotiatedOffer = false,
+    Guid? NegotiatedOfferId = null);

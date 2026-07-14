@@ -4,10 +4,12 @@ import {
   BadgeCheck,
   Briefcase,
   CalendarDays,
+  Clock,
   Languages,
   Mail,
   MapPin,
   Phone,
+  Star,
   User,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -16,6 +18,12 @@ import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { Loader } from "@/components/shared/Loader";
 import { usePublicProfile } from "@/features/auth/hooks/usePublicProfile";
+import {
+  useUserReputation,
+  useUserReviews,
+} from "@/features/reviews/hooks/useReviews";
+import { StarRatingDisplay } from "@/features/reviews/components/StarRating";
+import { ReputationPreview } from "@/features/reviews/components/ReputationPreview";
 import { getApiErrorMessage, isNotFoundError } from "@/api/errors";
 import { formatDate } from "@/utils/format";
 import {
@@ -31,6 +39,8 @@ type Props = {
   roleLabel: "Guest" | "Host";
   profileLink?: string;
   compact?: boolean;
+  /** When true, load and show stay-review reputation (default true). */
+  showReputation?: boolean;
 };
 
 function VerificationChip({
@@ -58,15 +68,31 @@ function VerificationChip({
   );
 }
 
+function formatResponseTime(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `~${hours}h`;
+  return `~${Math.round(hours / 24)}d`;
+}
+
 export function ApplicationProfilePanel({
   userId,
   enabled = true,
   roleLabel,
   profileLink,
   compact = false,
+  showReputation = true,
 }: Props) {
   const query = usePublicProfile(enabled ? userId : undefined);
+  const reputationQuery = useUserReputation(
+    enabled && showReputation ? userId : undefined,
+  );
+  const reviewsQuery = useUserReviews(
+    enabled && showReputation && !compact ? userId : undefined,
+  );
   const profile = query.data;
+  const reputation = reputationQuery.data;
+  const reviews = reviewsQuery.data;
   const display = profileDisplayName(profile, roleLabel);
   const location = profile ? profileLocation(profile) : null;
   const verifiedCount = profileVerificationCount(profile);
@@ -84,7 +110,10 @@ export function ApplicationProfilePanel({
       <Alert variant="destructive" className="text-sm">
         {isNotFoundError(query.error)
           ? `${roleLabel} profile not available.`
-          : getApiErrorMessage(query.error, `Failed to load ${roleLabel.toLowerCase()} profile.`)}
+          : getApiErrorMessage(
+              query.error,
+              `Failed to load ${roleLabel.toLowerCase()} profile.`,
+            )}
       </Alert>
     );
   }
@@ -117,6 +146,15 @@ export function ApplicationProfilePanel({
                 ID
               </Badge>
             )}
+            {showReputation &&
+              reputation &&
+              reputation.reviewCount > 0 && (
+                <StarRatingDisplay
+                  average={reputation.averageOverall}
+                  count={reputation.reviewCount}
+                  className="text-xs"
+                />
+              )}
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground">
             {location ? (
@@ -147,7 +185,10 @@ export function ApplicationProfilePanel({
         <div className="min-w-0 flex-1 space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <p className="font-semibold text-base leading-none">{display}</p>
-            <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+            <Badge
+              variant="outline"
+              className="text-[10px] uppercase tracking-wide"
+            >
               {roleLabel}
             </Badge>
             {profile.isGovernmentIdVerified && (
@@ -156,6 +197,14 @@ export function ApplicationProfilePanel({
                 ID verified
               </Badge>
             )}
+            {showReputation &&
+              reputation &&
+              reputation.reviewCount > 0 && (
+                <StarRatingDisplay
+                  average={reputation.averageOverall}
+                  count={reputation.reviewCount}
+                />
+              )}
           </div>
           <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
             {location && (
@@ -176,6 +225,12 @@ export function ApplicationProfilePanel({
             </span>
             {profile.responseRatePercent != null && (
               <span>Responds {profile.responseRatePercent}% of the time</span>
+            )}
+            {profile.responseTimeMinutes != null && (
+              <span className="flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                Typically {formatResponseTime(profile.responseTimeMinutes)}
+              </span>
             )}
           </div>
           {profile.bio && (
@@ -212,6 +267,25 @@ export function ApplicationProfilePanel({
         </div>
       </div>
 
+      {showReputation && (
+        <div className="rounded-lg border bg-background/60 p-3 space-y-2">
+          <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <Star className="h-3.5 w-3.5" />
+            {roleLabel === "Guest" ? "Guest reviews" : "Host reviews"}
+          </p>
+          <ReputationPreview
+            reputation={reputation}
+            reviews={reviews}
+            maxReviews={3}
+            emptyLabel={
+              roleLabel === "Guest"
+                ? "This guest has no published reviews yet."
+                : "This host has no published reviews yet."
+            }
+          />
+        </div>
+      )}
+
       {profileLink && (
         <Link to={profileLink}>
           <Button variant="outline" size="sm" className="gap-1.5">
@@ -232,11 +306,13 @@ export function useApplicationProfilePreview(
   fallbackLabel: string,
 ) {
   const query = usePublicProfile(enabled ? userId : undefined);
+  const reputationQuery = useUserReputation(enabled ? userId : undefined);
   const profile = query.data;
   const name = profileDisplayName(profile, fallbackLabel);
   return {
     query,
     profile,
+    reputation: reputationQuery.data,
     name,
     location: profile ? profileLocation(profile) : null,
     initials: profileInitials(name, fallbackLabel[0] ?? "U"),

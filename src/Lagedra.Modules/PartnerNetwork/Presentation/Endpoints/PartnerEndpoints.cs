@@ -141,8 +141,15 @@ public static class PartnerEndpoints
             ISender sender) =>
         {
             var result = await sender.Send(new CreateDirectReservationCommand(
-                id, req.GuestName, req.GuestEmail, req.ListingId,
-                GetUserId(user), IsPlatformAdmin(user)))
+                id,
+                req.TenantUserId,
+                req.ListingId,
+                req.PayerType,
+                GetUserId(user),
+                IsPlatformAdmin(user),
+                req.RequestedCheckIn,
+                req.RequestedCheckOut,
+                req.StripePaymentMethodId))
                 .ConfigureAwait(false);
 
             return result.IsSuccess
@@ -162,6 +169,29 @@ public static class PartnerEndpoints
             var result = await sender.Send(new ListDirectReservationsQuery(
                 id, GetUserId(user), IsPlatformAdmin(user),
                 statusFilter, skip ?? 0, take ?? 50))
+                .ConfigureAwait(false);
+            return ToHttpResult(result);
+        });
+
+        group.MapPost("/{id:guid}/setup-intent", async (
+            Guid id,
+            CreatePartnerSetupIntentRequest req,
+            ClaimsPrincipal user,
+            ISender sender) =>
+        {
+            var result = await sender.Send(new CreatePartnerBookingSetupIntentCommand(
+                id, req.ListingId, GetUserId(user), IsPlatformAdmin(user)))
+                .ConfigureAwait(false);
+            return ToHttpResult(result);
+        });
+
+        group.MapGet("/{id:guid}/endorsed-members", async (
+            Guid id,
+            ClaimsPrincipal user,
+            ISender sender) =>
+        {
+            var result = await sender.Send(new ListEndorsedMembersQuery(
+                id, GetUserId(user), IsPlatformAdmin(user)))
                 .ConfigureAwait(false);
             return ToHttpResult(result);
         });
@@ -233,7 +263,7 @@ public static class PartnerEndpoints
             ISender sender) =>
         {
             var result = await sender.Send(new InvitePartnerGuestCommand(
-                id, req.Email, req.FullName, req.ListingId,
+                id, req.Email, req.FullName,
                 req.WithEndorsement, req.EndorsementNote,
                 GetUserId(user), IsPlatformAdmin(user)))
                 .ConfigureAwait(false);

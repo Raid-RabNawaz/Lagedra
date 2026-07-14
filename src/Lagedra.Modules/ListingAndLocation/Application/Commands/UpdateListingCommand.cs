@@ -37,7 +37,8 @@ public sealed record UpdateListingCommand(
     bool ClearDefaultDeposit = false,
     long? DepositUnverifiedCents = null,
     long? DepositBackgroundVerifiedCents = null,
-    long? DepositPartnerGuaranteedCents = null) : IRequest<Result<ListingDetailsDto>>;
+    long? DepositPartnerGuaranteedCents = null,
+    LeaseTermsDto? LeaseTerms = null) : IRequest<Result<ListingDetailsDto>>;
 
 public sealed class UpdateListingCommandValidator : AbstractValidator<UpdateListingCommand>
 {
@@ -135,6 +136,34 @@ public sealed class UpdateListingCommandHandler(
                 hr.PetsAllowed, hr.PetsNotes, hr.SmokingAllowed,
                 hr.PartiesAllowed, hr.QuietHoursStart, hr.QuietHoursEnd,
                 hr.LeavingInstructions, hr.AdditionalRules));
+        }
+
+        if (request.LeaseTerms is { } lt)
+        {
+            listing.SetLeaseTerms(Domain.ValueObjects.LeaseTerms.Create(
+                lt.RentDueDayOfMonth,
+                lt.NsfFirstFeeCents,
+                lt.NsfSubsequentFeeCents,
+                lt.LateFeePercent,
+                lt.LateFeeGraceDays,
+                lt.UtilitiesResponsibility,
+                lt.YardMaintenanceByTenant,
+                lt.Furnished,
+                lt.IncludedAppliancesNotes,
+                lt.KeyCount,
+                lt.MailboxKeyCount,
+                lt.KeyReplacementFeeCents,
+                lt.LockoutFeeCents,
+                lt.ParkingSpaceCount,
+                lt.ParkingDescription,
+                lt.ParkingIncludedInRent,
+                lt.MaxGuestConsecutiveDays,
+                lt.RentersInsuranceMinLiabilityCents,
+                lt.EarlyTerminationFeeMonths,
+                lt.BuiltBefore1978,
+                lt.LeadPaintKnowledge,
+                lt.RentCapJustCauseExempt,
+                lt.PaymentMethods));
         }
 
         if (request.CancellationPolicy is { } cp)

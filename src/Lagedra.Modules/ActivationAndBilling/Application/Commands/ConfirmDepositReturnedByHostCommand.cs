@@ -1,6 +1,7 @@
 using Lagedra.Modules.ActivationAndBilling.Application.DTOs;
 using Lagedra.Modules.ActivationAndBilling.Domain.Enums;
 using Lagedra.Modules.ActivationAndBilling.Infrastructure.Persistence;
+using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Results;
 using Lagedra.SharedKernel.Time;
 using MediatR;
@@ -12,18 +13,21 @@ namespace Lagedra.Modules.ActivationAndBilling.Application.Commands;
 /// The host confirms they returned the deposit directly to the tenant (the
 /// non-custodial model — Lagedra never holds the funds). Recording the amount
 /// and method half-completes the handshake; the deal completes once the tenant
-/// also confirms receipt.
+/// also confirms receipt. Partial returns require a deduction reason and a
+/// sealed damage-photo evidence manifest.
 /// </summary>
 public sealed record ConfirmDepositReturnedByHostCommand(
     Guid DealId,
     Guid HostUserId,
     long ReturnedAmountCents,
     string? Method,
-    string? Note) : IRequest<Result<PaymentConfirmationDto>>;
+    string? Note,
+    Guid? EvidenceManifestId = null) : IRequest<Result<PaymentConfirmationDto>>;
 
 public sealed class ConfirmDepositReturnedByHostCommandHandler(
     BillingDbContext dbContext,
-    IClock clock)
+    IClock clock,
+    IEvidenceManifestProvider evidenceProvider)
     : IRequestHandler<ConfirmDepositReturnedByHostCommand, Result<PaymentConfirmationDto>>
 {
     private static readonly Error Forbidden = new(
@@ -69,10 +73,35 @@ public sealed class ConfirmDepositReturnedByHostCommandHandler(
                     "End the stay before confirming the deposit return."));
         }
 
+        if (request.ReturnedAmountCents < confirmation.DepositAmountCents)
+        {
+            if (request.EvidenceManifestId is null || request.EvidenceManifestId == Guid.Empty)
+            {
+                return Result<PaymentConfirmationDto>.Failure(
+                    new Error("DepositReturn.EvidenceRequired",
+                        "A damage photo is required when returning less than the full deposit."));
+            }
+
+            var sealedOk = await evidenceProvider
+                .ExistsAndIsSealedAsync(request.EvidenceManifestId.Value, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (!sealedOk)
+            {
+                return Result<PaymentConfirmationDto>.Failure(
+                    new Error("DepositReturn.EvidenceNotSealed",
+                        "Upload and seal a damage photo before confirming a partial deposit return."));
+            }
+        }
+
         try
         {
             confirmation.ConfirmDepositReturnedByHost(
-                request.ReturnedAmountCents, request.Method, request.Note, clock);
+                request.ReturnedAmountCents,
+                request.Method,
+                request.Note,
+                request.EvidenceManifestId,
+                clock);
         }
         catch (InvalidOperationException ex)
         {

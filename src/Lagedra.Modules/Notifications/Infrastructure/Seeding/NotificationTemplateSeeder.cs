@@ -8,19 +8,11 @@ using Microsoft.Extensions.Logging;
 namespace Lagedra.Modules.Notifications.Infrastructure.Seeding;
 
 /// <summary>
-/// Seeds the minimum set of email templates Phase 16 depends on.
-///
-/// History: prior to Phase 16 the Notifications module assumed templates
-/// would be created via an admin UI / seed migration that never landed,
-/// so every email path silently 404'd at the template lookup in
-/// <c>SendEmailNotificationCommandHandler</c>. The 16.10 one-tap approve
-/// flow makes that gap user-visible (the host's email never arrives), so
-/// we ship a baseline set here and only the <c>application_submitted</c>
-/// template is strictly required — others can be added incrementally.
+/// Seeds the minimum set of email + SMS templates Phase 16 / Twilio SMS depend on.
 ///
 /// Seeding is upsert-by-(TemplateId, Channel): existing rows with the
-/// same template id are left untouched so an admin can override the body
-/// without their changes being clobbered on the next deploy.
+/// same template id + channel are left untouched so an admin can override
+/// the body without their changes being clobbered on the next deploy.
 /// </summary>
 public static partial class NotificationTemplateSeeder
 {
@@ -44,19 +36,19 @@ public static partial class NotificationTemplateSeeder
             .GetRequiredService<ILoggerFactory>()
             .CreateLogger("NotificationTemplateSeeder");
 
-        var templates = BuildBaselineTemplates();
+        var templates = BuildBaselineTemplates().Concat(BuildSmsTemplates()).ToList();
 
-        var existingIds = await dbContext.Templates
-            .Where(t => t.Channel == NotificationChannel.Email)
-            .Select(t => t.TemplateId)
+        var existingKeys = await dbContext.Templates
+            .Select(t => new { t.TemplateId, t.Channel })
             .ToListAsync(ct)
             .ConfigureAwait(false);
-        var existingSet = new HashSet<string>(existingIds, StringComparer.OrdinalIgnoreCase);
+        var existingSet = new HashSet<(string, NotificationChannel)>(
+            existingKeys.Select(k => (k.TemplateId, k.Channel)));
 
         var added = 0;
         foreach (var template in templates)
         {
-            if (existingSet.Contains(template.TemplateId))
+            if (existingSet.Contains((template.TemplateId, template.Channel)))
             {
                 continue;
             }
@@ -166,11 +158,105 @@ public static partial class NotificationTemplateSeeder
             subject: "New question about {listingTitle}",
             htmlBody: inquiryStartedHtml,
             plainTextBody: inquiryStartedText);
+
+        const string dealActivatedHtml = """
+            <!doctype html>
+            <html>
+            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; color: #111;">
+              <h2 style="margin-top: 32px;">Your booking is active</h2>
+              <p>Deal <strong>{dealId}</strong> is now active. Your signed lease agreement PDF is attached to this email for your records.</p>
+              <p style="font-size: 13px; color: #666;">
+                Keep this document for your records. You can also download it later from your deal page in Lagedra.
+              </p>
+            </body>
+            </html>
+            """;
+
+        const string dealActivatedText = """
+            Your booking is active
+
+            Deal {dealId} is now active. Your signed lease agreement PDF is attached to this email for your records.
+            """;
+
+        yield return new NotificationTemplate(
+            templateId: "deal_activated",
+            channel: NotificationChannel.Email,
+            subject: "Booking active — lease agreement attached",
+            htmlBody: dealActivatedHtml,
+            plainTextBody: dealActivatedText);
     }
+
+    private static IEnumerable<NotificationTemplate> BuildSmsTemplates()
+    {
+        // SMS bodies live in PlainTextBody; HtmlBody mirrors them so the
+        // NotificationTemplate constructor's required htmlBody is satisfied.
+        yield return Sms("application_submitted",
+            "Lagedra: New booking application for {listingTitle}. Review: {approveUrl}");
+        yield return Sms("application_approved",
+            "Lagedra: Your booking application was approved. Open the app to continue.");
+        yield return Sms("application_rejected",
+            "Lagedra: Your booking application was not approved.");
+        yield return Sms("application_expired",
+            "Lagedra: Your booking application has expired.");
+        yield return Sms("application_superseded",
+            "Lagedra: Your booking application was superseded by another booking.");
+        yield return Sms("booking_payment_failed",
+            "Lagedra: Booking payment failed ({reason}). Please update your payment method.");
+        yield return Sms("booking_payment_failed_host",
+            "Lagedra: A guest's booking payment failed for your listing.");
+        yield return Sms("payment_confirmed",
+            "Lagedra: Payment confirmed. Your booking is moving forward.");
+        yield return Sms("payment_disputed",
+            "Lagedra: A payment dispute was opened on deal {dealId}.");
+        yield return Sms("payment_dispute_resolved",
+            "Lagedra: Payment dispute on deal {dealId} resolved: {outcome}.");
+        yield return Sms("deal_activated",
+            "Lagedra: Your stay is confirmed and active.");
+        yield return Sms("booking_cancelled",
+            "Lagedra: Booking cancelled. {reason}");
+        yield return Sms("damage_claim_filed",
+            "Lagedra: A damage claim of ${amount} was filed on deal {dealId}.");
+        yield return Sms("payment_failed",
+            "Lagedra: A subscription or protocol payment failed. Please update billing.");
+        yield return Sms("damage_claim_approved",
+            "Lagedra: Damage claim approved for ${amount} on deal {dealId}.");
+        yield return Sms("damage_claim_rejected",
+            "Lagedra: Damage claim rejected on deal {dealId}.");
+        yield return Sms("deposit_return_due",
+            "Lagedra: Return the deposit within 21 days (or itemize deductions with a damage photo).");
+        yield return Sms("review_due",
+            "Lagedra: Your stay is complete — please leave a review in the app.");
+        yield return Sms("review_reminder",
+            "Lagedra: Reminder — you still need to leave a review for your stay.");
+        yield return Sms("arbitration_case_filed",
+            "Lagedra: An arbitration case was filed.");
+        yield return Sms("arbitration_decision",
+            "Lagedra: An arbitration decision is ready (tier {tier}).");
+        yield return Sms("evidence_complete",
+            "Lagedra: Evidence window closed. Decision due {decisionDueAt}.");
+        yield return Sms("arbitration_case_closed",
+            "Lagedra: Your arbitration case has been closed.");
+        yield return Sms("arbitration_case_appealed",
+            "Lagedra: An arbitration case was appealed.");
+        yield return Sms("identity_verified",
+            "Lagedra: Your identity has been verified.");
+        yield return Sms("identity_verification_failed",
+            "Lagedra: Identity verification failed: {reason}");
+        yield return Sms("insurance_status_changed",
+            "Lagedra: Insurance status is now {newState} for deal {dealId}.");
+    }
+
+    private static NotificationTemplate Sms(string templateId, string body) =>
+        new(
+            templateId: templateId,
+            channel: NotificationChannel.Sms,
+            subject: templateId,
+            htmlBody: body,
+            plainTextBody: body);
 
     [LoggerMessage(
         EventId = 16100,
         Level = LogLevel.Information,
-        Message = "Seeded {Count} notification email templates")]
+        Message = "Seeded {Count} notification templates")]
     private static partial void LogSeeded(ILogger logger, int count);
 }

@@ -8,6 +8,7 @@ using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Results;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Lagedra.Modules.ListingAndLocation.Application.Queries;
 
@@ -26,7 +27,8 @@ public sealed record GetListingDetailsQuery(
 public sealed class GetListingDetailsQueryHandler(
     ListingsDbContext dbContext,
     IHostVerificationProvider hostVerificationProvider,
-    IHostProfileProvider hostProfileProvider)
+    IHostProfileProvider hostProfileProvider,
+    IServiceProvider serviceProvider)
     : IRequestHandler<GetListingDetailsQuery, Result<ListingDetailsDto>>
 {
     private static readonly Error NotFound = new("Listing.NotFound", "Listing not found.");
@@ -77,6 +79,13 @@ public sealed class GetListingDetailsQueryHandler(
                 null)
             : null;
 
+        var reviewReputationProvider = serviceProvider.GetService<IReviewReputationProvider>();
+        var hostReputation = reviewReputationProvider is null
+            ? null
+            : await reviewReputationProvider
+                .GetListingHostReputationAsync(listing.Id, cancellationToken)
+                .ConfigureAwait(false);
+
         var qualityScore = ListingQualityScoreCalculator.Calculate(
             listing.Photos.Count,
             listing.Description.Length,
@@ -85,7 +94,8 @@ public sealed class GetListingDetailsQueryHandler(
             listing.HouseRules is not null,
             listing.CancellationPolicy is not null,
             hostVerification?.IsVerified ?? false,
-            hostProfile?.ResponseRatePercent);
+            hostProfile?.ResponseRatePercent,
+            hostReputation?.AverageOverall);
 
         return Result<ListingDetailsDto>.Success(
             ListingMapper.ToDetails(listing, badges, hostProfile, qualityScore));

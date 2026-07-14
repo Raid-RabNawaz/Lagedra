@@ -173,6 +173,10 @@ namespace PartnerNetwork.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<string>("StripeCustomerId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<string>("SuspensionReason")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");

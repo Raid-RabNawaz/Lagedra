@@ -47,6 +47,9 @@ public sealed class LockInquirySessionCommandHandler(
         }
 
         var session = await dbContext.Sessions
+            .Include(s => s.Offers)
+            .Include(s => s.Questions)
+                .ThenInclude(q => q.Answer)
             .FirstOrDefaultAsync(
                 s => s.DealId == request.DealId
                     && s.Status == InquirySessionStatus.Open,
@@ -62,10 +65,6 @@ public sealed class LockInquirySessionCommandHandler(
         session.Lock();
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        return Result<InquiryDto>.Success(MapToDto(session));
+        return Result<InquiryDto>.Success(InquiryDtoMapper.ToDto(session));
     }
-
-    private static InquiryDto MapToDto(Domain.Aggregates.InquirySession s) =>
-        new(s.Id, s.DealId, s.ListingId, s.TenantUserId, s.Status,
-            s.UnlockedByLandlordAt, s.ClosedAt, s.CreatedAt, []);
 }

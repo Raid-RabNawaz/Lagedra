@@ -1,16 +1,19 @@
-using Lagedra.Modules.ListingAndLocation.Application.Commands;
 using Lagedra.Modules.ListingAndLocation.Application.DTOs;
 using Lagedra.Modules.ListingAndLocation.Infrastructure.Persistence;
+using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Results;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Lagedra.Modules.ListingAndLocation.Application.Queries;
 
 public sealed record GetSimilarListingsQuery(Guid ListingId, int Limit = 6)
     : IRequest<Result<IReadOnlyList<ListingSummaryDto>>>;
 
-public sealed class GetSimilarListingsQueryHandler(ListingsDbContext dbContext)
+public sealed class GetSimilarListingsQueryHandler(
+    ListingsDbContext dbContext,
+    IServiceProvider serviceProvider)
     : IRequestHandler<GetSimilarListingsQuery, Result<IReadOnlyList<ListingSummaryDto>>>
 {
     private const double PriceTolerance = 0.20;
@@ -57,7 +60,10 @@ public sealed class GetSimilarListingsQueryHandler(ListingsDbContext dbContext)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        var items = similar.Select(l => ListingMapper.ToSummary(l)).ToList();
+        var reputationProvider = serviceProvider.GetService<IReviewReputationProvider>();
+        var items = await ListingSummaryEnricher
+            .ToSummariesAsync(similar, reputationProvider, cancellationToken)
+            .ConfigureAwait(false);
 
         return Result<IReadOnlyList<ListingSummaryDto>>.Success(items);
     }

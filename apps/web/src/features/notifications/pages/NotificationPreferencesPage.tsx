@@ -1,7 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import {
-  ArrowLeft,
   Bell,
   CheckCircle2,
   AlertTriangle,
@@ -17,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
+import { BackLink } from "@/components/shared/BackLink";
 import { Loader } from "@/components/shared/Loader";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -89,6 +88,14 @@ const EVENT_LABELS: Record<string, { label: string; description: string }> = {
     label: "Truth surface confirmed",
     description: "When a truth surface snapshot is confirmed",
   },
+  review_due: {
+    label: "Review requested",
+    description: "When a completed stay opens the review window",
+  },
+  review_reminder: {
+    label: "Review reminder",
+    description: "Reminders if you have not left a review after a completed stay",
+  },
 };
 
 export const NotificationPreferencesPage = () => {
@@ -156,13 +163,7 @@ export const NotificationPreferencesPage = () => {
   return (
     <div className="space-y-8">
       <div>
-        <Link
-          to="/app/profile"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to profile
-        </Link>
+        <BackLink fallbackTo="/app/profile" className="mb-4" />
         <h1 className="text-3xl font-bold tracking-tight">
           Notification Preferences
         </h1>

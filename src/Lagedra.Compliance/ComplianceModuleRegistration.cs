@@ -39,6 +39,8 @@ public static class ComplianceModuleRegistration
         services.AddDomainEventHandler<SharedKernel.Integration.Events.InsuranceStatusChangedEvent, OnInsuranceStatusChangedCreateSignalHandler>();
         services.AddDomainEventHandler<SharedKernel.Integration.Events.BillingStoppedEvent, OnBillingStoppedCreateSignalHandler>();
         services.AddDomainEventHandler<SharedKernel.Integration.Events.DealCompletedEvent, OnDealCompletedCreateSignalHandler>();
+        services.AddDomainEventHandler<SharedKernel.Integration.Events.PositiveReviewEarnedEvent, OnPositiveReviewEarnedCreateSignalHandler>();
+        services.AddDomainEventHandler<SharedKernel.Integration.Events.ReviewConcernRaisedEvent, OnReviewConcernRaisedCreateSignalHandler>();
 
         return services;
     }

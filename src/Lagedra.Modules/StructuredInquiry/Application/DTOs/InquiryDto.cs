@@ -11,7 +11,12 @@ public sealed record InquiryDto(
     DateTime? UnlockedByLandlordAt,
     DateTime? ClosedAt,
     DateTime CreatedAt,
-    IReadOnlyList<InquiryQuestionDto> Questions);
+    IReadOnlyList<InquiryQuestionDto> Questions,
+    IReadOnlyList<InquiryOfferDto> Offers,
+    InquiryOfferDto? AcceptedOffer,
+    Guid? PartnerOrganizationId = null,
+    string? PartnerOrganizationName = null,
+    Guid? LandlordUserId = null);
 
 public sealed record InquiryQuestionDto(
     Guid QuestionId,
@@ -20,13 +25,27 @@ public sealed record InquiryQuestionDto(
     DateTime SubmittedAt,
     InquiryAnswerDto? Answer,
     string? CustomText = null,
-    string? OpenQuestionText = null);
+    string? OpenQuestionText = null,
+    Guid? SubmittedByUserId = null,
+    InquiryQuestionAuthorRole? SubmittedByRole = null);
 
 public sealed record InquiryAnswerDto(
     Guid AnswerId,
     ResponseType ResponseType,
     string AnswerValue,
     DateTime AnsweredAt);
+
+public sealed record InquiryOfferDto(
+    Guid OfferId,
+    Guid ProposedByUserId,
+    InquiryOfferRole ProposedByRole,
+    long RentCents,
+    long DepositCents,
+    string? Note,
+    InquiryOfferStatus Status,
+    DateTime ProposedAt,
+    DateTime? RespondedAt,
+    Guid? SupersedesOfferId);
 
 /// <summary>
 /// Phase 17 — lightweight inbox row for the host inquiries page. Joins
@@ -46,7 +65,8 @@ public sealed record HostInquirySummaryDto(
     DateTime CreatedAt,
     DateTime LastActivityAt,
     int QuestionCount,
-    int UnansweredCount);
+    int UnansweredCount,
+    Guid? PartnerOrganizationId = null);
 
 /// <summary>
 /// Phase 17 — tenant counterpart of <see cref="HostInquirySummaryDto"/>.
@@ -54,11 +74,6 @@ public sealed record HostInquirySummaryDto(
 /// inquiry thread they've started, regardless of whether they've
 /// applied yet.
 /// </summary>
-/// <remarks>
-/// <c>UnansweredByHostCount</c> is the number of questions the tenant
-/// is still waiting on — the symmetric metric to the host inbox's
-/// <c>UnansweredCount</c>.
-/// </remarks>
 public sealed record TenantInquirySummaryDto(
     Guid SessionId,
     Guid ListingId,
@@ -67,6 +82,27 @@ public sealed record TenantInquirySummaryDto(
     string? ListingCity,
     Guid LandlordUserId,
     string? LandlordDisplayName,
+    InquirySessionStatus Status,
+    Guid? DealId,
+    DateTime CreatedAt,
+    DateTime LastActivityAt,
+    int QuestionCount,
+    int UnansweredByHostCount,
+    Guid? PartnerOrganizationId = null);
+
+/// <summary>
+/// Partner staff inbox row for threads where their org is attached.
+/// </summary>
+public sealed record PartnerInquirySummaryDto(
+    Guid SessionId,
+    Guid ListingId,
+    string? ListingTitle,
+    Uri? ListingCoverPhotoUri,
+    string? ListingCity,
+    Guid TenantUserId,
+    string? TenantDisplayName,
+    Guid PartnerOrganizationId,
+    string? PartnerOrganizationName,
     InquirySessionStatus Status,
     Guid? DealId,
     DateTime CreatedAt,

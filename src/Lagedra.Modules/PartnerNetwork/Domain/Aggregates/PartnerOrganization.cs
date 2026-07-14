@@ -24,6 +24,12 @@ public sealed class PartnerOrganization : AggregateRoot<Guid>
     public DateTime EndorsementTermsAcceptedAt { get; private set; }
     public Guid EndorsementTermsAcceptedByUserId { get; private set; }
 
+    /// <summary>
+    /// Cached Stripe Customer id for company-pays reservations. Populated lazily
+    /// the first time a verified org admin runs the partner SetupIntent flow.
+    /// </summary>
+    public string? StripeCustomerId { get; private set; }
+
     private PartnerOrganization() { }
 
     public static PartnerOrganization Create(
@@ -94,5 +100,12 @@ public sealed class PartnerOrganization : AggregateRoot<Guid>
         UpdatedAt = clock.UtcNow;
 
         AddDomainEvent(new PartnerOrganizationSuspendedEvent(Id, reason));
+    }
+
+    public void SetStripeCustomerId(string stripeCustomerId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stripeCustomerId);
+        StripeCustomerId = stripeCustomerId.Trim();
+        UpdatedAt = DateTime.UtcNow;
     }
 }

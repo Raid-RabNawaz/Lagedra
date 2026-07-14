@@ -20,7 +20,6 @@ export const PartnerGuestsPage = () => {
 
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
-  const [listingId, setListingId] = useState("");
   const [withEndorsement, setWithEndorsement] = useState(true);
   const [endorsementNote, setEndorsementNote] = useState("");
 
@@ -43,11 +42,7 @@ export const PartnerGuestsPage = () => {
       return false;
     }
     if (!fullName.trim()) {
-      setSubmitError("Please enter the guest's full name.");
-      return false;
-    }
-    if (listingId.trim() && listingId.trim().length < 30) {
-      setSubmitError("Listing ID looks malformed.");
+      setSubmitError("Please enter the member's full name.");
       return false;
     }
     return true;
@@ -62,14 +57,12 @@ export const PartnerGuestsPage = () => {
       const result = await partnerApi.inviteGuest(membership.organization.id, {
         email: email.trim(),
         fullName: fullName.trim(),
-        listingId: listingId.trim() || null,
         withEndorsement,
         endorsementNote: withEndorsement ? endorsementNote.trim() || null : null,
       });
       setLastResult(result);
       setEmail("");
       setFullName("");
-      setListingId("");
       setEndorsementNote("");
     } catch (err) {
       setSubmitError(extractErrorMessage(err));
@@ -94,11 +87,12 @@ export const PartnerGuestsPage = () => {
       <div>
         <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
           <Mail className="h-7 w-7 text-muted-foreground" />
-          Invite a guest
+          Invite a member
         </h1>
         <p className="mt-1 text-muted-foreground">
-          Create a Lagedra account on behalf of one of your members or guests. They'll receive an
-          email with a link to set their password and sign in.
+          Create a Lagedra account for someone you relocate or host. They&apos;ll receive an email
+          with a link to set their password. After they&apos;re endorsed, book for them from
+          Reservations.
         </p>
       </div>
 
@@ -106,8 +100,8 @@ export const PartnerGuestsPage = () => {
         <Alert>
           <AlertDescription>
             {!isAdmin
-              ? "Only organization admins can invite guests."
-              : "Your organization must be verified before you can invite guests."}
+              ? "Only organization admins can invite members."
+              : "Your organization must be verified before you can invite members."}
           </AlertDescription>
         </Alert>
       )}
@@ -124,18 +118,15 @@ export const PartnerGuestsPage = () => {
                   : " — they already had an account."}
               </p>
               <ul className="ml-5 list-disc text-sm">
-                {lastResult.endorsementId && (
+                {lastResult.endorsementId ? (
                   <li>
-                    Endorsement <strong>auto-approved</strong> for this guest.
+                    Endorsement <strong>auto-approved</strong>. You can book for them from
+                    Reservations.
                   </li>
-                )}
-                {lastResult.directReservationId && (
+                ) : (
                   <li>
-                    A direct reservation was created and linked to a deal application.
+                    No endorsement was created. Endorse them before booking on their behalf.
                   </li>
-                )}
-                {!lastResult.endorsementId && !lastResult.directReservationId && (
-                  <li>No endorsement or reservation was created with this invite.</li>
                 )}
               </ul>
               {lastResult.setPasswordUrl && (
@@ -173,10 +164,10 @@ export const PartnerGuestsPage = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>New guest invite</CardTitle>
+          <CardTitle>New member invite</CardTitle>
           <CardDescription>
-            If a Lagedra account already exists for this email, we'll reuse it instead of creating a
-            duplicate. The endorsement and reservation actions below are still applied.
+            If a Lagedra account already exists for this email, we&apos;ll reuse it instead of
+            creating a duplicate. Booking is done separately on the Reservations page.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -207,22 +198,6 @@ export const PartnerGuestsPage = () => {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="invite-listing">
-                Listing ID <span className="text-muted-foreground">(optional)</span>
-              </Label>
-              <Input
-                id="invite-listing"
-                value={listingId}
-                onChange={(e) => setListingId(e.target.value)}
-                placeholder="00000000-0000-0000-0000-000000000000"
-                disabled={!canInvite}
-              />
-              <p className="text-xs text-muted-foreground">
-                Provide a listing to also create a direct reservation alongside this invite.
-              </p>
-            </div>
-
             <div className="space-y-3 rounded-md border p-4">
               <div className="flex items-start gap-3">
                 <Checkbox
@@ -240,9 +215,8 @@ export const PartnerGuestsPage = () => {
                     Auto-approve a Partner-Backed Protection endorsement
                   </span>
                   <span className="mt-1 block text-muted-foreground">
-                    The guest will benefit from a reduced security-deposit band on any application
-                    they submit while the endorsement is active. You can revoke it anytime from the
-                    Endorsements tab.
+                    Required before you can book on their behalf. You can revoke it anytime from
+                    the Endorsements tab.
                   </span>
                 </Label>
               </div>

@@ -33,6 +33,7 @@ public sealed class GetMyListingInquiryQueryHandler(InquiryDbContext dbContext)
             .AsNoTracking()
             .Include(s => s.Questions)
                 .ThenInclude(q => q.Answer)
+            .Include(s => s.Offers)
             .Where(s => s.ListingId == request.ListingId
                 && s.TenantUserId == request.TenantUserId)
             .OrderByDescending(s => s.CreatedAt)
@@ -45,22 +46,6 @@ public sealed class GetMyListingInquiryQueryHandler(InquiryDbContext dbContext)
                 new Error("Inquiry.NotFound", "No inquiry thread found for this listing."));
         }
 
-        return Result<InquiryDto>.Success(MapToDto(session));
+        return Result<InquiryDto>.Success(InquiryDtoMapper.ToDto(session));
     }
-
-    private static InquiryDto MapToDto(InquirySession s) =>
-        new(s.Id, s.DealId, s.ListingId, s.TenantUserId, s.Status,
-            s.UnlockedByLandlordAt, s.ClosedAt, s.CreatedAt,
-            s.Questions.Select(q => new InquiryQuestionDto(
-                q.Id,
-                q.PredefinedQuestionId,
-                q.Category,
-                q.SubmittedAt,
-                q.Answer is not null
-                    ? new InquiryAnswerDto(q.Answer.Id, q.Answer.ResponseType,
-                        q.Answer.AnswerValue, q.Answer.AnsweredAt)
-                    : null,
-                q.CustomText,
-                q.OpenQuestionText))
-            .ToList());
 }

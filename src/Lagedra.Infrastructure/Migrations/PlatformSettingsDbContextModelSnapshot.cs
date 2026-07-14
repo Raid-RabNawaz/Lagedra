@@ -152,6 +152,27 @@ namespace Lagedra.Infrastructure.Migrations
                             Description = "Days after check-out within which a damage claim can be filed",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Value = "14"
+                        },
+                        new
+                        {
+                            Key = "deposit_return.window_days",
+                            Description = "Days after move-out within which the host must return the deposit or provide an itemized statement of deductions (CA Civil Code §1950.5)",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Value = "21"
+                        },
+                        new
+                        {
+                            Key = "review.window_days",
+                            Description = "Days after stay completion within which host and guest may submit double-blind reviews",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Value = "14"
+                        },
+                        new
+                        {
+                            Key = "review.reminder_interval_days",
+                            Description = "Days between reminder notifications for parties who have not submitted a stay review",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Value = "3"
                         });
                 });
 #pragma warning restore 612, 618

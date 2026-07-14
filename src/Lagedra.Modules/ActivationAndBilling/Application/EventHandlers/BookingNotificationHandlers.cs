@@ -17,7 +17,8 @@ namespace Lagedra.Modules.ActivationAndBilling.Application.EventHandlers;
 
 internal static class Channels
 {
-    internal static readonly NotificationChannel[] EmailAndInApp = [NotificationChannel.Email, NotificationChannel.InApp];
+    internal static readonly NotificationChannel[] EmailInAppAndSms =
+        [NotificationChannel.Email, NotificationChannel.InApp, NotificationChannel.Sms];
     internal static readonly NotificationChannel[] InAppOnly = [NotificationChannel.InApp];
 }
 
@@ -83,7 +84,7 @@ public sealed class OnApplicationSubmittedNotify(
                 ["approveUrl"] = approveUrl,
                 ["frontendUrl"] = frontendUrl,
             },
-            Channels.EmailAndInApp, e.ListingId, "Listing"), ct).ConfigureAwait(false);
+            Channels.EmailInAppAndSms, e.ListingId, "Listing"), ct).ConfigureAwait(false);
     }
 
     private static string BuildApproveUrl(
@@ -115,7 +116,7 @@ public sealed class OnApplicationApprovedNotify(IMediator m)
             "Application Approved",
             "Your booking application has been approved! Please review and confirm the deal terms.",
             new() { ["dealId"] = e.DealId.ToString(), ["listingId"] = e.ListingId.ToString() },
-            Channels.EmailAndInApp, e.DealId, "Deal"), ct).ConfigureAwait(false);
+            Channels.EmailInAppAndSms, e.DealId, "Deal"), ct).ConfigureAwait(false);
     }
 }
 
@@ -130,7 +131,7 @@ public sealed class OnApplicationRejectedNotify(IMediator m)
             "Application Not Accepted",
             "Unfortunately, your booking application was not accepted by the host.",
             new() { ["applicationId"] = e.ApplicationId.ToString(), ["listingId"] = e.ListingId.ToString() },
-            Channels.EmailAndInApp, e.ListingId, "Listing"), ct).ConfigureAwait(false);
+            Channels.EmailInAppAndSms, e.ListingId, "Listing"), ct).ConfigureAwait(false);
     }
 }
 
@@ -146,7 +147,7 @@ public sealed class OnApplicationExpiredNotify(IMediator m)
             "Your booking request expired because the host didn't respond in time. " +
             "You can send a new request or explore other listings.",
             new() { ["applicationId"] = e.ApplicationId.ToString(), ["listingId"] = e.ListingId.ToString() },
-            Channels.EmailAndInApp, e.ListingId, "Listing"), ct).ConfigureAwait(false);
+            Channels.EmailInAppAndSms, e.ListingId, "Listing"), ct).ConfigureAwait(false);
     }
 }
 
@@ -162,7 +163,7 @@ public sealed class OnApplicationSupersededNotify(IMediator m)
             "The host confirmed another booking for dates that overlap your request, " +
             "so your request was closed. You can request different dates on this listing.",
             new() { ["applicationId"] = e.ApplicationId.ToString(), ["listingId"] = e.ListingId.ToString() },
-            Channels.EmailAndInApp, e.ListingId, "Listing"), ct).ConfigureAwait(false);
+            Channels.EmailInAppAndSms, e.ListingId, "Listing"), ct).ConfigureAwait(false);
     }
 }
 
@@ -186,7 +187,7 @@ public sealed class OnBookingPaymentFailedNotify(IMediator m)
                 ["listingId"] = e.ListingId.ToString(),
                 ["reason"] = e.Reason,
             },
-            Channels.EmailAndInApp, e.DealId, "Deal"), ct).ConfigureAwait(false);
+            Channels.EmailInAppAndSms, e.DealId, "Deal"), ct).ConfigureAwait(false);
 
         // Host: informational — the booking isn't active yet because payment
         // failed; we're following up with the tenant.
@@ -200,7 +201,7 @@ public sealed class OnBookingPaymentFailedNotify(IMediator m)
                 ["dealId"] = e.DealId.ToString(),
                 ["listingId"] = e.ListingId.ToString(),
             },
-            Channels.EmailAndInApp, e.DealId, "Deal"), ct).ConfigureAwait(false);
+            Channels.EmailInAppAndSms, e.DealId, "Deal"), ct).ConfigureAwait(false);
     }
 }
 
@@ -219,7 +220,7 @@ public sealed class OnPaymentConfirmedNotify(BillingDbContext db, IMediator m)
             "Payment Confirmed",
             "Your host has confirmed receiving your payment. Waiting for insurance activation.",
             new() { ["dealId"] = e.DealId.ToString() },
-            Channels.EmailAndInApp, e.DealId, "Deal"), ct).ConfigureAwait(false);
+            Channels.EmailInAppAndSms, e.DealId, "Deal"), ct).ConfigureAwait(false);
     }
 }
 
@@ -238,7 +239,7 @@ public sealed class OnPaymentDisputedNotify(BillingDbContext db, IMediator m)
             "Payment Disputed",
             $"The tenant has disputed the payment: {e.Reason}",
             new() { ["dealId"] = e.DealId.ToString(), ["reason"] = e.Reason },
-            Channels.EmailAndInApp, e.DealId, "Deal"), ct).ConfigureAwait(false);
+            Channels.EmailInAppAndSms, e.DealId, "Deal"), ct).ConfigureAwait(false);
     }
 }
 
@@ -260,7 +261,7 @@ public sealed class OnPaymentDisputeResolvedNotify(BillingDbContext db, IMediato
                 "Payment Dispute Resolved",
                 outcome,
                 new() { ["dealId"] = e.DealId.ToString(), ["outcome"] = outcome },
-                Channels.EmailAndInApp, e.DealId, "Deal"), ct).ConfigureAwait(false);
+                Channels.EmailInAppAndSms, e.DealId, "Deal"), ct).ConfigureAwait(false);
         }
     }
 }
@@ -276,14 +277,14 @@ public sealed class OnDealActivatedNotify(IMediator m)
             "Booking Active",
             "Your booking is now active and insurance is confirmed.",
             new() { ["dealId"] = e.DealId.ToString() },
-            Channels.EmailAndInApp, e.DealId, "Deal"), ct).ConfigureAwait(false);
+            Channels.EmailInAppAndSms, e.DealId, "Deal"), ct).ConfigureAwait(false);
 
         await m.Send(new NotifyUserCommand(
             e.LandlordUserId, "deal_activated",
             "Deal Complete",
             "Deal complete. Your booking is active and insurance is in place.",
             new() { ["dealId"] = e.DealId.ToString() },
-            Channels.EmailAndInApp, e.DealId, "Deal"), ct).ConfigureAwait(false);
+            Channels.EmailInAppAndSms, e.DealId, "Deal"), ct).ConfigureAwait(false);
     }
 }
 
@@ -311,14 +312,14 @@ public sealed class OnBookingCancelledNotify(BillingDbContext db, IMediator m)
             "Booking Cancelled",
             $"{e.Reason}. {refundInfo}",
             new() { ["dealId"] = e.DealId.ToString(), ["reason"] = e.Reason, ["refundInfo"] = refundInfo },
-            Channels.EmailAndInApp, e.DealId, "Deal"), ct).ConfigureAwait(false);
+            Channels.EmailInAppAndSms, e.DealId, "Deal"), ct).ConfigureAwait(false);
 
         await m.Send(new NotifyUserCommand(
             app.LandlordUserId, "booking_cancelled",
             "Booking Cancelled",
             $"A booking has been cancelled: {e.Reason}",
             new() { ["dealId"] = e.DealId.ToString(), ["reason"] = e.Reason },
-            Channels.EmailAndInApp, e.ListingId, "Listing"), ct).ConfigureAwait(false);
+            Channels.EmailInAppAndSms, e.ListingId, "Listing"), ct).ConfigureAwait(false);
     }
 }
 
@@ -334,7 +335,7 @@ public sealed class OnDamageClaimFiledNotify(IMediator m)
             "Damage Claim Filed",
             $"A damage claim of ${claimDollars.ToString("N0", CultureInfo.InvariantCulture)} has been filed for your stay.",
             new() { ["dealId"] = e.DealId.ToString(), ["amount"] = claimDollars.ToString("N0", CultureInfo.InvariantCulture) },
-            Channels.EmailAndInApp, e.DealId, "Deal"), ct).ConfigureAwait(false);
+            Channels.EmailInAppAndSms, e.DealId, "Deal"), ct).ConfigureAwait(false);
     }
 }
 
@@ -374,14 +375,14 @@ public sealed class OnDamageClaimApprovedNotify(BillingDbContext db, IMediator m
             "Damage Claim Approved",
             $"A damage claim of ${approvedDollarsLabel} has been approved. The amount will be deducted from your deposit.",
             new() { ["dealId"] = e.DealId.ToString(), ["amount"] = approvedDollarsLabel },
-            Channels.EmailAndInApp, e.DealId, "Deal"), ct).ConfigureAwait(false);
+            Channels.EmailInAppAndSms, e.DealId, "Deal"), ct).ConfigureAwait(false);
 
         await m.Send(new NotifyUserCommand(
             app.LandlordUserId, "damage_claim_approved",
             "Damage Claim Approved",
             $"Your damage claim of ${approvedDollarsLabel} has been approved.",
             new() { ["dealId"] = e.DealId.ToString(), ["amount"] = approvedDollarsLabel },
-            Channels.EmailAndInApp, e.DealId, "Deal"), ct).ConfigureAwait(false);
+            Channels.EmailInAppAndSms, e.DealId, "Deal"), ct).ConfigureAwait(false);
     }
 }
 
@@ -400,13 +401,13 @@ public sealed class OnDamageClaimRejectedNotify(BillingDbContext db, IMediator m
             "Damage Claim Rejected",
             "A damage claim against your deposit has been rejected. Your full deposit will be returned.",
             new() { ["dealId"] = e.DealId.ToString() },
-            Channels.EmailAndInApp, e.DealId, "Deal"), ct).ConfigureAwait(false);
+            Channels.EmailInAppAndSms, e.DealId, "Deal"), ct).ConfigureAwait(false);
 
         await m.Send(new NotifyUserCommand(
             app.LandlordUserId, "damage_claim_rejected",
             "Damage Claim Rejected",
             "Your damage claim has been rejected after review.",
             new() { ["dealId"] = e.DealId.ToString() },
-            Channels.EmailAndInApp, e.DealId, "Deal"), ct).ConfigureAwait(false);
+            Channels.EmailInAppAndSms, e.DealId, "Deal"), ct).ConfigureAwait(false);
     }
 }

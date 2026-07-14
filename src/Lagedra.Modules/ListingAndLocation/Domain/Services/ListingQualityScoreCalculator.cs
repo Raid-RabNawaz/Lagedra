@@ -20,7 +20,8 @@ public static class ListingQualityScoreCalculator
     private const int HouseRulesWeight = 5;
     private const int CancellationPolicyWeight = 5;
     private const int HostVerifiedWeight = 10;
-    private const int ResponseRateWeight = 15;
+    private const int ResponseRateWeight = 10;
+    private const int HostRatingWeight = 5;
 
     public static int Calculate(
         int photoCount,
@@ -30,7 +31,8 @@ public static class ListingQualityScoreCalculator
         bool hasHouseRules,
         bool hasCancellationPolicy,
         bool isHostVerified,
-        int? hostResponseRatePercent)
+        int? hostResponseRatePercent,
+        double? hostAverageRating = null)
     {
         var score = 0.0;
 
@@ -46,6 +48,11 @@ public static class ListingQualityScoreCalculator
         if (hostResponseRatePercent.HasValue)
         {
             score += (hostResponseRatePercent.Value / 100.0) * ResponseRateWeight;
+        }
+
+        if (hostAverageRating is >= 1 and <= 5)
+        {
+            score += ((hostAverageRating.Value - 1.0) / 4.0) * HostRatingWeight;
         }
 
         return (int)Math.Round(Math.Clamp(score, 0, 100));

@@ -29,12 +29,25 @@ public static class StructuredInquiryModuleRegistration
 
         services.AddScoped<InquirySessionRepository>();
         services.AddScoped<IInquiryDealLinker, InquiryDealLinker>();
+        services.AddScoped<IAcceptedInquiryOfferProvider, AcceptedInquiryOfferProvider>();
 
         services.AddDomainEventHandler<TruthSurfaceConfirmedEvent,
             OnTruthSurfaceConfirmedCloseInquiryHandler>();
 
         services.AddDomainEventHandler<Domain.Events.ListingInquiryStartedEvent,
             OnListingInquiryStartedNotifyHandler>();
+
+        services.AddDomainEventHandler<Domain.Events.InquiryOfferProposedEvent,
+            OnInquiryOfferProposedNotifyHandler>();
+
+        services.AddDomainEventHandler<Domain.Events.InquiryOfferAcceptedEvent,
+            OnInquiryOfferAcceptedNotifyHandler>();
+
+        services.AddDomainEventHandler<Domain.Events.InquiryPartnerAddedEvent,
+            OnInquiryPartnerAddedNotifyHandler>();
+
+        services.AddDomainEventHandler<Domain.Events.InquiryPartnerQuestionSubmittedEvent,
+            OnInquiryPartnerQuestionSubmittedNotifyHandler>();
 
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(StructuredInquiryModuleRegistration).Assembly));

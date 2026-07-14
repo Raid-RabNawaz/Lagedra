@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   ShieldCheck,
   CheckCircle2,
@@ -12,6 +12,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
+import { BackLink } from "@/components/shared/BackLink";
 import { http } from "@/api/http";
 import { getApiErrorMessage } from "@/api/errors";
 import type { DealApplicationDto } from "@/api/types";
@@ -98,9 +99,11 @@ export const HostApprovePage = () => {
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               )}
-              <Link to="/app/applications">
-                <Button variant="outline">Back to inbox</Button>
-              </Link>
+              <BackLink
+                fallbackTo="/app/applications"
+                variant="button"
+                label="Back to inbox"
+              />
             </div>
           </CardContent>
         </Card>

@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, ArrowRight, CreditCard, ShieldCheck, AlertCircle, Lock, Receipt } from "lucide-react";
+import { ArrowRight, CreditCard, ShieldCheck, AlertCircle, Lock, Receipt } from "lucide-react";
 import { loadStripe } from "@stripe/stripe-js";
 import {
   Elements,
@@ -12,6 +12,7 @@ import { appConfig } from "@/app/config";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
+import { BackLink } from "@/components/shared/BackLink";
 import { Loader } from "@/components/shared/Loader";
 import {
   useCheckoutStatus,
@@ -240,13 +241,11 @@ export default function CheckoutPage() {
   if (isForbiddenError(statusError)) {
     return (
       <div className="mx-auto max-w-lg px-4 py-16 sm:px-6 lg:px-8">
-        <Link
-          to={dealId ? `/app/deals/${dealId}` : "/app/deals"}
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to deal
-        </Link>
+        <BackLink
+          fallbackTo={dealId ? `/app/deals/${dealId}` : "/app/deals"}
+          label="Back to deal"
+          className="mb-6"
+        />
         <Alert variant="destructive">
           <Lock className="h-4 w-4" />
           <span className="ml-2 text-sm">
@@ -271,13 +270,11 @@ export default function CheckoutPage() {
   if (isNotFoundError(statusError) && !tenantNeedsToConfirm && dealId) {
     return (
       <div className="mx-auto max-w-lg px-4 py-16 sm:px-6 lg:px-8">
-        <Link
-          to={`/app/deals/${dealId}`}
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to deal
-        </Link>
+        <BackLink
+          fallbackTo={`/app/deals/${dealId}`}
+          label="Back to deal"
+          className="mb-6"
+        />
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <span className="ml-2 text-sm">
@@ -315,13 +312,11 @@ export default function CheckoutPage() {
 
   return (
     <div className="mx-auto max-w-lg px-4 py-8 sm:px-6 lg:px-8">
-      <Link
-        to={dealId ? `/app/deals/${dealId}` : "/app/deals"}
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to deal
-      </Link>
+      <BackLink
+        fallbackTo={dealId ? `/app/deals/${dealId}` : "/app/deals"}
+        label="Back to deal"
+        className="mb-6"
+      />
 
       <h1 className="text-2xl font-bold tracking-tight mb-2">
         {paymentNeedsRetry ? "Retry payment" : "Payment"}

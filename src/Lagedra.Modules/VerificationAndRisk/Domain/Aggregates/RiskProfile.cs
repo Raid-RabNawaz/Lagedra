@@ -56,10 +56,18 @@ public sealed class RiskProfile : AggregateRoot<Guid>
             Id, TenantUserId, verificationClass, confidence.Level, ComputedAt));
     }
 
-    public void UpdateDepositBand(InsuranceStatus insuranceStatus, long jurisdictionCapCents)
+    public void UpdateDepositBand(
+        InsuranceStatus insuranceStatus,
+        long jurisdictionCapCents,
+        double? reputationAverage = null,
+        int reputationReviewCount = 0)
     {
         var (low, high) = DepositRecommendationPolicy.Recommend(
-            VerificationClass, insuranceStatus, jurisdictionCapCents);
+            VerificationClass,
+            insuranceStatus,
+            jurisdictionCapCents,
+            reputationAverage,
+            reputationReviewCount);
 
         DepositBandLowCents = low;
         DepositBandHighCents = high;

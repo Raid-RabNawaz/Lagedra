@@ -12,7 +12,8 @@ public sealed record ListMyApplicationsQuery(
 
 public sealed class ListMyApplicationsQueryHandler(
     BillingDbContext dbContext,
-    IListingProvider listingProvider)
+    IListingProvider listingProvider,
+    IPartnerOrganizationBillingProfile partnerOrgBilling)
     : IRequestHandler<ListMyApplicationsQuery, Result<IReadOnlyList<DealApplicationDto>>>
 {
     public async Task<Result<IReadOnlyList<DealApplicationDto>>> Handle(
@@ -28,11 +29,6 @@ public sealed class ListMyApplicationsQueryHandler(
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        // Enrich each row with the listing's title / cover / city so inbox
-        // cards can render the property identity. This matters most for the
-        // tenant "my applications" view: the tenant doesn't own these listings
-        // and so can't resolve them client-side (it previously fell back to a
-        // bare "Property" placeholder).
         var listingIds = applications
             .Select(a => a.ListingId)
             .Distinct()
@@ -46,10 +42,30 @@ public sealed class ListMyApplicationsQueryHandler(
 
         var summaryById = summaries.ToDictionary(s => s.Id);
 
+        var partnerOrgIds = applications
+            .Where(a => a.PartnerOrganizationId is not null)
+            .Select(a => a.PartnerOrganizationId!.Value)
+            .Distinct()
+            .ToList();
+
+        var partnerNames = new Dictionary<Guid, string?>();
+        foreach (var orgId in partnerOrgIds)
+        {
+            partnerNames[orgId] = await partnerOrgBilling
+                .GetNameAsync(orgId, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
         IReadOnlyList<DealApplicationDto> dtos = applications
             .Select(a =>
             {
-                var dto = DealApplicationDtoMapper.ToDto(a);
+                string? partnerName = null;
+                if (a.PartnerOrganizationId is { } orgId)
+                {
+                    partnerNames.TryGetValue(orgId, out partnerName);
+                }
+
+                var dto = DealApplicationDtoMapper.ToDto(a, partnerName);
                 return summaryById.TryGetValue(a.ListingId, out var summary)
                     ? dto with
                     {

@@ -14,7 +14,7 @@ public sealed class NotificationTemplateConfiguration : IEntityTypeConfiguration
         builder.HasKey(t => t.Id);
 
         builder.Property(t => t.TemplateId).HasMaxLength(100).IsRequired();
-        builder.HasIndex(t => t.TemplateId).IsUnique();
+        builder.HasIndex(t => new { t.TemplateId, t.Channel }).IsUnique();
 
         builder.Property(t => t.Channel)
             .HasConversion<string>()

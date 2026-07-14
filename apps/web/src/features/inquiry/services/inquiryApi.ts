@@ -4,12 +4,16 @@ import type {
   InquiryDto,
   InquiryQuestionDto,
   InquiryAnswerDto,
+  InquiryOfferDto,
   PredefinedQuestionDto,
   InquiryCategory,
   SubmitInquiryQuestionRequest,
   SubmitLandlordResponseRequest,
+  ProposeInquiryOfferRequest,
+  CounterInquiryOfferRequest,
   HostInquirySummaryDto,
   TenantInquirySummaryDto,
+  PartnerInquirySummaryDto,
 } from "@/api/types";
 
 export const inquiryApi = {
@@ -125,6 +129,79 @@ export const inquiryApi = {
     const response = await http.post<InquiryAnswerDto>(
       endpoints.inquiry.sessionAnswers(sessionId),
       payload,
+    );
+    return response.data;
+  },
+
+  async proposeOffer(
+    sessionId: string,
+    payload: ProposeInquiryOfferRequest,
+  ): Promise<InquiryOfferDto> {
+    const response = await http.post<InquiryOfferDto>(
+      endpoints.inquiry.sessionOffers(sessionId),
+      payload,
+    );
+    return response.data;
+  },
+
+  async acceptOffer(sessionId: string, offerId: string): Promise<InquiryOfferDto> {
+    const response = await http.post<InquiryOfferDto>(
+      endpoints.inquiry.acceptOffer(sessionId, offerId),
+    );
+    return response.data;
+  },
+
+  async counterOffer(
+    sessionId: string,
+    offerId: string,
+    payload: CounterInquiryOfferRequest,
+  ): Promise<InquiryOfferDto> {
+    const response = await http.post<InquiryOfferDto>(
+      endpoints.inquiry.counterOffer(sessionId, offerId),
+      payload,
+    );
+    return response.data;
+  },
+
+  async withdrawAcceptedOffer(sessionId: string): Promise<InquiryOfferDto> {
+    const response = await http.post<InquiryOfferDto>(
+      endpoints.inquiry.withdrawAcceptedOffer(sessionId),
+    );
+    return response.data;
+  },
+
+  async addPartner(
+    sessionId: string,
+    organizationId: string,
+  ): Promise<InquiryDto> {
+    const response = await http.post<InquiryDto>(
+      endpoints.inquiry.sessionPartner(sessionId),
+      { organizationId },
+    );
+    return response.data;
+  },
+
+  async removePartner(sessionId: string): Promise<InquiryDto> {
+    const response = await http.delete<InquiryDto>(
+      endpoints.inquiry.sessionPartner(sessionId),
+    );
+    return response.data;
+  },
+
+  async startPartnerListingInquiry(
+    listingId: string,
+    tenantUserId: string,
+  ): Promise<InquiryDto> {
+    const response = await http.post<InquiryDto>(
+      endpoints.inquiry.startPartnerListingInquiry(listingId),
+      { tenantUserId },
+    );
+    return response.data;
+  },
+
+  async listPartnerInquiries(): Promise<PartnerInquirySummaryDto[]> {
+    const response = await http.get<PartnerInquirySummaryDto[]>(
+      endpoints.inquiry.partnerInbox,
     );
     return response.data;
   },

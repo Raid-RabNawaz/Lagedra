@@ -30,5 +30,34 @@ public sealed class ApplicationUserConfiguration : IEntityTypeConfiguration<Appl
         builder.Property(u => u.StripeCustomerId)
             .HasMaxLength(64)
             .IsRequired(false);
+
+        // Sign-up flow metadata (founding-partner / pre-launch join flow).
+        builder.Property(u => u.CompanyName).HasMaxLength(200).IsRequired(false);
+        builder.Property(u => u.SignupType).HasMaxLength(20).IsRequired(false);
+        builder.Property(u => u.PortfolioSize).HasMaxLength(20).IsRequired(false);
+        builder.Property(u => u.HousingType).HasMaxLength(50).IsRequired(false);
+        builder.Property(u => u.PlacementsPerYear).HasMaxLength(20).IsRequired(false);
+        builder.Property(u => u.IsPreLaunchSignup).HasDefaultValue(false);
+
+        builder.Property(u => u.PhoneVerificationCodeHash).HasMaxLength(64).IsRequired(false);
+        builder.Property(u => u.PhoneVerificationExpiresAt).IsRequired(false);
+        builder.Property(u => u.PhoneVerificationSentAt).IsRequired(false);
+        builder.Property(u => u.PhoneVerificationWindowStartedAt).IsRequired(false);
+        builder.Property(u => u.PhoneVerificationSendCount).HasDefaultValue(0);
+
+        builder.Property(u => u.MailingStreet).HasMaxLength(200).IsRequired(false);
+        builder.Property(u => u.MailingCity).HasMaxLength(100).IsRequired(false);
+        builder.Property(u => u.MailingState).HasMaxLength(50).IsRequired(false);
+        builder.Property(u => u.MailingZip).HasMaxLength(20).IsRequired(false);
+        builder.Property(u => u.MailingCountry).HasMaxLength(100).IsRequired(false);
+        builder.Property(u => u.NoticeAddressSameAsMailing).HasDefaultValue(true);
+        builder.Property(u => u.NoticeStreet).HasMaxLength(200).IsRequired(false);
+        builder.Property(u => u.NoticeCity).HasMaxLength(100).IsRequired(false);
+        builder.Property(u => u.NoticeState).HasMaxLength(50).IsRequired(false);
+        builder.Property(u => u.NoticeZip).HasMaxLength(20).IsRequired(false);
+        builder.Property(u => u.NoticeCountry).HasMaxLength(100).IsRequired(false);
+        builder.Property(u => u.BrokerName).HasMaxLength(200).IsRequired(false);
+        builder.Property(u => u.BrokerDreLicense).HasMaxLength(50).IsRequired(false);
+        builder.Property(u => u.BrokerScopeNotes).HasMaxLength(2000).IsRequired(false);
     }
 }

@@ -32,4 +32,5 @@ public sealed record PaymentConfirmationDto(
     DateTime? DepositReturnSettledAt = null,
     // Deposit minus approved/settled damage deductions — what the host is
     // expected to return. Computed on the status query only.
-    long? NetReturnableDepositCents = null);
+    long? NetReturnableDepositCents = null,
+    Guid? DepositReturnEvidenceManifestId = null);

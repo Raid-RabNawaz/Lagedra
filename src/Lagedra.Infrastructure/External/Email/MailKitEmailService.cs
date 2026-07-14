@@ -33,6 +33,20 @@ public sealed partial class MailKitEmailService(
             HtmlBody = message.HtmlBody,
             TextBody = message.PlainTextBody
         };
+
+        if (message.Attachments is { Count: > 0 })
+        {
+            foreach (var attachment in message.Attachments)
+            {
+                using var stream = new MemoryStream(attachment.Content);
+                await bodyBuilder.Attachments.AddAsync(
+                    attachment.FileName,
+                    stream,
+                    ContentType.Parse(attachment.ContentType),
+                    ct).ConfigureAwait(false);
+            }
+        }
+
         mime.Body = bodyBuilder.ToMessageBody();
 
         using var client = new SmtpClient();

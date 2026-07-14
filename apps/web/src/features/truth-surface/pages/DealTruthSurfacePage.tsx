@@ -1,7 +1,6 @@
-import { useParams, Navigate, Link } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { useParams, Navigate } from "react-router-dom";
 import { useSnapshotByDealId } from "@/features/truth-surface/hooks/useTruthSurface";
-import { Button } from "@/components/ui/button";
+import { BackLink } from "@/components/shared/BackLink";
 import { Loader } from "@/components/shared/Loader";
 import { EmptyState } from "@/components/shared/EmptyState";
 
@@ -26,12 +25,11 @@ export function DealTruthSurfacePage() {
           : "A truth surface snapshot has not been created for this deal yet. It will be created once the inquiry phase is complete."
       }
     >
-      <Link to={dealId ? `/app/deals/${dealId}` : "/app/deals"}>
-        <Button variant="outline" size="sm">
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to deal
-        </Button>
-      </Link>
+      <BackLink
+        fallbackTo={dealId ? `/app/deals/${dealId}` : "/app/deals"}
+        variant="button"
+        label="Back to deal"
+      />
     </EmptyState>
   );
 }

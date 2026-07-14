@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
-  ArrowLeft,
   ArrowRight,
   ShieldCheck,
   ShieldAlert,
@@ -25,6 +24,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Alert } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { Label } from "@/components/ui/label";
+import { BackLink } from "@/components/shared/BackLink";
 import { Loader } from "@/components/shared/Loader";
 import { formatDate } from "@/utils/format";
 import type { ConfirmingParty } from "@/api/types";
@@ -87,26 +87,18 @@ export const TruthSurfaceConfirmationPage = () => {
         <p className="text-destructive font-medium">
           Truth Surface snapshot not found or failed to load.
         </p>
-        <Link
-          to="/app"
-          className="inline-flex items-center gap-1.5 mt-4 text-sm text-muted-foreground hover:text-foreground"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to dashboard
-        </Link>
+        <BackLink fallbackTo="/app" label="Back to dashboard" className="mt-4" />
       </div>
     );
   }
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
-      <Link
-        to={`/app/deals/${snapshot.dealId}`}
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to deal
-      </Link>
+      <BackLink
+        fallbackTo={`/app/deals/${snapshot.dealId}`}
+        label="Back to deal"
+        className="mb-6"
+      />
 
       <div className="flex items-center gap-3 mb-2">
         <h1 className="text-2xl font-bold tracking-tight">Booking agreement</h1>

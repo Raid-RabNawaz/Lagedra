@@ -16,7 +16,7 @@ public sealed class DeliveryLogConfiguration : IEntityTypeConfiguration<Delivery
         builder.Property(d => d.NotificationId).IsRequired();
         builder.HasIndex(d => d.NotificationId);
 
-        builder.Property(d => d.BrevoMessageId).HasMaxLength(200);
+        builder.Property(d => d.ProviderMessageId).HasMaxLength(200);
         builder.Property(d => d.Error).HasMaxLength(2000);
     }
 }

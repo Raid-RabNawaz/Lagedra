@@ -37,10 +37,14 @@ public sealed partial class DepositReturnJob(
         var claimDeadlineDays = (int)await settings
             .GetLongAsync(PlatformSettingKeys.DamageClaimFilingDeadlineDays, 14, ct)
             .ConfigureAwait(false);
+        var returnWindowDays = (int)await settings
+            .GetLongAsync(PlatformSettingKeys.DepositReturnWindowDays, 21, ct)
+            .ConfigureAwait(false);
 
-        // Only start nudging once the claim window has closed — before that the
-        // host may still be assessing damages.
-        var cutoff = clock.UtcNow.AddDays(-claimDeadlineDays);
+        // Nudge once the longer of the claim-assessment and statutory return
+        // windows has elapsed — hosts may still be documenting deductions.
+        var nudgeAfterDays = Math.Max(claimDeadlineDays, returnWindowDays);
+        var cutoff = clock.UtcNow.AddDays(-nudgeAfterDays);
 
         var closedDeals = await dbContext.BillingAccounts
             .Where(b => b.Status == BillingAccountStatus.Closed
@@ -98,10 +102,12 @@ public sealed partial class DepositReturnJob(
                 await mediator.Send(new NotifyUserCommand(
                     parties.LandlordUserId, "deposit_return_due",
                     "Return the security deposit",
-                    "The stay has ended. Please return the security deposit to your guest "
-                    + "directly, then confirm it in the app so the booking can be completed.",
+                    "The stay has ended. By law you must return the security deposit "
+                    + $"(or provide an itemized statement of deductions) within {returnWindowDays} days of move-out. "
+                    + "Return it to your guest directly, then confirm it in the app. "
+                    + "If you withhold any amount, include a reason and a damage photo.",
                     new() { ["dealId"] = confirmation.DealId.ToString() },
-                    Channels.EmailAndInApp, confirmation.DealId, "Deal"), ct).ConfigureAwait(false);
+                    Channels.EmailInAppAndSms, confirmation.DealId, "Deal"), ct).ConfigureAwait(false);
             }
             else if (confirmation.TenantConfirmedDepositReceivedAt is null)
             {
@@ -111,7 +117,7 @@ public sealed partial class DepositReturnJob(
                     "Your host marked your security deposit as returned. Please confirm you "
                     + "received it to complete the booking — or raise a dispute if you didn't.",
                     new() { ["dealId"] = confirmation.DealId.ToString() },
-                    Channels.EmailAndInApp, confirmation.DealId, "Deal"), ct).ConfigureAwait(false);
+                    Channels.EmailInAppAndSms, confirmation.DealId, "Deal"), ct).ConfigureAwait(false);
             }
 
             confirmation.MarkDepositReturnReminderSent(clock);

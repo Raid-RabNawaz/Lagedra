@@ -48,6 +48,9 @@ public sealed class RequestDetailUnlockCommandHandler(
         // path the V2 booking flow relies on — sessions default to Open so
         // the tenant can ask questions without an unlock dance.
         var existing = await dbContext.Sessions
+            .Include(s => s.Offers)
+            .Include(s => s.Questions)
+                .ThenInclude(q => q.Answer)
             .Where(s => s.DealId == request.DealId)
             .OrderByDescending(s => s.CreatedAt)
             .FirstOrDefaultAsync(cancellationToken)
@@ -55,7 +58,7 @@ public sealed class RequestDetailUnlockCommandHandler(
 
         if (existing is not null)
         {
-            return Result<InquiryDto>.Success(MapToDto(existing));
+            return Result<InquiryDto>.Success(InquiryDtoMapper.ToDto(existing));
         }
 
         var initialStatus = featureFlags.BookingFlowV2Enabled
@@ -75,10 +78,6 @@ public sealed class RequestDetailUnlockCommandHandler(
         dbContext.Sessions.Add(session);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        return Result<InquiryDto>.Success(MapToDto(session));
+        return Result<InquiryDto>.Success(InquiryDtoMapper.ToDto(session));
     }
-
-    private static InquiryDto MapToDto(Domain.Aggregates.InquirySession s) =>
-        new(s.Id, s.DealId, s.ListingId, s.TenantUserId, s.Status,
-            s.UnlockedByLandlordAt, s.ClosedAt, s.CreatedAt, []);
 }

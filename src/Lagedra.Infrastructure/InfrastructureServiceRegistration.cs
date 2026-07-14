@@ -3,6 +3,7 @@ using Lagedra.Infrastructure.Caching;
 using Lagedra.Infrastructure.Eventing;
 using Lagedra.Infrastructure.External.Antivirus;
 using Lagedra.Infrastructure.External.Channels;
+using Lagedra.Infrastructure.External.Channels.Hostaway;
 using Lagedra.Infrastructure.External.Channels.OwnerRez;
 using Lagedra.Infrastructure.External.Email;
 using Lagedra.Infrastructure.External.Geocoding;
@@ -10,6 +11,7 @@ using Lagedra.Infrastructure.External.Insurance;
 using Lagedra.Infrastructure.External.Payments;
 using Lagedra.Infrastructure.External.Kyc;
 using Lagedra.Infrastructure.External.Persona;
+using Lagedra.Infrastructure.External.Sms;
 using Lagedra.Infrastructure.External.Storage;
 using Lagedra.SharedKernel.Integration;
 using Lagedra.Infrastructure.Observability;
@@ -23,6 +25,7 @@ using Lagedra.SharedKernel.Events;
 using Lagedra.SharedKernel.RealTime;
 using Lagedra.SharedKernel.Security;
 using Lagedra.SharedKernel.Settings;
+using Lagedra.SharedKernel.Sms;
 using Lagedra.SharedKernel.Time;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -53,6 +56,22 @@ public static class InfrastructureServiceRegistration
         services.Configure<BrevoSmtpSettings>(
             configuration.GetSection(BrevoSmtpSettings.SectionName));
         services.AddScoped<IEmailService, MailKitEmailService>();
+
+        // SMS (Twilio Messaging API; no-op when credentials are missing)
+        services.Configure<TwilioSettings>(
+            configuration.GetSection(TwilioSettings.SectionName));
+        var twilioSettings = configuration.GetSection(TwilioSettings.SectionName).Get<TwilioSettings>();
+        if (twilioSettings?.IsConfigured == true)
+        {
+            services.AddHttpClient<ISmsService, TwilioSmsService>(client =>
+            {
+                client.BaseAddress = new Uri("https://api.twilio.com/2010-04-01/");
+            });
+        }
+        else
+        {
+            services.AddScoped<ISmsService, NoOpSmsService>();
+        }
 
         // Eventing
         services.AddScoped<IEventBus, InMemoryEventBus>();
@@ -114,14 +133,19 @@ public static class InfrastructureServiceRegistration
 
         // Channel / PMS integrations (provider-agnostic).
         // Register one IChannelProvider per integrated platform; the registry
-        // resolves them by ProviderKey. Adding Hostaway/Guesty/etc. later is a
+        // resolves them by ProviderKey. Adding Guesty/Lodgify/etc. later is a
         // one-line addition here — no changes to the sync jobs or publisher.
         services.Configure<OwnerRezChannelSettings>(
             configuration.GetSection(OwnerRezChannelSettings.SectionName));
+        services.Configure<HostawayChannelSettings>(
+            configuration.GetSection(HostawayChannelSettings.SectionName));
 
         var ownerRezSettings = configuration
             .GetSection(OwnerRezChannelSettings.SectionName)
             .Get<OwnerRezChannelSettings>() ?? new OwnerRezChannelSettings();
+        var hostawaySettings = configuration
+            .GetSection(HostawayChannelSettings.SectionName)
+            .Get<HostawayChannelSettings>() ?? new HostawayChannelSettings();
 
         // The OwnerRez provider talks to the HAXML/HAOLB channel API over a typed
         // HttpClient: channel-level credentials are sent as HTTP Basic auth and a
@@ -141,6 +165,18 @@ public static class InfrastructureServiceRegistration
             }
         });
         services.AddScoped<IChannelProvider>(sp => sp.GetRequiredService<OwnerRezChannelProvider>());
+
+        // Hostaway uses per-host OAuth2 client credentials (account ID + API
+        // secret on ChannelConnection). Only the API base URL is platform-level.
+        services.AddHttpClient<HostawayChannelProvider>(client =>
+        {
+            client.BaseAddress = hostawaySettings.BaseUrl;
+            client.Timeout = TimeSpan.FromSeconds(60);
+            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", hostawaySettings.UserAgent);
+            client.DefaultRequestHeaders.TryAddWithoutValidation("Cache-control", "no-cache");
+        });
+        services.AddScoped<IChannelProvider>(sp => sp.GetRequiredService<HostawayChannelProvider>());
+
         services.AddScoped<IChannelProviderRegistry, ChannelProviderRegistry>();
 
         // Caching — swap InMemoryCacheService for a distributed impl (e.g. Redis) here

@@ -1,4 +1,5 @@
 using Lagedra.Modules.ActivationAndBilling.Domain.Aggregates;
+using Lagedra.Modules.ActivationAndBilling.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -75,6 +76,15 @@ public sealed class DealApplicationConfiguration : IEntityTypeConfiguration<Deal
             .HasMaxLength(64)
             .IsRequired(false);
 
+        builder.Property(a => a.PayerType)
+            .HasConversion<string>()
+            .HasMaxLength(40)
+            .HasDefaultValue(ApplicationPayerType.Tenant)
+            .IsRequired();
+
+        builder.Property(a => a.PayerUserId)
+            .IsRequired(false);
+
         // Truth Surface consent audit (tenant at request, host at approval).
         builder.Property(a => a.TenantTruthSurfaceConsentGiven)
             .HasDefaultValue(false)
@@ -96,6 +106,7 @@ public sealed class DealApplicationConfiguration : IEntityTypeConfiguration<Deal
             .HasFilter("\"DealId\" IS NOT NULL")
             .IsUnique();
 
+        builder.Ignore(a => a.IsPaymentReady);
         builder.Ignore(a => a.DomainEvents);
     }
 }

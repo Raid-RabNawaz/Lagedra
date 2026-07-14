@@ -52,6 +52,9 @@ public sealed partial class ApproveDealApplicationCommandHandler(
     private static readonly Error HostPayoutSetupRequired = new(
         "Application.HostPayoutSetupRequired",
         "Add your payout details before accepting this request. Accepting charges the tenant's deposit and first payment immediately, which needs a payout destination. Complete payout setup, then accept again.");
+    private static readonly Error PaymentNotReady = new(
+        "Application.PaymentNotReady",
+        "This request is not ready to accept yet. The tenant must complete payment authorization and Truth Surface consent first.");
 
     public async Task<Result<DealApplicationDto>> Handle(
         ApproveDealApplicationCommand request,
@@ -94,6 +97,16 @@ public sealed partial class ApproveDealApplicationCommandHandler(
         if (application.DepositAmountCents is null)
         {
             return Result<DealApplicationDto>.Failure(NoDepositSnapshot);
+        }
+
+        // Partner-direct (and any V2 card-on-file) bookings must be payment-ready
+        // before the host can approve: PM on file + tenant Truth Surface consent.
+        if (featureFlags.BookingFlowV2Enabled
+            && (application.Source == DealApplicationSource.PartnerDirectReservation
+                || !string.IsNullOrEmpty(application.StripePaymentMethodId))
+            && !application.IsPaymentReady)
+        {
+            return Result<DealApplicationDto>.Failure(PaymentNotReady);
         }
 
         var listing = await listingProvider

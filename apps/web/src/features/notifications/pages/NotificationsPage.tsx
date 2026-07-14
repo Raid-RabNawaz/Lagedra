@@ -1,6 +1,5 @@
 import { useNavigate, Link } from "react-router-dom";
 import {
-  ArrowLeft,
   Bell,
   CheckCheck,
   Circle,
@@ -17,6 +16,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { BackLink } from "@/components/shared/BackLink";
 import { Loader } from "@/components/shared/Loader";
 import { cn } from "@/lib/utils";
 import type { InAppNotificationDto } from "@/api/types";
@@ -115,13 +115,7 @@ export const NotificationsPage = () => {
   return (
     <div className="space-y-6">
       <div>
-        <Link
-          to="/app"
-          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to dashboard
-        </Link>
+        <BackLink fallbackTo="/app" className="mb-4" />
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold tracking-tight">

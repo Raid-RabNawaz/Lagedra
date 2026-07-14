@@ -2,6 +2,7 @@ import { endpoints } from "@/api/endpoints";
 import { http } from "@/api/http";
 import type {
   ApproveApplicationRequest,
+  AttachApplicationPaymentRequest,
   BookingSetupIntentResult,
   DealApplicationDto,
   ReservationPreviewDto,
@@ -68,6 +69,17 @@ export const applicationApi = {
   async reject(id: string): Promise<DealApplicationDto> {
     const response = await http.post<DealApplicationDto>(
       endpoints.applications.reject(id),
+    );
+    return response.data;
+  },
+
+  async attachPayment(
+    id: string,
+    payload: AttachApplicationPaymentRequest,
+  ): Promise<DealApplicationDto> {
+    const response = await http.post<DealApplicationDto>(
+      endpoints.applications.attachPayment(id),
+      payload,
     );
     return response.data;
   },

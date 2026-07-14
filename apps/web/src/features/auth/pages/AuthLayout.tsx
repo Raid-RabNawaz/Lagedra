@@ -4,7 +4,7 @@ import logoSvg from "@/assets/logo.svg";
 
 const navLinks = [
   { to: "/auth/login", label: "Log in" },
-  { to: "/auth/register", label: "Sign up" },
+  { to: "/join", label: "Sign up" },
 ] as const;
 
 export const AuthLayout = () => {

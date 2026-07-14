@@ -20,11 +20,12 @@
       "environment": [
         { "name": "ASPNETCORE_ENVIRONMENT", "value": "Production" },
         { "name": "ASPNETCORE_URLS", "value": "http://+:8080" },
-        { "name": "ConnectionStrings__Default", "value": "Host=lagedra-db.cx408miakalh.us-west-1.rds.amazonaws.com;Port=5432;Database=lagedra_db;Username=lagedra;Password=Lag3dra_Pr0d_2026!;SSL Mode=Require;Trust Server Certificate=true" },
+        { "name": "ConnectionStrings__Default", "value": "Host=lagedra-db.cx408miakalh.us-west-1.rds.amazonaws.com;Port=5432;Database=lagedra_prod;Username=lagedra;Password=Lag3dra_Pr0d_2026!;SSL Mode=Require;Trust Server Certificate=true" },
         { "name": "Jwt__Issuer", "value": "https://api.lagedra.com" },
         { "name": "Jwt__Audience", "value": "https://lagedra.com" },
         { "name": "App__BaseUrl", "value": "https://api.lagedra.com" },
-        { "name": "App__FrontendUrl", "value": "https://staging.lagedra.com" },
+        { "name": "App__FrontendUrl", "value": "https://lagedra.com" },
+        { "name": "App__MarketingUrl", "value": "https://staging.lagedra.com" },
         { "name": "Stripe__PublishableKey", "value": "pk_test_51TH4W49C1zhcxwIed13rUO089U9x7zqymxW7pjkgeEDIUFss6MBN9WPwXfQQSH3JWOOdnUSm0EYObonbUpprqBbh004eAq2YhU" },
         { "name": "MinIO__Endpoint", "value": "s3.us-west-1.amazonaws.com" },
         { "name": "MinIO__EvidenceBucket", "value": "lagedra-private-prod" },
@@ -46,6 +47,10 @@
         { "name": "Channels__OwnerRez__Username", "value": "HaXmlSandboxMoR" },
         { "name": "Channels__OwnerRez__Key", "value": "0beefaaa-963c-407c-bd64-bdeadb949417" },
         { "name": "Channels__OwnerRez__UserAgent", "value": "Lagedra/1.0 (+https://lagedra.com)" },
+        { "name": "Channels__Hostaway__BaseUrl", "value": "https://api.hostaway.com" },
+        { "name": "Channels__Hostaway__UserAgent", "value": "Lagedra/1.0 (+https://lagedra.com)" },
+        { "name": "Channels__Hostaway__DefaultChannelId", "value": "2000" },
+        { "name": "Channels__Hostaway__AutoRegisterWebhooks", "value": "true" },
         { "name": "FeatureFlags__BookingFlow.V2", "value": "true" },
         { "name": "FeatureFlags__ListingImport.AiExtraction", "value": "false" }
       ],
@@ -54,7 +59,10 @@
         { "name": "Stripe__SecretKey", "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/stripe-secret-key" },
         { "name": "Stripe__WebhookSecret", "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/stripe-webhook-secret" },
         { "name": "GoogleMaps__ApiKey", "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/google-maps-key" },
-        { "name": "Encryption__Key", "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/encryption-key" }
+        { "name": "Encryption__Key", "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/encryption-key" },
+        { "name": "Twilio__AccountSid", "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/twilio-account-sid" },
+        { "name": "Twilio__AuthToken", "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/twilio-auth-token" },
+        { "name": "Twilio__MessagingServiceSid", "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/twilio-messaging-service-sid" }
       ],
       "logConfiguration": {
         "logDriver": "awslogs",

@@ -20,8 +20,10 @@ const moneyFormatter = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 0,
 });
 
-export function formatDate(dateStr: string | Date): string {
+export function formatDate(dateStr: string | Date | null | undefined): string {
+  if (dateStr == null || dateStr === "") return "—";
   const date = typeof dateStr === "string" ? new Date(dateStr) : dateStr;
+  if (Number.isNaN(date.getTime())) return "—";
   return dateFormatter.format(date);
 }
 

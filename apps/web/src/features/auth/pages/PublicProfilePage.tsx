@@ -1,8 +1,8 @@
-import { Link, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import {
-  ArrowLeft,
   BadgeCheck,
   CalendarDays,
+  Clock,
   Globe,
   Languages,
   MapPin,
@@ -11,14 +11,21 @@ import {
   ShieldCheck,
   Briefcase,
   Mail,
+  Star,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
+import { BackLink } from "@/components/shared/BackLink";
 import { Loader } from "@/components/shared/Loader";
 import { usePublicProfile } from "@/features/auth/hooks/usePublicProfile";
+import { useUserReputation, useUserReviews } from "@/features/reviews/hooks/useReviews";
+import { StarRatingDisplay } from "@/features/reviews/components/StarRating";
+import {
+  ReputationCategoryBars,
+  ReviewListItem,
+} from "@/features/reviews/components/ReputationPreview";
 import { getApiErrorMessage, isNotFoundError } from "@/api/errors";
 import { formatDate } from "@/utils/format";
 
@@ -43,15 +50,23 @@ function formatLocation(profile: {
   return parts.length > 0 ? parts.join(", ") : null;
 }
 
+function formatResponseTime(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `about ${hours} hour${hours === 1 ? "" : "s"}`;
+  const days = Math.round(hours / 24);
+  return `about ${days} day${days === 1 ? "" : "s"}`;
+}
+
 /**
- * Read-only view of another user's profile. Used by hosts inspecting a
- * tenant who applied to one of their listings, and (long-term) by guests
- * viewing a host's profile from the listing detail page. Surfaces only
- * the fields exposed by `GET /v1/auth/users/{userId}/public-profile`.
+ * Read-only view of another user's profile — used when a host inspects a
+ * guest on a booking request, or a guest views a host from a listing.
  */
 export const PublicProfilePage = () => {
   const { userId } = useParams<{ userId: string }>();
   const { data: profile, isLoading, isError, error } = usePublicProfile(userId);
+  const { data: reputation } = useUserReputation(userId);
+  const { data: reviews } = useUserReviews(userId);
 
   if (!userId) {
     return (
@@ -73,18 +88,14 @@ export const PublicProfilePage = () => {
             ? "This user's profile is not available."
             : getApiErrorMessage(error, "Failed to load profile.")}
         </p>
-        <Link to=".." className="mt-4 inline-block">
-          <Button variant="outline" size="sm">
-            <ArrowLeft className="h-4 w-4" />
-            Go back
-          </Button>
-        </Link>
+        <BackLink fallbackTo="/" variant="button" label="Go back" className="mt-4" />
       </div>
     );
   }
 
-  const fullName = profile.displayName
-    ?? [profile.firstName, profile.lastName].filter(Boolean).join(" ").trim();
+  const fullName =
+    profile.displayName ??
+    [profile.firstName, profile.lastName].filter(Boolean).join(" ").trim();
   const heading = fullName && fullName.length > 0 ? fullName : "Lagedra member";
   const location = formatLocation(profile);
   const verifiedCount = [
@@ -92,17 +103,15 @@ export const PublicProfilePage = () => {
     profile.isPhoneVerified,
     profile.isEmailVerified,
   ].filter(Boolean).length;
+  const hasAbout =
+    Boolean(profile.languages) ||
+    profile.responseRatePercent != null ||
+    profile.responseTimeMinutes != null ||
+    Boolean(profile.occupation);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <Link
-        to=".."
-        relative="path"
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back
-      </Link>
+      <BackLink fallbackTo="/" label="Back" />
 
       <Card>
         <CardContent className="flex flex-col gap-6 p-6 sm:flex-row sm:items-start">
@@ -125,6 +134,13 @@ export const PublicProfilePage = () => {
                 </Badge>
               )}
             </div>
+
+            {reputation && reputation.reviewCount > 0 && (
+              <StarRatingDisplay
+                average={reputation.averageOverall}
+                count={reputation.reviewCount}
+              />
+            )}
 
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
               {location && (
@@ -154,66 +170,131 @@ export const PublicProfilePage = () => {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Verifications</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm">
-          <VerificationRow
-            label="Government ID"
-            verified={profile.isGovernmentIdVerified}
-            icon={<BadgeCheck className="h-4 w-4" />}
-          />
-          <VerificationRow
-            label="Phone number"
-            verified={profile.isPhoneVerified}
-            icon={<Phone className="h-4 w-4" />}
-          />
-          <VerificationRow
-            label="Email address"
-            verified={profile.isEmailVerified}
-            icon={<Mail className="h-4 w-4" />}
-          />
-          <p className="pt-2 text-xs text-muted-foreground">
-            {verifiedCount === 3
-              ? "Every available verification is complete."
-              : verifiedCount === 0
-                ? "No verifications completed yet."
-                : `${verifiedCount} of 3 verifications complete.`}
-          </p>
-        </CardContent>
-      </Card>
-
-      {(profile.languages || profile.responseRatePercent != null) && (
+      <div className="grid gap-6 sm:grid-cols-2">
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">About</CardTitle>
+            <CardTitle className="text-base">Verifications</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
-            {profile.languages && (
-              <div className="flex items-center gap-2">
-                <Languages className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">Languages:</span>
-                <span>{profile.languages}</span>
-              </div>
-            )}
-            {profile.responseRatePercent != null && (
-              <div className="flex items-center gap-2">
-                <Globe className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">Response rate:</span>
-                <span>{profile.responseRatePercent}%</span>
-              </div>
-            )}
-            {profile.responseTimeMinutes != null && (
-              <div className="flex items-center gap-2">
-                <Globe className="h-4 w-4 text-muted-foreground" />
-                <span className="text-muted-foreground">Typical response time:</span>
-                <span>{formatResponseTime(profile.responseTimeMinutes)}</span>
-              </div>
-            )}
+            <VerificationRow
+              label="Government ID"
+              verified={profile.isGovernmentIdVerified}
+              icon={<BadgeCheck className="h-4 w-4" />}
+            />
+            <VerificationRow
+              label="Phone number"
+              verified={profile.isPhoneVerified}
+              icon={<Phone className="h-4 w-4" />}
+            />
+            <VerificationRow
+              label="Email address"
+              verified={profile.isEmailVerified}
+              icon={<Mail className="h-4 w-4" />}
+            />
+            <p className="pt-2 text-xs text-muted-foreground">
+              {verifiedCount === 3
+                ? "Every available verification is complete."
+                : verifiedCount === 0
+                  ? "No verifications completed yet."
+                  : `${verifiedCount} of 3 verifications complete.`}
+            </p>
+          </CardContent>
+        </Card>
+
+        {hasAbout && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">About</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              {profile.occupation && (
+                <div className="flex items-start gap-2">
+                  <Briefcase className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-muted-foreground">Occupation</p>
+                    <p>{profile.occupation}</p>
+                  </div>
+                </div>
+              )}
+              {profile.languages && (
+                <div className="flex items-start gap-2">
+                  <Languages className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-muted-foreground">Languages</p>
+                    <p>{profile.languages}</p>
+                  </div>
+                </div>
+              )}
+              {profile.responseRatePercent != null && (
+                <div className="flex items-start gap-2">
+                  <Globe className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-muted-foreground">Response rate</p>
+                    <p>{profile.responseRatePercent}% of messages</p>
+                  </div>
+                </div>
+              )}
+              {profile.responseTimeMinutes != null && (
+                <div className="flex items-start gap-2">
+                  <Clock className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-muted-foreground">Typical response time</p>
+                    <p>{formatResponseTime(profile.responseTimeMinutes)}</p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      {reputation && reputation.reviewCount > 0 && (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Star className="h-4 w-4" />
+              Rating breakdown
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-baseline gap-3">
+              <span className="text-3xl font-bold tabular-nums">
+                {reputation.averageOverall.toFixed(1)}
+              </span>
+              <StarRatingDisplay
+                average={reputation.averageOverall}
+                count={reputation.reviewCount}
+              />
+            </div>
+            <ReputationCategoryBars reputation={reputation} />
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Star className="h-4 w-4" />
+            Reviews
+            {reviews && reviews.length > 0 ? (
+              <span className="font-normal text-muted-foreground">
+                ({reviews.length})
+              </span>
+            ) : null}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {reviews && reviews.length > 0 ? (
+            reviews.map((r) => (
+              <ReviewListItem key={r.id} review={r} showCategories />
+            ))
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No published reviews yet.
+            </p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 };
@@ -246,12 +327,4 @@ function VerificationRow({
       )}
     </div>
   );
-}
-
-function formatResponseTime(minutes: number): string {
-  if (minutes < 60) return `${minutes} min`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  const days = Math.round(hours / 24);
-  return `${days}d`;
 }

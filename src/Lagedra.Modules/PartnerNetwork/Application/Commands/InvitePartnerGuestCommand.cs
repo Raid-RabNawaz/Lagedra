@@ -1,5 +1,4 @@
 using Lagedra.Modules.PartnerNetwork.Application.Authorization;
-using Lagedra.Modules.PartnerNetwork.Application.DTOs;
 using Lagedra.Modules.PartnerNetwork.Domain.Aggregates;
 using Lagedra.Modules.PartnerNetwork.Domain.Entities;
 using Lagedra.Modules.PartnerNetwork.Domain.Enums;
@@ -14,11 +13,10 @@ using Microsoft.Extensions.Logging;
 namespace Lagedra.Modules.PartnerNetwork.Application.Commands;
 
 /// <summary>
-/// Partner-driven guest provisioning. The partner enters an email + name (and optional
-/// listing); we create the user (or reuse an existing one), email them a set-password
-/// link, write an audit row, and (when a listing is provided) create a
-/// <see cref="DirectReservation"/>. If <see cref="WithEndorsement"/> is true, a
-/// <see cref="PartnerEndorsement"/> is created in the auto-approved (Approved) state.
+/// Partner-driven member provisioning. The partner enters an email + name; we create
+/// the user (or reuse an existing one), email them a set-password link, write an audit
+/// row, and (when requested) auto-approve a <see cref="PartnerEndorsement"/>.
+/// Booking is a separate responsibility — use <c>CreateDirectReservationCommand</c>.
 ///
 /// Authorization: caller must be a verified-org admin via
 /// <see cref="IPartnerAccessService.RequireVerifiedOrgAdminAsync"/>.
@@ -27,7 +25,6 @@ public sealed record InvitePartnerGuestCommand(
     Guid OrganizationId,
     string Email,
     string FullName,
-    Guid? ListingId,
     bool WithEndorsement,
     string? EndorsementNote,
     Guid CallerUserId,
@@ -40,8 +37,7 @@ public sealed record PartnerGuestInviteResultDto(
     bool WasUserJustCreated,
     Uri? SetPasswordUrl,
     DateTime? SetPasswordTokenExpiresAt,
-    Guid? EndorsementId,
-    Guid? DirectReservationId);
+    Guid? EndorsementId);
 
 public sealed partial class InvitePartnerGuestCommandHandler(
     PartnerDbContext dbContext,
@@ -60,12 +56,12 @@ public sealed partial class InvitePartnerGuestCommandHandler(
         if (string.IsNullOrWhiteSpace(request.Email))
         {
             return Result<PartnerGuestInviteResultDto>.Failure(
-                new Error("Invite.EmailRequired", "Guest email is required."));
+                new Error("Invite.EmailRequired", "Member email is required."));
         }
         if (string.IsNullOrWhiteSpace(request.FullName))
         {
             return Result<PartnerGuestInviteResultDto>.Failure(
-                new Error("Invite.FullNameRequired", "Guest full name is required."));
+                new Error("Invite.FullNameRequired", "Member full name is required."));
         }
 
         var authzResult = await accessService.RequireVerifiedOrgAdminAsync(
@@ -133,20 +129,6 @@ public sealed partial class InvitePartnerGuestCommandHandler(
             }
         }
 
-        Guid? directReservationId = null;
-        if (request.ListingId is { } listingId)
-        {
-            var reservation = DirectReservation.Create(
-                request.OrganizationId,
-                request.FullName.Trim(),
-                request.Email.Trim(),
-                listingId,
-                request.CallerUserId,
-                clock);
-            dbContext.DirectReservations.Add(reservation);
-            directReservationId = reservation.Id;
-        }
-
         var invite = PartnerGuestInvite.Create(
             request.OrganizationId,
             request.CallerUserId,
@@ -155,14 +137,14 @@ public sealed partial class InvitePartnerGuestCommandHandler(
             request.FullName.Trim(),
             invitedUser.WasJustCreated,
             endorsementId,
-            request.ListingId,
+            listingId: null,
             clock);
         dbContext.GuestInvites.Add(invite);
 
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         LogInviteRecorded(logger, invite.Id, invitedUser.UserId, request.OrganizationId,
-            invitedUser.WasJustCreated, endorsementId, directReservationId);
+            invitedUser.WasJustCreated, endorsementId);
 
         return Result<PartnerGuestInviteResultDto>.Success(new PartnerGuestInviteResultDto(
             invite.Id,
@@ -171,20 +153,18 @@ public sealed partial class InvitePartnerGuestCommandHandler(
             invitedUser.WasJustCreated,
             invitedUser.SetPasswordUrl,
             invitedUser.TokenExpiresAt,
-            endorsementId,
-            directReservationId));
+            endorsementId));
     }
 
     [LoggerMessage(Level = LogLevel.Information,
-        Message = "Recorded partner guest invite {InviteId}: user={UserId}, org={OrgId}, justCreated={JustCreated}, endorsementId={EndorsementId}, reservationId={ReservationId}")]
+        Message = "Recorded partner member invite {InviteId}: user={UserId}, org={OrgId}, justCreated={JustCreated}, endorsementId={EndorsementId}")]
     private static partial void LogInviteRecorded(
         ILogger logger,
         Guid inviteId,
         Guid userId,
         Guid orgId,
         bool justCreated,
-        Guid? endorsementId,
-        Guid? reservationId);
+        Guid? endorsementId);
 
     [LoggerMessage(Level = LogLevel.Information,
         Message = "Endorsement already active for tenant {UserId} from org {OrgId}; reusing existing endorsement.")]

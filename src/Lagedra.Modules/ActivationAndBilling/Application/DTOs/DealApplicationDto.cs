@@ -41,4 +41,9 @@ public sealed record DealApplicationDto(
     // by command results where it isn't needed.
     string? ListingTitle = null,
     Uri? ListingCoverPhotoUri = null,
-    string? ListingCity = null);
+    string? ListingCity = null,
+    ApplicationPayerType PayerType = ApplicationPayerType.Tenant,
+    Guid? PayerUserId = null,
+    bool HasPaymentMethod = false,
+    bool IsPaymentReady = false,
+    string? PartnerOrganizationName = null);

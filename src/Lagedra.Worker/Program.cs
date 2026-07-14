@@ -11,11 +11,12 @@ using Lagedra.Modules.ContentManagement;
 using Lagedra.Modules.Evidence;
 using Lagedra.Modules.IdentityAndVerification;
 using Lagedra.Modules.InsuranceIntegration;
-using Lagedra.Modules.JurisdictionPacks;
+using Lagedra.Modules.LeaseAgreements;
 using Lagedra.Modules.ListingAndLocation;
 using Lagedra.Modules.Notifications;
 using Lagedra.Modules.PartnerNetwork;
 using Lagedra.Modules.Privacy;
+using Lagedra.Modules.Reviews;
 using Lagedra.Modules.StructuredInquiry;
 using Lagedra.Modules.VerificationAndRisk;
 using Lagedra.TruthSurface;
@@ -54,13 +55,14 @@ try
             services.AddComplianceMonitoring(configuration);
             services.AddArbitration(configuration);
             services.AddEvidence(configuration);
-            services.AddJurisdictionPacks(configuration);
+            services.AddLeaseAgreements(configuration);
             services.AddNotifications(configuration);
             services.AddPrivacy(configuration);
             services.AddAntiAbuseAndIntegrity(configuration);
             services.AddContentManagement(configuration);
             services.AddPartnerNetwork(configuration);
             services.AddChannelIntegration(configuration);
+            services.AddReviews(configuration);
 
             services.AddQuartzScheduling(configuration);
         })

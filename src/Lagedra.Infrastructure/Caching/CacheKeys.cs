@@ -13,6 +13,7 @@ public static class CacheKeys
     public const string PlatformSettingPrefix = "platform_setting";
     public const string ListingDefsPrefix = "listing_defs";
     public const string JurisdictionPackPrefix = "jurisdiction_pack";
+    public const string LeaseAgreementTemplatePrefix = "lease_agreement_template";
     public const string BlogPrefix = "blog";
     public const string SeoPrefix = "seo";
     public const string ListingPrefix = "listing";
@@ -31,6 +32,9 @@ public static class CacheKeys
 
     public static string JurisdictionPack(string code) =>
         $"{JurisdictionPackPrefix}:{code}";
+
+    public static string LeaseAgreementTemplate(string code) =>
+        $"{LeaseAgreementTemplatePrefix}:{code}";
 
     public static string BlogPublished(int page, int size) =>
         $"{BlogPrefix}:published:page:{page}:size:{size}";

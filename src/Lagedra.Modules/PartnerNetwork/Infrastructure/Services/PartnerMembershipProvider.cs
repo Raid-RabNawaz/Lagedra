@@ -17,4 +17,28 @@ public sealed class PartnerMembershipProvider(PartnerDbContext dbContext)
 
         return member?.OrganizationId;
     }
+
+    public async Task<IReadOnlyList<Guid>> GetMemberUserIdsAsync(
+        Guid organizationId,
+        CancellationToken ct = default)
+    {
+        return await dbContext.Members
+            .AsNoTracking()
+            .Where(m => m.OrganizationId == organizationId)
+            .Select(m => m.UserId)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+    }
+
+    public async Task<string?> GetOrganizationNameAsync(
+        Guid organizationId,
+        CancellationToken ct = default)
+    {
+        return await dbContext.Organizations
+            .AsNoTracking()
+            .Where(o => o.Id == organizationId)
+            .Select(o => o.Name)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+    }
 }

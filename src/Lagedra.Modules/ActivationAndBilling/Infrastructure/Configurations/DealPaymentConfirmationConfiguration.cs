@@ -53,6 +53,7 @@ public sealed class DealPaymentConfirmationConfiguration
         builder.Property(c => c.DepositReturnAmountCents);
         builder.Property(c => c.DepositReturnMethod).HasMaxLength(50);
         builder.Property(c => c.DepositReturnNote).HasMaxLength(2000);
+        builder.Property(c => c.DepositReturnEvidenceManifestId);
         builder.Property(c => c.DepositReturnSettledAt);
         builder.Property(c => c.DepositReturnReminderSentAt);
 

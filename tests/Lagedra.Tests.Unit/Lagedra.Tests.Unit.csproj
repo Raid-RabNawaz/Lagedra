@@ -25,6 +25,8 @@
     <ProjectReference Include="..\..\src\Lagedra.Modules\PartnerNetwork\PartnerNetwork.csproj" />
     <ProjectReference Include="..\..\src\Lagedra.Modules\IdentityAndVerification\IdentityAndVerification.csproj" />
     <ProjectReference Include="..\..\src\Lagedra.Modules\Arbitration\Arbitration.csproj" />
+    <ProjectReference Include="..\..\src\Lagedra.Modules\Reviews\Reviews.csproj" />
+    <ProjectReference Include="..\..\src\Lagedra.Modules\VerificationAndRisk\VerificationAndRisk.csproj" />
   </ItemGroup>
 
   <ItemGroup>

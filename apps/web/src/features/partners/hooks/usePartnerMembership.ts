@@ -6,6 +6,7 @@ export function usePartnerMembership() {
     queryKey: ["partner", "my-membership"],
     queryFn: () => partnerApi.getMyMembership(),
     staleTime: 60_000,
+    retry: false,
   });
 
   return {

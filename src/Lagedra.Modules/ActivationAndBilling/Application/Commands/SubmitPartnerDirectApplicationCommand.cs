@@ -12,19 +12,17 @@ namespace Lagedra.Modules.ActivationAndBilling.Application.Commands;
 /// <summary>
 /// Submits a <see cref="DealApplication"/> on behalf of a tenant, attributed to a
 /// specific partner organization. Only invoked from inside <c>CreateDirectReservationCommand</c>
-/// (Phase 18.7) — there is no public endpoint that maps directly to this command.
-///
-/// Differences vs <see cref="SubmitApplicationCommand"/>:
-///   - The caller is the partner, not the tenant. Tenant id is supplied directly.
-///   - <see cref="DealApplication.Source"/> is set to <see cref="DealApplicationSource.PartnerDirectReservation"/>.
-///   - The listing must have <see cref="ListingDetailsDto.AcceptsPartnerDirectReservations"/> = true.
+/// — there is no public endpoint that maps directly to this command.
 /// </summary>
 public sealed record SubmitPartnerDirectApplicationCommand(
     Guid ListingId,
     Guid TenantUserId,
     Guid PartnerOrganizationId,
     DateOnly RequestedCheckIn,
-    DateOnly RequestedCheckOut) : IRequest<Result<DealApplicationDto>>;
+    DateOnly RequestedCheckOut,
+    ApplicationPayerType PayerType = ApplicationPayerType.Tenant,
+    Guid? PayerUserId = null,
+    string? StripePaymentMethodId = null) : IRequest<Result<DealApplicationDto>>;
 
 public sealed class SubmitPartnerDirectApplicationCommandHandler(
     BillingDbContext dbContext,
@@ -43,12 +41,21 @@ public sealed class SubmitPartnerDirectApplicationCommandHandler(
         new("Dates.Unavailable", "The requested dates are not available.");
     private static readonly Error OwnListing =
         new("Application.OwnListing", "You cannot apply to your own listing.");
+    private static readonly Error PartnerPaymentRequired =
+        new("Application.PartnerPaymentRequired",
+            "A payment method is required when the partner organization pays.");
 
     public async Task<Result<DealApplicationDto>> Handle(
         SubmitPartnerDirectApplicationCommand request,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        if (request.PayerType == ApplicationPayerType.PartnerOrganization
+            && string.IsNullOrWhiteSpace(request.StripePaymentMethodId))
+        {
+            return Result<DealApplicationDto>.Failure(PartnerPaymentRequired);
+        }
 
         var listing = await listingProvider
             .GetListingDetailsAsync(request.ListingId, cancellationToken)
@@ -106,7 +113,10 @@ public sealed class SubmitPartnerDirectApplicationCommandHandler(
             partnerOrganizationId: request.PartnerOrganizationId,
             isPartnerReferred: true,
             source: DealApplicationSource.PartnerDirectReservation,
-            depositSnapshot: pricing.ToSnapshot());
+            stripePaymentMethodId: request.StripePaymentMethodId,
+            depositSnapshot: pricing.ToSnapshot(),
+            payerType: request.PayerType,
+            payerUserId: request.PayerUserId);
 
         dbContext.DealApplications.Add(application);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);

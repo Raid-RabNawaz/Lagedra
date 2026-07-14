@@ -22,8 +22,8 @@ using Lagedra.Modules.Arbitration;
 using Lagedra.Modules.Arbitration.Presentation.Endpoints;
 using Lagedra.Modules.Evidence;
 using Lagedra.Modules.Evidence.Presentation.Endpoints;
-using Lagedra.Modules.JurisdictionPacks;
-using Lagedra.Modules.JurisdictionPacks.Presentation.Endpoints;
+using Lagedra.Modules.LeaseAgreements;
+using Lagedra.Modules.LeaseAgreements.Presentation.Endpoints;
 using Lagedra.Modules.ActivationAndBilling;
 using Lagedra.Modules.ActivationAndBilling.Presentation.Endpoints;
 using Lagedra.Modules.IdentityAndVerification;
@@ -42,6 +42,8 @@ using Lagedra.Modules.PartnerNetwork;
 using Lagedra.Modules.PartnerNetwork.Presentation.Endpoints;
 using Lagedra.Modules.ChannelIntegration;
 using Lagedra.Modules.ChannelIntegration.Presentation.Endpoints;
+using Lagedra.Modules.Reviews;
+using Lagedra.Modules.Reviews.Presentation.Endpoints;
 using Lagedra.Modules.AuditLog;
 using Lagedra.Modules.AuditLog.Presentation.Endpoints;
 using Lagedra.Modules.Analytics;
@@ -52,6 +54,7 @@ using Lagedra.Infrastructure.Middleware;
 using Lagedra.Infrastructure.Observability;
 using Lagedra.Infrastructure.RealTime;
 using Lagedra.Infrastructure.Settings;
+using Lagedra.SharedKernel.Settings;
 using Quartz;
 using Serilog;
 using System.Text.Json;
@@ -85,13 +88,14 @@ try
     builder.Services.AddComplianceMonitoring(builder.Configuration);
     builder.Services.AddArbitration(builder.Configuration);
     builder.Services.AddEvidence(builder.Configuration);
-    builder.Services.AddJurisdictionPacks(builder.Configuration);
+    builder.Services.AddLeaseAgreements(builder.Configuration);
     builder.Services.AddNotifications(builder.Configuration);
     builder.Services.AddPrivacy(builder.Configuration);
     builder.Services.AddAntiAbuseAndIntegrity(builder.Configuration);
     builder.Services.AddContentManagement(builder.Configuration);
     builder.Services.AddPartnerNetwork(builder.Configuration);
     builder.Services.AddChannelIntegration(builder.Configuration);
+    builder.Services.AddReviews(builder.Configuration);
     builder.Services.AddAuditLog(builder.Configuration);
     builder.Services.AddAnalytics(builder.Configuration);
     builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
@@ -185,7 +189,7 @@ try
             typeof(Lagedra.Modules.StructuredInquiry.Infrastructure.Persistence.InquiryDbContext),
             typeof(Lagedra.Modules.Arbitration.Infrastructure.Persistence.ArbitrationDbContext),
             typeof(Lagedra.Modules.Evidence.Infrastructure.Persistence.EvidenceDbContext),
-            typeof(Lagedra.Modules.JurisdictionPacks.Infrastructure.Persistence.JurisdictionDbContext),
+            typeof(Lagedra.Modules.LeaseAgreements.Infrastructure.Persistence.LeaseAgreementDbContext),
             typeof(Lagedra.Modules.VerificationAndRisk.Infrastructure.Persistence.RiskDbContext),
             typeof(Lagedra.Modules.ComplianceMonitoring.Infrastructure.Persistence.ComplianceMonitoringDbContext),
             typeof(Lagedra.Modules.Notifications.Infrastructure.Persistence.NotificationDbContext),
@@ -195,6 +199,7 @@ try
             typeof(Lagedra.Modules.PartnerNetwork.Infrastructure.Persistence.PartnerDbContext),
             typeof(Lagedra.Modules.ChannelIntegration.Infrastructure.Persistence.ChannelDbContext),
             typeof(Lagedra.Modules.AuditLog.Infrastructure.Persistence.AuditDbContext),
+            typeof(Lagedra.Modules.Reviews.Infrastructure.Persistence.ReviewsDbContext),
             typeof(Lagedra.Infrastructure.Settings.PlatformSettingsDbContext),
         };
 
@@ -224,24 +229,33 @@ try
     // Phase 16.10 — ensure the application_submitted email template (and
     // the rest of the baseline set) exists so the one-tap approve link
     // actually renders. No-op when admin-managed rows already exist.
-    await Lagedra.Modules.Notifications.Infrastructure.Seeding.NotificationTemplateSeeder
-        .SeedAsync(app.Services).ConfigureAwait(false);
+    // Duplicate TemplateId races (Email vs Sms before the composite unique
+    // index migration) must not take down the API.
+    try
+    {
+        await Lagedra.Modules.Notifications.Infrastructure.Seeding.NotificationTemplateSeeder
+            .SeedAsync(app.Services).ConfigureAwait(false);
+    }
+    catch (DbUpdateException ex)
+    {
+        Log.Warning(ex, "Notification template seed skipped (DB error): {Message}", ex.Message);
+    }
 
     try
     {
-        await using var jurisdictionSeedScope = app.Services.CreateAsyncScope();
-        var jurisdictionMediator = jurisdictionSeedScope.ServiceProvider.GetRequiredService<MediatR.IMediator>();
-        await jurisdictionMediator.Send(
-            new Lagedra.Modules.JurisdictionPacks.Application.Commands.SeedCaliforniaDepositCapCommand())
+        await using var leaseSeedScope = app.Services.CreateAsyncScope();
+        var leaseMediator = leaseSeedScope.ServiceProvider.GetRequiredService<MediatR.IMediator>();
+        await leaseMediator.Send(
+            new Lagedra.Modules.LeaseAgreements.Application.Commands.SeedCaliforniaLeaseTemplateCommand())
             .ConfigureAwait(false);
     }
     catch (DbUpdateException ex)
     {
-        Log.Warning(ex, "Jurisdiction pack seed skipped (DB error): {Message}", ex.Message);
+        Log.Warning(ex, "Lease agreement template seed skipped (DB error): {Message}", ex.Message);
     }
     catch (InvalidOperationException ex)
     {
-        Log.Warning(ex, "Jurisdiction pack seed skipped (invalid state): {Message}", ex.Message);
+        Log.Warning(ex, "Lease agreement template seed skipped (invalid state): {Message}", ex.Message);
     }
 
     await using var settingsScope = app.Services.CreateAsyncScope();
@@ -253,6 +267,30 @@ try
     catch (InvalidOperationException ex) when (ex.Message.Contains("PendingModelChanges", StringComparison.Ordinal))
     {
         Log.Warning("Pending model changes detected for PlatformSettingsDbContext – existing migrations applied, skipping.");
+    }
+
+    // Ensure the pre-launch toggle exists so it surfaces in Admin → Fees &
+    // Settings as an on/off switch. Idempotent: only creates the row when
+    // missing, so an admin flipping it on/off is never clobbered on deploy.
+    try
+    {
+        var platformSettings = settingsScope.ServiceProvider.GetRequiredService<IPlatformSettingsService>();
+        var existing = await platformSettings
+            .GetStringAsync(PlatformSettingKeys.PreLaunchEnabled)
+            .ConfigureAwait(false);
+        if (existing is null)
+        {
+            await platformSettings.SetAsync(
+                PlatformSettingKeys.PreLaunchEnabled,
+                "false",
+                "Pre-launch mode: turns self sign-up into a founding-partner waitlist and hides the product from non-staff users.",
+                updatedByUserId: null)
+                .ConfigureAwait(false);
+        }
+    }
+    catch (DbUpdateException ex)
+    {
+        Log.Warning(ex, "Pre-launch setting seed skipped (DB error): {Message}", ex.Message);
     }
 
     app.UseCorrelationId();
@@ -329,8 +367,7 @@ try
     app.MapArbitratorEndpoints();
     app.MapEvidenceEndpoints();
     app.MapUploadEndpoints();
-    app.MapJurisdictionPackEndpoints();
-    app.MapAdminJurisdictionPackEndpoints();
+    app.MapLeaseAgreementEndpoints();
     app.MapNotificationEndpoints();
     app.MapInAppNotificationEndpoints();
     app.MapPrivacyEndpoints();
@@ -340,7 +377,10 @@ try
     app.MapAdminBlogEndpoints();
     app.MapPartnerEndpoints();
     app.MapChannelEndpoints();
+    app.MapHostawayWebhookEndpoints();
+    app.MapReviewsEndpoints();
     app.MapPlatformSettingsEndpoints();
+    app.MapPublicConfigEndpoints();
     app.MapAdminComplianceEndpoints();
     app.MapAdminInsuranceEndpoints();
     app.MapAdminIntegrityEndpoints();

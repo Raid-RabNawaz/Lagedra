@@ -63,3 +63,39 @@ public sealed class OnDealCompletedCreateSignalHandler(
         await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 }
+
+public sealed class OnPositiveReviewEarnedCreateSignalHandler(
+    ComplianceDbContext dbContext)
+    : IDomainEventHandler<PositiveReviewEarnedEvent>
+{
+    public async Task Handle(PositiveReviewEarnedEvent domainEvent, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(domainEvent);
+
+        var signal = ComplianceSignal.Create(
+            domainEvent.DealId,
+            "PositiveReview",
+            $"revieweeUserId={domainEvent.RevieweeUserId};rating={domainEvent.OverallRating}");
+
+        dbContext.Signals.Add(signal);
+        await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
+}
+
+public sealed class OnReviewConcernRaisedCreateSignalHandler(
+    ComplianceDbContext dbContext)
+    : IDomainEventHandler<ReviewConcernRaisedEvent>
+{
+    public async Task Handle(ReviewConcernRaisedEvent domainEvent, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(domainEvent);
+
+        var signal = ComplianceSignal.Create(
+            domainEvent.DealId,
+            "ReviewConcern",
+            $"revieweeUserId={domainEvent.RevieweeUserId};rating={domainEvent.OverallRating}");
+
+        dbContext.Signals.Add(signal);
+        await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
+}

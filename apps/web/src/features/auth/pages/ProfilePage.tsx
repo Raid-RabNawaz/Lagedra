@@ -69,6 +69,20 @@ type ProfileFormData = {
   dateOfBirth: string;
   emergencyContactName: string;
   emergencyContactPhone: string;
+  mailingStreet: string;
+  mailingCity: string;
+  mailingState: string;
+  mailingZip: string;
+  mailingCountry: string;
+  noticeAddressSameAsMailing: boolean;
+  noticeStreet: string;
+  noticeCity: string;
+  noticeState: string;
+  noticeZip: string;
+  noticeCountry: string;
+  brokerName: string;
+  brokerDreLicense: string;
+  brokerScopeNotes: string;
 };
 
 const changePasswordSchema = z
@@ -110,6 +124,20 @@ const toFormData = (
   dateOfBirth: profile?.dateOfBirth ?? "",
   emergencyContactName: profile?.emergencyContactName ?? "",
   emergencyContactPhone: profile?.emergencyContactPhone ?? "",
+  mailingStreet: profile?.mailingStreet ?? "",
+  mailingCity: profile?.mailingCity ?? "",
+  mailingState: profile?.mailingState ?? "",
+  mailingZip: profile?.mailingZip ?? "",
+  mailingCountry: profile?.mailingCountry ?? "",
+  noticeAddressSameAsMailing: profile?.noticeAddressSameAsMailing ?? true,
+  noticeStreet: profile?.noticeStreet ?? "",
+  noticeCity: profile?.noticeCity ?? "",
+  noticeState: profile?.noticeState ?? "",
+  noticeZip: profile?.noticeZip ?? "",
+  noticeCountry: profile?.noticeCountry ?? "",
+  brokerName: profile?.brokerName ?? "",
+  brokerDreLicense: profile?.brokerDreLicense ?? "",
+  brokerScopeNotes: profile?.brokerScopeNotes ?? "",
 });
 
 const ALLOWED_PHOTO_MIME = [
@@ -207,6 +235,20 @@ export const ProfilePage = () => {
       dateOfBirth: toNullable(values.dateOfBirth),
       emergencyContactName: toNullable(values.emergencyContactName),
       emergencyContactPhone: toNullable(values.emergencyContactPhone),
+      mailingStreet: toNullable(values.mailingStreet),
+      mailingCity: toNullable(values.mailingCity),
+      mailingState: toNullable(values.mailingState),
+      mailingZip: toNullable(values.mailingZip),
+      mailingCountry: toNullable(values.mailingCountry),
+      noticeAddressSameAsMailing: values.noticeAddressSameAsMailing,
+      noticeStreet: toNullable(values.noticeStreet),
+      noticeCity: toNullable(values.noticeCity),
+      noticeState: toNullable(values.noticeState),
+      noticeZip: toNullable(values.noticeZip),
+      noticeCountry: toNullable(values.noticeCountry),
+      brokerName: toNullable(values.brokerName),
+      brokerDreLicense: toNullable(values.brokerDreLicense),
+      brokerScopeNotes: toNullable(values.brokerScopeNotes),
     };
 
     try {
@@ -688,6 +730,74 @@ export const ProfilePage = () => {
                         <Input id="emergencyContactPhone" placeholder="+1 555 222 3333" {...form.register("emergencyContactPhone")} />
                       </FormField>
                     </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Lease mailing address</CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      Used on lease agreements for notices and landlord/tenant contact blocks.
+                    </p>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <FormField label="Street" id="mailingStreet">
+                      <Input id="mailingStreet" placeholder="123 Main St" {...form.register("mailingStreet")} />
+                    </FormField>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <FormField label="City" id="mailingCity">
+                        <Input id="mailingCity" {...form.register("mailingCity")} />
+                      </FormField>
+                      <FormField label="State" id="mailingState">
+                        <Input id="mailingState" {...form.register("mailingState")} />
+                      </FormField>
+                      <FormField label="ZIP" id="mailingZip">
+                        <Input id="mailingZip" {...form.register("mailingZip")} />
+                      </FormField>
+                      <FormField label="Country" id="mailingCountry">
+                        <Input id="mailingCountry" {...form.register("mailingCountry")} />
+                      </FormField>
+                    </div>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" {...form.register("noticeAddressSameAsMailing")} />
+                      Notice address same as mailing
+                    </label>
+                    {!form.watch("noticeAddressSameAsMailing") && (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <FormField label="Notice street" id="noticeStreet">
+                          <Input id="noticeStreet" {...form.register("noticeStreet")} />
+                        </FormField>
+                        <FormField label="Notice city" id="noticeCity">
+                          <Input id="noticeCity" {...form.register("noticeCity")} />
+                        </FormField>
+                        <FormField label="Notice state" id="noticeState">
+                          <Input id="noticeState" {...form.register("noticeState")} />
+                        </FormField>
+                        <FormField label="Notice ZIP" id="noticeZip">
+                          <Input id="noticeZip" {...form.register("noticeZip")} />
+                        </FormField>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Broker disclosure (hosts)</CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      Optional California broker fields for lease generation.
+                    </p>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <FormField label="Broker name" id="brokerName">
+                      <Input id="brokerName" {...form.register("brokerName")} />
+                    </FormField>
+                    <FormField label="DRE license #" id="brokerDreLicense">
+                      <Input id="brokerDreLicense" {...form.register("brokerDreLicense")} />
+                    </FormField>
+                    <FormField label="Scope notes" id="brokerScopeNotes">
+                      <Input id="brokerScopeNotes" {...form.register("brokerScopeNotes")} />
+                    </FormField>
                   </CardContent>
                 </Card>
 

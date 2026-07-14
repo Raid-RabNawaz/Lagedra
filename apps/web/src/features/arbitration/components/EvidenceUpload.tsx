@@ -24,7 +24,7 @@ import {
 } from "@/features/evidence/hooks/useEvidence";
 import { useAttachEvidence } from "@/features/arbitration/hooks/useArbitration";
 import { getApiErrorMessage } from "@/api/errors";
-import type { ManifestUploadDto, ScanStatus } from "@/api/types";
+import type { ManifestType, ManifestUploadDto, ScanStatus } from "@/api/types";
 
 const ALLOWED_MIME_PREFIXES = ["image/", "video/", "audio/"];
 const ALLOWED_EXACT_MIME_TYPES = new Set([
@@ -184,11 +184,18 @@ type EvidenceUploadProps = {
   caseId?: string;
   slotType?: string;
   manifestId?: string;
+  /** Defaults to Arbitration. Use Damage for deposit-deduction photos. */
+  manifestType?: ManifestType;
   onManifestCreated?: (manifestId: string) => void;
   onAttached?: () => void;
+  /** Fired after a successful seal when there is no arbitration case to attach to. */
+  onSealed?: (manifestId: string) => void;
   readOnly?: boolean;
   /** When true, show Open/Download for each uploaded file (reviewers). */
   canViewFiles?: boolean;
+  /** Override the file input accept attribute (e.g. images only). */
+  accept?: string;
+  title?: string;
 };
 
 export function EvidenceUpload({
@@ -196,10 +203,14 @@ export function EvidenceUpload({
   caseId,
   slotType,
   manifestId,
+  manifestType = "Arbitration",
   onManifestCreated,
   onAttached,
+  onSealed,
   readOnly = false,
   canViewFiles = false,
+  accept = ACCEPT_ATTRIBUTE,
+  title = "Evidence Files",
 }: EvidenceUploadProps) {
   const { data: manifest, isLoading } = useManifest(manifestId);
   const createManifest = useCreateManifest();
@@ -217,7 +228,7 @@ export function EvidenceUpload({
     try {
       const result = await createManifest.mutateAsync({
         dealId,
-        manifestType: "Arbitration",
+        manifestType,
       });
       onManifestCreated?.(result.manifestId);
     } catch (err) {
@@ -225,7 +236,7 @@ export function EvidenceUpload({
         getApiErrorMessage(err, "Could not create evidence manifest. Check deal access and try again."),
       );
     }
-  }, [dealId, createManifest, onManifestCreated]);
+  }, [dealId, manifestType, createManifest, onManifestCreated]);
 
   const handleFileSelect = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -278,7 +289,9 @@ export function EvidenceUpload({
         <CardContent className="flex flex-col items-center gap-3 py-8">
           <Upload className="h-8 w-8 text-muted-foreground" />
           <p className="text-sm text-muted-foreground text-center">
-            Create an evidence manifest to start uploading files.
+            {manifestType === "Damage"
+              ? "Create a photo set to upload damage images."
+              : "Create an evidence manifest to start uploading files."}
           </p>
           {!readOnly && (
             <Button
@@ -291,7 +304,7 @@ export function EvidenceUpload({
               ) : (
                 <Upload className="h-4 w-4 mr-2" />
               )}
-              Create manifest
+              {manifestType === "Damage" ? "Start photo upload" : "Create manifest"}
             </Button>
           )}
           {createError && (
@@ -321,7 +334,7 @@ export function EvidenceUpload({
     <Card>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-base">Evidence Files</CardTitle>
+          <CardTitle className="text-base">{title}</CardTitle>
           <div className="flex items-center gap-2">
             {isSealed ? (
               <Badge variant="success" className="gap-1">
@@ -375,7 +388,7 @@ export function EvidenceUpload({
                     {uploading ? "Uploading..." : "Upload File"}
                     <input
                       type="file"
-                      accept={ACCEPT_ATTRIBUTE}
+                      accept={accept}
                       className="absolute inset-0 opacity-0 cursor-pointer"
                       onChange={handleFileSelect}
                       disabled={uploading}
@@ -397,6 +410,8 @@ export function EvidenceUpload({
                             evidenceManifestId: manifestId,
                           });
                           onAttached?.();
+                        } else {
+                          onSealed?.(manifestId);
                         }
                       } catch (err) {
                         setAttachError(
@@ -411,7 +426,7 @@ export function EvidenceUpload({
                     ) : (
                       <ShieldAlert className="h-4 w-4 mr-2" />
                     )}
-                    {caseId ? "Seal & submit to case" : "Seal manifest"}
+                    {caseId ? "Seal & submit to case" : "Seal photos"}
                   </Button>
                 )}
               </div>

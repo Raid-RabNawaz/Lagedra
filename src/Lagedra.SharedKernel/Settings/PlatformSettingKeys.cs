@@ -36,6 +36,20 @@ public static class PlatformSettingKeys
     // Damage claims
     public const string DamageClaimFilingDeadlineDays = "damage_claim.filing_deadline_days";
 
+    // Deposit return (non-custodial). California Civil Code §1950.5 requires
+    // return (or itemized deductions) within 21 days of move-out.
+    public const string DepositReturnWindowDays = "deposit_return.window_days";
+
+    // Stay reviews (host ↔ guest double-blind window after stay completion).
+    public const string ReviewWindowDays = "review.window_days";
+    public const string ReviewReminderIntervalDays = "review.reminder_interval_days";
+
     // Stripe Connect
     public const string StripePlatformFeePriceId = "stripe.platform_fee_price_id";
+
+    // Pre-launch / go-to-market
+    // When true, the platform runs in "pre-launch" mode: self sign-up becomes a
+    // founding-partner waitlist (no password, no dashboard access) and everyone
+    // except operational staff is limited to the public marketing + browse pages.
+    public const string PreLaunchEnabled = "prelaunch.enabled";
 }

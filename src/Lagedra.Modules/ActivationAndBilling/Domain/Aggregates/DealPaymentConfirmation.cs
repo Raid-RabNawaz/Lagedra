@@ -2,6 +2,7 @@ using Lagedra.Modules.ActivationAndBilling.Domain.Enums;
 using Lagedra.Modules.ActivationAndBilling.Domain.Events;
 using Lagedra.Modules.ActivationAndBilling.Domain.ValueObjects;
 using Lagedra.SharedKernel.Domain;
+using Lagedra.SharedKernel.Integration.Events;
 using Lagedra.SharedKernel.Time;
 
 namespace Lagedra.Modules.ActivationAndBilling.Domain.Aggregates;
@@ -70,6 +71,12 @@ public sealed class DealPaymentConfirmation : AggregateRoot<Guid>
 
     /// <summary>Optional host note attached to the deposit return (reference, breakdown, etc.).</summary>
     public string? DepositReturnNote { get; private set; }
+
+    /// <summary>
+    /// Sealed evidence manifest of damage photos. Required when the host returns
+    /// less than the full deposit paid by the tenant.
+    /// </summary>
+    public Guid? DepositReturnEvidenceManifestId { get; private set; }
 
     /// <summary>Set once both parties have confirmed; this is the "deal completed" marker.</summary>
     public DateTime? DepositReturnSettledAt { get; private set; }
@@ -317,13 +324,16 @@ public sealed class DealPaymentConfirmation : AggregateRoot<Guid>
 
     /// <summary>
     /// Host confirms they returned the deposit directly to the tenant. Records
-    /// the returned amount and how it was sent. Settles the handshake when the
-    /// tenant has also confirmed receipt. No-op once already settled.
+    /// the returned amount and how it was sent. When returning less than the
+    /// full deposit paid by the tenant, a deduction reason and sealed damage
+    /// evidence are required. Settles the handshake when the tenant has also
+    /// confirmed receipt. No-op once already settled.
     /// </summary>
     public void ConfirmDepositReturnedByHost(
         long returnedAmountCents,
         string? method,
         string? note,
+        Guid? evidenceManifestId,
         IClock clock)
     {
         ArgumentNullException.ThrowIfNull(clock);
@@ -345,10 +355,28 @@ public sealed class DealPaymentConfirmation : AggregateRoot<Guid>
             return;
         }
 
+        if (returnedAmountCents < DepositAmountCents)
+        {
+            if (string.IsNullOrWhiteSpace(note))
+            {
+                throw new InvalidOperationException(
+                    "A valid reason for deductions is required when returning less than the full deposit.");
+            }
+
+            if (evidenceManifestId is null || evidenceManifestId == Guid.Empty)
+            {
+                throw new InvalidOperationException(
+                    "A damage photo is required when returning less than the full deposit.");
+            }
+        }
+
         HostConfirmedDepositReturnedAt ??= clock.UtcNow;
         DepositReturnAmountCents = returnedAmountCents;
         DepositReturnMethod = method;
-        DepositReturnNote = note;
+        DepositReturnNote = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+        DepositReturnEvidenceManifestId = evidenceManifestId is null || evidenceManifestId == Guid.Empty
+            ? null
+            : evidenceManifestId;
         UpdatedAt = clock.UtcNow;
 
         TrySettleDepositReturn(clock);
@@ -423,6 +451,30 @@ public sealed class DealPaymentConfirmation : AggregateRoot<Guid>
 
         DepositReturnSettledAt = clock.UtcNow;
         AddDomainEvent(new DepositReturnSettledEvent(DealId, DepositReturnSettledAt.Value));
+        AddDomainEvent(new StayCompletedEvent(DealId));
+    }
+
+    /// <summary>
+    /// Zero-deposit stays complete at move-out (no deposit handshake). Raises
+    /// <see cref="StayCompletedEvent"/> so the review window can open.
+    /// </summary>
+    public void CompleteStayWithoutDeposit(IClock clock)
+    {
+        ArgumentNullException.ThrowIfNull(clock);
+
+        if (DepositAmountCents > 0)
+        {
+            throw new InvalidOperationException(
+                "Cannot complete without deposit handshake when a deposit was collected.");
+        }
+
+        if (MoveOutInitiatedAt is null)
+        {
+            throw new InvalidOperationException("Move-out must begin before completing the stay.");
+        }
+
+        AddDomainEvent(new StayCompletedEvent(DealId));
+        UpdatedAt = clock.UtcNow;
     }
 
     /// <summary>

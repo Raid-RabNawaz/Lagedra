@@ -1,7 +1,6 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import {
-  ArrowLeft,
   ArrowRight,
   CheckCircle2,
   Clock,
@@ -18,12 +17,15 @@ import { useListingDetail } from "@/features/listings/hooks/useListings";
 import { InquiryStatusBadge } from "@/features/inquiry/components/InquiryStatusBadge";
 import { InquiryQuestion } from "@/features/inquiry/components/InquiryQuestion";
 import { InquiryResponseForm } from "@/features/inquiry/components/InquiryResponseForm";
+import { InquiryOfferPanel } from "@/features/inquiry/components/InquiryOfferPanel";
+import { InquiryParticipantsPanel } from "@/features/inquiry/components/InquiryParticipantsPanel";
 import { ApplyDialog } from "@/features/applications/components/ApplyDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { BackLink } from "@/components/shared/BackLink";
 import { Loader } from "@/components/shared/Loader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { formatDate } from "@/utils/format";
@@ -33,6 +35,7 @@ import {
   isNotFoundError,
 } from "@/api/errors";
 import type { InquiryQuestionDto, ResponseType } from "@/api/types";
+import { usePartnerMembership } from "@/features/partners/hooks/usePartnerMembership";
 
 const categoryLabels: Record<string, string> = {
   UtilitySpecifics: "Utility Specifics",
@@ -69,14 +72,50 @@ export const ListingInquiryPage = () => {
 
   const { data: listing } = useListingDetail(inquiry?.listingId);
   const { data: predefinedQuestions } = usePredefinedQuestions();
+  const { membership: partnerMembership } = usePartnerMembership();
 
   const isTenant = !!user && !!inquiry && user.userId === inquiry.tenantUserId;
-  const isLandlord = !!user && !!listing && user.userId === listing.landlordUserId;
+  const isLandlordFromData =
+    !!user &&
+    !!inquiry &&
+    (user.userId === inquiry.landlordUserId ||
+      (!!listing && user.userId === listing.landlordUserId));
+
+  // Sticky host role for this session — listing detail can lag or miss after
+  // a thread refetch, which previously hid every remaining reply form and the
+  // offer panel at once.
+  const [confirmedHostSessionId, setConfirmedHostSessionId] = useState<string | null>(
+    null,
+  );
+  useEffect(() => {
+    if (!inquiry?.sessionId) {
+      setConfirmedHostSessionId(null);
+      return;
+    }
+    if (isLandlordFromData) {
+      setConfirmedHostSessionId(inquiry.sessionId);
+      return;
+    }
+    setConfirmedHostSessionId((prev) =>
+      prev === inquiry.sessionId ? prev : null,
+    );
+  }, [isLandlordFromData, inquiry?.sessionId]);
+
+  const isLandlord =
+    isLandlordFromData ||
+    (!!inquiry?.sessionId && confirmedHostSessionId === inquiry.sessionId);
+
+  const isPartner =
+    !!inquiry?.partnerOrganizationId &&
+    !!partnerMembership &&
+    partnerMembership.organization.id === inquiry.partnerOrganizationId;
 
   const isOpen = inquiry?.status === "Open";
   const isClosed = inquiry?.status === "Closed";
   const is404 = isNotFoundError(error);
   const isForbidden = isForbiddenError(error);
+  const canAskQuestions = isOpen && (isTenant || isPartner);
+  const canNegotiateOffers = isOpen && !inquiry?.dealId && (isTenant || isLandlord);
 
   const [applyOpen, setApplyOpen] = useState(false);
 
@@ -116,7 +155,6 @@ export const ListingInquiryPage = () => {
         >
           <Link to="/listings">
             <Button variant="outline" size="sm">
-              <ArrowLeft className="mr-2 h-4 w-4" />
               Browse listings
             </Button>
           </Link>
@@ -150,13 +188,7 @@ export const ListingInquiryPage = () => {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
-      <Link
-        to={backTo}
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        {listing ? "Back to listing" : "Back"}
-      </Link>
+      <BackLink fallbackTo={backTo} className="mb-6" />
 
       <div className="flex items-center gap-3 mb-6">
         <h1 className="text-2xl font-bold tracking-tight">
@@ -195,16 +227,39 @@ export const ListingInquiryPage = () => {
         )}
       </div>
 
-      {/* Empty state — only shown for tenants with no questions yet. */}
+      {(isTenant || isLandlord || isPartner) && (
+        <InquiryParticipantsPanel
+          inquiry={inquiry}
+          isTenant={!!isTenant}
+          isLandlord={!!isLandlord}
+          isPartner={!!isPartner}
+          canManagePartner={isOpen && !inquiry.dealId}
+        />
+      )}
+
+      {sessionId && (isTenant || isLandlord) && (
+        <InquiryOfferPanel
+          sessionId={sessionId}
+          offers={inquiry.offers ?? []}
+          acceptedOffer={inquiry.acceptedOffer ?? null}
+          listing={listing}
+          isTenant={!!isTenant}
+          isLandlord={!!isLandlord}
+          isOpen={isOpen}
+          canNegotiate={canNegotiateOffers}
+        />
+      )}
+
+      {/* Empty state — only shown when askers have no questions yet. */}
       {inquiry.questions.length === 0 && isOpen && (
         <Card className="mb-6">
           <CardContent className="py-8">
             <EmptyState
               title="No questions yet"
               description={
-                isTenant
+                canAskQuestions
                   ? "Pick a category below to ask the host a structured question, or choose 'Other' to type your own."
-                  : "The tenant hasn't asked any questions yet."
+                  : "No questions have been asked yet."
               }
             />
           </CardContent>
@@ -220,12 +275,24 @@ export const ListingInquiryPage = () => {
                 <CardTitle className="text-sm font-medium leading-snug">
                   {getQuestionText(q)}
                 </CardTitle>
-                <Badge variant="secondary" className="shrink-0 text-xs">
-                  {categoryLabels[q.category] ?? q.category}
-                </Badge>
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <Badge variant="secondary" className="text-xs">
+                    {categoryLabels[q.category] ?? q.category}
+                  </Badge>
+                  {q.submittedByRole === "Partner" && (
+                    <Badge variant="outline" className="text-xs">
+                      Asked by partner
+                    </Badge>
+                  )}
+                </div>
               </div>
               <p className="text-xs text-muted-foreground">
                 Asked {formatDate(q.submittedAt)}
+                {q.submittedByRole === "Partner"
+                  ? " · Partner"
+                  : q.submittedByRole === "Tenant" || !q.submittedByRole
+                    ? " · Tenant"
+                    : ""}
               </p>
             </CardHeader>
             <CardContent>
@@ -266,8 +333,8 @@ export const ListingInquiryPage = () => {
         ))}
       </div>
 
-      {/* Ask new question (tenant only, while open). */}
-      {isOpen && isTenant && sessionId && (
+      {/* Ask new question (tenant or attached partner, while open). */}
+      {canAskQuestions && sessionId && (
         <>
           <Separator className="my-6" />
           <InquiryQuestion sessionId={sessionId} />

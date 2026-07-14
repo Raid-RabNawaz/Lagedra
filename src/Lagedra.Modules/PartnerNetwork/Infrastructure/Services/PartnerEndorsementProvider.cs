@@ -63,4 +63,26 @@ public sealed class PartnerEndorsementProvider(
             .ToList()
             .AsReadOnly();
     }
+
+    public async Task<Guid?> GetReviewEligibleEndorsementIdAsync(
+        Guid tenantUserId,
+        Guid organizationId,
+        CancellationToken ct = default)
+    {
+        // Any endorsement that reached Approved (including later Revoked/Expired).
+        var id = await dbContext.Endorsements
+            .AsNoTracking()
+            .Where(e => e.TenantUserId == tenantUserId
+                     && e.OrganizationId == organizationId
+                     && (e.Status == PartnerEndorsementStatus.Approved
+                         || e.Status == PartnerEndorsementStatus.Revoked
+                         || e.Status == PartnerEndorsementStatus.Expired
+                         || e.ApprovedAt != null))
+            .OrderByDescending(e => e.ApprovedAt ?? e.CreatedAt)
+            .Select(e => (Guid?)e.Id)
+            .FirstOrDefaultAsync(ct)
+            .ConfigureAwait(false);
+
+        return id;
+    }
 }

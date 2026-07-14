@@ -253,6 +253,11 @@ const ConversationRow = ({ row }: { row: TenantInquirySummaryDto }) => {
                   Linked to deal
                 </Badge>
               )}
+              {row.partnerOrganizationId && (
+                <Badge variant="outline" className="text-xs">
+                  Partner on thread
+                </Badge>
+              )}
             </div>
           </div>
 

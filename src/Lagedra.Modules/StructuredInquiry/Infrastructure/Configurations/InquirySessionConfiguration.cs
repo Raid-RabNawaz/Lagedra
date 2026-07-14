@@ -18,9 +18,13 @@ public sealed class InquirySessionConfiguration : IEntityTypeConfiguration<Inqui
         builder.Property(s => s.ListingId).IsRequired();
         builder.Property(s => s.TenantUserId).IsRequired();
         builder.Property(s => s.DealId).IsRequired(false);
+        builder.Property(s => s.PartnerOrganizationId).IsRequired(false);
+        builder.Property(s => s.PartnerAddedAt);
+        builder.Property(s => s.PartnerAddedByUserId);
 
         builder.HasIndex(s => s.DealId);
         builder.HasIndex(s => s.ListingId);
+        builder.HasIndex(s => s.PartnerOrganizationId);
         // Used by the listing detail page to find a tenant's existing
         // pre-booking thread for "continue conversation" semantics.
         builder.HasIndex(s => new { s.ListingId, s.TenantUserId });
@@ -35,6 +39,13 @@ public sealed class InquirySessionConfiguration : IEntityTypeConfiguration<Inqui
             .HasForeignKey(q => q.SessionId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        builder.HasMany(s => s.Offers)
+            .WithOne()
+            .HasForeignKey(o => o.SessionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
         builder.Ignore(s => s.DomainEvents);
+        builder.Ignore(s => s.AcceptedOffer);
+        builder.Ignore(s => s.PendingOffer);
     }
 }

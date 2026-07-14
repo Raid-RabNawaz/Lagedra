@@ -114,3 +114,23 @@ export function useRejectApplication() {
     },
   });
 }
+
+export function useAttachApplicationPayment() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      id,
+      payload,
+    }: {
+      id: string;
+      payload: import("@/api/types").AttachApplicationPaymentRequest;
+    }) => applicationApi.attachPayment(id, payload),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["application", data.applicationId], data);
+      void queryClient.invalidateQueries({
+        queryKey: ["applications", "mine"],
+      });
+    },
+  });
+}

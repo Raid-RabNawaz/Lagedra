@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,11 +7,12 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert } from "@/components/ui/alert";
-import {
-  useSubmitAnswer,
-  useSubmitSessionAnswer,
-} from "@/features/inquiry/hooks/useInquiry";
-import type { ResponseType } from "@/api/types";
+import { inquiryApi } from "@/features/inquiry/services/inquiryApi";
+import type {
+  InquiryDto,
+  ResponseType,
+  SubmitLandlordResponseRequest,
+} from "@/api/types";
 import { getApiErrorMessage } from "@/api/errors";
 
 /**
@@ -35,6 +37,7 @@ type Props = {
 const MAX_TEXT_ANSWER = 2000;
 
 export const InquiryResponseForm = (props: Props) => {
+  const queryClient = useQueryClient();
   const initialResponseType: ResponseType = props.isOpenQuestion
     ? "OpenText"
     : props.expectedResponseType ?? "YesNo";
@@ -42,35 +45,73 @@ export const InquiryResponseForm = (props: Props) => {
   const [responseType, setResponseType] = useState<ResponseType>(initialResponseType);
   const [answerValue, setAnswerValue] = useState("");
 
-  const submitDealMutation = useSubmitAnswer();
-  const submitSessionMutation = useSubmitSessionAnswer();
-  const isPending = submitDealMutation.isPending || submitSessionMutation.isPending;
-  const submitError = submitDealMutation.error ?? submitSessionMutation.error;
-  const isError = submitDealMutation.isError || submitSessionMutation.isError;
+  const useSessionRoute = "sessionId" in props && !!props.sessionId;
 
-  const handleSubmit = async () => {
+  // One mutation instance per question form — never share pending/error with siblings.
+  const submitMutation = useMutation({
+    mutationKey: [
+      "inquiry",
+      "submit-answer",
+      useSessionRoute ? props.sessionId : props.dealId,
+      props.questionId,
+    ],
+    mutationFn: async (payload: SubmitLandlordResponseRequest) => {
+      if (useSessionRoute && props.sessionId) {
+        return inquiryApi.submitSessionAnswer(props.sessionId, payload);
+      }
+      if ("dealId" in props && props.dealId) {
+        return inquiryApi.submitAnswer(props.dealId, payload);
+      }
+      throw new Error("Missing dealId or sessionId for answer submit.");
+    },
+    onSuccess: (answer, payload) => {
+      if (useSessionRoute && props.sessionId) {
+        queryClient.setQueryData<InquiryDto>(
+          ["inquiry", "by-session", props.sessionId],
+          (current) => {
+            if (!current) return current;
+            return {
+              ...current,
+              questions: current.questions.map((q) =>
+                q.questionId === payload.questionId
+                  ? {
+                      ...q,
+                      answer: {
+                        answerId: answer.answerId,
+                        responseType: answer.responseType,
+                        answerValue: answer.answerValue,
+                        answeredAt: answer.answeredAt,
+                      },
+                    }
+                  : q,
+              ),
+            };
+          },
+        );
+        void queryClient.invalidateQueries({
+          queryKey: ["inquiry", "by-session", props.sessionId],
+        });
+      } else if ("dealId" in props && props.dealId) {
+        void queryClient.invalidateQueries({
+          queryKey: ["inquiry", props.dealId],
+        });
+      }
+      void queryClient.invalidateQueries({
+        queryKey: ["inquiry", "host-inbox"],
+      });
+      setAnswerValue("");
+    },
+  });
+
+  const handleSubmit = () => {
     const trimmed = answerValue.trim();
     if (!trimmed) return;
 
-    const payload = {
+    submitMutation.mutate({
       questionId: props.questionId,
       responseType,
       answerValue: trimmed.slice(0, MAX_TEXT_ANSWER),
-    };
-
-    try {
-      if ("dealId" in props && props.dealId) {
-        await submitDealMutation.mutateAsync({ dealId: props.dealId, payload });
-      } else if ("sessionId" in props && props.sessionId) {
-        await submitSessionMutation.mutateAsync({
-          sessionId: props.sessionId,
-          payload,
-        });
-      }
-      setAnswerValue("");
-    } catch {
-      // Error surfaced via the alert below.
-    }
+    });
   };
 
   return (
@@ -128,20 +169,20 @@ export const InquiryResponseForm = (props: Props) => {
         )}
       </div>
 
-      {isError && (
+      {submitMutation.isError && (
         <Alert variant="destructive" className="text-xs">
-          {getApiErrorMessage(submitError, "Failed to submit answer.")}
+          {getApiErrorMessage(submitMutation.error, "Failed to submit answer.")}
         </Alert>
       )}
 
       <Button
         size="sm"
         onClick={handleSubmit}
-        disabled={!answerValue.trim() || isPending}
+        disabled={!answerValue.trim() || submitMutation.isPending}
         className="gap-1.5"
       >
         <Send className="h-3 w-3" />
-        {isPending ? "Sending..." : "Send Answer"}
+        {submitMutation.isPending ? "Sending..." : "Send Answer"}
       </Button>
     </div>
   );

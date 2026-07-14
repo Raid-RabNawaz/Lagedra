@@ -1,6 +1,6 @@
-import { useParams, Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 import {
-  ArrowLeft,
   Lock,
   Unlock,
   CheckCircle2,
@@ -19,11 +19,13 @@ import { useMyDeals } from "@/features/deals/hooks/useDeals";
 import { InquiryStatusBadge } from "@/features/inquiry/components/InquiryStatusBadge";
 import { InquiryQuestion } from "@/features/inquiry/components/InquiryQuestion";
 import { InquiryResponseForm } from "@/features/inquiry/components/InquiryResponseForm";
+import { InquiryOfferPanel } from "@/features/inquiry/components/InquiryOfferPanel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
+import { BackLink } from "@/components/shared/BackLink";
 import { Loader } from "@/components/shared/Loader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { formatDate } from "@/utils/format";
@@ -53,8 +55,6 @@ export const InquiryThreadPage = () => {
   const user = useAuthStore((s) => s.user);
   const { data: deals } = useMyDeals("all");
   const deal = deals?.find((d) => d.dealId === dealId);
-  const isLandlord = !!user && !!deal && user.userId === deal.landlordUserId;
-  const isTenant = !!user && !!deal && user.userId === deal.tenantUserId;
 
   const {
     data: inquiry,
@@ -62,6 +62,31 @@ export const InquiryThreadPage = () => {
     isError,
     error,
   } = useInquiryThread(dealId);
+
+  const isLandlordFromData =
+    !!user &&
+    ((!!deal && user.userId === deal.landlordUserId) ||
+      (!!inquiry && user.userId === inquiry.landlordUserId));
+  const isTenant =
+    !!user &&
+    ((!!deal && user.userId === deal.tenantUserId) ||
+      (!!inquiry && user.userId === inquiry.tenantUserId));
+
+  const [confirmedHostDealId, setConfirmedHostDealId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!dealId) {
+      setConfirmedHostDealId(null);
+      return;
+    }
+    if (isLandlordFromData) {
+      setConfirmedHostDealId(dealId);
+      return;
+    }
+    setConfirmedHostDealId((prev) => (prev === dealId ? prev : null));
+  }, [isLandlordFromData, dealId]);
+
+  const isLandlord =
+    isLandlordFromData || (!!dealId && confirmedHostDealId === dealId);
 
   const { data: predefinedQuestions } = usePredefinedQuestions();
   const requestUnlock = useRequestUnlock();
@@ -107,13 +132,10 @@ export const InquiryThreadPage = () => {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
-      <Link
-        to={dealId ? `/app/deals/${dealId}` : "/app/deals"}
-        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
-      >
-        <ArrowLeft className="h-4 w-4" />
-        Back to deal
-      </Link>
+      <BackLink
+        fallbackTo={dealId ? `/app/deals/${dealId}` : "/app/deals"}
+        className="mb-6"
+      />
 
       <div className="flex items-center gap-3 mb-6">
         <h1 className="text-2xl font-bold tracking-tight">Structured Inquiry</h1>
@@ -269,6 +291,19 @@ export const InquiryThreadPage = () => {
             </Alert>
           )}
 
+          {inquiry.sessionId && (isTenant || isLandlord) && (
+            <InquiryOfferPanel
+              sessionId={inquiry.sessionId}
+              offers={inquiry.offers ?? []}
+              acceptedOffer={inquiry.acceptedOffer ?? null}
+              listing={undefined}
+              isTenant={!!isTenant}
+              isLandlord={!!isLandlord}
+              isOpen={!!isOpen}
+              canNegotiate={!!isOpen && !inquiry.dealId}
+            />
+          )}
+
           {/* Question / answer thread */}
           {inquiry.questions.length === 0 && isOpen && (
             <Card className="mb-6">
@@ -322,9 +357,11 @@ export const InquiryThreadPage = () => {
                         </span>
                       </div>
                     </div>
-                  ) : isOpen && isLandlord && inquiry.dealId ? (
+                  ) : isOpen && isLandlord && (inquiry.sessionId || inquiry.dealId) ? (
                     <InquiryResponseForm
-                      dealId={inquiry.dealId}
+                      {...(inquiry.sessionId
+                        ? { sessionId: inquiry.sessionId }
+                        : { dealId: inquiry.dealId! })}
                       questionId={q.questionId}
                       expectedResponseType={getExpectedResponseType(q)}
                       isOpenQuestion={!!q.openQuestionText}

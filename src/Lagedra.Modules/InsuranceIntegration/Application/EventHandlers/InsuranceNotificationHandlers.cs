@@ -12,7 +12,8 @@ namespace Lagedra.Modules.InsuranceIntegration.Application.EventHandlers;
 public sealed class OnInsuranceStatusChangedNotify(InsuranceDbContext db, IMediator m)
     : IDomainEventHandler<InsuranceStatusChangedEvent>
 {
-    private static readonly NotificationChannel[] EmailAndInApp = [NotificationChannel.Email, NotificationChannel.InApp];
+    private static readonly NotificationChannel[] EmailInAppAndSms =
+        [NotificationChannel.Email, NotificationChannel.InApp, NotificationChannel.Sms];
 
     public async Task Handle(InsuranceStatusChangedEvent e, CancellationToken ct = default)
     {
@@ -34,6 +35,6 @@ public sealed class OnInsuranceStatusChangedNotify(InsuranceDbContext db, IMedia
             policy.TenantUserId, "insurance_status_changed",
             title, body,
             new() { ["dealId"] = e.DealId.ToString(), ["oldState"] = e.OldState.ToString(), ["newState"] = e.NewState.ToString() },
-            EmailAndInApp, e.DealId, "Deal"), ct).ConfigureAwait(false);
+            EmailInAppAndSms, e.DealId, "Deal"), ct).ConfigureAwait(false);
     }
 }

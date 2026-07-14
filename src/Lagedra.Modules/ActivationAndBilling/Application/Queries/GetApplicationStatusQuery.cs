@@ -1,5 +1,6 @@
 using Lagedra.Modules.ActivationAndBilling.Application.DTOs;
 using Lagedra.Modules.ActivationAndBilling.Infrastructure.Persistence;
+using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Results;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -12,7 +13,9 @@ public sealed record GetApplicationStatusQuery(
     bool IsAdmin = false) : IRequest<Result<DealApplicationDto>>;
 
 public sealed class GetApplicationStatusQueryHandler(
-    BillingDbContext dbContext)
+    BillingDbContext dbContext,
+    IPartnerMembershipProvider partnerMembership,
+    IPartnerOrganizationBillingProfile partnerOrgBilling)
     : IRequestHandler<GetApplicationStatusQuery, Result<DealApplicationDto>>
 {
     public async Task<Result<DealApplicationDto>> Handle(
@@ -32,15 +35,34 @@ public sealed class GetApplicationStatusQueryHandler(
                 new Error("Application.NotFound", "Application not found."));
         }
 
-        if (!request.IsAdmin
-            && application.TenantUserId != request.CallerUserId
-            && application.LandlordUserId != request.CallerUserId)
+        var isParty = application.TenantUserId == request.CallerUserId
+            || application.LandlordUserId == request.CallerUserId;
+
+        var isPartnerOnApplication = false;
+        if (!request.IsAdmin && !isParty && application.PartnerOrganizationId is { } partnerOrgId)
+        {
+            var callerOrgId = await partnerMembership
+                .GetPartnerOrganizationIdAsync(request.CallerUserId, cancellationToken)
+                .ConfigureAwait(false);
+            isPartnerOnApplication = callerOrgId == partnerOrgId;
+        }
+
+        if (!request.IsAdmin && !isParty && !isPartnerOnApplication)
         {
             return Result<DealApplicationDto>.Failure(
                 new Error("Application.Forbidden",
                     "You do not have access to this application."));
         }
 
-        return Result<DealApplicationDto>.Success(DealApplicationDtoMapper.ToDto(application));
+        string? partnerName = null;
+        if (application.PartnerOrganizationId is { } orgId)
+        {
+            partnerName = await partnerOrgBilling
+                .GetNameAsync(orgId, cancellationToken)
+                .ConfigureAwait(false);
+        }
+
+        return Result<DealApplicationDto>.Success(
+            DealApplicationDtoMapper.ToDto(application, partnerName));
     }
 }

@@ -268,6 +268,16 @@ namespace ActivationAndBilling.Migrations
                     b.Property<Guid?>("PartnerOrganizationId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("PayerType")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasDefaultValue("Tenant");
+
+                    b.Property<Guid?>("PayerUserId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateOnly>("RequestedCheckIn")
                         .HasColumnType("date");
 
@@ -376,6 +386,9 @@ namespace ActivationAndBilling.Migrations
 
                     b.Property<long?>("DepositReturnAmountCents")
                         .HasColumnType("bigint");
+
+                    b.Property<Guid?>("DepositReturnEvidenceManifestId")
+                        .HasColumnType("uuid");
 
                     b.Property<string>("DepositReturnMethod")
                         .HasMaxLength(50)
