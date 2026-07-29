@@ -5,6 +5,7 @@ import { apiTimeToInput } from "./listingFormSchema";
 export function listingDetailsToFormValues(listing: ListingDetailsDto): ListingFormValues {
   const hr = listing.houseRules;
   const cp = listing.cancellationPolicy;
+  const lt = listing.leaseTerms;
 
   return {
     propertyType: listing.propertyType,
@@ -54,5 +55,28 @@ export function listingDetailsToFormValues(listing: ListingDetailsDto): ListingF
     partialRefundPercent: cp?.partialRefundPercent ?? undefined,
     partialRefundDays: cp?.partialRefundDays ?? undefined,
     customTerms: cp?.customTerms ?? "",
+    rentDueDayOfMonth: lt?.rentDueDayOfMonth ?? 1,
+    paymentMethods: lt?.paymentMethods ?? "",
+    nsfFirstFeeDollars: (lt?.nsfFirstFeeCents ?? 2500) / 100,
+    nsfSubsequentFeeDollars: (lt?.nsfSubsequentFeeCents ?? 3500) / 100,
+    lateFeePercent: lt?.lateFeePercent ?? 5,
+    lateFeeGraceDays: lt?.lateFeeGraceDays ?? 3,
+    utilitiesResponsibility: lt?.utilitiesResponsibility ?? "",
+    yardMaintenanceByTenant: lt?.yardMaintenanceByTenant ?? false,
+    furnished: lt?.furnished ?? false,
+    includedAppliancesNotes: lt?.includedAppliancesNotes ?? "",
+    keyCount: lt?.keyCount ?? 1,
+    mailboxKeyCount: lt?.mailboxKeyCount ?? 0,
+    keyReplacementFeeDollars: (lt?.keyReplacementFeeCents ?? 20000) / 100,
+    lockoutFeeDollars: (lt?.lockoutFeeCents ?? 20000) / 100,
+    parkingSpaceCount: lt?.parkingSpaceCount ?? 0,
+    parkingDescription: lt?.parkingDescription ?? "",
+    parkingIncludedInRent: lt?.parkingIncludedInRent ?? true,
+    maxGuestConsecutiveDays: lt?.maxGuestConsecutiveDays ?? 7,
+    rentersInsuranceMinLiabilityDollars: (lt?.rentersInsuranceMinLiabilityCents ?? 100_000_00) / 100,
+    earlyTerminationFeeMonths: lt?.earlyTerminationFeeMonths ?? 2,
+    builtBefore1978: lt?.builtBefore1978 ?? false,
+    leadPaintKnowledge: lt?.leadPaintKnowledge ?? "",
+    rentCapJustCauseExempt: lt?.rentCapJustCauseExempt ?? false,
   };
 }

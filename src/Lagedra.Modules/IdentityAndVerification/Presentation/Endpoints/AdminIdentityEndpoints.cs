@@ -19,10 +19,24 @@ public static class AdminIdentityEndpoints
             .RequireAuthorization("RequirePlatformAdmin");
 
         group.MapGet("/manual-queue", GetManualQueue);
+        group.MapGet("/manual-queue/{id:guid}", GetManualDetail);
         group.MapPost("/manual-queue/{id:guid}/approve", ApproveManual);
         group.MapPost("/manual-queue/{id:guid}/reject", RejectManual);
 
         return app;
+    }
+
+    private static async Task<IResult> GetManualDetail(
+        [FromRoute] Guid id,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetManualVerificationDetailQuery(id), ct)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : Results.NotFound(new { error = result.Error.Code, detail = result.Error.Description });
     }
 
     private static async Task<IResult> GetManualQueue(IMediator mediator, CancellationToken ct)

@@ -18,7 +18,11 @@ public sealed class ChannelConnection : AggregateRoot<Guid>
     /// <summary>Lowercase provider key, e.g. "ownerrez". Routes to the IChannelProvider.</summary>
     public string ProviderKey { get; private set; } = string.Empty;
 
-    /// <summary>The host's account/advertiser id on the external platform.</summary>
+    /// <summary>
+    /// The host's account identifier on the external platform — a numeric
+    /// account id for Hostaway, a client id for Guesty, the account email for
+    /// OwnerRez.
+    /// </summary>
     public string ExternalAccountId { get; private set; } = string.Empty;
 
     public string DisplayName { get; private set; } = string.Empty;

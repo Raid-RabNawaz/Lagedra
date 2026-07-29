@@ -19,7 +19,7 @@ public sealed class OnViolationCreatedNotify(IMediator mediator)
             $"A {e.Category} violation has been recorded on your deal.",
             new() { ["violationId"] = e.ViolationId.ToString(), ["dealId"] = e.DealId.ToString(), ["category"] = e.Category.ToString() },
             [NotificationChannel.Email, NotificationChannel.InApp],
-            e.ViolationId, "Violation"), ct).ConfigureAwait(false);
+            e.DealId, "Deal"), ct).ConfigureAwait(false);
     }
 }
 
@@ -36,7 +36,7 @@ public sealed class OnViolationResolvedNotify(IMediator mediator)
             "A compliance violation on your deal has been resolved.",
             new() { ["violationId"] = e.ViolationId.ToString(), ["dealId"] = e.DealId.ToString() },
             [NotificationChannel.Email, NotificationChannel.InApp],
-            e.ViolationId, "Violation"), ct).ConfigureAwait(false);
+            e.DealId, "Deal"), ct).ConfigureAwait(false);
     }
 }
 
@@ -53,6 +53,6 @@ public sealed class OnViolationEscalatedNotify(IMediator mediator)
             $"A {e.Category} violation on your deal has been escalated for further review.",
             new() { ["violationId"] = e.ViolationId.ToString(), ["dealId"] = e.DealId.ToString(), ["category"] = e.Category.ToString() },
             [NotificationChannel.Email, NotificationChannel.InApp],
-            e.ViolationId, "Violation"), ct).ConfigureAwait(false);
+            e.DealId, "Deal"), ct).ConfigureAwait(false);
     }
 }

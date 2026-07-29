@@ -38,7 +38,7 @@ export const DualControlApprovalsPage = () => {
     if (!user?.userId) return;
     setActionInFlight(item.versionId);
     try {
-      await adminApi.approveLeaseVersion(item.templateId, item.versionId, user.userId);
+      await adminApi.approveLeaseVersion(item.templateId, item.versionId);
       await loadPending();
     } catch {
       setError("Approval failed. You may already be the first approver — a different admin must provide the second approval.");

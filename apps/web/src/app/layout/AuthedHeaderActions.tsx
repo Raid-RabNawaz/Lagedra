@@ -10,7 +10,12 @@ import {
 import { useAuthStore } from "@/app/auth/authStore";
 import { useModeStore } from "@/app/auth/modeStore";
 import { supportsModeSwitching } from "@/app/auth/permissions";
+import {
+  isPreLaunchLimitedHost,
+  PRE_LAUNCH_HOST_HOME,
+} from "@/app/auth/preLaunchAccess";
 import { roleLabel } from "@/app/auth/roles";
+import { usePublicConfigStore } from "@/app/config/publicConfigStore";
 import { authApi } from "@/features/auth/services/authApi";
 import { NotificationBell } from "@/features/notifications/components/NotificationBell";
 import { useNotificationHub } from "@/features/notifications/hooks/useNotificationHub";
@@ -36,8 +41,8 @@ type Props = {
 
 /**
  * Shared header actions for any layout that wants the "logged-in
- * chrome" — host/guest mode switch, notification bell, and the user
- * dropdown (email, role, Dashboard, Profile, Log out).
+ * chrome" — Member-only Travelling/Hosting switch, notification bell,
+ * and the user dropdown (email, role, Dashboard, Profile, Log out).
  *
  * Centralising it here keeps the AppShell top bar and the marketplace
  * top bar visually identical for authenticated users — previously the
@@ -54,7 +59,9 @@ export function AuthedHeaderActions({
 
   const mode = useModeStore((s) => s.mode);
   const toggleMode = useModeStore((s) => s.toggleMode);
-  const showModeSwitch = supportsModeSwitching(user?.role);
+  const preLaunchEnabled = usePublicConfigStore((s) => s.preLaunchEnabled);
+  const preLaunchLimited = isPreLaunchLimitedHost(preLaunchEnabled, user?.role);
+  const showModeSwitch = !preLaunchLimited && supportsModeSwitching(user?.role);
 
   // Keep the SignalR hub primed wherever this component mounts so the
   // notification badge stays live across `/app` and the marketplace.
@@ -101,7 +108,7 @@ export function AuthedHeaderActions({
     <div className="flex items-center gap-2">
       {showModeSwitch && <ModeSwitch mode={mode} onToggle={toggleMode} />}
 
-      <NotificationBell />
+      {!preLaunchLimited && <NotificationBell />}
 
       <div className="relative" ref={menuRef}>
         <button
@@ -145,25 +152,27 @@ export function AuthedHeaderActions({
               </Badge>
             </div>
 
-            {showDashboardInMenu && (
+            {(showDashboardInMenu || preLaunchLimited) && (
               <Link
-                to="/app"
+                to={preLaunchLimited ? PRE_LAUNCH_HOST_HOME : "/app"}
                 onClick={() => setOpen(false)}
                 className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
               >
                 <LayoutDashboard className="h-4 w-4" />
-                Dashboard
+                {preLaunchLimited ? "My listings" : "Dashboard"}
               </Link>
             )}
 
-            <Link
-              to="/app/profile"
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-            >
-              <User className="h-4 w-4" />
-              Profile & settings
-            </Link>
+            {!preLaunchLimited && (
+              <Link
+                to="/app/profile"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+              >
+                <User className="h-4 w-4" />
+                Profile & settings
+              </Link>
+            )}
 
             <button
               type="button"

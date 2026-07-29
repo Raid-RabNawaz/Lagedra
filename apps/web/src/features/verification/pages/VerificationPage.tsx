@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { isAxiosError } from "axios";
 import { Link, useNavigate } from "react-router-dom";
 import {
   Shield,
@@ -23,11 +22,10 @@ import { authApi } from "@/features/auth/services/authApi";
 import { privacyApi } from "@/features/privacy/services/privacyApi";
 import {
   useVerificationStatus,
-  useStartKyc,
-  useCompleteKyc,
   useSubmitBackgroundCheckConsent,
   useRiskView,
 } from "@/features/verification/hooks/useVerification";
+import { ManualKycUpload } from "@/features/verification/components/ManualKycUpload";
 import type { VerificationStatus, VerificationClassLevel } from "@/api/types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -81,20 +79,11 @@ export const VerificationPage = () => {
   const riskUserId = verificationStatus?.status === "Verified" ? userId : undefined;
   const { data: riskView } = useRiskView(riskUserId);
 
-  const startKyc = useStartKyc();
-  const completeKyc = useCompleteKyc();
   const bgConsent = useSubmitBackgroundCheckConsent();
 
   const [consentChecked, setConsentChecked] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
-
-  // Inline DOB capture when starting KYC and the auth profile has none.
-  const initialDob = user?.dateOfBirth ?? "";
-  const [dobInput, setDobInput] = useState<string>(initialDob);
-  useEffect(() => {
-    setDobInput(initialDob);
-  }, [initialDob]);
 
   // Resend verification email (one-shot, with cooldown so users don't spam).
   const [resendingEmail, setResendingEmail] = useState(false);
@@ -169,26 +158,18 @@ export const VerificationPage = () => {
         cta: hasPhoneNumber ? "Send verification code" : "Open profile",
       };
     }
-    if (canStartKyc) {
+    if (canStartKyc || isPending) {
       return {
         title: "Verify your identity",
-        body: "Confirm a government-issued ID to unlock the lowest deposit bands and faster booking.",
+        body: "Upload photos of your government-issued ID and take a live selfie. Our team reviews every submission personally.",
         href: "#kyc",
         cta: kycStatus === "Failed" ? "Retry verification" : "Start verification",
-      };
-    }
-    if (isPending) {
-      return {
-        title: "Verification in progress",
-        body: "Hang tight — we'll update this page automatically the moment your check completes.",
-        href: "#kyc",
-        cta: null,
       };
     }
     if (kycStatus === "ManualReviewRequired") {
       return {
         title: "Under manual review",
-        body: "Our team is reviewing your submission. We'll notify you within 1–2 business days.",
+        body: "Our team is reviewing your ID and selfie. We'll notify you once it's done — typically within 24 hours.",
         href: "#kyc",
         cta: null,
       };
@@ -223,49 +204,6 @@ export const VerificationPage = () => {
     const id = hash.replace(/^#/, "");
     const el = document.getElementById(id);
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
-
-  const handleStartKyc = async () => {
-    if (!userId) return;
-    setActionError(null);
-    setActionSuccess(null);
-
-    const dob = dobInput.trim() || user?.dateOfBirth || null;
-    if (!dob) {
-      setActionError("Please enter your date of birth before starting verification.");
-      return;
-    }
-
-    try {
-      await privacyApi.ensureRequiredConsents(userId);
-      await startKyc.mutateAsync({
-        userId,
-        firstName: user?.firstName,
-        lastName: user?.lastName,
-        dateOfBirth: dob,
-      });
-      setActionSuccess(
-        "Identity verification started. With no KYC partner configured we've auto-approved it for you.",
-      );
-    } catch (e) {
-      if (isAxiosError(e) && e.response?.status === 451) {
-        setActionError("Consent is required before verification. Please accept legal consents and try again.");
-        return;
-      }
-      setActionError((e as Error)?.message ?? "Failed to start identity verification.");
-    }
-  };
-
-  const handleCompleteKyc = async () => {
-    if (!userId) return;
-    setActionError(null);
-    setActionSuccess(null);
-    try {
-      await completeKyc.mutateAsync({ userId });
-      setActionSuccess("Identity verification completed successfully.");
-    } catch (e) {
-      setActionError((e as Error)?.message ?? "Failed to complete verification.");
-    }
   };
 
   const handleBackgroundCheck = async () => {
@@ -597,87 +535,48 @@ export const VerificationPage = () => {
             </div>
           )}
 
-          {canStartKyc && (
+          {(canStartKyc || isPending) && (
             <div className="space-y-4">
               <div className="rounded-lg border p-4 bg-muted/30 space-y-3">
                 <h4 className="font-medium text-sm">What you'll need</h4>
                 <ul className="text-sm text-muted-foreground space-y-1.5">
                   <li className="flex items-center gap-2">
                     <ChevronRight className="h-3 w-3 shrink-0" />
-                    A valid government-issued photo ID (driver's license, passport, or state ID)
+                    Clear photos of a valid government-issued photo ID (driver's license, passport, or state ID)
                   </li>
                   <li className="flex items-center gap-2">
                     <ChevronRight className="h-3 w-3 shrink-0" />
-                    A device with a camera for a quick selfie
+                    A device with a camera for a live selfie
                   </li>
                   <li className="flex items-center gap-2">
                     <ChevronRight className="h-3 w-3 shrink-0" />
-                    Takes about 2–3 minutes to complete
+                    Our team reviews submissions manually, typically within 24 hours
                   </li>
                 </ul>
               </div>
-
-              {!user?.dateOfBirth && (
-                <div className="space-y-2">
-                  <Label htmlFor="kyc-dob">Date of birth</Label>
-                  <Input
-                    id="kyc-dob"
-                    type="date"
-                    value={dobInput}
-                    onChange={(e) => setDobInput(e.target.value)}
-                    className="max-w-xs"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Used only to match the document you'll upload. We never share your DOB publicly.
-                  </p>
-                </div>
-              )}
 
               {kycStatus === "Failed" && (
                 <Alert variant="destructive">
                   <XCircle className="h-4 w-4" />
                   <AlertDescription>
-                    Your previous verification attempt was unsuccessful. You can try again below.
+                    Your previous verification attempt was rejected. Upload new documents and try again.
                   </AlertDescription>
                 </Alert>
               )}
 
-              <Button
-                onClick={() => void handleStartKyc()}
-                disabled={startKyc.isPending}
-                className="gap-2"
-              >
-                <UserCheck className="h-4 w-4" />
-                {startKyc.isPending
-                  ? "Starting..."
-                  : kycStatus === "Failed"
-                    ? "Retry verification"
-                    : "Start identity verification"}
-              </Button>
-            </div>
-          )}
-
-          {isPending && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
-                <Loader2 className="h-6 w-6 text-amber-500 animate-spin shrink-0" />
-                <div>
-                  <p className="font-medium text-amber-800">Verification in progress</p>
-                  <p className="text-sm text-amber-700 mt-0.5">
-                    Your identity is being verified. This page refreshes automatically every few seconds —
-                    you don't need to do anything.
-                  </p>
-                </div>
-              </div>
-              <Button
-                variant="outline"
-                onClick={() => void handleCompleteKyc()}
-                disabled={completeKyc.isPending}
-                className="gap-2"
-              >
-                <RefreshCw className={`h-4 w-4 ${completeKyc.isPending ? "animate-spin" : ""}`} />
-                {completeKyc.isPending ? "Checking..." : "Check status now"}
-              </Button>
+              <ManualKycUpload
+                firstName={user?.firstName}
+                lastName={user?.lastName}
+                dateOfBirth={user?.dateOfBirth}
+                beforeSubmit={async () => {
+                  if (userId) await privacyApi.ensureRequiredConsents(userId);
+                }}
+                onSubmitted={() => {
+                  setActionSuccess(
+                    "Verification submitted. Our team will review your documents and notify you — typically within 24 hours.",
+                  );
+                }}
+              />
             </div>
           )}
 

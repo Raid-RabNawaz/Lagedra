@@ -1,5 +1,7 @@
 using Lagedra.Auth.Application.Errors;
 using Lagedra.Auth.Domain;
+using Lagedra.SharedKernel.Events;
+using Lagedra.SharedKernel.Integration.Events;
 using Lagedra.SharedKernel.Results;
 using Lagedra.SharedKernel.Security;
 using Lagedra.SharedKernel.Time;
@@ -13,6 +15,7 @@ public sealed record ConfirmPhoneVerificationCommand(Guid UserId, string Code) :
 public sealed class ConfirmPhoneVerificationCommandHandler(
     UserManager<ApplicationUser> userManager,
     IHashingService hashingService,
+    IEventBus eventBus,
     IClock clock)
     : IRequestHandler<ConfirmPhoneVerificationCommand, Result>
 {
@@ -62,6 +65,9 @@ public sealed class ConfirmPhoneVerificationCommandHandler(
         {
             return AuthErrors.IdentityError(update.Errors.First().Description);
         }
+
+        await eventBus.Publish(new PhoneVerifiedEvent(user.Id, clock.UtcNow), cancellationToken)
+            .ConfigureAwait(false);
 
         return Result.Success();
     }

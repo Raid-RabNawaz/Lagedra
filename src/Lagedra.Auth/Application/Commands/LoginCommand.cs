@@ -25,11 +25,6 @@ public sealed class LoginCommandHandler(
 {
     private readonly SuperAdminSettings _superAdmin = superAdminOptions.Value;
 
-    // Operational roles that must keep working while the platform is in
-    // pre-launch mode (e.g. to run the platform and flip the flag off).
-    private static readonly HashSet<UserRole> PreLaunchExemptRoles =
-        [UserRole.PlatformAdmin, UserRole.Arbitrator];
-
     public async Task<Result<AuthResultDto>> Handle(LoginCommand request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -74,7 +69,7 @@ public sealed class LoginCommandHandler(
 
     private async Task<bool> CanSignInDuringPreLaunchAsync(ApplicationUser user, CancellationToken ct)
     {
-        if (PreLaunchExemptRoles.Contains(user.Role))
+        if (PreLaunchAccess.CanSignIn(user))
         {
             return true;
         }

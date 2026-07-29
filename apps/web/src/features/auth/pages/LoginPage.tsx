@@ -7,6 +7,7 @@ import { Mail, Lock, ArrowRight } from "lucide-react";
 import { authApi } from "@/features/auth/services/authApi";
 import { useAuthStore } from "@/app/auth/authStore";
 import { usePublicConfigStore } from "@/app/config/publicConfigStore";
+import { PRE_LAUNCH_HOST_HOME } from "@/app/auth/preLaunchAccess";
 import { getApiErrorMessage } from "@/api/errors";
 import { appConfig } from "@/app/config";
 import { Button } from "@/components/ui/button";
@@ -30,7 +31,8 @@ export const LoginPage = () => {
   const setUser = useAuthStore((state) => state.setUser);
   const navigate = useNavigate();
   const location = useLocation();
-  const nextPath = (location.state as { from?: string } | null)?.from ?? "/app";
+  const defaultNext = preLaunchEnabled ? PRE_LAUNCH_HOST_HOME : "/app";
+  const nextPath = (location.state as { from?: string } | null)?.from ?? defaultNext;
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -80,7 +82,9 @@ export const LoginPage = () => {
       <div className="mb-8">
         <h1 className="text-3xl font-bold tracking-tight">Welcome back</h1>
         <p className="mt-2 text-muted-foreground">
-          Sign in to your Lagedra account to continue.
+          {preLaunchEnabled
+            ? "Sign in to add listings and import from Hostaway."
+            : "Sign in to your Lagedra account to continue."}
         </p>
       </div>
 

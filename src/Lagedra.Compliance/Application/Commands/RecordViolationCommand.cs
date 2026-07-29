@@ -30,10 +30,29 @@ public sealed class RecordViolationCommandHandler(ComplianceDbContext dbContext)
             request.EvidenceReference);
 
         dbContext.Violations.Add(violation);
+
+        // Every violation lowers the target's trust level, so it is always
+        // mirrored into the trust ledger regardless of how it was reported
+        // (manual report or compliance-signal pipeline).
+        dbContext.TrustLedgerEntries.Add(TrustLedgerEntry.Create(
+            request.TargetUserId,
+            MapToLedgerEntryType(request.Category),
+            violation.Id,
+            $"{request.Category} violation recorded for deal",
+            isPublic: false));
+
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return Result<ViolationDto>.Success(ViolationMapper.ToDto(violation));
     }
+
+    private static TrustLedgerEntryType MapToLedgerEntryType(ViolationCategory category) =>
+        category switch
+        {
+            ViolationCategory.NonPayment => TrustLedgerEntryType.PaymentDefault,
+            ViolationCategory.EarlyTermination => TrustLedgerEntryType.EarlyTermination,
+            _ => TrustLedgerEntryType.ViolationRecorded,
+        };
 }
 
 internal static class ViolationMapper

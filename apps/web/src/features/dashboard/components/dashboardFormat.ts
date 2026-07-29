@@ -24,7 +24,7 @@ export function dealPhaseMeta(phase: DealPhase): BadgeMeta {
     case "Active":
       return { label: "Active", variant: "success" };
     case "AwaitingDepositReturn":
-      return { label: "Deposit return", variant: "accent" };
+      return { label: "Deposit Returned", variant: "accent" };
     case "Checkout":
       return { label: "Checkout", variant: "accent" };
     case "TruthSurface":

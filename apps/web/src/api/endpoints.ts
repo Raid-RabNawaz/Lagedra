@@ -19,6 +19,8 @@ export const endpoints = {
     confirmPhoneCode: "/v1/auth/phone/confirm",
     users: "/v1/auth/users",
     userRole: (userId: string) => `/v1/auth/users/${userId}/role`,
+    sendSetPasswordEmail: (userId: string) =>
+      `/v1/auth/users/${userId}/send-set-password-email`,
     publicProfile: (userId: string) => `/v1/auth/users/${userId}/public-profile`,
   },
   listings: {
@@ -72,6 +74,9 @@ export const endpoints = {
     attachPayment: (id: string) => `/v1/applications/${id}/attach-payment`,
     forListing: (listingId: string) => `/v1/applications/listing/${listingId}`,
   },
+  me: {
+    verificationTier: "/v1/me/verification-tier",
+  },
   adminDefinitions: {
     amenities: "/v1/admin/listing-definitions/amenities",
     amenity: (id: string) => `/v1/admin/listing-definitions/amenities/${id}`,
@@ -104,6 +109,7 @@ export const endpoints = {
   },
   deals: {
     mine: "/v1/deals/mine",
+    stayAccess: (dealId: string) => `/v1/deals/${dealId}/stay-access`,
   },
   checkout: {
     create: (dealId: string) => `/v1/deals/${dealId}/checkout`,
@@ -186,6 +192,8 @@ export const endpoints = {
     startKyc: "/v1/identity/kyc/start",
     completeKyc: "/v1/identity/kyc/complete",
     status: (userId: string) => `/v1/identity/status?userId=${userId}`,
+    manualKycDocuments: "/v1/identity/kyc/manual/documents",
+    manualKycSubmit: "/v1/identity/kyc/manual/submit",
   },
   verification: {
     backgroundCheckConsent: "/v1/verification/background-check/consent",
@@ -281,6 +289,7 @@ export const endpoints = {
   },
   adminIdentity: {
     manualQueue: "/v1/admin/identity/manual-queue",
+    manualDetail: (id: string) => `/v1/admin/identity/manual-queue/${id}`,
     approveManual: (id: string) => `/v1/admin/identity/manual-queue/${id}/approve`,
     rejectManual: (id: string) => `/v1/admin/identity/manual-queue/${id}/reject`,
   },

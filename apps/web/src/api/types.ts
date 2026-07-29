@@ -4,6 +4,9 @@ export type ErrorResponse = {
   error?: string;
   detail?: string;
   message?: string;
+  /** SharedKernel `Error` serialization (minimal APIs). */
+  code?: string;
+  description?: string;
 };
 
 export type AuthResultDto = {
@@ -105,6 +108,13 @@ export type RegisterResponse = {
 
 export type PublicConfigDto = {
   preLaunchEnabled: boolean;
+};
+
+export type VerifyEmailResponse = {
+  message: string;
+  /** True for password-less signups (pre-launch hosts) that must set a password next. */
+  requiresPasswordSetup?: boolean;
+  passwordSetupToken?: string | null;
 };
 
 export type ExternalLoginRequest = {
@@ -359,7 +369,38 @@ export type ListingDetailsDto = {
   rejectionReason?: string | null;
   submittedForReviewAt?: string | null;
   reviewedAt?: string | null;
+  leaseTerms?: LeaseTermsDto | null;
 };
+
+// Listing-level lease terms merged into the generated lease agreement PDF.
+// All amounts are in cents; nulls fall back to platform defaults.
+export type LeaseTermsDto = {
+  rentDueDayOfMonth: number;
+  nsfFirstFeeCents: number;
+  nsfSubsequentFeeCents: number;
+  lateFeePercent: number;
+  lateFeeGraceDays: number;
+  utilitiesResponsibility?: string | null;
+  yardMaintenanceByTenant: boolean;
+  furnished: boolean;
+  includedAppliancesNotes?: string | null;
+  keyCount: number;
+  mailboxKeyCount: number;
+  keyReplacementFeeCents: number;
+  lockoutFeeCents: number;
+  parkingSpaceCount: number;
+  parkingDescription?: string | null;
+  parkingIncludedInRent: boolean;
+  maxGuestConsecutiveDays: number;
+  rentersInsuranceMinLiabilityCents: number;
+  earlyTerminationFeeMonths: number;
+  builtBefore1978: boolean;
+  leadPaintKnowledge?: string | null;
+  rentCapJustCauseExempt: boolean;
+  paymentMethods?: string | null;
+};
+
+export type LeaseTermsRequest = LeaseTermsDto;
 
 export type ListingReviewItemDto = {
   id: string;
@@ -549,6 +590,7 @@ export type UpdateListingRequest = {
   depositUnverifiedCents?: number | null;
   depositBackgroundVerifiedCents?: number | null;
   depositPartnerGuaranteedCents?: number | null;
+  leaseTerms?: LeaseTermsRequest | null;
 };
 
 export type SetApproxLocationRequest = {
@@ -823,6 +865,12 @@ export type TenantVerificationTier =
   | "Unverified"
   | "BackgroundVerified"
   | "PartnerGuaranteed";
+
+/** Current user's resolved verification tier ("trust level"). */
+export type MyVerificationTierDto = {
+  tier: TenantVerificationTier;
+  partnerOrganizationId: string | null;
+};
 
 export type DealApplicationDto = {
   applicationId: string;
@@ -1337,6 +1385,39 @@ export type VerificationStatusDto = {
   createdAt: string;
 };
 
+// ── Manual KYC (ID photos + live selfie, admin-reviewed) ────
+export type KycDocumentType = "IdFront" | "IdBack" | "Selfie";
+
+export type KycDocumentDto = {
+  documentType: KycDocumentType;
+  fileName: string;
+  uploadedAt: string;
+};
+
+export type SubmitManualKycRequest = {
+  firstName?: string | null;
+  lastName?: string | null;
+  dateOfBirth?: string | null;
+};
+
+export type ManualVerificationDocumentDto = {
+  documentType: KycDocumentType;
+  fileName: string;
+  mimeType: string;
+  uploadedAt: string;
+  downloadUrl: string;
+};
+
+export type ManualVerificationDetailDto = {
+  profileId: string;
+  userId: string;
+  email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  dateOfBirth: string | null;
+  documents: ManualVerificationDocumentDto[];
+};
+
 export type StartKycRequest = {
   userId: string;
   firstName?: string | null;
@@ -1387,6 +1468,28 @@ export type DealPhase =
 
 export type DealPhaseFilter = "active" | "past" | "all";
 
+/** Full address + counterpart contact, unlocked after the booking is confirmed. */
+export type DealStayAccessDto = {
+  dealId: string;
+  dealPhase: string;
+  isUnlocked: boolean;
+  lockedReason?: string | null;
+  propertyAddress?: {
+    street: string;
+    city: string;
+    state: string;
+    zipCode: string;
+    country: string;
+  } | null;
+  counterpart?: {
+    userId: string;
+    fullName: string;
+    email?: string | null;
+    phone?: string | null;
+    role: string;
+  } | null;
+};
+
 export type DealSummaryDto = {
   dealId: string;
   applicationId: string;
@@ -1410,6 +1513,12 @@ export type DealSummaryDto = {
   tenantVerificationTier?: TenantVerificationTier | null;
   depositReason?: string | null;
   truthSurfaceLocked?: boolean | null;
+  /** Host confirmed they returned the deposit (non-custodial handshake). */
+  hostConfirmedDepositReturnedAt?: string | null;
+  /** Guest confirmed they received the deposit back. */
+  tenantConfirmedDepositReceivedAt?: string | null;
+  /** Both sides confirmed — deposit return is complete. */
+  depositReturnSettledAt?: string | null;
 };
 
 // ── Notifications ────────────────────────────────────────────
@@ -1499,7 +1608,13 @@ export type TrustLedgerEntryType =
   | "EarlyTermination"
   | "PositiveReview"
   | "ReviewConcern"
-  | "IdentityVerified";
+  | "IdentityVerified"
+  | "EmailVerified"
+  | "PhoneVerified"
+  | "BackgroundCheckPassed"
+  | "PartnerEndorsed"
+  | "PartnerEndorsementRevoked"
+  | "PartnerEndorsementExpired";
 
 export type TrustLedgerEntryDto = {
   id: string;
@@ -1748,7 +1863,7 @@ export type EvidenceScanQueueItemDto = {
 export type ManualVerificationItemDto = {
   profileId: string;
   userId: string;
-  email: string;
+  email: string | null;
   firstName: string | null;
   lastName: string | null;
   submittedAt: string;
@@ -1785,20 +1900,44 @@ export type AuditSearchResultDto = {
 // ── Admin: Analytics ────────────────────────────────────────
 export type PlatformSummaryDto = {
   totalListings: number;
+  listingsAdded: number;
   activeDeals: number;
+  newDeals: number;
+  totalApplications: number;
   mrrCents: number;
   conversionRatePercent: number;
   periodStart: string;
   periodEnd: string;
 };
 
+export type AdminListingStatus =
+  | "Draft"
+  | "InReview"
+  | "Published"
+  | "Activated"
+  | "Closed"
+  | "Denied";
+
 export type ListingAnalyticsItemDto = {
   listingId: string;
   title: string;
-  views: number;
+  landlordUserId: string;
+  landlordName: string;
+  landlordEmail: string | null;
+  status: AdminListingStatus;
+  createdAt: string;
+  monthlyRentCents: number;
   applicationCount: number;
   conversionPercent: number;
   qualityScore: number;
+};
+
+export type ListingAnalyticsFilters = {
+  landlordUserId?: string;
+  search?: string;
+  status?: AdminListingStatus;
+  addedFrom?: string;
+  addedTo?: string;
 };
 
 // ── Admin: Blog ─────────────────────────────────────────────
@@ -2054,6 +2193,9 @@ export type PartnerMemberDto = {
   memberRole: PartnerMemberRole;
   joinedAt: string;
   invitedBy: string | null;
+  displayName: string | null;
+  email: string | null;
+  invitedByDisplayName: string | null;
 };
 
 export type MyPartnerMembershipDto = {
@@ -2090,6 +2232,8 @@ export type PartnerEndorsementDto = {
   organizationId: string;
   organizationName: string;
   tenantUserId: string;
+  tenantDisplayName: string | null;
+  tenantEmail: string | null;
   status: PartnerEndorsementStatus;
   requestedAt: string;
   requestedByUserId: string;

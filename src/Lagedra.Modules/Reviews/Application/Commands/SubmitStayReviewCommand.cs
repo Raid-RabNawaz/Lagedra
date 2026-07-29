@@ -138,7 +138,7 @@ public sealed class SubmitStayReviewCommandHandler(
 
         if (window.ShouldPublish(clock))
         {
-            await PublishWindowAsync(window, cancellationToken).ConfigureAwait(false);
+            await PublishWindowAsync(window, review, cancellationToken).ConfigureAwait(false);
         }
 
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -146,12 +146,24 @@ public sealed class SubmitStayReviewCommandHandler(
         return Result<StayReviewDto>.Success(ReviewMapper.ToDto(review));
     }
 
-    private async Task PublishWindowAsync(StayReviewWindow window, CancellationToken ct)
+    private async Task PublishWindowAsync(
+        StayReviewWindow window,
+        StayReview justSubmitted,
+        CancellationToken ct)
     {
         var reviews = await dbContext.StayReviews
             .Where(r => r.DealId == window.DealId && r.Status == StayReviewStatus.Submitted)
             .ToListAsync(ct)
             .ConfigureAwait(false);
+
+        // The review Added in this request is not in the database yet, so the
+        // query above misses it. Without including it here, the window would
+        // publish while the second party's review stayed Submitted forever
+        // (and never appeared on the listing / reputation surfaces).
+        if (reviews.TrueForAll(r => r.Id != justSubmitted.Id))
+        {
+            reviews.Add(justSubmitted);
+        }
 
         foreach (var review in reviews)
         {

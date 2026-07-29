@@ -2,6 +2,7 @@ import { lazy } from "react";
 import { Navigate, createBrowserRouter, useLocation } from "react-router-dom";
 import { RequireAuth } from "@/app/auth/RequireAuth";
 import { RequireLaunchAccess } from "@/app/auth/RequireLaunchAccess";
+import { RequirePreLaunchHostSurface } from "@/app/auth/RequirePreLaunchHostSurface";
 import { RequireMember } from "@/app/auth/RequireMember";
 import { RequireRole } from "@/app/auth/RequireRole";
 import { RequireArbitrationAccess } from "@/app/auth/RequireArbitrationAccess";
@@ -164,15 +165,18 @@ export const router = createBrowserRouter([
     errorElement: <RouteErrorBoundary />,
     children: [
       {
-        // Pre-launch gate: while the launch flag is on, only operational staff
-        // reach the product; everyone else is redirected to the join flow.
-        element: <RequireLaunchAccess />,
+        // Pre-launch: staff + founding hosts enter the app; hosts are then
+        // limited to listings + Hostaway by RequirePreLaunchHostSurface.
+        element: <RequireLaunchAccess surface="app" />,
         children: [
       {
         path: "/app",
         element: <AppShell />,
         errorElement: <RouteErrorBoundary />,
         children: [
+          {
+            element: <RequirePreLaunchHostSurface />,
+            children: [
           { index: true, element: <LazyPage><DashboardPage /></LazyPage> },
           { path: "profile", element: <LazyPage><ProfilePage /></LazyPage> },
           { path: "users/:userId", element: <LazyPage><PublicProfilePage /></LazyPage> },
@@ -283,6 +287,8 @@ export const router = createBrowserRouter([
               { path: "audit", element: <LazyPage><AuditSearchPage /></LazyPage> },
               { path: "analytics", element: <LazyPage><AnalyticsDashboardPage /></LazyPage> },
               { path: "listing-analytics", element: <LazyPage><ListingAnalyticsPage /></LazyPage> },
+            ],
+          },
             ],
           },
         ],

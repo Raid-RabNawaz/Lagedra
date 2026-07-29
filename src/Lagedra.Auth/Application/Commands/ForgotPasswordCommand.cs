@@ -20,8 +20,10 @@ public sealed class ForgotPasswordCommandHandler(
         ArgumentNullException.ThrowIfNull(request);
         var user = await userManager.FindByEmailAsync(request.Email).ConfigureAwait(true);
 
-        // Always return success to prevent email enumeration
-        if (user is null || !user.IsActive)
+        // Always return success to prevent email enumeration. Send whenever the
+        // account exists (including inactive / not-yet-verified) so hosts and
+        // waitlist leads who never got a working password can still set one.
+        if (user is null || user.IsDeleted)
         {
             return Result.Success();
         }

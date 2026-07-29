@@ -1,7 +1,6 @@
-# pnpm 11 reads package-manager settings from here (the `pnpm` field in
-# package.json and the legacy `onlyBuiltDependencies` key were both removed in
-# pnpm 11.0). `allowBuilds` is the replacement: allow esbuild's install/build
-# script to run so Vite has its native binary. Without this pnpm skips it by
-# default and `pnpm dev` crashes.
+# Single-package workspace so pnpm 9+ accepts this file. pnpm 11 also reads
+# allowBuilds here (esbuild must run so Vite has its native binary).
+packages:
+  - "."
 allowBuilds:
   esbuild: true

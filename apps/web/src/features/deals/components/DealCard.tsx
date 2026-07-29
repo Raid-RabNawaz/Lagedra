@@ -2,12 +2,28 @@ import { Link } from "react-router-dom";
 import { Calendar, MapPin, ArrowRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { DealPhaseBadge } from "./DealPhaseBadge";
+import { EndingSoonBadge } from "./BookingAttentionBanner";
 import { formatDate, formatMoney } from "@/utils/format";
 import { useAuthStore } from "@/app/auth/authStore";
-import type { DealSummaryDto, DealPhase } from "@/api/types";
+import {
+  getDealIssue,
+  getEndingSoon,
+  isCriticalDealIssue,
+} from "@/features/deals/utils/bookingAttention";
+import type { DealSummaryDto } from "@/api/types";
+import { cn } from "@/lib/utils";
 
-function actionLabel(phase: DealPhase, isLandlord: boolean): string {
-  switch (phase) {
+function actionLabel(
+  deal: Pick<
+    DealSummaryDto,
+    | "dealPhase"
+    | "hostConfirmedDepositReturnedAt"
+    | "tenantConfirmedDepositReceivedAt"
+    | "depositReturnSettledAt"
+  >,
+  isLandlord: boolean,
+): string {
+  switch (deal.dealPhase) {
     case "TruthSurface":
       return "Confirm truth surface";
     case "Checkout":
@@ -15,9 +31,21 @@ function actionLabel(phase: DealPhase, isLandlord: boolean): string {
     case "Active":
       return "View billing";
     case "AwaitingDepositReturn":
-      return isLandlord ? "Return deposit" : "Confirm deposit";
+      if (deal.depositReturnSettledAt) return "View details";
+      if (isLandlord) {
+        if (deal.hostConfirmedDepositReturnedAt) {
+          return deal.tenantConfirmedDepositReceivedAt
+            ? "View details"
+            : "Waiting on guest";
+        }
+        return "Return deposit";
+      }
+      if (deal.tenantConfirmedDepositReceivedAt) return "View details";
+      return deal.hostConfirmedDepositReturnedAt
+        ? "Confirm deposit"
+        : "Awaiting host";
     case "PaymentFailed":
-      return isLandlord ? "View details" : "Update payment";
+      return isLandlord ? "Resolve payment" : "Update payment";
     case "Closed":
     case "Cancelled":
       return "View details";
@@ -29,10 +57,23 @@ function actionLabel(phase: DealPhase, isLandlord: boolean): string {
 export function DealCard({ deal }: { deal: DealSummaryDto }) {
   const user = useAuthStore((s) => s.user);
   const isLandlord = user?.userId === deal.landlordUserId;
+  const perspective = isLandlord ? "host" : "guest";
+  const issue = getDealIssue(deal, perspective);
+  const ending = getEndingSoon(deal);
+  const critical = issue ? isCriticalDealIssue(issue.kind) : false;
 
   return (
     <Link to={`/app/deals/${deal.dealId}`} className="block group">
-      <Card className="overflow-hidden transition hover:shadow-md">
+      <Card
+        className={cn(
+          "overflow-hidden transition hover:shadow-md",
+          critical && "border-destructive/50 ring-1 ring-destructive/20",
+          !critical && ending && "border-amber-300 ring-1 ring-amber-200",
+          !critical &&
+            issue?.kind === "AwaitingDepositReturn" &&
+            "border-amber-300 ring-1 ring-amber-200",
+        )}
+      >
         <div className="flex">
           <div className="relative w-36 min-h-[140px] shrink-0 bg-muted">
             {deal.listingCoverPhotoUri ? (
@@ -54,7 +95,10 @@ export function DealCard({ deal }: { deal: DealSummaryDto }) {
                 <h3 className="font-semibold text-base leading-snug line-clamp-1 group-hover:underline">
                   {deal.listingTitle}
                 </h3>
-                <DealPhaseBadge phase={deal.dealPhase} />
+                <div className="flex shrink-0 flex-col items-end gap-1">
+                  <DealPhaseBadge phase={deal.dealPhase} />
+                  {ending && <EndingSoonBadge ending={ending} />}
+                </div>
               </div>
 
               {deal.listingCity && (
@@ -70,21 +114,53 @@ export function DealCard({ deal }: { deal: DealSummaryDto }) {
                 <span>–</span>
                 <span>{formatDate(deal.requestedCheckOut)}</span>
               </div>
+
+              {issue && (
+                <p
+                  className={cn(
+                    "mt-2 text-xs leading-relaxed",
+                    critical ? "text-destructive" : "text-amber-900",
+                  )}
+                >
+                  {issue.problem}
+                </p>
+              )}
             </div>
 
             <div className="flex items-end justify-between mt-3 pt-2 border-t">
               <div className="text-sm">
                 {deal.monthlyRentCents != null && (
-                  <span className="font-medium">{formatMoney(deal.monthlyRentCents)}/mo</span>
+                  <span className="font-medium">
+                    {formatMoney(deal.monthlyRentCents)}/mo
+                  </span>
                 )}
               </div>
-              <span className="text-sm font-medium text-primary flex items-center gap-1">
-                {actionLabel(deal.dealPhase, isLandlord)}
+              <span
+                className={cn(
+                  "text-sm font-medium flex items-center gap-1",
+                  critical ? "text-destructive" : "text-primary",
+                )}
+              >
+                {actionLabel(deal, isLandlord)}
                 <ArrowRight className="h-3.5 w-3.5" />
               </span>
             </div>
           </CardContent>
         </div>
+
+        {issue && (
+          <div
+            className={cn(
+              "border-t px-4 py-2.5 text-xs",
+              critical
+                ? "border-destructive/20 bg-destructive/5 text-destructive"
+                : "border-amber-200 bg-amber-50 text-amber-950",
+            )}
+          >
+            <span className="font-medium">How to resolve: </span>
+            {issue.resolution}
+          </div>
+        )}
       </Card>
     </Link>
   );

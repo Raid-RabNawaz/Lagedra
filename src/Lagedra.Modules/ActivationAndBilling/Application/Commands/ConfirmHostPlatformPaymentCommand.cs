@@ -49,17 +49,6 @@ public sealed class ConfirmHostPlatformPaymentCommandHandler(
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return Result<PaymentConfirmationDto>.Success(
-            new PaymentConfirmationDto(
-                confirmation.Id, confirmation.DealId, confirmation.Status,
-                confirmation.HostConfirmed, confirmation.HostConfirmedAt,
-                confirmation.TenantDisputed, confirmation.TenantDisputedAt,
-                confirmation.DisputeReason, confirmation.GracePeriodExpiresAt,
-                confirmation.TotalTenantPaymentCents,
-                confirmation.TotalHostPlatformPaymentCents,
-                confirmation.FirstMonthRentCents,
-                confirmation.DepositAmountCents,
-                confirmation.InsuranceFeeCents,
-                confirmation.MonthlyProtocolFeeCents,
-                confirmation.HostPaidPlatform, confirmation.HostPaidPlatformAt));
+            PaymentConfirmationDtoMapper.ToDto(confirmation));
     }
 }

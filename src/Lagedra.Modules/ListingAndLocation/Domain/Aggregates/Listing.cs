@@ -610,6 +610,25 @@ public sealed class Listing : AggregateRoot<Guid>
         ApproxGeoPoint = geoPoint;
     }
 
+    /// <summary>
+    /// Updates the public map pin when locking a precise address. Unlike
+    /// <see cref="SetApproxLocation"/>, this is allowed for
+    /// <see cref="ListingStatus.Published"/> so hosts can correct the pin
+    /// without reopening the listing for full edits.
+    /// </summary>
+    public void SyncApproxLocationForAddressLock(GeoPoint geoPoint)
+    {
+        ArgumentNullException.ThrowIfNull(geoPoint);
+
+        if (Status is not (ListingStatus.Draft or ListingStatus.Denied or ListingStatus.Published))
+        {
+            throw new InvalidOperationException(
+                $"Cannot update approximate location while locking address in status '{Status}'.");
+        }
+
+        ApproxGeoPoint = geoPoint;
+    }
+
     public void LockPreciseAddress(Address address, string? jurisdictionCode)
     {
         ArgumentNullException.ThrowIfNull(address);

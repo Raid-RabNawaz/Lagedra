@@ -24,13 +24,17 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { DealTimeline } from "@/features/deals/components/DealTimeline";
 import { DealPhaseBadge } from "@/features/deals/components/DealPhaseBadge";
 import { DepositReturnPanel } from "@/features/deals/components/DepositReturnPanel";
+import { DealStayAccessCard } from "@/features/deals/components/DealStayAccessCard";
+import { EndingSoonBadge } from "@/features/deals/components/BookingAttentionBanner";
 import { LeaveStayReviewPanel } from "@/features/reviews/components/LeaveStayReviewPanel";
 import { useMyDeals } from "@/features/deals/hooks/useDeals";
 import { useSnapshotByDealId } from "@/features/truth-surface/hooks/useTruthSurface";
+import { LeaseAgreementDownloadButton } from "@/features/truth-surface/components/LeaseAgreementDownloadButton";
 import { useAuthStore } from "@/app/auth/authStore";
 import { tierLabel } from "@/features/applications/lib/bookingConsent";
+import { getEndingSoon } from "@/features/deals/utils/bookingAttention";
 import { formatDate, formatMoney } from "@/utils/format";
-import type { DealSummaryDto, DealPhase, TruthSurfaceDto } from "@/api/types";
+import type { DealSummaryDto, TruthSurfaceDto } from "@/api/types";
 
 type PerspectiveProps = {
   deal: DealSummaryDto;
@@ -47,11 +51,17 @@ type PerspectiveProps = {
 };
 
 function nextStepMessage(
-  phase: DealPhase,
+  deal: Pick<
+    DealSummaryDto,
+    | "dealPhase"
+    | "hostConfirmedDepositReturnedAt"
+    | "tenantConfirmedDepositReceivedAt"
+    | "depositReturnSettledAt"
+  >,
   isLandlord: boolean,
   isTenant: boolean,
 ): string {
-  switch (phase) {
+  switch (deal.dealPhase) {
     case "TruthSurface":
       return "Both parties need to confirm the truth surface to proceed.";
     case "Checkout":
@@ -61,10 +71,26 @@ function nextStepMessage(
     case "Active":
       return "This deal is active. You can view billing details and invoices.";
     case "AwaitingDepositReturn":
-      if (isLandlord)
+      if (deal.depositReturnSettledAt) {
+        return "Deposit return is complete. This booking is finishing.";
+      }
+      if (isLandlord) {
+        if (deal.hostConfirmedDepositReturnedAt) {
+          return deal.tenantConfirmedDepositReceivedAt
+            ? "The guest confirmed they received the deposit. This booking is finishing."
+            : "You reported returning the deposit. Waiting for the guest to confirm receipt.";
+        }
         return "The stay has ended. Return the deposit (or an itemized statement of deductions) within 21 days of move-out, then confirm it below. If you return less than the full amount, include a reason and a damage photo.";
-      if (isTenant)
+      }
+      if (isTenant) {
+        if (deal.tenantConfirmedDepositReceivedAt) {
+          return "You confirmed receipt of your deposit. This booking is finishing.";
+        }
+        if (deal.hostConfirmedDepositReturnedAt) {
+          return "Your host reported returning the deposit. Confirm you received it below — or open a dispute if you didn't.";
+        }
         return "The stay has ended. Confirm you received your deposit back to complete the deal — or open a dispute if you didn't. Hosts generally have 21 days to return the deposit.";
+      }
       return "The stay has ended and the deposit return is being confirmed.";
     case "PaymentFailed":
       if (isTenant)
@@ -95,7 +121,7 @@ function StatusAndNextSteps({
       <CardContent className="space-y-4">
         <DealTimeline currentPhase={deal.dealPhase} />
         <p className="text-sm text-muted-foreground">
-          {nextStepMessage(deal.dealPhase, isLandlord, isTenant)}
+          {nextStepMessage(deal, isLandlord, isTenant)}
         </p>
         <PrimaryAction
           deal={deal}
@@ -275,6 +301,7 @@ export function DealDetailPage() {
   const showCompliance = ["Active", "AwaitingDepositReturn", "Closed"].includes(deal.dealPhase);
 
   const truthSurfaceLocked = deal.truthSurfaceLocked ?? truthSurface?.isLocked ?? false;
+  const ending = getEndingSoon(deal);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -303,7 +330,10 @@ export function DealDetailPage() {
             <h1 className="text-xl font-bold tracking-tight line-clamp-2">
               {deal.listingTitle}
             </h1>
-            <DealPhaseBadge phase={deal.dealPhase} />
+            <div className="flex shrink-0 flex-col items-end gap-1">
+              <DealPhaseBadge phase={deal.dealPhase} />
+              {ending && <EndingSoonBadge ending={ending} />}
+            </div>
           </div>
           {deal.listingCity && (
             <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
@@ -366,6 +396,12 @@ export function DealDetailPage() {
         truthSurface={truthSurface ?? null}
       />
 
+      <DealStayAccessCard
+        dealId={deal.dealId}
+        dealPhase={deal.dealPhase}
+        counterpartLabel={isTenant ? "Host" : "Guest"}
+      />
+
       {(deal.dealPhase === "Active" ||
         deal.dealPhase === "AwaitingDepositReturn") && (
         <DepositReturnPanel
@@ -404,6 +440,18 @@ export function DealDetailPage() {
               ) : undefined
             }
           />
+        )}
+
+        {truthSurface?.status === "Confirmed" && (isLandlord || isTenant) && (
+          <div className="flex items-center justify-between gap-3 rounded-xl border p-4">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">Lease agreement</p>
+              <p className="text-xs text-muted-foreground">
+                The signed lease generated from the sealed deal terms.
+              </p>
+            </div>
+            <LeaseAgreementDownloadButton dealId={deal.dealId} size="sm" />
+          </div>
         )}
 
         {showPayment && (

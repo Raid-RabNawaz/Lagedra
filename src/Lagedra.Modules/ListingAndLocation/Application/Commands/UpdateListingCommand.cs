@@ -66,6 +66,11 @@ public sealed class UpdateListingCommandValidator : AbstractValidator<UpdateList
                 x.DepositBackgroundVerifiedCents,
                 x.DepositUnverifiedCents))
             .WithMessage("Deposits must satisfy partner-guaranteed \u2264 background-verified \u2264 unverified.");
+
+        RuleFor(x => x.LeaseTerms!.RentDueDayOfMonth)
+            .InclusiveBetween(1, 28)
+            .When(x => x.LeaseTerms is not null)
+            .WithMessage("Rent due day must be between 1 and 28.");
     }
 }
 
@@ -116,123 +121,131 @@ public sealed class UpdateListingCommandHandler(
             }
         }
 
-        var stayRange = new StayRange(request.MinStayDays, request.MaxStayDays);
-
-        listing.Update(
-            request.PropertyType,
-            request.Title,
-            request.Description,
-            request.MonthlyRentCents,
-            request.Bedrooms,
-            request.Bathrooms,
-            stayRange,
-            request.MaxDepositCents,
-            request.SquareFootage);
-
-        if (request.HouseRules is { } hr)
+        try
         {
-            listing.SetHouseRules(Domain.ValueObjects.HouseRules.Create(
-                hr.CheckInTime, hr.CheckOutTime, hr.MaxGuests,
-                hr.PetsAllowed, hr.PetsNotes, hr.SmokingAllowed,
-                hr.PartiesAllowed, hr.QuietHoursStart, hr.QuietHoursEnd,
-                hr.LeavingInstructions, hr.AdditionalRules));
-        }
+            var stayRange = new StayRange(request.MinStayDays, request.MaxStayDays);
 
-        if (request.LeaseTerms is { } lt)
-        {
-            listing.SetLeaseTerms(Domain.ValueObjects.LeaseTerms.Create(
-                lt.RentDueDayOfMonth,
-                lt.NsfFirstFeeCents,
-                lt.NsfSubsequentFeeCents,
-                lt.LateFeePercent,
-                lt.LateFeeGraceDays,
-                lt.UtilitiesResponsibility,
-                lt.YardMaintenanceByTenant,
-                lt.Furnished,
-                lt.IncludedAppliancesNotes,
-                lt.KeyCount,
-                lt.MailboxKeyCount,
-                lt.KeyReplacementFeeCents,
-                lt.LockoutFeeCents,
-                lt.ParkingSpaceCount,
-                lt.ParkingDescription,
-                lt.ParkingIncludedInRent,
-                lt.MaxGuestConsecutiveDays,
-                lt.RentersInsuranceMinLiabilityCents,
-                lt.EarlyTerminationFeeMonths,
-                lt.BuiltBefore1978,
-                lt.LeadPaintKnowledge,
-                lt.RentCapJustCauseExempt,
-                lt.PaymentMethods));
-        }
+            listing.Update(
+                request.PropertyType,
+                request.Title,
+                request.Description,
+                request.MonthlyRentCents,
+                request.Bedrooms,
+                request.Bathrooms,
+                stayRange,
+                request.MaxDepositCents,
+                request.SquareFootage);
 
-        if (request.CancellationPolicy is { } cp)
-        {
-            listing.SetCancellationPolicy(Domain.ValueObjects.CancellationPolicy.Create(
-                cp.Type, cp.FreeCancellationDays,
-                cp.PartialRefundPercent, cp.PartialRefundDays,
-                cp.CustomTerms));
-        }
-
-        if (request.AmenityIds is not null)
-        {
-            listing.SetAmenities(request.AmenityIds);
-        }
-
-        if (request.SafetyDeviceIds is not null)
-        {
-            listing.SetSafetyDevices(request.SafetyDeviceIds);
-        }
-
-        if (request.ConsiderationIds is not null)
-        {
-            listing.SetConsiderations(request.ConsiderationIds);
-        }
-
-        if (request.InstantBookingEnabled.HasValue)
-        {
-            listing.SetInstantBooking(request.InstantBookingEnabled.Value);
-        }
-
-        if (request.VirtualTourUrl is not null)
-        {
-            listing.SetVirtualTourUrl(request.VirtualTourUrl);
-        }
-
-        // Phase 16.2: explicit clear takes precedence; otherwise update only when supplied.
-        if (request.ClearDefaultDeposit)
-        {
-            listing.SetDefaultDeposit(null);
-        }
-        else if (request.DefaultDepositCents.HasValue)
-        {
-            listing.SetDefaultDeposit(request.DefaultDepositCents);
-        }
-
-        // Predetermined per-verification-tier deposits are submitted with the
-        // full edit form, so treat the incoming values as authoritative (null
-        // clears a tier back to the MaxDepositCents fallback).
-        listing.SetVerificationDeposits(
-            request.DepositUnverifiedCents,
-            request.DepositBackgroundVerifiedCents,
-            request.DepositPartnerGuaranteedCents);
-
-        if (rentChanged)
-        {
-            var newRecord = ListingPriceHistory.Create(listing.Id, request.MonthlyRentCents, today);
-            dbContext.ListingPriceHistory.Add(newRecord);
-        }
-
-        if (!string.IsNullOrWhiteSpace(request.ApproxAddress))
-        {
-            var geocoded = await geocodingService
-                .GeocodeAddressAsync(request.ApproxAddress, cancellationToken)
-                .ConfigureAwait(false);
-
-            if (geocoded is not null)
+            if (request.HouseRules is { } hr)
             {
-                listing.SetApproxLocation(new GeoPoint(geocoded.Latitude, geocoded.Longitude));
+                listing.SetHouseRules(Domain.ValueObjects.HouseRules.Create(
+                    hr.CheckInTime, hr.CheckOutTime, hr.MaxGuests,
+                    hr.PetsAllowed, hr.PetsNotes, hr.SmokingAllowed,
+                    hr.PartiesAllowed, hr.QuietHoursStart, hr.QuietHoursEnd,
+                    hr.LeavingInstructions, hr.AdditionalRules));
             }
+
+            if (request.LeaseTerms is { } lt)
+            {
+                listing.SetLeaseTerms(Domain.ValueObjects.LeaseTerms.Create(
+                    lt.RentDueDayOfMonth,
+                    lt.NsfFirstFeeCents,
+                    lt.NsfSubsequentFeeCents,
+                    lt.LateFeePercent,
+                    lt.LateFeeGraceDays,
+                    lt.UtilitiesResponsibility,
+                    lt.YardMaintenanceByTenant,
+                    lt.Furnished,
+                    lt.IncludedAppliancesNotes,
+                    lt.KeyCount,
+                    lt.MailboxKeyCount,
+                    lt.KeyReplacementFeeCents,
+                    lt.LockoutFeeCents,
+                    lt.ParkingSpaceCount,
+                    lt.ParkingDescription,
+                    lt.ParkingIncludedInRent,
+                    lt.MaxGuestConsecutiveDays,
+                    lt.RentersInsuranceMinLiabilityCents,
+                    lt.EarlyTerminationFeeMonths,
+                    lt.BuiltBefore1978,
+                    lt.LeadPaintKnowledge,
+                    lt.RentCapJustCauseExempt,
+                    lt.PaymentMethods));
+            }
+
+            if (request.CancellationPolicy is { } cp)
+            {
+                listing.SetCancellationPolicy(Domain.ValueObjects.CancellationPolicy.Create(
+                    cp.Type, cp.FreeCancellationDays,
+                    cp.PartialRefundPercent, cp.PartialRefundDays,
+                    cp.CustomTerms));
+            }
+
+            if (request.AmenityIds is not null)
+            {
+                listing.SetAmenities(request.AmenityIds);
+            }
+
+            if (request.SafetyDeviceIds is not null)
+            {
+                listing.SetSafetyDevices(request.SafetyDeviceIds);
+            }
+
+            if (request.ConsiderationIds is not null)
+            {
+                listing.SetConsiderations(request.ConsiderationIds);
+            }
+
+            if (request.InstantBookingEnabled.HasValue)
+            {
+                listing.SetInstantBooking(request.InstantBookingEnabled.Value);
+            }
+
+            if (request.VirtualTourUrl is not null)
+            {
+                listing.SetVirtualTourUrl(request.VirtualTourUrl);
+            }
+
+            // Phase 16.2: explicit clear takes precedence; otherwise update only when supplied.
+            if (request.ClearDefaultDeposit)
+            {
+                listing.SetDefaultDeposit(null);
+            }
+            else if (request.DefaultDepositCents.HasValue)
+            {
+                listing.SetDefaultDeposit(request.DefaultDepositCents);
+            }
+
+            // Predetermined per-verification-tier deposits are submitted with the
+            // full edit form, so treat the incoming values as authoritative (null
+            // clears a tier back to the MaxDepositCents fallback).
+            listing.SetVerificationDeposits(
+                request.DepositUnverifiedCents,
+                request.DepositBackgroundVerifiedCents,
+                request.DepositPartnerGuaranteedCents);
+
+            if (rentChanged)
+            {
+                var newRecord = ListingPriceHistory.Create(listing.Id, request.MonthlyRentCents, today);
+                dbContext.ListingPriceHistory.Add(newRecord);
+            }
+
+            if (!string.IsNullOrWhiteSpace(request.ApproxAddress))
+            {
+                var geocoded = await geocodingService
+                    .GeocodeAddressAsync(request.ApproxAddress, cancellationToken)
+                    .ConfigureAwait(false);
+
+                if (geocoded is not null)
+                {
+                    listing.SetApproxLocation(new GeoPoint(geocoded.Latitude, geocoded.Longitude));
+                }
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Result<ListingDetailsDto>.Failure(
+                new Error("Listing.NotEditable", ex.Message));
         }
 
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);

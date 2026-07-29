@@ -15,6 +15,8 @@ import { variantContent, type JoinVariant } from "../joinContent";
 export type SignupSuccessInfo = {
   email: string;
   preLaunch: boolean;
+  /** Pre-launch host signup: the verify link chains into "set your password". */
+  setPasswordAfterVerify?: boolean;
   devVerificationUrl?: string;
 };
 
@@ -50,6 +52,11 @@ export const SignupForm = ({ variant, preLaunch, onBack, onSuccess }: SignupForm
   const setUser = useAuthStore((s) => s.setUser);
   const navigate = useNavigate();
 
+  // During pre-launch nobody types a password at signup: partners join the
+  // waitlist; hosts get a real account and set their password after verifying
+  // their email.
+  const waitlistMode = preLaunch && variant === "partner";
+
   const schema = z.object(
     preLaunch ? baseFields : { ...baseFields, password: passwordSchema },
   );
@@ -84,7 +91,8 @@ export const SignupForm = ({ variant, preLaunch, onBack, onSuccess }: SignupForm
       });
       onSuccess({
         email: data.email,
-        preLaunch: result.preLaunch ?? preLaunch,
+        preLaunch: result.preLaunch ?? waitlistMode,
+        setPasswordAfterVerify: preLaunch && variant === "host",
         devVerificationUrl: result.dev_verificationUrl,
       });
     } catch (error) {
@@ -225,10 +233,14 @@ export const SignupForm = ({ variant, preLaunch, onBack, onSuccess }: SignupForm
           className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#5B3FE0] px-5 py-3 text-[15px] font-semibold text-white transition-colors hover:bg-[#4A2FC7] disabled:opacity-60"
         >
           {form.formState.isSubmitting ? (
-            preLaunch ? "Joining..." : "Creating account..."
+            waitlistMode ? "Joining..." : "Creating account..."
           ) : (
             <>
-              {preLaunch ? "Join the partner program" : "Create account"}
+              {waitlistMode
+                ? "Join the partner program"
+                : preLaunch
+                  ? "Create host account"
+                  : "Create account"}
               <ArrowRight className="h-4 w-4" />
             </>
           )}

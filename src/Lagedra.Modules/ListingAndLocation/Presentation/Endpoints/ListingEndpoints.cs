@@ -159,7 +159,8 @@ public static class ListingEndpoints
                 ClearDefaultDeposit: request.ClearDefaultDeposit,
                 DepositUnverifiedCents: request.DepositUnverifiedCents,
                 DepositBackgroundVerifiedCents: request.DepositBackgroundVerifiedCents,
-                DepositPartnerGuaranteedCents: request.DepositPartnerGuaranteedCents),
+                DepositPartnerGuaranteedCents: request.DepositPartnerGuaranteedCents,
+                LeaseTerms: MapLeaseTerms(request.LeaseTerms)),
             cancellationToken).ConfigureAwait(true);
 
         return result.IsSuccess
@@ -691,5 +692,38 @@ public static class ListingEndpoints
             request.Type, request.FreeCancellationDays,
             request.PartialRefundPercent, request.PartialRefundDays,
             request.CustomTerms);
+    }
+
+    private static LeaseTermsDto? MapLeaseTerms(LeaseTermsRequest? request)
+    {
+        if (request is null)
+        {
+            return null;
+        }
+
+        return new LeaseTermsDto(
+            request.RentDueDayOfMonth,
+            request.NsfFirstFeeCents,
+            request.NsfSubsequentFeeCents,
+            request.LateFeePercent,
+            request.LateFeeGraceDays,
+            request.UtilitiesResponsibility,
+            request.YardMaintenanceByTenant,
+            request.Furnished,
+            request.IncludedAppliancesNotes,
+            request.KeyCount,
+            request.MailboxKeyCount,
+            request.KeyReplacementFeeCents,
+            request.LockoutFeeCents,
+            request.ParkingSpaceCount,
+            request.ParkingDescription,
+            request.ParkingIncludedInRent,
+            request.MaxGuestConsecutiveDays,
+            request.RentersInsuranceMinLiabilityCents,
+            request.EarlyTerminationFeeMonths,
+            request.BuiltBefore1978,
+            request.LeadPaintKnowledge,
+            request.RentCapJustCauseExempt,
+            request.PaymentMethods);
     }
 }

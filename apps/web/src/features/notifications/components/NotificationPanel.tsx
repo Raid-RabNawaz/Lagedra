@@ -11,6 +11,7 @@ import {
   useMarkRead,
   useMarkAllRead,
 } from "@/features/notifications/hooks/useNotifications";
+import { getNotificationRoute } from "@/features/notifications/utils/getNotificationRoute";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { InAppNotificationDto } from "@/api/types";
@@ -26,43 +27,6 @@ function timeAgo(dateStr: string): string {
   if (hours < 24) return `${hours}h ago`;
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
-}
-
-function getNotificationRoute(n: InAppNotificationDto): string | null {
-  if (!n.relatedEntityId) return null;
-
-  switch (n.relatedEntityType) {
-    case "Deal":
-      if (n.category.startsWith("truth_surface"))
-        return `/app/truth-surface/${n.relatedEntityId}`;
-      if (
-        n.category.startsWith("payment") ||
-        n.category === "deal_activated" ||
-        n.category.startsWith("damage_claim") ||
-        n.category === "billing_stopped"
-      )
-        return `/app/deals/${n.relatedEntityId}/billing`;
-      if (n.category === "application_approved")
-        return `/app/deals/${n.relatedEntityId}`;
-      return `/app/deals/${n.relatedEntityId}`;
-
-    case "Listing":
-      if (n.category === "application_submitted" || n.category === "application_received")
-        return `/app/applications`;
-      return `/listings/${n.relatedEntityId}`;
-
-    case "BillingAccount":
-      return null;
-
-    case "ArbitrationCase":
-      return null;
-
-    case "Violation":
-      return null;
-
-    default:
-      return null;
-  }
 }
 
 const categoryColor: Record<string, string> = {

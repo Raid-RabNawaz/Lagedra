@@ -7,10 +7,13 @@ using Microsoft.EntityFrameworkCore;
 namespace Lagedra.Compliance.Application.Queries;
 
 /// <summary>
-/// Returns the public trust ledger for a user — pseudonymized view
-/// showing only entries marked as IsPublic.
+/// Returns the trust ledger for a user. By default this is the public,
+/// pseudonymized view (entries marked IsPublic only). When
+/// <see cref="GetTrustLedgerForUserQuery.IncludeNonPublic"/> is set — the user
+/// viewing their own ledger, or a platform admin — every entry is returned.
 /// </summary>
-public sealed record GetTrustLedgerForUserQuery(Guid UserId) : IRequest<Result<IReadOnlyList<TrustLedgerEntryDto>>>;
+public sealed record GetTrustLedgerForUserQuery(Guid UserId, bool IncludeNonPublic = false)
+    : IRequest<Result<IReadOnlyList<TrustLedgerEntryDto>>>;
 
 public sealed class GetTrustLedgerForUserQueryHandler(ComplianceDbContext dbContext)
     : IRequestHandler<GetTrustLedgerForUserQuery, Result<IReadOnlyList<TrustLedgerEntryDto>>>
@@ -22,7 +25,7 @@ public sealed class GetTrustLedgerForUserQueryHandler(ComplianceDbContext dbCont
 
         var entries = await dbContext.TrustLedgerEntries
             .AsNoTracking()
-            .Where(e => e.UserId == request.UserId && e.IsPublic)
+            .Where(e => e.UserId == request.UserId && (request.IncludeNonPublic || e.IsPublic))
             .OrderByDescending(e => e.OccurredAt)
             .Select(e => new TrustLedgerEntryDto(
                 e.Id, e.UserId, e.EntryType, e.ReferenceId,

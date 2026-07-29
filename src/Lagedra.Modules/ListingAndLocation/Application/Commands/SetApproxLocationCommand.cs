@@ -43,8 +43,17 @@ public sealed class SetApproxLocationCommandHandler(ListingsDbContext dbContext)
             return Result<ListingDetailsDto>.Failure(Forbidden);
         }
 
-        var geoPoint = new GeoPoint(request.Latitude, request.Longitude);
-        listing.SetApproxLocation(geoPoint);
+        try
+        {
+            var geoPoint = new GeoPoint(request.Latitude, request.Longitude);
+            listing.SetApproxLocation(geoPoint);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Result<ListingDetailsDto>.Failure(
+                new Error("Listing.NotEditable", ex.Message));
+        }
+
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return Result<ListingDetailsDto>.Success(ListingMapper.ToDetails(listing));

@@ -158,7 +158,8 @@ public sealed partial class ChannelContentImporter(
             Latitude: snapshot.Latitude,
             Longitude: snapshot.Longitude,
             Address: address,
-            Photos: photos);
+            Photos: photos,
+            AmenityNames: snapshot.AmenityCodes);
     }
 
     private static ListingImportPropertyType ParsePropertyType(string? type) => (type ?? string.Empty).ToUpperInvariant() switch

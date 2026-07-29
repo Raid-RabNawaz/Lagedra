@@ -57,14 +57,7 @@ public sealed class DisputePaymentCommandHandler(
 
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        return Result<PaymentConfirmationDto>.Success(MapToDto(confirmation));
+        return Result<PaymentConfirmationDto>.Success(
+            PaymentConfirmationDtoMapper.ToDto(confirmation));
     }
-
-    private static PaymentConfirmationDto MapToDto(Domain.Aggregates.DealPaymentConfirmation c) =>
-        new(c.Id, c.DealId, c.Status, c.HostConfirmed, c.HostConfirmedAt,
-            c.TenantDisputed, c.TenantDisputedAt, c.DisputeReason, c.GracePeriodExpiresAt,
-            c.TotalTenantPaymentCents, c.TotalHostPlatformPaymentCents,
-            c.FirstMonthRentCents, c.DepositAmountCents,
-            c.InsuranceFeeCents, c.MonthlyProtocolFeeCents,
-            c.HostPaidPlatform, c.HostPaidPlatformAt);
 }

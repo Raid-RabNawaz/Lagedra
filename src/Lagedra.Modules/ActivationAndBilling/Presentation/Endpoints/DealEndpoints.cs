@@ -17,6 +17,7 @@ public static class DealEndpoints
             .RequireAuthorization();
 
         group.MapGet("/mine", ListMyDeals);
+        group.MapGet("/{dealId:guid}/stay-access", GetStayAccess);
 
         return app;
     }
@@ -34,6 +35,31 @@ public static class DealEndpoints
         return result.IsSuccess
             ? Results.Ok(result.Value)
             : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+    }
+
+    private static async Task<IResult> GetStayAccess(
+        [FromRoute] Guid dealId,
+        ClaimsPrincipal user,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var userId = GetUserId(user);
+        var result = await mediator.Send(new GetDealStayAccessQuery(dealId, userId), ct)
+            .ConfigureAwait(true);
+
+        if (result.IsSuccess)
+        {
+            return Results.Ok(result.Value);
+        }
+
+        return result.Error.Code switch
+        {
+            "Deal.NotFound" => Results.NotFound(new { error = result.Error.Code, detail = result.Error.Description }),
+            "Deal.Forbidden" => Results.Json(
+                new { error = result.Error.Code, detail = result.Error.Description },
+                statusCode: StatusCodes.Status403Forbidden),
+            _ => Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description }),
+        };
     }
 
     private static Guid GetUserId(ClaimsPrincipal user) =>

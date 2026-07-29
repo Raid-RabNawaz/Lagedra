@@ -8,4 +8,7 @@ public sealed record PartnerMemberDto(
     Guid UserId,
     PartnerMemberRole MemberRole,
     DateTime JoinedAt,
-    Guid? InvitedBy);
+    Guid? InvitedBy,
+    string? DisplayName = null,
+    string? Email = null,
+    string? InvitedByDisplayName = null);

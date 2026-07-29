@@ -80,7 +80,9 @@ const VerifyEmailSuccess = ({ info }: { info: SignupSuccessInfo }) => (
     <h1 className="mt-6 text-3xl font-extrabold tracking-tight text-[#1A1A2E]">Check your email</h1>
     <p className="mt-3 max-w-md text-[15px] text-[#3D3D4E]">
       We've sent a verification link to <span className="font-semibold text-[#1A1A2E]">{info.email}</span>.
-      Click it to activate your account, then sign in.
+      {info.setPasswordAfterVerify
+        ? " Click it to verify your email and set your password — then you can sign in and start adding listings."
+        : " Click it to activate your account, then sign in."}
     </p>
 
     {info.devVerificationUrl && (

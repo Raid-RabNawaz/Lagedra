@@ -27,6 +27,7 @@ public sealed class MinioSettings
     public string EvidenceBucket { get; init; } = "lagedra-private";
     public string ExportsBucket { get; init; } = "lagedra-private";
     public string QuarantineBucket { get; init; } = "lagedra-private";
+    public string KycBucket { get; init; } = "lagedra-private";
     public string ListingsBucket { get; init; } = "lagedra-public";
     public string UsersBucket { get; init; } = "lagedra-public";
     public bool UseHttps { get; init; }

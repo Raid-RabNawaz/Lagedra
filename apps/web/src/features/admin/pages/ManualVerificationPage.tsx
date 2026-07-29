@@ -1,10 +1,21 @@
 import { useEffect, useState } from "react";
-import { CheckCircle, XCircle } from "lucide-react";
+import { CheckCircle, Eye, Loader2, XCircle } from "lucide-react";
 import { adminApi } from "@/features/admin/services/adminApi";
-import type { ManualVerificationItemDto } from "@/api/types";
+import type {
+  ManualVerificationDetailDto,
+  ManualVerificationItemDto,
+} from "@/api/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -21,11 +32,22 @@ function slaBadge(hours: number) {
   return <Badge variant="destructive">{hours.toFixed(1)} h</Badge>;
 }
 
+const documentLabels: Record<string, string> = {
+  IdFront: "ID — front",
+  IdBack: "ID — back",
+  Selfie: "Live selfie",
+};
+
 export const ManualVerificationPage = () => {
   const [queue, setQueue] = useState<ManualVerificationItemDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [acting, setActing] = useState<string | null>(null);
+
+  const [reviewing, setReviewing] = useState<ManualVerificationItemDto | null>(null);
+  const [detail, setDetail] = useState<ManualVerificationDetailDto | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
 
   const loadQueue = async () => {
     setIsLoading(true);
@@ -44,10 +66,32 @@ export const ManualVerificationPage = () => {
     void loadQueue();
   }, []);
 
+  const openReview = async (item: ManualVerificationItemDto) => {
+    setReviewing(item);
+    setDetail(null);
+    setDetailError(null);
+    setDetailLoading(true);
+    try {
+      const data = await adminApi.getManualVerificationDetail(item.profileId);
+      setDetail(data);
+    } catch {
+      setDetailError("Failed to load the submitted documents.");
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  const closeReview = () => {
+    setReviewing(null);
+    setDetail(null);
+    setDetailError(null);
+  };
+
   const handleApprove = async (id: string) => {
     setActing(id);
     try {
       await adminApi.approveManualVerification(id);
+      closeReview();
       await loadQueue();
     } catch {
       setError("Failed to approve verification.");
@@ -60,6 +104,7 @@ export const ManualVerificationPage = () => {
     setActing(id);
     try {
       await adminApi.rejectManualVerification(id);
+      closeReview();
       await loadQueue();
     } catch {
       setError("Failed to reject verification.");
@@ -75,7 +120,7 @@ export const ManualVerificationPage = () => {
           Manual Verification
         </h1>
         <p className="mt-1 text-muted-foreground">
-          KYC manual review fallback queue. SLA: ≤ 24 hours.
+          Review submitted ID photos and live selfies to verify user identity. SLA: ≤ 24 hours.
         </p>
       </div>
 
@@ -125,26 +170,15 @@ export const ManualVerificationPage = () => {
                     </TableCell>
                     <TableCell>{slaBadge(item.hoursRemaining)}</TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={acting === item.profileId}
-                          onClick={() => void handleApprove(item.profileId)}
-                        >
-                          <CheckCircle className="mr-1 h-4 w-4 text-green-600" />
-                          Approve
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          disabled={acting === item.profileId}
-                          onClick={() => void handleReject(item.profileId)}
-                        >
-                          <XCircle className="mr-1 h-4 w-4 text-red-600" />
-                          Reject
-                        </Button>
-                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={acting === item.profileId}
+                        onClick={() => void openReview(item)}
+                      >
+                        <Eye className="mr-1 h-4 w-4" />
+                        Review
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -153,6 +187,99 @@ export const ManualVerificationPage = () => {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={reviewing !== null} onOpenChange={(open) => !open && closeReview()}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Identity review</DialogTitle>
+            <DialogDescription>
+              Compare the live selfie against the ID photo, and check that the name and date of
+              birth below match the document.
+            </DialogDescription>
+          </DialogHeader>
+
+          {detailLoading ? (
+            <Loader label="Loading documents..." />
+          ) : detailError ? (
+            <p className="py-6 text-center text-destructive">{detailError}</p>
+          ) : detail ? (
+            <div className="space-y-5">
+              <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
+                <div>
+                  <p className="text-muted-foreground">Name</p>
+                  <p className="font-medium">
+                    {[detail.firstName, detail.lastName].filter(Boolean).join(" ") || "—"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Date of birth</p>
+                  <p className="font-medium">
+                    {detail.dateOfBirth
+                      ? new Date(detail.dateOfBirth).toLocaleDateString()
+                      : "—"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Email</p>
+                  <p className="font-medium break-all">{detail.email || "—"}</p>
+                </div>
+              </div>
+
+              {detail.documents.length === 0 ? (
+                <p className="py-4 text-center text-muted-foreground">
+                  No documents were uploaded for this submission.
+                </p>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  {detail.documents.map((doc) => (
+                    <figure key={doc.documentType} className="space-y-2">
+                      <figcaption className="text-sm font-medium">
+                        {documentLabels[doc.documentType] ?? doc.documentType}
+                        <span className="ml-2 text-xs font-normal text-muted-foreground">
+                          {new Date(doc.uploadedAt).toLocaleString()}
+                        </span>
+                      </figcaption>
+                      <a href={doc.downloadUrl} target="_blank" rel="noreferrer">
+                        <img
+                          src={doc.downloadUrl}
+                          alt={documentLabels[doc.documentType] ?? doc.documentType}
+                          className="w-full rounded-lg border object-contain max-h-72 bg-muted"
+                        />
+                      </a>
+                    </figure>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : null}
+
+          <DialogFooter>
+            <Button
+              variant="destructive"
+              disabled={!reviewing || acting === reviewing.profileId || detailLoading}
+              onClick={() => reviewing && void handleReject(reviewing.profileId)}
+            >
+              {acting === reviewing?.profileId ? (
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+              ) : (
+                <XCircle className="mr-1 h-4 w-4" />
+              )}
+              Reject
+            </Button>
+            <Button
+              disabled={!reviewing || acting === reviewing.profileId || detailLoading}
+              onClick={() => reviewing && void handleApprove(reviewing.profileId)}
+            >
+              {acting === reviewing?.profileId ? (
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCircle className="mr-1 h-4 w-4" />
+              )}
+              Approve
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

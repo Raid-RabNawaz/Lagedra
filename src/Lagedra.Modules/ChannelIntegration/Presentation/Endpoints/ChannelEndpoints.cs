@@ -123,7 +123,9 @@ public static class ChannelEndpoints
             "Channel.NotFound" or
             "Channel.ListingNotMapped" => Results.NotFound(error),
 
-            "Channel.AlreadyConnected" =>
+            "Channel.AlreadyConnected" or
+            "Channel.HostawayAlreadyConnected" or
+            "Channel.GuestyAlreadyConnected" =>
                 Results.Json(error, statusCode: StatusCodes.Status409Conflict),
 
             _ => Results.BadRequest(error)

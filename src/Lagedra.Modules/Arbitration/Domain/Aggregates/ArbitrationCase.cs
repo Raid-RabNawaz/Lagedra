@@ -223,6 +223,18 @@ public sealed class ArbitrationCase : AggregateRoot<Guid>
         }
 
         AddDomainEvent(new DecisionIssuedEvent(Id, DealId, Tier, now));
+
+        // One integration event per penalized party so Compliance can record
+        // an ArbitrationRuling entry on each party's trust ledger.
+        foreach (var party in _decisionPenalties.GroupBy(p => p.PartyUserId))
+        {
+            var summary = string.Join(", ", party
+                .Select(p => PenaltyTypeRules.GetLabel(p.PenaltyType))
+                .Distinct());
+
+            AddDomainEvent(new SharedKernel.Integration.Events.ArbitrationRulingIssuedEvent(
+                Id, DealId, party.Key, summary, now));
+        }
     }
 
     public void CloseCase()

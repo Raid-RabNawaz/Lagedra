@@ -1,0 +1,196 @@
+{
+  "family": "lagedra-api",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "512",
+  "memory": "1024",
+  "executionRoleArn": "arn:aws:iam::930218374225:role/lagedra-ecs-execution",
+  "taskRoleArn": "arn:aws:iam::930218374225:role/lagedra-ecs-task",
+  "containerDefinitions": [
+    {
+      "name": "api",
+      "image": "930218374225.dkr.ecr.us-west-1.amazonaws.com/lagedra/api@sha256:f4f483b076011dd99e4796c0d78b6397e890f0275ebb4bf1a2b9e9ecb4034ea9",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8080,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "ASPNETCORE_ENVIRONMENT",
+          "value": "Production"
+        },
+        {
+          "name": "ASPNETCORE_URLS",
+          "value": "http://+:8080"
+        },
+        {
+          "name": "ConnectionStrings__Default",
+          "value": "Host=lagedra-db.cx408miakalh.us-west-1.rds.amazonaws.com;Port=5432;Database=lagedra_prod;Username=lagedra;Password=Lag3dra_Pr0d_2026!;SSL Mode=Require;Trust Server Certificate=true"
+        },
+        {
+          "name": "Jwt__Issuer",
+          "value": "https://api.lagedra.com"
+        },
+        {
+          "name": "Jwt__Audience",
+          "value": "https://lagedra.com"
+        },
+        {
+          "name": "App__BaseUrl",
+          "value": "https://api.lagedra.com"
+        },
+        {
+          "name": "App__FrontendUrl",
+          "value": "https://lagedra.com"
+        },
+        {
+          "name": "App__MarketingUrl",
+          "value": "https://staging.lagedra.com"
+        },
+        {
+          "name": "Stripe__PublishableKey",
+          "value": "pk_test_51TH4W49C1zhcxwIed13rUO089U9x7zqymxW7pjkgeEDIUFss6MBN9WPwXfQQSH3JWOOdnUSm0EYObonbUpprqBbh004eAq2YhU"
+        },
+        {
+          "name": "MinIO__Endpoint",
+          "value": "s3.us-west-1.amazonaws.com"
+        },
+        {
+          "name": "MinIO__EvidenceBucket",
+          "value": "lagedra-private-prod"
+        },
+        {
+          "name": "MinIO__ExportsBucket",
+          "value": "lagedra-private-prod"
+        },
+        {
+          "name": "MinIO__QuarantineBucket",
+          "value": "lagedra-private-prod"
+        },
+        {
+          "name": "MinIO__ListingsBucket",
+          "value": "lagedra-public-prod"
+        },
+        {
+          "name": "MinIO__UsersBucket",
+          "value": "lagedra-public-prod"
+        },
+        {
+          "name": "MinIO__UseHttps",
+          "value": "true"
+        },
+        {
+          "name": "MinIO__UseIamRole",
+          "value": "true"
+        },
+        {
+          "name": "Twilio__FromEmail",
+          "value": "info@lagedra.com"
+        },
+        {
+          "name": "Twilio__FromName",
+          "value": "Lagedra"
+        },
+        {
+          "name": "ExternalAuth__Google__ClientId",
+          "value": "262822188598-915tp2sk0cgsv9sj0c6nifnp661998ba.apps.googleusercontent.com"
+        },
+        {
+          "name": "ListingImport__ScrapingAnt__ApiKey",
+          "value": "29f37cdbfe3e47ebae555db06b628241"
+        },
+        {
+          "name": "Channels__OwnerRez__BaseUrl",
+          "value": "https://faststage.ownerrez.com"
+        },
+        {
+          "name": "Channels__OwnerRez__Username",
+          "value": "HaXmlSandboxMoR"
+        },
+        {
+          "name": "Channels__OwnerRez__Key",
+          "value": "0beefaaa-963c-407c-bd64-bdeadb949417"
+        },
+        {
+          "name": "Channels__OwnerRez__UserAgent",
+          "value": "Lagedra/1.0 (+https://lagedra.com)"
+        },
+        {
+          "name": "Channels__Hostaway__BaseUrl",
+          "value": "https://api.hostaway.com"
+        },
+        {
+          "name": "Channels__Hostaway__UserAgent",
+          "value": "Lagedra/1.0 (+https://lagedra.com)"
+        },
+        {
+          "name": "Channels__Hostaway__DefaultChannelId",
+          "value": "2000"
+        },
+        {
+          "name": "Channels__Hostaway__AutoRegisterWebhooks",
+          "value": "true"
+        },
+        {
+          "name": "FeatureFlags__BookingFlow.V2",
+          "value": "true"
+        },
+        {
+          "name": "FeatureFlags__ListingImport.AiExtraction",
+          "value": "false"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "Jwt__Secret",
+          "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/jwt-secret"
+        },
+        {
+          "name": "Stripe__SecretKey",
+          "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/stripe-secret-key"
+        },
+        {
+          "name": "Stripe__WebhookSecret",
+          "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/stripe-webhook-secret"
+        },
+        {
+          "name": "GoogleMaps__ApiKey",
+          "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/google-maps-key"
+        },
+        {
+          "name": "Encryption__Key",
+          "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/encryption-key"
+        },
+        {
+          "name": "Twilio__AccountSid",
+          "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/twilio-account-sid"
+        },
+        {
+          "name": "Twilio__AuthToken",
+          "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/twilio-auth-token"
+        },
+        {
+          "name": "Twilio__MessagingServiceSid",
+          "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/twilio-messaging-service-sid"
+        },
+        {
+          "name": "Twilio__SendGridApiKey",
+          "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/twilio-sendgrid-api-key"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/lagedra",
+          "awslogs-region": "us-west-1",
+          "awslogs-stream-prefix": "api"
+        }
+      }
+    }
+  ]
+}

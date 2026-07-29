@@ -1,14 +1,16 @@
 import { useEffect, useState } from "react";
-import { Shield, Search, ChevronLeft, ChevronRight } from "lucide-react";
+import { Shield, Search, ChevronLeft, ChevronRight, KeyRound, Loader2 } from "lucide-react";
 import { authApi } from "@/features/auth/services/authApi";
 import type { UserProfileDto } from "@/api/types";
 import type { UserRole } from "@/app/auth/roles";
 import { allRoles, roleLabel } from "@/app/auth/roles";
+import { getApiErrorMessage } from "@/api/errors";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader } from "@/components/shared/Loader";
 import { ChangeRoleDialog } from "@/features/admin/components/ChangeRoleDialog";
 
@@ -19,6 +21,9 @@ export const UsersPage = () => {
   const [page, setPage] = useState(1);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleTarget, setRoleTarget] = useState<{ user: UserProfileDto } | null>(null);
+  const [sendingPasswordFor, setSendingPasswordFor] = useState<string | null>(null);
+  const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
   const pageSize = 50;
 
   const loadUsers = async (p: number) => {
@@ -55,6 +60,29 @@ export const UsersPage = () => {
     setRoleTarget(null);
   };
 
+  const handleSendSetPasswordEmail = async (user: UserProfileDto) => {
+    const label =
+      user.displayName ||
+      [user.firstName, user.lastName].filter(Boolean).join(" ") ||
+      user.email;
+    const ok = window.confirm(
+      `Send a set-password email to ${label} (${user.email})?\n\nThey'll get a link to choose a new password.`,
+    );
+    if (!ok) return;
+
+    setActionMessage(null);
+    setActionError(null);
+    setSendingPasswordFor(user.userId);
+    try {
+      const result = await authApi.sendSetPasswordEmail(user.userId);
+      setActionMessage(result.message || `Set-password email sent to ${user.email}.`);
+    } catch (err) {
+      setActionError(getApiErrorMessage(err, "Failed to send set-password email."));
+    } finally {
+      setSendingPasswordFor(null);
+    }
+  };
+
   const roleBadgeVariant = (role: string | number) => {
     if (role === "PlatformAdmin") return "default" as const;
     if (role === "Member") return "accent" as const;
@@ -69,6 +97,17 @@ export const UsersPage = () => {
           View and manage all platform users.
         </p>
       </div>
+
+      {actionMessage && (
+        <Alert className="border-success/40 bg-success/5">
+          <AlertDescription>{actionMessage}</AlertDescription>
+        </Alert>
+      )}
+      {actionError && (
+        <Alert variant="destructive">
+          <AlertDescription>{actionError}</AlertDescription>
+        </Alert>
+      )}
 
       <Card>
         <CardHeader className="pb-4">
@@ -129,14 +168,30 @@ export const UsersPage = () => {
                         {new Date(user.memberSince).toLocaleDateString()}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setRoleTarget({ user })}
-                        >
-                          <Shield className="h-4 w-4" />
-                          Change role
-                        </Button>
+                        <div className="flex flex-wrap items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            disabled={sendingPasswordFor === user.userId}
+                            onClick={() => void handleSendSetPasswordEmail(user)}
+                            title="Email the user a link to set a new password"
+                          >
+                            {sendingPasswordFor === user.userId ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <KeyRound className="h-4 w-4" />
+                            )}
+                            Set password
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setRoleTarget({ user })}
+                          >
+                            <Shield className="h-4 w-4" />
+                            Change role
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

@@ -14,6 +14,7 @@ import type {
   UpdateProfileRequest,
   UpdateRoleRequest,
   UserProfileDto,
+  VerifyEmailResponse,
 } from "@/api/types";
 import { useAuthStore } from "@/app/auth/authStore";
 
@@ -43,8 +44,8 @@ export const authApi = {
     return response.data;
   },
 
-  async verifyEmail(userId: string, token: string): Promise<{ message: string }> {
-    const response = await http.get<{ message: string }>(endpoints.auth.verifyEmail, {
+  async verifyEmail(userId: string, token: string): Promise<VerifyEmailResponse> {
+    const response = await http.get<VerifyEmailResponse>(endpoints.auth.verifyEmail, {
       params: { userId, token },
     });
     return response.data;
@@ -124,6 +125,13 @@ export const authApi = {
 
   async updateUserRole(userId: string, payload: UpdateRoleRequest): Promise<{ message: string }> {
     const response = await http.put<{ message: string }>(endpoints.auth.userRole(userId), payload);
+    return response.data;
+  },
+
+  async sendSetPasswordEmail(userId: string): Promise<{ message: string }> {
+    const response = await http.post<{ message: string }>(
+      endpoints.auth.sendSetPasswordEmail(userId),
+    );
     return response.data;
   },
 

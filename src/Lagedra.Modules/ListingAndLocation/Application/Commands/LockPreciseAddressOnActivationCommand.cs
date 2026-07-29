@@ -62,22 +62,32 @@ public sealed class LockPreciseAddressOnActivationCommandHandler(
             .GeocodeAddressAsync(fullAddress, cancellationToken)
             .ConfigureAwait(false);
 
-        if (geocoded is not null)
+        try
         {
-            listing.SetApproxLocation(new GeoPoint(geocoded.Latitude, geocoded.Longitude));
+            if (geocoded is not null)
+            {
+                listing.SyncApproxLocationForAddressLock(
+                    new GeoPoint(geocoded.Latitude, geocoded.Longitude));
+            }
+
+            var jurisdictionCode = request.JurisdictionCode;
+            if (string.IsNullOrWhiteSpace(jurisdictionCode))
+            {
+                var jurisdiction = await geocodingService
+                    .ResolveJurisdictionAsync(fullAddress, cancellationToken)
+                    .ConfigureAwait(false);
+
+                jurisdictionCode = jurisdiction?.JurisdictionCode;
+            }
+
+            listing.LockPreciseAddress(address, jurisdictionCode);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Result<ListingDetailsDto>.Failure(
+                new Error("Listing.LockAddressFailed", ex.Message));
         }
 
-        var jurisdictionCode = request.JurisdictionCode;
-        if (string.IsNullOrWhiteSpace(jurisdictionCode))
-        {
-            var jurisdiction = await geocodingService
-                .ResolveJurisdictionAsync(fullAddress, cancellationToken)
-                .ConfigureAwait(false);
-
-            jurisdictionCode = jurisdiction?.JurisdictionCode;
-        }
-
-        listing.LockPreciseAddress(address, jurisdictionCode);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return Result<ListingDetailsDto>.Success(ListingMapper.ToDetails(listing));

@@ -69,31 +69,53 @@ export const getApiErrorMessage = (
   if (isAxiosErrorResponse(error)) {
     const data = error.response?.data;
     const status = error.response?.status;
+    const code = data?.code ?? data?.error;
 
+    if (data?.description) return data.description;
     if (data?.detail) return data.detail;
     if (data?.message) return data.message;
 
-    if (data?.error) {
+    if (code) {
+      if (
+        status === 409 &&
+        (code === "Channel.AlreadyConnected" ||
+          code === "Channel.HostawayAlreadyConnected" ||
+          code === "Channel.GuestyAlreadyConnected")
+      ) {
+        if (code === "Channel.GuestyAlreadyConnected") {
+          return "Guesty is already connected. Use Sync to update existing listings and import new ones.";
+        }
+        return "Hostaway is already connected. Use Sync to update existing listings and import new ones.";
+      }
+
       if (status === 403) {
-        const friendly = findFallback(FORBIDDEN_FALLBACK_BY_PREFIX, data.error);
+        const friendly = findFallback(FORBIDDEN_FALLBACK_BY_PREFIX, code);
         if (friendly) return friendly;
         return "You do not have permission to perform this action.";
       }
 
       if (status === 404) {
-        const friendly = findFallback(NOT_FOUND_FALLBACK_BY_PREFIX, data.error);
+        const friendly = findFallback(NOT_FOUND_FALLBACK_BY_PREFIX, code);
         if (friendly) return friendly;
       }
 
       if (status === 400) {
-        const friendly = BAD_REQUEST_FALLBACK_BY_PREFIX[data.error];
+        const friendly = BAD_REQUEST_FALLBACK_BY_PREFIX[code];
         if (friendly) return friendly;
       }
 
-      return data.error;
+      return code;
     }
 
     if (status === 401) {
+      // Login/register callers pass a credentials-oriented fallback; keep that
+      // instead of the generic "session expired" copy used for authed calls.
+      if (
+        fallback !== DEFAULT_MESSAGE &&
+        /login|sign-?in|credential|password/i.test(fallback)
+      ) {
+        return fallback;
+      }
       return "Your session has expired. Please sign in again.";
     }
     if (status === 403) {
@@ -101,6 +123,9 @@ export const getApiErrorMessage = (
     }
     if (status === 404) {
       return "The requested resource could not be found.";
+    }
+    if (status === 409) {
+      return "This action conflicts with an existing resource.";
     }
 
     return error.message || fallback;

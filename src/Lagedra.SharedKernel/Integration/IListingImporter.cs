@@ -64,7 +64,8 @@ public sealed record ListingImportRequest(
     double? Latitude = null,
     double? Longitude = null,
     ListingImportAddress? Address = null,
-    IReadOnlyList<ListingImportPhoto>? Photos = null);
+    IReadOnlyList<ListingImportPhoto>? Photos = null,
+    IReadOnlyList<string>? AmenityNames = null);
 
 public sealed record ListingImportResult(
     Guid ListingId,

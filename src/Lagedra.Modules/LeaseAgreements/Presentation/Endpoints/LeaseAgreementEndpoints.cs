@@ -107,12 +107,13 @@ public static class LeaseAgreementEndpoints
     private static async Task<IResult> ApproveVersion(
         [FromRoute] Guid id,
         [FromRoute] Guid versionId,
-        [FromBody] ApproveLeaseTemplateRequest? request,
         HttpContext httpContext,
         IMediator mediator,
         CancellationToken ct)
     {
-        var approverId = request?.ApproverId ?? GetUserId(httpContext);
+        // Dual-control: the approver is always the authenticated caller. A
+        // client-supplied approver id would let one admin forge both approvals.
+        var approverId = GetUserId(httpContext);
         var result = await mediator.Send(
             new ApproveLeaseTemplateVersionCommand(id, versionId, approverId), ct)
             .ConfigureAwait(true);
@@ -184,15 +185,50 @@ public static class LeaseAgreementEndpoints
 
     private static async Task<IResult> DownloadDealPdf(
         [FromRoute] Guid dealId,
+        HttpContext httpContext,
         IDealLeaseDocumentStore store,
+        IMediator mediator,
+        IDealApplicationStatusProvider dealProvider,
         CancellationToken ct)
     {
-        var doc = await store.GetByDealIdAsync(dealId, ct).ConfigureAwait(true);
-        if (doc is null)
+        // Only the deal's landlord/tenant (or a platform admin) may download
+        // the filled lease — it contains both parties' personal details.
+        if (!httpContext.User.IsInRole("PlatformAdmin"))
         {
-            return Results.NotFound(new { error = "LeaseDocument.NotFound", detail = "No lease PDF for this deal." });
+            var callerId = GetUserId(httpContext);
+            var participants = await dealProvider.GetParticipantsAsync(dealId, ct).ConfigureAwait(true);
+            if (participants is null
+                || (participants.LandlordUserId != callerId && participants.TenantUserId != callerId))
+            {
+                return Results.Forbid();
+            }
         }
 
+        var existing = await store.GetByDealIdAsync(dealId, ct).ConfigureAwait(true);
+        if (existing is not null)
+        {
+            return Results.File(existing.Content, existing.ContentType, existing.FileName);
+        }
+
+        // Generate on demand when the async Truth Surface handler hasn't
+        // produced a PDF yet (or previously failed). Matches the deal_activated
+        // email path so download never permanently 404s after seal.
+        var result = await mediator.Send(new GenerateDealLeasePdfCommand(dealId), ct)
+            .ConfigureAwait(true);
+
+        if (result.IsFailure)
+        {
+            return Results.Problem(
+                detail: result.Error.Description,
+                statusCode: StatusCodes.Status422UnprocessableEntity,
+                title: result.Error.Code,
+                extensions: new Dictionary<string, object?>
+                {
+                    ["error"] = result.Error.Code,
+                });
+        }
+
+        var doc = result.Value;
         return Results.File(doc.Content, doc.ContentType, doc.FileName);
     }
 

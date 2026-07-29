@@ -41,6 +41,7 @@ import {
 import { getApiErrorMessage } from "@/api/errors";
 import { StarRatingDisplay } from "@/features/reviews/components/StarRating";
 import type { DealApplicationDto } from "@/api/types";
+import { cn } from "@/lib/utils";
 
 type Props = {
   application: DealApplicationDto;
@@ -141,7 +142,11 @@ export const ApplicationCard = ({
   return (
     <>
       <Card
-        className="relative overflow-hidden cursor-pointer transition-all hover:border-primary/30 hover:shadow-md focus-within:ring-2 focus-within:ring-ring"
+        className={cn(
+          "relative overflow-hidden cursor-pointer transition-all hover:border-primary/30 hover:shadow-md focus-within:ring-2 focus-within:ring-ring",
+          application.status === "PaymentFailed" &&
+            "border-destructive/50 ring-1 ring-destructive/20",
+        )}
         onClick={openDetailDialog}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
@@ -358,6 +363,37 @@ export const ApplicationCard = ({
                   ? " The guest has been notified."
                   : " The host has notified you."}
               </span>
+            </div>
+          )}
+
+          {application.status === "PaymentFailed" && (
+            <div
+              className="relative z-10 flex flex-col gap-2 rounded-b-[inherit] border-t border-destructive/30 bg-destructive/5 px-4 py-2.5 text-xs text-destructive sm:flex-row sm:items-center sm:justify-between"
+              onClick={stopBubble}
+            >
+              <div className="min-w-0 space-y-0.5">
+                <p className="font-semibold">Payment failed — booking at risk</p>
+                <p className="text-destructive/90">
+                  {isHostView
+                    ? "The guest’s deposit payment didn’t go through. They’ve been asked to update their card and retry."
+                    : "Your deposit payment didn’t go through. Update your card and retry to activate this booking."}
+                </p>
+                <p className="text-destructive/80">
+                  <span className="font-medium">How to resolve: </span>
+                  {isHostView
+                    ? "Open the booking once a deal exists, or wait for the guest to retry payment."
+                    : "Open the booking checkout and update your payment method."}
+                </p>
+              </div>
+              {application.dealId && (
+                <Link
+                  to={`/app/deals/${application.dealId}`}
+                  onClick={stopBubble}
+                  className="shrink-0 font-semibold text-destructive underline-offset-2 hover:underline"
+                >
+                  {isHostView ? "Resolve →" : "Resolve payment →"}
+                </Link>
+              )}
             </div>
           )}
 

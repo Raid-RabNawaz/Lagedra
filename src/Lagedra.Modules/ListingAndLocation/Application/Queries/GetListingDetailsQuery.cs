@@ -97,7 +97,24 @@ public sealed class GetListingDetailsQueryHandler(
             hostProfile?.ResponseRatePercent,
             hostReputation?.AverageOverall);
 
-        return Result<ListingDetailsDto>.Success(
-            ListingMapper.ToDetails(listing, badges, hostProfile, qualityScore));
+        var details = ListingMapper.ToDetails(listing, badges, hostProfile, qualityScore);
+
+        // Public shoppers (and any non-owner) only get city/region — never the
+        // street or ZIP — until they are a confirmed booking party (see deal
+        // stay-access endpoint). Owners and platform admins keep the full address.
+        if (!isOwner && !request.RequesterIsPlatformAdmin && details.PreciseAddress is { } addr)
+        {
+            details = details with
+            {
+                PreciseAddress = new AddressDto(
+                    string.Empty,
+                    addr.City,
+                    addr.State,
+                    string.Empty,
+                    addr.Country),
+            };
+        }
+
+        return Result<ListingDetailsDto>.Success(details);
     }
 }

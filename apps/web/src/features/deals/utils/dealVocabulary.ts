@@ -18,7 +18,7 @@ export function dealHeading(phase: DealPhase): string {
     case "Active":
       return "Active";
     case "AwaitingDepositReturn":
-      return "Deposit return";
+      return "Deposit Returned";
     case "Closed":
       return "Completed";
     case "PaymentFailed":

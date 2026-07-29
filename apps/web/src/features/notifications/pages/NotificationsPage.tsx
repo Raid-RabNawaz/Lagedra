@@ -13,6 +13,7 @@ import {
   useMarkAllRead,
   useUnreadCount,
 } from "@/features/notifications/hooks/useNotifications";
+import { getNotificationRoute } from "@/features/notifications/utils/getNotificationRoute";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -39,30 +40,6 @@ function formatTimestamp(dateStr: string): string {
     day: "numeric",
     year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
   });
-}
-
-function getNotificationRoute(n: InAppNotificationDto): string | null {
-  if (!n.relatedEntityId) return null;
-
-  switch (n.relatedEntityType) {
-    case "Deal":
-      if (n.category.startsWith("truth_surface"))
-        return `/app/truth-surface/${n.relatedEntityId}`;
-      if (n.category === "application_approved")
-        return `/app/deals/${n.relatedEntityId}`;
-      return `/app/deals/${n.relatedEntityId}/billing`;
-
-    case "Listing":
-      if (
-        n.category === "application_submitted" ||
-        n.category === "application_received"
-      )
-        return `/app/applications`;
-      return `/listings/${n.relatedEntityId}`;
-
-    default:
-      return null;
-  }
 }
 
 const categoryColor: Record<string, string> = {

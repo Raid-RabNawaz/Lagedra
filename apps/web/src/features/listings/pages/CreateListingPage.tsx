@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Info } from "lucide-react";
 import { useAuthStore } from "@/app/auth/authStore";
 import { listingApi } from "@/features/listings/services/listingApi";
@@ -10,7 +10,10 @@ import {
   type ApplyImportPayload,
 } from "@/features/listings/components/ImportFromUrlPanel";
 import { useListingDefinitions } from "@/features/listings/hooks/useListingDefinitions";
-import { toCreateListingRequest } from "@/features/listings/lib/toListingRequests";
+import {
+  toCreateListingRequest,
+  toUpdateListingRequest,
+} from "@/features/listings/lib/toListingRequests";
 import { importListingPhotos } from "@/features/listings/lib/importListingPhotos";
 import {
   listingFormSchema,
@@ -65,20 +68,63 @@ export const CreateListingPage = () => {
   // a draft outright (e.g. the imported description was too short).
   const [reviewNote, setReviewNote] = useState<string | null>(null);
 
-  const mutation = useMutation({
+  // The draft created after the Basics step. The wizard's location and photos
+  // steps save through listing-scoped endpoints that invalidate
+  // ["listing", id], so we keep the draft in the shared query cache.
+  const [draftId, setDraftId] = useState<string | null>(null);
+  const draftQuery = useQuery({
+    queryKey: ["listing", draftId],
+    queryFn: () => listingApi.getDetail(draftId!),
+    enabled: Boolean(draftId),
+  });
+
+  // Creates the draft when the host completes the Basics step. Fields the host
+  // hasn't reached yet are sent with the form defaults and refined by the
+  // later steps via update calls.
+  const createDraftMutation = useMutation({
     mutationFn: async (values: ListingFormValues) => {
       if (!user) throw new Error("You must be signed in.");
       const created = await listingApi.create(toCreateListingRequest(values));
-      // Post-create step: re-upload any selected imported photos through the
-      // existing media pipeline. No-op when nothing was selected.
+      // Re-upload any selected imported photos through the existing media
+      // pipeline. No-op when nothing was selected.
       if (pendingPhotos.length > 0) {
         await importListingPhotos(created.id, pendingPhotos);
       }
       return created;
     },
     onSuccess: (data) => {
+      queryClient.setQueryData(["listing", data.id], data);
+      setDraftId(data.id);
       void queryClient.invalidateQueries({ queryKey: ["listings", "mine"] });
-      void navigate(`/app/listings/${data.id}/edit`, { replace: true });
+      if (pendingPhotos.length > 0) {
+        // Imported photos were uploaded after the snapshot above.
+        void queryClient.invalidateQueries({ queryKey: ["listing", data.id] });
+      }
+    },
+  });
+
+  // Persists progress each time the host advances past a form step.
+  const saveProgressMutation = useMutation({
+    mutationFn: async (values: ListingFormValues) => {
+      if (!draftId) throw new Error("Draft has not been created yet.");
+      return listingApi.update(draftId, toUpdateListingRequest(values));
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(["listing", data.id], data);
+    },
+  });
+
+  // Final step: save once more, then hand off to the listing page where the
+  // host can submit for review.
+  const finishMutation = useMutation({
+    mutationFn: async (values: ListingFormValues) => {
+      if (!draftId) throw new Error("Draft has not been created yet.");
+      return listingApi.update(draftId, toUpdateListingRequest(values));
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(["listing", data.id], data);
+      void queryClient.invalidateQueries({ queryKey: ["listings", "mine"] });
+      void navigate(`/app/listings/${data.id}`, { replace: true });
     },
   });
 
@@ -149,8 +195,8 @@ export const CreateListingPage = () => {
         <BackLink fallbackTo="/app/listings" label="Back to my listings" />
         <h1 className="mt-2 text-3xl font-bold tracking-tight">Create a listing</h1>
         <p className="mt-1 text-muted-foreground">
-          We'll walk you through the details step by step. After you create the listing, you'll set
-          the map location and upload photos before publishing.
+          We'll walk you through everything step by step — details, location, photos and rules.
+          Your draft is created after the first step and saved as you go.
         </p>
       </div>
 
@@ -161,12 +207,18 @@ export const CreateListingPage = () => {
         creating={reviewMutation.isPending}
       />
 
-      {(mutation.isError || reviewMutation.isError) && (
+      {(createDraftMutation.isError ||
+        saveProgressMutation.isError ||
+        finishMutation.isError ||
+        reviewMutation.isError) && (
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
-            {((mutation.error ?? reviewMutation.error) as Error)?.message ??
-              "Failed to create listing. Check all fields and try again."}
+            {((createDraftMutation.error ??
+              saveProgressMutation.error ??
+              finishMutation.error ??
+              reviewMutation.error) as Error)?.message ??
+              "Failed to save listing. Check all fields and try again."}
           </AlertDescription>
         </Alert>
       )}
@@ -182,9 +234,16 @@ export const CreateListingPage = () => {
         key={wizardKey}
         definitions={defs.data}
         defaultValues={importedDefaults}
-        submitLabel="Create listing"
-        onSubmit={async (values) => {
-          await mutation.mutateAsync(values);
+        listing={draftQuery.data ?? null}
+        submitLabel="Finish listing"
+        onCreateDraft={async (values) => {
+          await createDraftMutation.mutateAsync(values);
+        }}
+        onSaveProgress={async (values) => {
+          await saveProgressMutation.mutateAsync(values);
+        }}
+        onFinish={async (values) => {
+          await finishMutation.mutateAsync(values);
         }}
       />
     </div>

@@ -1,6 +1,5 @@
 using System.Globalization;
 using Lagedra.Modules.ListingAndLocation.Domain.Entities;
-using Lagedra.Modules.ListingAndLocation.Domain.Enums;
 using Lagedra.Modules.ListingAndLocation.Domain.Services;
 using Lagedra.Modules.ListingAndLocation.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Integration;
@@ -25,9 +24,10 @@ public sealed class ListingProvider(ListingsDbContext db) : IListingProvider
             return null;
         }
 
-        // Precise address is only embedded once the listing has been activated
-        // (legally locked). Pre-activation, exposing it would leak host PII.
-        var preciseAddress = listing.PreciseAddress is not null && listing.Status == ListingStatus.Activated
+        // Precise address is shared with deal participants via Truth Surface /
+        // lease once the host has locked it. Public listing reads redact the
+        // street separately (GetListingDetailsQuery).
+        var preciseAddress = listing.PreciseAddress is not null
             ? new ListingAddressDto(
                 listing.PreciseAddress.Street,
                 listing.PreciseAddress.City,

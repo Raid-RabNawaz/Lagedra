@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, Navigate } from "react-router-dom";
 import {
   ArrowRight,
   ShieldCheck,
@@ -12,12 +12,14 @@ import {
 import { useAuthStore } from "@/app/auth/authStore";
 import {
   useSnapshot,
+  useSnapshotByDealId,
   useConfirmSnapshot,
 } from "@/features/truth-surface/hooks/useTruthSurface";
 import { useMyDeals } from "@/features/deals/hooks/useDeals";
 import { TruthSurfaceStatusBadge } from "@/features/truth-surface/components/TruthSurfaceStatusBadge";
 import { TruthSnapshotViewer } from "@/features/truth-surface/components/TruthSnapshotViewer";
 import { AgreementDocument } from "@/features/truth-surface/components/AgreementDocument";
+import { LeaseAgreementDownloadButton } from "@/features/truth-surface/components/LeaseAgreementDownloadButton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -34,6 +36,11 @@ export const TruthSurfaceConfirmationPage = () => {
   const user = useAuthStore((s) => s.user);
 
   const { data: snapshot, isLoading, isError } = useSnapshot(snapshotId);
+  // Legacy truth-surface notifications incorrectly deep-linked with a deal id.
+  // If the snapshot lookup fails, try resolving it as a deal id and redirect.
+  const dealFallback = useSnapshotByDealId(
+    isError && snapshotId ? snapshotId : undefined,
+  );
   const confirmMutation = useConfirmSnapshot();
 
   const { data: deals } = useMyDeals("all");
@@ -77,17 +84,39 @@ export const TruthSurfaceConfirmationPage = () => {
     });
   };
 
-  if (isLoading) {
+  if (isLoading || (isError && dealFallback.isLoading)) {
     return <Loader fullPage label="Loading Truth Surface..." />;
+  }
+
+  if (isError && dealFallback.data?.snapshotId) {
+    return (
+      <Navigate
+        to={`/app/truth-surface/${dealFallback.data.snapshotId}`}
+        replace
+      />
+    );
   }
 
   if (isError || !snapshot) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8 text-center">
+      <div className="mx-auto max-w-3xl px-4 py-16 sm:px-6 lg:px-8 text-center space-y-4">
         <p className="text-destructive font-medium">
           Truth Surface snapshot not found or failed to load.
         </p>
-        <BackLink fallbackTo="/app" label="Back to dashboard" className="mt-4" />
+        <p className="text-sm text-muted-foreground">
+          Open the deal to view the booking agreement if one exists.
+        </p>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          {snapshotId && (
+            <Link
+              to={`/app/deals/${snapshotId}/truth-surface`}
+              className="text-sm font-medium text-primary hover:underline"
+            >
+              Try deal truth surface
+            </Link>
+          )}
+          <BackLink fallbackTo="/app" label="Back to dashboard" />
+        </div>
       </div>
     );
   }
@@ -262,6 +291,9 @@ export const TruthSurfaceConfirmationPage = () => {
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
+              {isConfirmed && (isTenant || isLandlord) && (
+                <LeaseAgreementDownloadButton dealId={snapshot.dealId} />
+              )}
             </div>
           </div>
         </>

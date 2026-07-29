@@ -4,6 +4,7 @@ import { partnerApi } from "@/features/partners/services/partnerApi";
 import { usePartnerMembership } from "@/features/partners/hooks/usePartnerMembership";
 import { extractErrorMessage } from "@/lib/errors";
 import type { PartnerMemberDto, PartnerMemberRole } from "@/api/types";
+import { PersonCell } from "@/features/partners/components/PersonCell";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { ListRowsSkeleton } from "@/components/shared/ListSkeleton";
 import { Loader } from "@/components/shared/Loader";
 import { ErrorState } from "@/components/shared/ErrorState";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -64,83 +67,92 @@ export const PartnerMembersPage = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
-            <Users className="h-7 w-7 text-muted-foreground" />
-            Members
-          </h1>
-          <p className="mt-1 text-muted-foreground">
+      <PageHeader
+        icon={Users}
+        title="Members"
+        description={
+          <>
             People in <strong>{membership.organization.name}</strong> who can act on the
             organization's behalf.
-          </p>
-        </div>
+          </>
+        }
+      >
         {isAdmin && (
           <Button onClick={() => setDialogOpen(true)}>
             <Plus className="h-4 w-4" />
             Add member
           </Button>
         )}
-      </div>
+      </PageHeader>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Team</CardTitle>
-          <CardDescription>
-            {members.length} member{members.length === 1 ? "" : "s"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <Loader label="Loading members..." />
-          ) : error ? (
-            <ErrorState error={error} onRetry={() => void loadMembers()} />
-          ) : members.length === 0 ? (
-            <EmptyState
-              title="No members yet"
-              description="Add a teammate to give them access to this partner organization."
-            >
-              {isAdmin && (
-                <Button onClick={() => setDialogOpen(true)}>
-                  <Plus className="h-4 w-4" />
-                  Add member
-                </Button>
-              )}
-            </EmptyState>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>User ID</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead className="hidden md:table-cell">Joined</TableHead>
-                  <TableHead className="hidden lg:table-cell">Invited by</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {members.map((m) => (
-                  <TableRow key={m.id}>
-                    <TableCell className="font-mono text-xs" title={m.userId}>
-                      {m.userId.slice(0, 12)}…
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={m.memberRole === "Admin" ? "accent" : "secondary"}>
-                        {m.memberRole}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
-                      {formatDate(m.joinedAt)}
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell font-mono text-xs text-muted-foreground">
-                      {m.invitedBy ? `${m.invitedBy.slice(0, 8)}…` : "—"}
-                    </TableCell>
+      {isLoading ? (
+        <ListRowsSkeleton rows={3} />
+      ) : error ? (
+        <ErrorState error={error} onRetry={() => void loadMembers()} />
+      ) : (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">Team</CardTitle>
+            <CardDescription>
+              {members.length} member{members.length === 1 ? "" : "s"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {members.length === 0 ? (
+              <EmptyState
+                title="No members yet"
+                description="Add a teammate to give them access to this partner organization."
+              >
+                {isAdmin && (
+                  <Button onClick={() => setDialogOpen(true)}>
+                    <Plus className="h-4 w-4" />
+                    Add member
+                  </Button>
+                )}
+              </EmptyState>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Member</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead className="hidden md:table-cell">Joined</TableHead>
+                    <TableHead className="hidden lg:table-cell">Invited by</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+                </TableHeader>
+                <TableBody>
+                  {members.map((m) => (
+                    <TableRow key={m.id}>
+                      <TableCell>
+                        <PersonCell
+                          displayName={m.displayName}
+                          email={m.email}
+                          userId={m.userId}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={m.memberRole === "Admin" ? "accent" : "secondary"}>
+                          {m.memberRole}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
+                        {formatDate(m.joinedAt)}
+                      </TableCell>
+                      <TableCell
+                        className="hidden lg:table-cell text-sm text-muted-foreground"
+                        title={m.invitedBy ?? undefined}
+                      >
+                        {m.invitedByDisplayName?.trim() ||
+                          (m.invitedBy ? `${m.invitedBy.slice(0, 8)}…` : "—")}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {orgId && (
         <AddMemberDialog

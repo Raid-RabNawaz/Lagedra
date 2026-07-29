@@ -9,4 +9,5 @@ public sealed record UserRegisteredEvent(
     DateTime OccurredAt,
     Guid UserId,
     string Email,
-    UserRole Role) : IDomainEvent;
+    UserRole Role,
+    string? SignupType = null) : IDomainEvent;

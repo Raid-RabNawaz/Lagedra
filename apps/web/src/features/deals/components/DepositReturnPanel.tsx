@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { HandCoins, Check, Clock, DoorOpen, Scale } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import {
   useConfirmDepositReturnedByHost,
   useConfirmDepositReceivedByTenant,
 } from "@/features/activation-billing/hooks/useBilling";
+import { MY_DEALS_KEY } from "@/features/deals/hooks/useDeals";
 import { formatDate, formatMoney } from "@/utils/format";
 import type { DealSummaryDto } from "@/api/types";
 
@@ -171,7 +173,23 @@ function HandshakeCard({
   isLandlord: boolean;
   isTenant: boolean;
 }) {
-  const { data: payment, isLoading } = usePaymentStatus(deal.dealId);
+  const queryClient = useQueryClient();
+  // Prefer deal-summary handshake fields so a stale payment cache can't claim
+  // the guest never confirmed after they already settled server-side.
+  const summarySettled = Boolean(deal.depositReturnSettledAt);
+  const summaryTenantReceived = Boolean(deal.tenantConfirmedDepositReceivedAt);
+  const summaryHostReturned = Boolean(deal.hostConfirmedDepositReturnedAt);
+
+  const { data: payment, isLoading } = usePaymentStatus(deal.dealId, {
+    // Keep polling while the handshake is open so the host sees guest
+    // confirmation without a manual refresh.
+    refetchInterval: (query) => {
+      if (summarySettled || query.state.data?.depositReturnSettledAt) {
+        return false;
+      }
+      return 5_000;
+    },
+  });
   const confirmReturned = useConfirmDepositReturnedByHost();
   const confirmReceived = useConfirmDepositReceivedByTenant();
 
@@ -185,6 +203,25 @@ function HandshakeCard({
   const { data: evidenceManifest } = useManifest(evidenceManifestId);
   const evidenceSealed = evidenceManifest?.status === "Sealed";
 
+  const hostReturned =
+    Boolean(payment?.hostConfirmedDepositReturnedAt) || summaryHostReturned;
+  const tenantReceived =
+    Boolean(payment?.tenantConfirmedDepositReceivedAt) || summaryTenantReceived;
+  const settled =
+    Boolean(payment?.depositReturnSettledAt) || summarySettled;
+
+  // Payment status can settle before the deals list refetches phase → Closed.
+  useEffect(() => {
+    if (!payment?.depositReturnSettledAt) return;
+    if (deal.dealPhase === "Closed" && deal.depositReturnSettledAt) return;
+    void queryClient.invalidateQueries({ queryKey: [MY_DEALS_KEY] });
+  }, [
+    payment?.depositReturnSettledAt,
+    deal.dealPhase,
+    deal.depositReturnSettledAt,
+    queryClient,
+  ]);
+
   if (isLoading || !payment) {
     return (
       <Card>
@@ -194,10 +231,6 @@ function HandshakeCard({
       </Card>
     );
   }
-
-  const hostReturned = Boolean(payment.hostConfirmedDepositReturnedAt);
-  const tenantReceived = Boolean(payment.tenantConfirmedDepositReceivedAt);
-  const settled = Boolean(payment.depositReturnSettledAt);
 
   const depositCents = payment.depositAmountCents;
   const netCents =
@@ -395,7 +428,7 @@ function HandshakeCard({
         )}
 
         {/* Host, waiting on the guest */}
-        {!settled && isLandlord && hostReturned && (
+        {!settled && isLandlord && hostReturned && !tenantReceived && (
           <p className="text-sm text-muted-foreground">
             You reported returning{" "}
             {payment.depositReturnAmountCents != null
@@ -414,6 +447,14 @@ function HandshakeCard({
               </span>
             ) : null}
             Waiting for the guest to confirm receipt.
+          </p>
+        )}
+
+        {/* Host, guest confirmed but deals list not yet Closed */}
+        {!settled && isLandlord && hostReturned && tenantReceived && (
+          <p className="text-sm text-muted-foreground">
+            The guest confirmed they received the deposit. Finishing the
+            booking…
           </p>
         )}
 

@@ -35,6 +35,9 @@ export const ResetPasswordPage = () => {
   const [serverError, setServerError] = useState<string | null>(null);
   const userId = params.get("userId");
   const token = params.get("token");
+  // First-time password setup (email just verified) vs a forgotten-password
+  // reset — same API call, different copy.
+  const isSetup = params.get("setup") === "1";
 
   const form = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -43,7 +46,11 @@ export const ResetPasswordPage = () => {
 
   const onSubmit = form.handleSubmit(async (data) => {
     if (!userId || !token) {
-      setServerError("Invalid reset link. Please request a new password reset email.");
+      setServerError(
+        isSetup
+          ? "Invalid link. Please re-open the verification link from your email."
+          : "Invalid reset link. Please request a new password reset email.",
+      );
       return;
     }
 
@@ -59,7 +66,11 @@ export const ResetPasswordPage = () => {
       setMessage(response.message);
       form.reset();
     } catch {
-      setServerError("Could not reset password. Your link may be expired.");
+      setServerError(
+        isSetup
+          ? "Could not set your password. Your link may be expired — re-open the verification link from your email."
+          : "Could not reset password. Your link may be expired.",
+      );
     }
   });
 
@@ -69,13 +80,17 @@ export const ResetPasswordPage = () => {
         <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-success/10">
           <CheckCircle2 className="h-8 w-8 text-success" />
         </div>
-        <h1 className="text-2xl font-bold tracking-tight">Password updated</h1>
-        <p className="mt-2 text-muted-foreground">{message}</p>
+        <h1 className="text-2xl font-bold tracking-tight">
+          {isSetup ? "Your account is ready" : "Password updated"}
+        </h1>
+        <p className="mt-2 text-muted-foreground">
+          {isSetup ? "Password set. Sign in to start adding your listings." : message}
+        </p>
         <Link
           to="/auth/login"
           className={cn(buttonVariants({ variant: "accent", size: "lg" }), "mt-6 w-full")}
         >
-          Sign in with new password
+          {isSetup ? "Sign in" : "Sign in with new password"}
           <ArrowRight className="h-4 w-4" />
         </Link>
       </div>
@@ -85,9 +100,13 @@ export const ResetPasswordPage = () => {
   return (
     <div>
       <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Set new password</h1>
+        <h1 className="text-3xl font-bold tracking-tight">
+          {isSetup ? "Set your password" : "Set new password"}
+        </h1>
         <p className="mt-2 text-muted-foreground">
-          Choose a strong password for your account.
+          {isSetup
+            ? "Your email is verified. Choose a password to finish creating your account."
+            : "Choose a strong password for your account."}
         </p>
       </div>
 
@@ -131,14 +150,16 @@ export const ResetPasswordPage = () => {
           className="w-full"
           disabled={form.formState.isSubmitting}
         >
-          {form.formState.isSubmitting ? "Updating..." : "Reset password"}
+          {form.formState.isSubmitting
+            ? isSetup ? "Setting password..." : "Updating..."
+            : isSetup ? "Set password & continue" : "Reset password"}
         </Button>
       </form>
 
       <Separator className="my-8" />
 
       <p className="text-center text-sm text-muted-foreground">
-        Remember your password?{" "}
+        {isSetup ? "Already set a password?" : "Remember your password?"}{" "}
         <Link to="/auth/login" className="font-medium text-foreground hover:underline">
           Sign in
         </Link>

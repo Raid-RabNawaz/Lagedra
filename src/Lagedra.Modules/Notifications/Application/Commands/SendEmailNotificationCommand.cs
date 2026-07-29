@@ -15,7 +15,7 @@ public sealed record SendEmailNotificationCommand(Guid NotificationId) : IReques
 public sealed partial class SendEmailNotificationCommandHandler(
     NotificationDbContext dbContext,
     IEmailService emailService,
-    IDealLeaseDocumentStore leaseDocumentStore,
+    IDealLeasePdfService leasePdfService,
     ILogger<SendEmailNotificationCommandHandler> logger)
     : IRequestHandler<SendEmailNotificationCommand, Result>
 {
@@ -53,7 +53,9 @@ public sealed partial class SendEmailNotificationCommandHandler(
                 && notification.Payload.TryGetValue("dealId", out var dealIdRaw)
                 && Guid.TryParse(dealIdRaw, out var dealId))
             {
-                var leasePdf = await leaseDocumentStore.GetByDealIdAsync(dealId, cancellationToken)
+                // The email copy promises the lease PDF, so generate it on
+                // demand if the event-driven generation didn't produce one.
+                var leasePdf = await leasePdfService.GetOrGenerateAsync(dealId, cancellationToken)
                     .ConfigureAwait(false);
                 if (leasePdf is not null)
                 {
@@ -66,6 +68,10 @@ public sealed partial class SendEmailNotificationCommandHandler(
                             Content = leasePdf.Content
                         }
                     ];
+                }
+                else
+                {
+                    LogLeaseAttachmentMissing(logger, notification.Id, dealId);
                 }
             }
 
@@ -111,4 +117,7 @@ public sealed partial class SendEmailNotificationCommandHandler(
 
     [LoggerMessage(Level = LogLevel.Error, Message = "Email send failed for notification {NotificationId} to {RecipientAddress}")]
     private static partial void LogEmailFailed(ILogger logger, Guid notificationId, string recipientAddress, Exception ex);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Deal-activated email {NotificationId} sent without lease PDF — none could be generated for deal {DealId}")]
+    private static partial void LogLeaseAttachmentMissing(ILogger logger, Guid notificationId, Guid dealId);
 }

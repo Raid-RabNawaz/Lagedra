@@ -49,6 +49,8 @@ import { getSidebarGroupsForRole, supportsModeSwitching, type NavItem } from "@/
 import { resolveModeSwitchRedirect } from "@/app/auth/modeNavigation";
 import { roleLabel } from "@/app/auth/roles";
 import { useModeStore } from "@/app/auth/modeStore";
+import { usePublicConfigStore } from "@/app/config/publicConfigStore";
+import { isPreLaunchLimitedHost } from "@/app/auth/preLaunchAccess";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { AuthedHeaderActions } from "@/app/layout/AuthedHeaderActions";
@@ -119,7 +121,9 @@ export const AppShell = () => {
   const collapsed = !expanded;
 
   const mode = useModeStore((s) => s.mode);
-  const showModeSwitch = supportsModeSwitching(user?.role);
+  const preLaunchEnabled = usePublicConfigStore((s) => s.preLaunchEnabled);
+  const preLaunchLimited = isPreLaunchLimitedHost(preLaunchEnabled, user?.role);
+  const showModeSwitch = !preLaunchLimited && supportsModeSwitching(user?.role);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -134,7 +138,11 @@ export const AppShell = () => {
     }
   }, [mode, location.pathname, navigate, showModeSwitch]);
 
-  const groups = getSidebarGroupsForRole(user?.role ?? "", showModeSwitch ? mode : undefined);
+  const groups = getSidebarGroupsForRole(
+    user?.role ?? "",
+    showModeSwitch ? mode : undefined,
+    { preLaunchLimited },
+  );
 
   const togglePinned = useCallback(() => {
     setPinned((v) => {
@@ -244,19 +252,24 @@ export const AppShell = () => {
               {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </Button>
 
-            <Link to="/app" className="flex items-center gap-2">
+            <Link
+              to={preLaunchLimited ? "/app/listings" : "/app"}
+              className="flex items-center gap-2"
+            >
               <img src={logoSvg} alt="Lagedra" className="h-6" />
             </Link>
           </div>
 
           <div className="flex items-center gap-2">
-            <Link
-              to="/listings"
-              className="hidden sm:flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-            >
-              <Search className="h-4 w-4" />
-              Browse listings
-            </Link>
+            {!preLaunchLimited && (
+              <Link
+                to="/listings"
+                className="hidden sm:flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+              >
+                <Search className="h-4 w-4" />
+                Browse listings
+              </Link>
+            )}
 
             {/* Mode switch + bell + user dropdown live here. The
                 Dashboard link is omitted from the dropdown inside the

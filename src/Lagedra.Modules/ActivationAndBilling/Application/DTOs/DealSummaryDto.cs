@@ -25,4 +25,7 @@ public sealed record DealSummaryDto(
     DateTime CreatedAt,
     TenantVerificationTier? TenantVerificationTier = null,
     string? DepositReason = null,
-    bool? TruthSurfaceLocked = null);
+    bool? TruthSurfaceLocked = null,
+    DateTime? HostConfirmedDepositReturnedAt = null,
+    DateTime? TenantConfirmedDepositReceivedAt = null,
+    DateTime? DepositReturnSettledAt = null);

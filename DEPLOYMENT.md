@@ -330,12 +330,8 @@ Configured in the ECS task definitions (`deploy/aws/api-task-def.json` and `depl
 | `Jwt__Audience`                   | `https://lagedra.com`              |
 | `App__BaseUrl`                    | `https://api.lagedra.com`          |
 | `App__FrontendUrl`                | `https://lagedra.com`              |
-| `Brevo__SmtpHost`                 | `smtp-relay.brevo.com`             |
-| `Brevo__SmtpPort`                 | `587`                              |
-| `Brevo__Username`                 | Brevo SMTP login                   |
-| `Brevo__Password`                 | Brevo SMTP password                |
-| `Brevo__FromEmail`                | Sender email address               |
-| `Brevo__FromName`                 | `Lagedra`                          |
+| `Twilio__FromEmail`               | Sender email address               |
+| `Twilio__FromName`                | `Lagedra`                          |
 | `ExternalAuth__Google__ClientId`  | Google OAuth Client ID             |
 | `Stripe__PublishableKey`          | Stripe public key                  |
 | `MinIO__Endpoint`                 | `s3.us-west-1.amazonaws.com`       |
@@ -355,7 +351,8 @@ Configured in the ECS task definitions (`deploy/aws/api-task-def.json` and `depl
 
 | Service       | Purpose                        | Config Location              |
 | ------------- | ------------------------------ | ---------------------------- |
-| Brevo (SMTP)  | Transactional email            | Task definition env vars     |
+| Twilio SendGrid | Transactional email            | SSM: `twilio-sendgrid-api-key` |
+| Twilio SMS      | OTP + notification SMS         | SSM: account + API key / token |
 | Google OAuth   | Social sign-in                 | Task def + frontend env      |
 | Google Maps   | Map rendering                  | SSM Parameter Store          |
 | Stripe        | Payment processing             | SSM + task def               |
@@ -373,9 +370,13 @@ When you add a new module to the solution, you must also add a `COPY` line for i
 
 `--force-new-deployment` only restarts the same revision. You must pass `--task-definition lagedra-api:N` explicitly with the new revision number.
 
-### Email sending fails (MailKit AuthenticationException)
+### Email sending fails (SendGrid 401/403)
 
-Verify `Brevo__Username` and `Brevo__Password` in the task definition match what works locally in `appsettings.Development.json`.
+Verify `Twilio__SendGridApiKey` and `Twilio__FromEmail` in SSM / task definition. The From address must be a verified sender/domain in SendGrid.
+
+### SMS sending fails (Twilio 401)
+
+Verify `Twilio__AccountSid`, `Twilio__MessagingServiceSid`, and either `Twilio__AuthToken` or `Twilio__ApiKeySid` + `Twilio__ApiKeySecret`.
 
 ### Frontend shows old content after deploy
 

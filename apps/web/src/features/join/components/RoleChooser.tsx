@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { ArrowRight, Briefcase, Home } from "lucide-react";
 import { JoinLogo } from "./JoinLogo";
 import { chooserContent, type JoinVariant } from "../joinContent";
+import { cn } from "@/lib/utils";
 
 const icons = { Home, Briefcase } as const;
 
@@ -53,5 +54,12 @@ export const RoleChooser = ({ onChoose, showBrowse = true }: RoleChooserProps) =
         </Link>
       </p>
     )}
+
+    <p className={cn("text-center text-sm text-[#3D3D4E]", showBrowse ? "mt-3" : "mt-10")}>
+      Already have an account?{" "}
+      <Link to="/auth/login" className="font-semibold text-[#5B3FE0] hover:underline">
+        Sign in
+      </Link>
+    </p>
   </div>
 );

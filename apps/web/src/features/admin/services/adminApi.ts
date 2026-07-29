@@ -12,11 +12,13 @@ import type {
   LeaseAgreementTemplateDto,
   EvidenceScanQueueItemDto,
   ManualVerificationItemDto,
+  ManualVerificationDetailDto,
   ViolationDto,
   AuditSearchParams,
   AuditSearchResultDto,
   PlatformSummaryDto,
   ListingAnalyticsItemDto,
+  ListingAnalyticsFilters,
   ListingDetailsDto,
   ListingReviewItemDto,
   BlogPostSummaryDto,
@@ -98,6 +100,10 @@ export const adminApi = {
     const r = await http.get<ManualVerificationItemDto[]>(endpoints.adminIdentity.manualQueue);
     return r.data;
   },
+  async getManualVerificationDetail(id: string): Promise<ManualVerificationDetailDto> {
+    const r = await http.get<ManualVerificationDetailDto>(endpoints.adminIdentity.manualDetail(id));
+    return r.data;
+  },
   async approveManualVerification(id: string): Promise<void> {
     await http.post(endpoints.adminIdentity.approveManual(id));
   },
@@ -124,8 +130,16 @@ export const adminApi = {
     });
     return r.data;
   },
-  async getListingAnalytics(): Promise<ListingAnalyticsItemDto[]> {
-    const r = await http.get<ListingAnalyticsItemDto[]>(endpoints.adminAnalytics.listings);
+  async getListingAnalytics(filters?: ListingAnalyticsFilters): Promise<ListingAnalyticsItemDto[]> {
+    const r = await http.get<ListingAnalyticsItemDto[]>(endpoints.adminAnalytics.listings, {
+      params: {
+        landlordUserId: filters?.landlordUserId || undefined,
+        search: filters?.search || undefined,
+        status: filters?.status || undefined,
+        addedFrom: filters?.addedFrom || undefined,
+        addedTo: filters?.addedTo || undefined,
+      },
+    });
     return r.data;
   },
 
@@ -230,15 +244,9 @@ export const adminApi = {
   async requestLeaseApproval(templateId: string, versionId: string): Promise<void> {
     await http.post(endpoints.leaseAgreements.requestApproval(templateId, versionId));
   },
-  async approveLeaseVersion(
-    templateId: string,
-    versionId: string,
-    approverId?: string,
-  ): Promise<void> {
-    await http.post(
-      endpoints.leaseAgreements.approve(templateId, versionId),
-      approverId ? { approverId } : {},
-    );
+  async approveLeaseVersion(templateId: string, versionId: string): Promise<void> {
+    // The backend derives the approver from the authenticated user.
+    await http.post(endpoints.leaseAgreements.approve(templateId, versionId), {});
   },
   async updateLeaseTemplateDraft(
     templateId: string,

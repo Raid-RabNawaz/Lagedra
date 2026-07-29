@@ -28,6 +28,17 @@ import {
   EmptyHint,
 } from "./DashboardKit";
 import { formatDayRange, dealPhaseMeta, appStatusMeta } from "./dashboardFormat";
+import {
+  DealIssueBanner,
+  EndingSoonBanner,
+  EndingSoonBadge,
+} from "@/features/deals/components/BookingAttentionBanner";
+import {
+  getDealIssue,
+  getEndingSoon,
+  sortDealsByAttention,
+} from "@/features/deals/utils/bookingAttention";
+import { cn } from "@/lib/utils";
 
 const ONGOING_PHASES = new Set([
   "TruthSurface",
@@ -56,14 +67,18 @@ export function TravelingDashboard({ user }: { user: UserProfileDto }) {
 
   const ongoingTrips = useMemo(
     () =>
-      myTrips
-        .filter((d) => ONGOING_PHASES.has(d.dealPhase))
-        .sort(
-          (a, b) =>
-            new Date(a.requestedCheckIn).getTime() -
-            new Date(b.requestedCheckIn).getTime(),
-        ),
+      sortDealsByAttention(
+        myTrips.filter((d) => ONGOING_PHASES.has(d.dealPhase)),
+      ),
     [myTrips],
+  );
+
+  const attentionTrips = useMemo(
+    () =>
+      ongoingTrips.filter(
+        (d) => getDealIssue(d, "guest") || getEndingSoon(d),
+      ),
+    [ongoingTrips],
   );
 
   const activeCount = myTrips.filter((d) => d.dealPhase === "Active").length;
@@ -76,6 +91,27 @@ export function TravelingDashboard({ user }: { user: UserProfileDto }) {
 
   return (
     <div className="space-y-6">
+      {attentionTrips.length > 0 && (
+        <div className="space-y-3">
+          {attentionTrips.slice(0, 3).map((deal) => {
+            const issue = getDealIssue(deal, "guest");
+            if (issue) {
+              return <DealIssueBanner key={deal.dealId} issue={issue} />;
+            }
+            const ending = getEndingSoon(deal);
+            if (!ending) return null;
+            return (
+              <EndingSoonBanner
+                key={deal.dealId}
+                listingTitle={deal.listingTitle}
+                ending={ending}
+                href={`/app/deals/${deal.dealId}`}
+              />
+            );
+          })}
+        </div>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Active trips"
@@ -127,11 +163,17 @@ export function TravelingDashboard({ user }: { user: UserProfileDto }) {
             <ul className="space-y-2">
               {ongoingTrips.slice(0, 4).map((d) => {
                 const phase = dealPhaseMeta(d.dealPhase);
+                const ending = getEndingSoon(d);
+                const failed = d.dealPhase === "PaymentFailed";
                 return (
                   <li key={d.dealId}>
                     <Link
                       to={`/app/deals/${d.dealId}`}
-                      className="flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50"
+                      className={cn(
+                        "flex items-center gap-3 rounded-lg border p-3 transition-colors hover:bg-muted/50",
+                        failed && "border-destructive/40 bg-destructive/5",
+                        !failed && ending && "border-amber-300 bg-amber-50/60",
+                      )}
                     >
                       <Thumb src={d.listingCoverPhotoUri} />
                       <div className="min-w-0 flex-1">
@@ -146,7 +188,10 @@ export function TravelingDashboard({ user }: { user: UserProfileDto }) {
                           <span>{formatDayRange(d.requestedCheckIn, d.requestedCheckOut)}</span>
                         </p>
                       </div>
-                      <Badge variant={phase.variant}>{phase.label}</Badge>
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <Badge variant={phase.variant}>{phase.label}</Badge>
+                        {ending && <EndingSoonBadge ending={ending} />}
+                      </div>
                       <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
                     </Link>
                   </li>

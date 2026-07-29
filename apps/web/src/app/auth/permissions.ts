@@ -59,6 +59,24 @@ const memberHostingGroup: NavGroup = {
   ],
 };
 
+/** Pre-launch host surface: listings + Hostaway import only. */
+const preLaunchHostSidebarGroups: NavGroup[] = [
+  {
+    label: "Hosting",
+    items: [
+      { to: "/app/listings", label: "My listings", icon: "Building2", end: true },
+      { to: "/app/listings/new", label: "Create listing", icon: "Plus" },
+      { to: "/app/channels", label: "Import (PMS)", icon: "Link2" },
+    ],
+  },
+];
+
+const preLaunchHostBottomTabs: NavItem[] = [
+  { to: "/app/listings", label: "Listings", icon: "Building2", end: true },
+  { to: "/app/listings/new", label: "Create", icon: "Plus" },
+  { to: "/app/channels", label: "Import", icon: "Link2" },
+];
+
 const arbitratorCasesGroup: NavGroup = {
   label: "Arbitration",
   items: [
@@ -69,12 +87,11 @@ const arbitratorCasesGroup: NavGroup = {
 
 // ── Admin sidebar groups ────────────────────────────────────
 //
-// Admins inherit every member-side group (so they can dogfood the
-// product from both guest and host perspectives). Below sit the
-// admin-only sections — split into focused queues rather than one
-// 8-item "Operations" dump, and prefixed with "Admin · " so they
-// stand out visually from member groups in the sidebar without
-// requiring a structural change to <SidebarNav>.
+// Admins inherit the full member-side nav (bookings + hosting) so
+// they can reach those screens for support, but they do not get the
+// Travelling ↔ Hosting mode toggle — that switch is Member-only.
+// Below sit the admin-only sections, prefixed with "Admin · " so
+// they stand out from member groups in the sidebar.
 
 const adminTrustSafetyGroup: NavGroup = {
   label: "Admin · Trust & safety",
@@ -212,11 +229,9 @@ const memberAllSidebarGroups: NavGroup[] = [
   memberAccountGroup,
 ];
 
-// Single source of truth for the admin sidebar block — keeps the
-// "view as guest"/"view as host" mode toggles and the no-mode default
-// in sync. Order goes: highest-frequency queues first (trust & safety
-// triage → arbitration), then directory-style screens, then config,
-// content, and finally analytics.
+// Single source of truth for the admin sidebar block. Order goes:
+// highest-frequency queues first (trust & safety triage → arbitration),
+// then directory-style screens, then config, content, and analytics.
 const adminSidebarGroups: NavGroup[] = [
   adminTrustSafetyGroup,
   adminArbitrationGroup,
@@ -242,12 +257,14 @@ const memberModeGroups: Record<AppMode, NavGroup[]> = {
 export function getSidebarGroupsForRole(
   role: UserRole | string | number,
   mode?: AppMode,
+  options?: { preLaunchLimited?: boolean },
 ): NavGroup[] {
+  if (options?.preLaunchLimited) {
+    return preLaunchHostSidebarGroups;
+  }
+  // Travelling ↔ Hosting nav is Member-only; other roles ignore mode.
   if (mode && String(role) === roles.member) {
     return memberModeGroups[mode];
-  }
-  if (mode && String(role) === roles.platformAdmin) {
-    return [...memberModeGroups[mode], ...adminSidebarGroups];
   }
   return roleSidebarGroups[role as UserRole] ?? [compactMainGroup, compactAccountGroup];
 }
@@ -323,9 +340,13 @@ const memberModeBottomTabs: Record<AppMode, NavItem[]> = {
 export function getBottomTabsForRole(
   role: UserRole | string | number | null,
   mode?: AppMode,
+  options?: { preLaunchLimited?: boolean },
 ): NavItem[] {
+  if (options?.preLaunchLimited) {
+    return preLaunchHostBottomTabs;
+  }
   if (!role) return guestBottomTabs;
-  if (mode && (String(role) === roles.member || String(role) === roles.platformAdmin)) {
+  if (mode && String(role) === roles.member) {
     return memberModeBottomTabs[mode];
   }
   return roleBottomTabs[role as UserRole] ?? guestBottomTabs;
@@ -336,14 +357,16 @@ export function getBottomTabsForRole(
 export function getNavItemsForRole(
   role: UserRole | string | number,
   mode?: AppMode,
+  options?: { preLaunchLimited?: boolean },
 ): NavItem[] {
-  const groups = getSidebarGroupsForRole(role, mode);
+  const groups = getSidebarGroupsForRole(role, mode, options);
   return groups.flatMap((g) => g.items);
 }
 
 // ── Mode switch eligibility ─────────────────────────────────
 
-const modeSwitchableRoles: Set<string> = new Set([roles.member, roles.platformAdmin]);
+/** Travelling ↔ Hosting applies only to Members (hosts/guests). */
+const modeSwitchableRoles: Set<string> = new Set([roles.member]);
 
 export function supportsModeSwitching(role: UserRole | string | number | null | undefined): boolean {
   if (!role) return false;

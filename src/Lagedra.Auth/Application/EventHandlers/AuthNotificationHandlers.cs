@@ -1,3 +1,4 @@
+using Lagedra.Auth.Application.Emails;
 using Lagedra.Auth.Domain.Events;
 using Lagedra.Modules.Notifications.Application.Commands;
 using Lagedra.Modules.Notifications.Domain.Enums;
@@ -14,10 +15,11 @@ public sealed class OnUserRegisteredNotify(IMediator m)
     public async Task Handle(UserRegisteredEvent e, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(e);
+        var title = WelcomeEmailComposer.BuildInAppWelcomeTitle(e.Role, e.SignupType);
         await m.Send(new NotifyUserCommand(
             e.UserId, "welcome",
-            "Welcome to Lagedra",
-            "Your account has been created. Complete your profile to get started.",
+            title,
+            WelcomeEmailComposer.BuildInAppWelcomeBody(e.Role, e.SignupType),
             new() { ["email"] = e.Email },
             InAppOnly), ct).ConfigureAwait(false);
     }

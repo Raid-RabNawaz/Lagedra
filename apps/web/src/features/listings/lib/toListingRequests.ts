@@ -32,6 +32,34 @@ function dollarsToCentsOrNull(dollars: number | undefined): number | null {
   return dollars === undefined ? null : Math.round(dollars * 100);
 }
 
+function leaseTermsFromForm(v: ListingFormValues): UpdateListingRequest["leaseTerms"] {
+  return {
+    rentDueDayOfMonth: v.rentDueDayOfMonth,
+    nsfFirstFeeCents: Math.round(v.nsfFirstFeeDollars * 100),
+    nsfSubsequentFeeCents: Math.round(v.nsfSubsequentFeeDollars * 100),
+    lateFeePercent: v.lateFeePercent,
+    lateFeeGraceDays: v.lateFeeGraceDays,
+    utilitiesResponsibility: v.utilitiesResponsibility?.trim() || null,
+    yardMaintenanceByTenant: v.yardMaintenanceByTenant,
+    furnished: v.furnished,
+    includedAppliancesNotes: v.includedAppliancesNotes?.trim() || null,
+    keyCount: v.keyCount,
+    mailboxKeyCount: v.mailboxKeyCount,
+    keyReplacementFeeCents: Math.round(v.keyReplacementFeeDollars * 100),
+    lockoutFeeCents: Math.round(v.lockoutFeeDollars * 100),
+    parkingSpaceCount: v.parkingSpaceCount,
+    parkingDescription: v.parkingDescription?.trim() || null,
+    parkingIncludedInRent: v.parkingIncludedInRent,
+    maxGuestConsecutiveDays: v.maxGuestConsecutiveDays,
+    rentersInsuranceMinLiabilityCents: Math.round(v.rentersInsuranceMinLiabilityDollars * 100),
+    earlyTerminationFeeMonths: v.earlyTerminationFeeMonths,
+    builtBefore1978: v.builtBefore1978,
+    leadPaintKnowledge: v.leadPaintKnowledge?.trim() || null,
+    rentCapJustCauseExempt: v.rentCapJustCauseExempt,
+    paymentMethods: v.paymentMethods?.trim() || null,
+  };
+}
+
 function tierDepositsFromForm(v: ListingFormValues) {
   return {
     depositUnverifiedCents: dollarsToCentsOrNull(v.depositUnverifiedDollars),
@@ -98,5 +126,6 @@ export function toUpdateListingRequest(v: ListingFormValues): UpdateListingReque
         : Math.round(v.defaultDepositDollars * 100),
     clearDefaultDeposit: v.defaultDepositDollars === undefined,
     ...tierDepositsFromForm(v),
+    leaseTerms: leaseTermsFromForm(v),
   };
 }

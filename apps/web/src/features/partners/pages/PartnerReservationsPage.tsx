@@ -38,6 +38,9 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { ListRowsSkeleton } from "@/components/shared/ListSkeleton";
+import { PersonCell } from "@/features/partners/components/PersonCell";
 import { Loader } from "@/components/shared/Loader";
 import { ErrorState } from "@/components/shared/ErrorState";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -99,24 +102,18 @@ export const PartnerReservationsPage = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
-            <CalendarCheck className="h-7 w-7 text-muted-foreground" />
-            Direct reservations
-          </h1>
-          <p className="mt-1 text-muted-foreground">
-            Book on behalf of endorsed members. Each reservation creates a deal application
-            visible to the member and the host.
-          </p>
-        </div>
+      <PageHeader
+        icon={CalendarCheck}
+        title="Direct reservations"
+        description="Book on behalf of endorsed members. Each reservation creates a deal application visible to the member and the host."
+      >
         {isAdmin && isVerified && (
           <Button onClick={() => setDialogOpen(true)}>
             <Plus className="h-4 w-4" />
             New reservation
           </Button>
         )}
-      </div>
+      </PageHeader>
 
       {!isVerified && (
         <Alert>
@@ -134,6 +131,11 @@ export const PartnerReservationsPage = () => {
         </TabsList>
       </Tabs>
 
+      {isLoading ? (
+        <ListRowsSkeleton rows={3} />
+      ) : error ? (
+        <ErrorState error={error} onRetry={() => void loadReservations()} />
+      ) : (
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-lg">Reservations</CardTitle>
@@ -142,11 +144,7 @@ export const PartnerReservationsPage = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
-            <Loader label="Loading reservations..." />
-          ) : error ? (
-            <ErrorState error={error} onRetry={() => void loadReservations()} />
-          ) : reservations.length === 0 ? (
+          {reservations.length === 0 ? (
             <EmptyState
               title="No reservations"
               description={
@@ -167,7 +165,6 @@ export const PartnerReservationsPage = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Member</TableHead>
-                  <TableHead className="hidden md:table-cell">Email</TableHead>
                   <TableHead>Listing</TableHead>
                   <TableHead>Application</TableHead>
                   <TableHead className="hidden lg:table-cell">Booked</TableHead>
@@ -176,9 +173,8 @@ export const PartnerReservationsPage = () => {
               <TableBody>
                 {reservations.map((r) => (
                   <TableRow key={r.id}>
-                    <TableCell className="font-medium">{r.guestName}</TableCell>
-                    <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
-                      {r.guestEmail}
+                    <TableCell>
+                      <PersonCell displayName={r.guestName} email={r.guestEmail} />
                     </TableCell>
                     <TableCell>
                       <Link
@@ -210,6 +206,7 @@ export const PartnerReservationsPage = () => {
           )}
         </CardContent>
       </Card>
+      )}
 
       {orgId && (
         <NewReservationDialog

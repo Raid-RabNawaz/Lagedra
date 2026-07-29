@@ -1,170 +1,170 @@
 {
-    "taskDefinitionArn": "arn:aws:ecs:us-west-1:930218374225:task-definition/lagedra-api:4",
-    "containerDefinitions": [
+  "taskDefinitionArn": "arn:aws:ecs:us-west-1:930218374225:task-definition/lagedra-api:4",
+  "containerDefinitions": [
+    {
+      "name": "api",
+      "image": "930218374225.dkr.ecr.us-west-1.amazonaws.com/lagedra/api:latest",
+      "cpu": 0,
+      "portMappings": [
         {
-            "name": "api",
-            "image": "930218374225.dkr.ecr.us-west-1.amazonaws.com/lagedra/api:latest",
-            "cpu": 0,
-            "portMappings": [
-                {
-                    "containerPort": 8080,
-                    "hostPort": 8080,
-                    "protocol": "tcp"
-                }
-            ],
-            "essential": true,
-            "environment": [
-                {
-                    "name": "ConnectionStrings__Default",
-                    "value": "Host=lagedra-db.cx408miakalh.us-west-1.rds.amazonaws.com;Port=5432;Database=lagedra_db;Username=lagedra;Password=Lag3dra_Pr0d_2026!;SSL Mode=Require;Trust Server Certificate=true"
-                },
-                {
-                    "name": "Stripe__PublishableKey",
-                    "value": "pk_test_51TH4W49C1zhcxwIed13rUO089U9x7zqymxW7pjkgeEDIUFss6MBN9WPwXfQQSH3JWOOdnUSm0EYObonbUpprqBbh004eAq2YhU"
-                },
-                {
-                    "name": "Brevo__FromName",
-                    "value": "Lagedra"
-                },
-                {
-                    "name": "ASPNETCORE_ENVIRONMENT",
-                    "value": "Production"
-                },
-                {
-                    "name": "Brevo__SmtpPort",
-                    "value": "587"
-                },
-                {
-                    "name": "MinIO__ExportsBucket",
-                    "value": "lagedra-exports-prod"
-                },
-                {
-                    "name": "MinIO__Endpoint",
-                    "value": "s3.us-west-1.amazonaws.com"
-                },
-                {
-                    "name": "Brevo__SmtpHost",
-                    "value": "smtp-relay.brevo.com"
-                },
-                {
-                    "name": "MinIO__EvidenceBucket",
-                    "value": "lagedra-evidence-prod"
-                },
-                {
-                    "name": "Brevo__FromEmail",
-                    "value": "raidrabnawaz@shortmidstay.com"
-                },
-                {
-                    "name": "ExternalAuth__Google__ClientId",
-                    "value": "262822188598-915tp2sk0cgsv9sj0c6nifnp661998ba.apps.googleusercontent.com"
-                },
-                {
-                    "name": "App__FrontendUrl",
-                    "value": "https://lagedra.com"
-                },
-                {
-                    "name": "Brevo__Password",
-                    "value": "cV3rIy0XEROCn8MP"
-                },
-                {
-                    "name": "ASPNETCORE_URLS",
-                    "value": "http://+:8080"
-                },
-                {
-                    "name": "Jwt__Audience",
-                    "value": "https://lagedra.com"
-                },
-                {
-                    "name": "Brevo__Username",
-                    "value": "a2d8fc001@smtp-brevo.com"
-                },
-                {
-                    "name": "App__BaseUrl",
-                    "value": "https://api.lagedra.com"
-                },
-                {
-                    "name": "Jwt__Issuer",
-                    "value": "https://api.lagedra.com"
-                }
-            ],
-            "mountPoints": [],
-            "volumesFrom": [],
-            "secrets": [
-                {
-                    "name": "Jwt__Secret",
-                    "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/jwt-secret"
-                },
-                {
-                    "name": "Stripe__SecretKey",
-                    "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/stripe-secret-key"
-                },
-                {
-                    "name": "Stripe__WebhookSecret",
-                    "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/stripe-webhook-secret"
-                },
-                {
-                    "name": "GoogleMaps__ApiKey",
-                    "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/google-maps-key"
-                }
-            ],
-            "logConfiguration": {
-                "logDriver": "awslogs",
-                "options": {
-                    "awslogs-group": "/ecs/lagedra",
-                    "awslogs-region": "us-west-1",
-                    "awslogs-stream-prefix": "api"
-                }
-            },
-            "systemControls": []
+          "containerPort": 8080,
+          "hostPort": 8080,
+          "protocol": "tcp"
         }
-    ],
-    "family": "lagedra-api",
-    "taskRoleArn": "arn:aws:iam::930218374225:role/lagedra-ecs-task",
-    "executionRoleArn": "arn:aws:iam::930218374225:role/lagedra-ecs-execution",
-    "networkMode": "awsvpc",
-    "revision": 4,
-    "volumes": [],
-    "status": "ACTIVE",
-    "requiresAttributes": [
+      ],
+      "essential": true,
+      "environment": [
         {
-            "name": "com.amazonaws.ecs.capability.logging-driver.awslogs"
+          "name": "ConnectionStrings__Default",
+          "value": "Host=lagedra-db.cx408miakalh.us-west-1.rds.amazonaws.com;Port=5432;Database=lagedra_db;Username=lagedra;Password=Lag3dra_Pr0d_2026!;SSL Mode=Require;Trust Server Certificate=true"
         },
         {
-            "name": "ecs.capability.execution-role-awslogs"
+          "name": "Stripe__PublishableKey",
+          "value": "pk_test_51TH4W49C1zhcxwIed13rUO089U9x7zqymxW7pjkgeEDIUFss6MBN9WPwXfQQSH3JWOOdnUSm0EYObonbUpprqBbh004eAq2YhU"
         },
         {
-            "name": "com.amazonaws.ecs.capability.ecr-auth"
+          "name": "ASPNETCORE_ENVIRONMENT",
+          "value": "Production"
         },
         {
-            "name": "com.amazonaws.ecs.capability.docker-remote-api.1.19"
+          "name": "MinIO__ExportsBucket",
+          "value": "lagedra-exports-prod"
         },
         {
-            "name": "com.amazonaws.ecs.capability.task-iam-role"
+          "name": "MinIO__Endpoint",
+          "value": "s3.us-west-1.amazonaws.com"
         },
         {
-            "name": "ecs.capability.execution-role-ecr-pull"
+          "name": "MinIO__EvidenceBucket",
+          "value": "lagedra-evidence-prod"
         },
         {
-            "name": "ecs.capability.secrets.ssm.environment-variables"
+          "name": "ExternalAuth__Google__ClientId",
+          "value": "262822188598-915tp2sk0cgsv9sj0c6nifnp661998ba.apps.googleusercontent.com"
         },
         {
-            "name": "com.amazonaws.ecs.capability.docker-remote-api.1.18"
+          "name": "App__FrontendUrl",
+          "value": "https://lagedra.com"
         },
         {
-            "name": "ecs.capability.task-eni"
+          "name": "ASPNETCORE_URLS",
+          "value": "http://+:8080"
+        },
+        {
+          "name": "Jwt__Audience",
+          "value": "https://lagedra.com"
+        },
+        {
+          "name": "App__BaseUrl",
+          "value": "https://api.lagedra.com"
+        },
+        {
+          "name": "Jwt__Issuer",
+          "value": "https://api.lagedra.com"
+        },
+        {
+          "name": "Twilio__FromEmail",
+          "value": "info@lagedra.com"
+        },
+        {
+          "name": "Twilio__FromName",
+          "value": "Lagedra"
         }
-    ],
-    "placementConstraints": [],
-    "compatibilities": [
-        "EC2",
-        "FARGATE",
-        "MANAGED_INSTANCES"
-    ],
-    "requiresCompatibilities": [
-        "FARGATE"
-    ],
-    "cpu": "512",
-    "memory": "1024",
-    "registeredAt": "2026-04-16T13:41:33.772000+05:00",
-    "registeredBy": "arn:aws:iam::930218374225:user/raid-rabnawaz"
+      ],
+      "mountPoints": [],
+      "volumesFrom": [],
+      "secrets": [
+        {
+          "name": "Jwt__Secret",
+          "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/jwt-secret"
+        },
+        {
+          "name": "Stripe__SecretKey",
+          "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/stripe-secret-key"
+        },
+        {
+          "name": "Stripe__WebhookSecret",
+          "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/stripe-webhook-secret"
+        },
+        {
+          "name": "GoogleMaps__ApiKey",
+          "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/google-maps-key"
+        },
+        {
+          "name": "Twilio__AccountSid",
+          "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/twilio-account-sid"
+        },
+        {
+          "name": "Twilio__AuthToken",
+          "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/twilio-auth-token"
+        },
+        {
+          "name": "Twilio__MessagingServiceSid",
+          "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/twilio-messaging-service-sid"
+        },
+        {
+          "name": "Twilio__SendGridApiKey",
+          "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/twilio-sendgrid-api-key"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/lagedra",
+          "awslogs-region": "us-west-1",
+          "awslogs-stream-prefix": "api"
+        }
+      },
+      "systemControls": []
+    }
+  ],
+  "family": "lagedra-api",
+  "taskRoleArn": "arn:aws:iam::930218374225:role/lagedra-ecs-task",
+  "executionRoleArn": "arn:aws:iam::930218374225:role/lagedra-ecs-execution",
+  "networkMode": "awsvpc",
+  "revision": 4,
+  "volumes": [],
+  "status": "ACTIVE",
+  "requiresAttributes": [
+    {
+      "name": "com.amazonaws.ecs.capability.logging-driver.awslogs"
+    },
+    {
+      "name": "ecs.capability.execution-role-awslogs"
+    },
+    {
+      "name": "com.amazonaws.ecs.capability.ecr-auth"
+    },
+    {
+      "name": "com.amazonaws.ecs.capability.docker-remote-api.1.19"
+    },
+    {
+      "name": "com.amazonaws.ecs.capability.task-iam-role"
+    },
+    {
+      "name": "ecs.capability.execution-role-ecr-pull"
+    },
+    {
+      "name": "ecs.capability.secrets.ssm.environment-variables"
+    },
+    {
+      "name": "com.amazonaws.ecs.capability.docker-remote-api.1.18"
+    },
+    {
+      "name": "ecs.capability.task-eni"
+    }
+  ],
+  "placementConstraints": [],
+  "compatibilities": [
+    "EC2",
+    "FARGATE",
+    "MANAGED_INSTANCES"
+  ],
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "cpu": "512",
+  "memory": "1024",
+  "registeredAt": "2026-04-16T13:41:33.772+05:00",
+  "registeredBy": "arn:aws:iam::930218374225:user/raid-rabnawaz"
 }

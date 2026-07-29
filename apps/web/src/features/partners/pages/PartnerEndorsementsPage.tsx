@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ShieldCheck, Plus, Loader2, Check, Ban } from "lucide-react";
 import { partnerApi } from "@/features/partners/services/partnerApi";
 import { usePartnerMembership } from "@/features/partners/hooks/usePartnerMembership";
 import { extractErrorMessage } from "@/lib/errors";
 import { EndorsementStatusBadge } from "@/features/partners/components/EndorsementStatusBadge";
+import { PersonCell } from "@/features/partners/components/PersonCell";
 import type { PartnerEndorsementDto, PartnerEndorsementStatus } from "@/api/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,8 +19,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { PageHeader } from "@/components/shared/PageHeader";
+import { FilterTabs, type FilterTabOption } from "@/components/shared/FilterTabs";
+import { ListRowsSkeleton } from "@/components/shared/ListSkeleton";
 import { Loader } from "@/components/shared/Loader";
 import { ErrorState } from "@/components/shared/ErrorState";
 import { EmptyState } from "@/components/shared/EmptyState";
@@ -29,9 +32,20 @@ import { FormError } from "@/components/shared/FormError";
 const formatDate = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString(undefined, { dateStyle: "medium" }) : "—";
 
-const truncate = (id: string) => `${id.slice(0, 8)}…`;
+const STATUSES: PartnerEndorsementStatus[] = ["Requested", "Approved", "Revoked", "Expired"];
 
-type Tab = "Requested" | "Approved" | "Revoked" | "Expired";
+const EMPTY_COPY: Record<PartnerEndorsementStatus, { title: string; description?: string }> = {
+  Requested: {
+    title: "Nothing to review",
+    description: "When a tenant requests an endorsement from your organization, it'll appear here.",
+  },
+  Approved: {
+    title: "No active endorsements",
+    description: "Approve a request or endorse a tenant directly to see them here.",
+  },
+  Revoked: { title: "No revoked endorsements" },
+  Expired: { title: "No expired endorsements" },
+};
 
 export const PartnerEndorsementsPage = () => {
   const { membership, isLoading: membershipLoading, error: membershipError, refresh } =
@@ -40,7 +54,7 @@ export const PartnerEndorsementsPage = () => {
   const [endorsements, setEndorsements] = useState<PartnerEndorsementDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
-  const [tab, setTab] = useState<Tab>("Requested");
+  const [tab, setTab] = useState<PartnerEndorsementStatus>("Requested");
   const [requestDialogOpen, setRequestDialogOpen] = useState(false);
   const [revokeTarget, setRevokeTarget] = useState<PartnerEndorsementDto | null>(null);
   const [actionInFlight, setActionInFlight] = useState<string | null>(null);
@@ -50,14 +64,14 @@ export const PartnerEndorsementsPage = () => {
   const isAdmin = membership?.memberRole === "Admin";
   const isVerified = membership?.organization.status === "Verified";
 
-  const loadEndorsements = async () => {
+  const loadEndorsements = async (silent = false) => {
     if (!orgId) return;
-    setIsLoading(true);
+    if (!silent) setIsLoading(true);
     setError(null);
     try {
-      const data = await partnerApi.listEndorsements(orgId, {
-        status: tab as PartnerEndorsementStatus,
-      });
+      // Fetch every status once so tab switches are instant and counts stay
+      // visible on the filter pills.
+      const data = await partnerApi.listEndorsements(orgId, { take: 200 });
       setEndorsements(data);
     } catch (err) {
       setError(err);
@@ -69,7 +83,27 @@ export const PartnerEndorsementsPage = () => {
   useEffect(() => {
     if (orgId) void loadEndorsements();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orgId, tab]);
+  }, [orgId]);
+
+  const countByStatus = useMemo(() => {
+    const counts = { Requested: 0, Approved: 0, Revoked: 0, Expired: 0 } as Record<
+      PartnerEndorsementStatus,
+      number
+    >;
+    for (const e of endorsements) counts[e.status] += 1;
+    return counts;
+  }, [endorsements]);
+
+  const visible = useMemo(
+    () => endorsements.filter((e) => e.status === tab),
+    [endorsements, tab],
+  );
+
+  const tabOptions: FilterTabOption<PartnerEndorsementStatus>[] = STATUSES.map((s) => ({
+    value: s,
+    label: s,
+    count: countByStatus[s],
+  }));
 
   const handleApprove = async (e: PartnerEndorsementDto) => {
     if (!orgId) return;
@@ -77,7 +111,7 @@ export const PartnerEndorsementsPage = () => {
     setActionError(null);
     try {
       await partnerApi.approveEndorsement(orgId, e.id, { note: null });
-      await loadEndorsements();
+      await loadEndorsements(true);
     } catch (err) {
       setActionError(extractErrorMessage(err));
     } finally {
@@ -89,26 +123,30 @@ export const PartnerEndorsementsPage = () => {
   if (membershipError) return <ErrorState error={membershipError} onRetry={() => void refresh()} />;
   if (!membership) return null;
 
+  const showApproved = tab === "Approved" || tab === "Expired";
+  const showExpires = tab === "Approved" || tab === "Expired";
+  const showRevoked = tab === "Revoked";
+  const showActions = isAdmin && (tab === "Requested" || tab === "Approved");
+
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
-            <ShieldCheck className="h-7 w-7 text-muted-foreground" />
-            Endorsements
-          </h1>
-          <p className="mt-1 text-muted-foreground">
+      <PageHeader
+        icon={ShieldCheck}
+        title="Endorsements"
+        description={
+          <>
             Vouch for tenants in your organization. An active endorsement gives them{" "}
             <strong>Partner-Backed Protection</strong> and a reduced security deposit.
-          </p>
-        </div>
+          </>
+        }
+      >
         {isAdmin && isVerified && (
           <Button onClick={() => setRequestDialogOpen(true)}>
             <Plus className="h-4 w-4" />
-            Request endorsement
+            Endorse a tenant
           </Button>
         )}
-      </div>
+      </PageHeader>
 
       {!isVerified && (
         <Alert>
@@ -124,111 +162,131 @@ export const PartnerEndorsementsPage = () => {
         </Alert>
       )}
 
-      <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)}>
-        <TabsList>
-          <TabsTrigger value="Requested">Requested</TabsTrigger>
-          <TabsTrigger value="Approved">Approved</TabsTrigger>
-          <TabsTrigger value="Revoked">Revoked</TabsTrigger>
-          <TabsTrigger value="Expired">Expired</TabsTrigger>
-        </TabsList>
-      </Tabs>
+      <FilterTabs
+        aria-label="Filter endorsements by status"
+        options={tabOptions}
+        value={tab}
+        onChange={setTab}
+        hideZeroCounts
+      />
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">{tab} endorsements</CardTitle>
-          <CardDescription>
-            {endorsements.length} record{endorsements.length === 1 ? "" : "s"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <Loader label="Loading endorsements..." />
-          ) : error ? (
-            <ErrorState error={error} onRetry={() => void loadEndorsements()} />
-          ) : endorsements.length === 0 ? (
-            <EmptyState
-              title={
-                tab === "Requested"
-                  ? "Nothing to review"
-                  : tab === "Approved"
-                    ? "No active endorsements"
-                    : `No ${tab.toLowerCase()} endorsements`
-              }
-              description={
-                tab === "Requested"
-                  ? "When a tenant requests an endorsement from your organization, it'll appear here."
-                  : undefined
-              }
-            />
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Tenant</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="hidden md:table-cell">Requested</TableHead>
-                  <TableHead className="hidden lg:table-cell">Approved</TableHead>
-                  <TableHead className="hidden lg:table-cell">Expires</TableHead>
-                  <TableHead className="hidden xl:table-cell">Note</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {endorsements.map((e) => (
-                  <TableRow key={e.id}>
-                    <TableCell className="font-mono text-xs" title={e.tenantUserId}>
-                      {truncate(e.tenantUserId)}
-                    </TableCell>
-                    <TableCell>
-                      <EndorsementStatusBadge status={e.status} />
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
-                      {formatDate(e.requestedAt)}
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
-                      {formatDate(e.approvedAt)}
-                    </TableCell>
-                    <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
-                      {formatDate(e.expiresAt)}
-                    </TableCell>
-                    <TableCell className="hidden xl:table-cell text-sm text-muted-foreground max-w-[200px] truncate">
-                      {e.note ?? "—"}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        {e.status === "Requested" && isAdmin && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => void handleApprove(e)}
-                            disabled={actionInFlight === e.id}
-                          >
-                            {actionInFlight === e.id ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <Check className="h-3 w-3" />
-                            )}
-                            Approve
-                          </Button>
-                        )}
-                        {(e.status === "Requested" || e.status === "Approved") && isAdmin && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setRevokeTarget(e)}
-                          >
-                            <Ban className="h-3 w-3" /> Revoke
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
+      {isLoading ? (
+        <ListRowsSkeleton rows={3} />
+      ) : error ? (
+        <ErrorState error={error} onRetry={() => void loadEndorsements()} />
+      ) : (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">{tab} endorsements</CardTitle>
+            <CardDescription>
+              {visible.length} record{visible.length === 1 ? "" : "s"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {visible.length === 0 ? (
+              <EmptyState title={EMPTY_COPY[tab].title} description={EMPTY_COPY[tab].description} />
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Tenant</TableHead>
+                    <TableHead className="hidden sm:table-cell">Status</TableHead>
+                    <TableHead className="hidden md:table-cell">Requested</TableHead>
+                    {showApproved && (
+                      <TableHead className="hidden lg:table-cell">Approved</TableHead>
+                    )}
+                    {showExpires && (
+                      <TableHead className="hidden lg:table-cell">Expires</TableHead>
+                    )}
+                    {showRevoked && (
+                      <>
+                        <TableHead className="hidden md:table-cell">Revoked</TableHead>
+                        <TableHead>Reason</TableHead>
+                      </>
+                    )}
+                    {!showRevoked && <TableHead className="hidden xl:table-cell">Note</TableHead>}
+                    {showActions && <TableHead className="text-right">Actions</TableHead>}
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+                </TableHeader>
+                <TableBody>
+                  {visible.map((e) => (
+                    <TableRow key={e.id}>
+                      <TableCell>
+                        <PersonCell
+                          displayName={e.tenantDisplayName}
+                          email={e.tenantEmail}
+                          userId={e.tenantUserId}
+                        />
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell">
+                        <EndorsementStatusBadge status={e.status} />
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
+                        {formatDate(e.requestedAt)}
+                      </TableCell>
+                      {showApproved && (
+                        <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
+                          {formatDate(e.approvedAt)}
+                        </TableCell>
+                      )}
+                      {showExpires && (
+                        <TableCell className="hidden lg:table-cell text-sm text-muted-foreground">
+                          {formatDate(e.expiresAt)}
+                        </TableCell>
+                      )}
+                      {showRevoked && (
+                        <>
+                          <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
+                            {formatDate(e.revokedAt)}
+                          </TableCell>
+                          <TableCell
+                            className="text-sm text-muted-foreground max-w-[240px] truncate"
+                            title={e.revokeReason ?? undefined}
+                          >
+                            {e.revokeReason ?? "—"}
+                          </TableCell>
+                        </>
+                      )}
+                      {!showRevoked && (
+                        <TableCell
+                          className="hidden xl:table-cell text-sm text-muted-foreground max-w-[200px] truncate"
+                          title={e.note ?? undefined}
+                        >
+                          {e.note ?? "—"}
+                        </TableCell>
+                      )}
+                      {showActions && (
+                        <TableCell className="text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            {e.status === "Requested" && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => void handleApprove(e)}
+                                disabled={actionInFlight === e.id}
+                              >
+                                {actionInFlight === e.id ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Check className="h-3 w-3" />
+                                )}
+                                Approve
+                              </Button>
+                            )}
+                            <Button variant="ghost" size="sm" onClick={() => setRevokeTarget(e)}>
+                              <Ban className="h-3 w-3" /> Revoke
+                            </Button>
+                          </div>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {orgId && (
         <RequestEndorsementDialog
@@ -237,7 +295,7 @@ export const PartnerEndorsementsPage = () => {
           orgId={orgId}
           onSuccess={() => {
             setTab("Approved");
-            void loadEndorsements();
+            void loadEndorsements(true);
           }}
         />
       )}
@@ -248,7 +306,7 @@ export const PartnerEndorsementsPage = () => {
           onClose={() => setRevokeTarget(null)}
           onSuccess={() => {
             setRevokeTarget(null);
-            void loadEndorsements();
+            void loadEndorsements(true);
           }}
         />
       )}
@@ -366,6 +424,9 @@ function RevokeEndorsementDialog({
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const tenantLabel =
+    endorsement.tenantDisplayName?.trim() || `tenant ${endorsement.tenantUserId.slice(0, 8)}…`;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!reason.trim()) {
@@ -389,8 +450,8 @@ function RevokeEndorsementDialog({
         <DialogHeader>
           <DialogTitle>Revoke endorsement</DialogTitle>
           <DialogDescription>
-            The tenant will lose Partner-Backed Protection from your organization. This is recorded
-            in the audit log and is not reversible.
+            <strong>{tenantLabel}</strong> will lose Partner-Backed Protection from your
+            organization. This is recorded in the audit log and is not reversible.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">

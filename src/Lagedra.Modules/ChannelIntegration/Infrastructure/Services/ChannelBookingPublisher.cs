@@ -93,7 +93,7 @@ public sealed partial class ChannelBookingPublisher(
             }
             else
             {
-                var error = result.ErrorMessage ?? result.ErrorCode ?? "OwnerRez rejected the booking.";
+                var error = result.ErrorMessage ?? result.ErrorCode ?? "The channel rejected the booking.";
                 link.MarkFailed(error, clock);
                 LogPushRejected(logger, dealId, error);
             }

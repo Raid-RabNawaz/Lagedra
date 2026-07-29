@@ -1,26 +1,24 @@
 using System.Globalization;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
-using System.Xml.Linq;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
 namespace Lagedra.Infrastructure.External.Channels.OwnerRez;
 
 /// <summary>
-/// OwnerRez implementation of <see cref="IChannelProvider"/> built on the
-/// OwnerRez "API for Channel Integration" (HAXML content feeds + HAOLB
-/// real-time quotes/bookings). Lagedra acts as a Merchant-of-Record channel:
-/// it pulls advertiser (host) content via the HAXML feeds and pushes
-/// already-paid bookings back via HAOLB <c>createbooking</c> using the
-/// <c>paymentChannelMoR</c> payment form.
+/// OwnerRez implementation of <see cref="IChannelProvider"/> against the OwnerRez
+/// API v2 (REST/JSON, <c>https://api.ownerrez.com/v2/…</c>). Per-connection
+/// credentials are the host's OwnerRez account email
+/// (<see cref="ChannelCredentials.Username"/>) and personal access token
+/// (<see cref="ChannelCredentials.Secret"/>), sent as HTTP Basic on every call.
 ///
-/// Channel-level credentials (username + key) live in
-/// <see cref="OwnerRezChannelSettings"/> and are sent as HTTP Basic auth on the
-/// shared <see cref="HttpClient"/>. The per-connection
-/// <see cref="ChannelCredentials.ExternalAccountId"/> is the host's
-/// <c>advertiserAssignedId</c> ("ora…") used to scope every feed.
+/// v2 has no merchant-of-record booking form: <c>BookingEditModel</c> carries no
+/// money fields and payments are read-only, so a pushed booking records the
+/// stay and guest only. The priced breakdown Lagedra collected is written into
+/// the booking notes so the host can reconcile it.
 /// </summary>
 public sealed partial class OwnerRezChannelProvider(
     HttpClient httpClient,
@@ -31,55 +29,43 @@ public sealed partial class OwnerRezChannelProvider(
 
     public string ProviderKey => "ownerrez";
 
-    private bool Configured =>
-        !string.IsNullOrWhiteSpace(_settings.Username) && !string.IsNullOrWhiteSpace(_settings.Key);
-
     public async Task<IReadOnlyList<ChannelListingSnapshot>> PullListingsAsync(
         ChannelCredentials credentials,
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(credentials);
-        if (!EnsureConfigured(nameof(PullListingsAsync)))
+        if (!EnsureCredentials(credentials, nameof(PullListingsAsync)))
         {
             return [];
         }
 
-        var advertiserId = credentials.ExternalAccountId;
-        var indexDoc = await GetXmlAsync($"/haapi/haxml/{Uri.EscapeDataString(advertiserId)}/listingindex", ct)
+        var properties = await ReadAllPagesAsync(
+                credentials,
+                "/v2/properties?active=true",
+                ParseProperty,
+                ct)
             .ConfigureAwait(false);
-        if (indexDoc is null)
+        if (properties.Count == 0)
         {
             return [];
         }
 
-        var rates = await TryLoadRatesAsync(advertiserId, ct).ConfigureAwait(false);
+        // Listing content (descriptions, photos, amenities, rate range) is a
+        // separate resource keyed by property_id.
+        var content = await ReadAllPagesAsync(
+                credentials,
+                "/v2/listings?includeAmenities=true&includeImages=true&includeRooms=true"
+                + "&includeBathrooms=true&includeDescriptions=text",
+                ParseListingContent,
+                ct)
+            .ConfigureAwait(false);
+        var contentByPropertyId = content
+            .GroupBy(c => c.PropertyId)
+            .ToDictionary(g => g.Key, g => g.First());
 
-        var snapshots = new List<ChannelListingSnapshot>();
-        foreach (var entry in indexDoc.Descendants("listingContentIndexEntry"))
-        {
-            var listingExternalId = Str(entry.Element("listingExternalId"));
-            if (string.IsNullOrWhiteSpace(listingExternalId) || !BoolOrTrue(entry.Element("active")))
-            {
-                continue;
-            }
-
-            var listingUrl = Str(entry.Element("listingUrl"))
-                ?? $"/haapi/haxml/{Uri.EscapeDataString(advertiserId)}/listing/{Uri.EscapeDataString(listingExternalId)}";
-
-            var listingDoc = await GetXmlAsync(listingUrl, ct).ConfigureAwait(false);
-            if (listingDoc is null)
-            {
-                continue;
-            }
-
-            var snapshot = ParseListing(listingDoc, listingExternalId, rates);
-            if (snapshot is not null)
-            {
-                snapshots.Add(snapshot);
-            }
-        }
-
-        return snapshots;
+        return properties
+            .Select(p => BuildSnapshot(p, contentByPropertyId.GetValueOrDefault(p.Id)))
+            .ToList();
     }
 
     public async Task<ChannelAvailabilityCalendar> PullAvailabilityAsync(
@@ -89,33 +75,25 @@ public sealed partial class OwnerRezChannelProvider(
     {
         ArgumentNullException.ThrowIfNull(credentials);
         var empty = new ChannelAvailabilityCalendar(externalListingId, []);
-        if (!EnsureConfigured(nameof(PullAvailabilityAsync)))
+        if (!EnsureCredentials(credentials, nameof(PullAvailabilityAsync))
+            || !TryParsePropertyId(externalListingId, out var propertyId))
         {
             return empty;
         }
 
-        var idx = await GetXmlAsync(
-            $"/haapi/haxml/{Uri.EscapeDataString(credentials.ExternalAccountId)}/availabilityindex", ct)
+        var start = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+        var end = start.AddDays(Math.Max(30, _settings.AvailabilityLookaheadDays));
+
+        var booked = await FetchBookedNightsAsync(credentials, propertyId, start, end, ct)
             .ConfigureAwait(false);
-        if (idx is null)
+
+        var days = new Dictionary<DateOnly, bool>();
+        for (var day = start; day <= end; day = day.AddDays(1))
         {
-            return empty;
+            days[day] = !booked.Contains(day);
         }
 
-        var entry = ParseIndexEntries(idx).FirstOrDefault(e =>
-            string.Equals(e.ExternalId, externalListingId, StringComparison.OrdinalIgnoreCase));
-        if (entry.Url is null)
-        {
-            return empty;
-        }
-
-        var availDoc = await GetXmlAsync(entry.Url, ct).ConfigureAwait(false);
-        if (availDoc is null)
-        {
-            return empty;
-        }
-
-        return new ChannelAvailabilityCalendar(externalListingId, ParseAvailabilityBlocks(availDoc));
+        return new ChannelAvailabilityCalendar(externalListingId, CollapseToBlocks(days));
     }
 
     public async Task<ChannelAvailabilityResult> CheckAvailabilityAsync(
@@ -125,58 +103,62 @@ public sealed partial class OwnerRezChannelProvider(
     {
         ArgumentNullException.ThrowIfNull(credentials);
         ArgumentNullException.ThrowIfNull(query);
-        if (!EnsureConfigured(nameof(CheckAvailabilityAsync)))
+        if (!EnsureCredentials(credentials, nameof(CheckAvailabilityAsync)))
         {
             return new ChannelAvailabilityResult(false, "NotConfigured");
         }
 
-        var body = new
+        if (query.CheckOut <= query.CheckIn)
         {
-            requestVersion = "1.0",
-            systemExternalId = _settings.SystemExternalId,
-            advertiserExternalId = credentials.ExternalAccountId,
-            listingExternalId = query.ExternalListingId,
-            dateRange = new
-            {
-                arrivalDate = query.CheckIn.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-                departureDate = query.CheckOut.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            },
-            adults = query.Adults,
-            children = query.Children,
-            pets = query.Pets,
-            units = new[] { new { unitExternalId = query.ExternalListingId } },
-        };
-
-        try
-        {
-            using var response = await httpClient
-                .PostAsJsonAsync("/haapi/haolbjson/fastavailability", body, ct)
-                .ConfigureAwait(false);
-
-            if (!response.IsSuccessStatusCode)
-            {
-                LogHttpError(logger, nameof(CheckAvailabilityAsync), (int)response.StatusCode, "fastavailability");
-                return new ChannelAvailabilityResult(false, "RequestFailed");
-            }
-
-            await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
-            using var doc = await JsonDocument.ParseAsync(stream, cancellationToken: ct).ConfigureAwait(false);
-
-            if (doc.RootElement.TryGetProperty("units", out var units) && units.GetArrayLength() > 0)
-            {
-                var unit = units[0];
-                var available = unit.TryGetProperty("available", out var a) && a.GetBoolean();
-                string? errorCode = unit.TryGetProperty("errorCode", out var ec) ? ec.GetString() : null;
-                return new ChannelAvailabilityResult(available, errorCode);
-            }
-
-            return new ChannelAvailabilityResult(false, "NoUnits");
+            return new ChannelAvailabilityResult(false, "InvalidDates");
         }
-        catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException)
+
+        if (!TryParsePropertyId(query.ExternalListingId, out var propertyId))
         {
-            LogRequestException(logger, nameof(CheckAvailabilityAsync), ex);
+            return new ChannelAvailabilityResult(false, "InvalidListingId");
+        }
+
+        // propertysearch evaluates OwnerRez's own availability + booking rules
+        // (min/max nights, changeover days, advance notice) for the window.
+        var path =
+            $"/v2/propertysearch?property_ids={propertyId}"
+            + $"&available_from={Date(query.CheckIn)}&available_to={Date(query.CheckOut)}"
+            + "&evaluate_rules=true";
+        if (query.Pets > 0)
+        {
+            path += "&pets_allowed=true";
+        }
+
+        using var doc = await GetJsonAsync(credentials, path, ct).ConfigureAwait(false);
+        if (doc is null)
+        {
             return new ChannelAvailabilityResult(false, "RequestFailed");
         }
+
+        if (!doc.RootElement.TryGetProperty("items", out var items)
+            || items.ValueKind != JsonValueKind.Array)
+        {
+            return new ChannelAvailabilityResult(false, "RequestFailed");
+        }
+
+        foreach (var item in items.EnumerateArray())
+        {
+            if (Int(item, "id") != propertyId)
+            {
+                continue;
+            }
+
+            if (item.TryGetProperty("rule_violations", out var violations)
+                && violations.ValueKind == JsonValueKind.Array
+                && violations.GetArrayLength() > 0)
+            {
+                return new ChannelAvailabilityResult(false, "RuleViolation");
+            }
+
+            return new ChannelAvailabilityResult(true);
+        }
+
+        return new ChannelAvailabilityResult(false, "Unavailable");
     }
 
     public async Task<ChannelBookingPushResult> PushBookingAsync(
@@ -186,38 +168,66 @@ public sealed partial class OwnerRezChannelProvider(
     {
         ArgumentNullException.ThrowIfNull(credentials);
         ArgumentNullException.ThrowIfNull(request);
-        if (!EnsureConfigured(nameof(PushBookingAsync)))
+        if (!HasCredentials(credentials))
         {
             return new ChannelBookingPushResult(false, ErrorCode: "NotConfigured",
-                ErrorMessage: "OwnerRez channel credentials are not configured.");
+                ErrorMessage: "OwnerRez account credentials are not configured on this connection.");
         }
 
-        var xml = BuildBookingXml(credentials, request);
-
-        var responseDoc = await PostXmlAsync(WithCreds("/haapi/haolb/createbooking"), xml, ct)
-            .ConfigureAwait(false);
-        if (responseDoc is null)
+        if (!TryParsePropertyId(request.ExternalListingId, out var propertyId))
         {
+            return new ChannelBookingPushResult(false, ErrorCode: "InvalidListingId",
+                ErrorMessage: "OwnerRez property id must be numeric.");
+        }
+
+        var guestId = await ResolveGuestIdAsync(credentials, request.Guest, ct).ConfigureAwait(false);
+        if (guestId is null)
+        {
+            return new ChannelBookingPushResult(false, ErrorCode: "GuestFailed",
+                ErrorMessage: "Could not find or create the guest in OwnerRez.");
+        }
+
+        var body = new Dictionary<string, object?>
+        {
+            ["property_id"] = propertyId,
+            ["guest_id"] = guestId.Value,
+            ["arrival"] = Date(request.CheckIn),
+            ["departure"] = Date(request.CheckOut),
+            ["is_block"] = false,
+            ["notes"] = BuildBookingNotes(request),
+        };
+
+        try
+        {
+            using var response = await SendAsync(
+                    credentials, HttpMethod.Post, "/v2/bookings", JsonContent.Create(body), ct)
+                .ConfigureAwait(false);
+            var payload = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                LogHttpError(logger, nameof(PushBookingAsync), (int)response.StatusCode, "/v2/bookings");
+                return new ChannelBookingPushResult(false, ErrorCode: "RequestFailed",
+                    ErrorMessage: ExtractErrorMessage(payload) ?? "OwnerRez rejected the booking.");
+            }
+
+            using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(payload) ? "{}" : payload);
+            var bookingId = Int(doc.RootElement, "id");
+            if (bookingId is null)
+            {
+                return new ChannelBookingPushResult(false, ErrorCode: "NoBookingId",
+                    ErrorMessage: "OwnerRez did not return a booking id.");
+            }
+
+            return new ChannelBookingPushResult(true,
+                ExternalBookingId: bookingId.Value.ToString(CultureInfo.InvariantCulture));
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException)
+        {
+            LogRequestException(logger, nameof(PushBookingAsync), ex);
             return new ChannelBookingPushResult(false, ErrorCode: "RequestFailed",
-                ErrorMessage: "OwnerRez createbooking request failed.");
+                ErrorMessage: "OwnerRez create-booking request failed.");
         }
-
-        var error = responseDoc.Descendants("error").FirstOrDefault();
-        if (error is not null)
-        {
-            var type = Str(error.Element("errorType")) ?? "Error";
-            var message = Str(error.Element("message")) ?? "OwnerRez rejected the booking.";
-            return new ChannelBookingPushResult(false, ErrorCode: type, ErrorMessage: message);
-        }
-
-        var externalId = Str(responseDoc.Descendants("externalId").FirstOrDefault());
-        if (string.IsNullOrWhiteSpace(externalId))
-        {
-            return new ChannelBookingPushResult(false, ErrorCode: "NoBookingId",
-                ErrorMessage: "OwnerRez did not return a booking id.");
-        }
-
-        return new ChannelBookingPushResult(true, ExternalBookingId: externalId);
     }
 
     public async Task<IReadOnlyList<ChannelBookingUpdate>> PullBookingUpdatesAsync(
@@ -226,486 +236,783 @@ public sealed partial class OwnerRezChannelProvider(
         CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(credentials);
-        if (!EnsureConfigured(nameof(PullBookingUpdatesAsync)))
+        if (!EnsureCredentials(credentials, nameof(PullBookingUpdatesAsync)))
         {
             return [];
         }
 
-        var advertiserId = credentials.ExternalAccountId;
-        var requestXml = new XDocument(
-            new XElement("bookingContentIndexRequest",
-                new XElement("documentVersion", "1.4"),
-                new XElement("advertiser", new XElement("assignedId", advertiserId)),
-                new XElement("startDate", changedSinceUtc.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))))
-            .ToString(SaveOptions.DisableFormatting);
+        var since = changedSinceUtc.ToUniversalTime()
+            .ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
 
-        var indexDoc = await PostXmlAsync(
-            $"/haapi/haolb/{Uri.EscapeDataString(advertiserId)}/bookingindex", requestXml, ct)
+        return await ReadAllPagesAsync(
+                credentials,
+                $"/v2/bookings?since_utc={Uri.EscapeDataString(since)}",
+                ParseBookingUpdate,
+                ct)
             .ConfigureAwait(false);
-        if (indexDoc is null)
-        {
-            return [];
-        }
-
-        var updates = new List<ChannelBookingUpdate>();
-        foreach (var (externalId, url) in ParseBookingIndexEntries(indexDoc))
-        {
-            var detail = await GetXmlAsync(url, ct).ConfigureAwait(false);
-            if (detail is null)
-            {
-                continue;
-            }
-
-            var status = Str(detail.Descendants("reservationStatus").FirstOrDefault())
-                ?? Str(detail.Descendants("status").FirstOrDefault())
-                ?? "UNKNOWN";
-            var bookingId = Str(detail.Descendants("externalId").FirstOrDefault()) ?? externalId;
-            var changedAt = ParseDateTime(detail.Descendants("lastUpdatedDate").FirstOrDefault())
-                ?? DateTime.UtcNow;
-
-            updates.Add(new ChannelBookingUpdate(bookingId, NormalizeBookingStatus(status), changedAt));
-        }
-
-        return updates;
     }
 
-    // ── Parsing helpers ─────────────────────────────────────────────────────
+    // ── Listing content ──────────────────────────────────────────────────────
 
-    private static ChannelListingSnapshot? ParseListing(
-        XDocument doc,
-        string externalId,
-        IReadOnlyDictionary<string, OwnerRezRate> rates)
+    private sealed record OwnerRezProperty(
+        int Id,
+        string Title,
+        string? Currency,
+        int? Bedrooms,
+        decimal? Bathrooms,
+        int? SquareFootage,
+        double? Latitude,
+        double? Longitude,
+        string PropertyType,
+        ChannelAddress? Address);
+
+    private sealed record OwnerRezListingContent(
+        int PropertyId,
+        string? Headline,
+        string? Description,
+        long? NightlyCents,
+        int? Bedrooms,
+        decimal? Bathrooms,
+        IReadOnlyList<string> AmenityCodes,
+        IReadOnlyList<ChannelPhoto> Photos);
+
+    private static OwnerRezProperty? ParseProperty(JsonElement item)
     {
-        var listing = doc.Root;
-        if (listing is null)
+        var id = Int(item, "id");
+        if (id is null or <= 0)
         {
             return null;
         }
 
-        var adContent = listing.Element("adContent");
-        var title = FirstText(adContent?.Element("headline"))
-            ?? FirstText(adContent?.Element("propertyName"))
-            ?? externalId;
-        var description = FirstText(adContent?.Element("description"));
+        var title = FirstNonEmpty(Str(item, "name"), Str(item, "external_name"))
+            ?? id.Value.ToString(CultureInfo.InvariantCulture);
 
-        var location = listing.Element("location");
-        var addrEl = location?.Element("address");
-        ChannelAddress? address = addrEl is null ? null : new ChannelAddress(
-            Line1: Str(addrEl.Element("addressLine1")),
-            City: Str(addrEl.Element("city")),
-            State: Str(addrEl.Element("stateOrProvince")),
-            PostalCode: Str(addrEl.Element("postalCode")),
-            Country: Str(addrEl.Element("country")));
+        ChannelAddress? address = null;
+        if (item.TryGetProperty("address", out var addr) && addr.ValueKind == JsonValueKind.Object)
+        {
+            address = new ChannelAddress(
+                Line1: FirstNonEmpty(Str(addr, "street1"), Str(addr, "street2")),
+                City: Str(addr, "city"),
+                State: FirstNonEmpty(Str(addr, "state"), Str(addr, "province")),
+                PostalCode: Str(addr, "postal_code"),
+                Country: Str(addr, "country"));
+        }
 
-        var latLng = location?.Element("geoCode")?.Element("latLng");
-        var latitude = Dbl(latLng?.Element("latitude"));
-        var longitude = Dbl(latLng?.Element("longitude"));
+        // `bathrooms` counts full and half rooms equally, so prefer the
+        // half-weighted total Lagedra stores.
+        var bathrooms = SumBathrooms(Int(item, "bathrooms_full"), Int(item, "bathrooms_half"))
+            ?? Dec(item, "bathrooms");
 
-        var unit = listing.Element("units")?.Element("unit");
-        var bedrooms = unit?.Element("bedrooms")?.Elements("bedroom").Count() ?? 0;
-        var bathrooms = ParseBathrooms(unit?.Element("bathrooms"));
-        var propertyType = MapPropertyType(Str(unit?.Element("propertyType")));
+        return new OwnerRezProperty(
+            Id: id.Value,
+            Title: title,
+            Currency: Str(item, "currency_code"),
+            Bedrooms: Int(item, "bedrooms"),
+            Bathrooms: bathrooms,
+            SquareFootage: ToSquareFeet(Int(item, "living_area"), Str(item, "living_area_type")),
+            Latitude: Dbl(item, "latitude"),
+            Longitude: Dbl(item, "longitude"),
+            PropertyType: MapPropertyType(Str(item, "property_type")),
+            Address: address);
+    }
 
-        var amenityCodes = unit?.Element("featureValues")?.Elements("featureValue")
-            .Select(f => Str(f.Element("unitFeatureName")))
-            .Where(s => !string.IsNullOrWhiteSpace(s))
-            .Select(s => s!)
-            .ToList() ?? [];
+    private static OwnerRezListingContent? ParseListingContent(JsonElement item)
+    {
+        var propertyId = Int(item, "property_id");
+        if (propertyId is null or <= 0)
+        {
+            return null;
+        }
 
-        var photos = listing.Element("images")?.Elements("image")
-            .Select(img =>
-            {
-                var uriText = Str(img.Element("uri"));
-                if (uriText is null || !Uri.TryCreate(uriText, UriKind.Absolute, out var uri))
-                {
-                    return null;
-                }
+        string? headline = null;
+        string? description = null;
+        if (item.TryGetProperty("descriptions", out var d) && d.ValueKind == JsonValueKind.Object)
+        {
+            headline = Str(d, "headline");
+            description = FirstNonEmpty(
+                Str(d, "description"),
+                Str(d, "short_description"),
+                Str(d, "accommodations_summary"));
+        }
 
-                var photoId = Str(img.Element("externalId")) ?? Guid.NewGuid().ToString("n");
-                return new ChannelPhoto(photoId, uri, FirstText(img.Element("title")));
-            })
-            .Where(p => p is not null)
-            .Select(p => p!)
-            .ToList() ?? [];
+        var nightly = Dec(item, "nightly_rate_min") ?? Dec(item, "nightly_rate_max");
+        long? nightlyCents = nightly is > 0
+            ? (long)Math.Round(nightly.Value * 100m, MidpointRounding.AwayFromZero)
+            : null;
 
-        rates.TryGetValue(externalId, out var rate);
-        var nightlyCents = rate?.NightlyCents;
+        var bathrooms = SumBathrooms(Int(item, "bathroom_full_count"), Int(item, "bathroom_half_count"))
+            ?? Dec(item, "bathroom_count");
+
+        return new OwnerRezListingContent(
+            PropertyId: propertyId.Value,
+            Headline: headline,
+            Description: description,
+            NightlyCents: nightlyCents,
+            Bedrooms: Int(item, "bedroom_count"),
+            Bathrooms: bathrooms,
+            AmenityCodes: ParseAmenityCodes(item),
+            Photos: ParsePhotos(item, propertyId.Value));
+    }
+
+    private static ChannelListingSnapshot BuildSnapshot(
+        OwnerRezProperty property,
+        OwnerRezListingContent? content)
+    {
+        var nightlyCents = content?.NightlyCents;
         var monthlyCents = nightlyCents.HasValue ? nightlyCents.Value * 30 : (long?)null;
 
         return new ChannelListingSnapshot(
-            ExternalListingId: externalId,
-            Title: title,
-            Description: description,
+            ExternalListingId: property.Id.ToString(CultureInfo.InvariantCulture),
+            Title: FirstNonEmpty(property.Title, content?.Headline) ?? property.Title,
+            Description: content?.Description,
             MonthlyRentCents: monthlyCents,
             NightlyRateCents: nightlyCents,
-            Currency: rate?.Currency ?? "USD",
+            Currency: property.Currency ?? "USD",
             MinStayNights: null,
             MaxStayNights: null,
-            Bedrooms: bedrooms,
-            Bathrooms: bathrooms,
-            SquareFootage: null,
-            DepositCents: rate?.DepositCents,
-            Latitude: latitude,
-            Longitude: longitude,
-            PropertyType: propertyType,
-            Address: address,
-            AmenityCodes: amenityCodes,
-            Photos: photos);
+            Bedrooms: property.Bedrooms ?? content?.Bedrooms,
+            Bathrooms: property.Bathrooms ?? content?.Bathrooms,
+            SquareFootage: property.SquareFootage,
+            DepositCents: null,
+            Latitude: property.Latitude,
+            Longitude: property.Longitude,
+            PropertyType: property.PropertyType,
+            Address: property.Address,
+            AmenityCodes: content?.AmenityCodes ?? [],
+            Photos: content?.Photos ?? []);
     }
 
-    private async Task<IReadOnlyDictionary<string, OwnerRezRate>> TryLoadRatesAsync(
-        string advertiserId,
-        CancellationToken ct)
+    private static List<ChannelPhoto> ParsePhotos(JsonElement item, int propertyId)
     {
-        var result = new Dictionary<string, OwnerRezRate>(StringComparer.OrdinalIgnoreCase);
-        var idx = await GetXmlAsync($"/haapi/haxml/{Uri.EscapeDataString(advertiserId)}/lodgingrateindex", ct)
-            .ConfigureAwait(false);
-        if (idx is null)
+        if (!item.TryGetProperty("photos", out var photos) || photos.ValueKind != JsonValueKind.Array)
         {
-            return result;
+            return [];
         }
 
-        foreach (var (externalId, url) in ParseIndexEntries(idx))
+        var result = new List<ChannelPhoto>();
+        var index = 0;
+        foreach (var photo in photos.EnumerateArray())
         {
-            var rateDoc = await GetXmlAsync(url, ct).ConfigureAwait(false);
-            var rate = rateDoc is null ? null : ParseRate(rateDoc);
-            if (rate is not null)
+            var urlText = FirstNonEmpty(
+                Str(photo, "original_url"),
+                Str(photo, "large_url"),
+                Str(photo, "cropped_url"));
+            if (urlText is null || !Uri.TryCreate(urlText, UriKind.Absolute, out var uri))
             {
-                result[externalId] = rate;
+                continue;
             }
+
+            // ImageFileModel carries no id, so derive a stable one from position.
+            result.Add(new ChannelPhoto(
+                $"{propertyId}-{index.ToString(CultureInfo.InvariantCulture)}",
+                uri,
+                Str(photo, "caption")));
+            index++;
         }
 
         return result;
     }
 
-    private static OwnerRezRate? ParseRate(XDocument doc)
+    private static List<string> ParseAmenityCodes(JsonElement item)
     {
-        var lodgingRate = doc.Descendants("lodgingRate").FirstOrDefault();
-        if (lodgingRate is null)
+        var codes = new List<string>();
+
+        if (item.TryGetProperty("amenity_categories", out var categories)
+            && categories.ValueKind == JsonValueKind.Array)
         {
-            return null;
+            foreach (var category in categories.EnumerateArray())
+            {
+                if (!category.TryGetProperty("amenities", out var amenities)
+                    || amenities.ValueKind != JsonValueKind.Array)
+                {
+                    continue;
+                }
+
+                foreach (var amenity in amenities.EnumerateArray())
+                {
+                    AddAmenity(codes, amenity);
+                }
+            }
         }
 
-        var currency = Str(lodgingRate.Element("currency")) ?? "USD";
-        var nightly = lodgingRate.Element("nightlyRates");
+        if (item.TryGetProperty("amenity_call_outs", out var callOuts)
+            && callOuts.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var callOut in callOuts.EnumerateArray())
+            {
+                AddAmenity(codes, callOut);
+            }
+        }
 
-        var perDay = WeekdayKeys
-            .Select(d => Dec(nightly?.Element(d)))
-            .Where(v => v is > 0)
-            .Select(v => v!.Value)
-            .ToList();
-
-        long? nightlyCents = perDay.Count > 0
-            ? (long)Math.Round(perDay.Average() * 100m, MidpointRounding.AwayFromZero)
-            : null;
-
-        var depositAmount =
-            Dec(lodgingRate.Descendants("flatRefundableDamageDepositFees").Elements("fee").Elements("amount").FirstOrDefault())
-            ?? Dec(lodgingRate.Descendants("refundableDamageDepositFlat").Elements("fee").Elements("amount").FirstOrDefault());
-        long? depositCents = depositAmount is > 0
-            ? (long)Math.Round(depositAmount.Value * 100m, MidpointRounding.AwayFromZero)
-            : null;
-
-        return new OwnerRezRate(nightlyCents, depositCents, currency);
+        return codes;
     }
+
+    private static void AddAmenity(List<string> codes, JsonElement amenity)
+    {
+        var name = FirstNonEmpty(Str(amenity, "title"), Str(amenity, "text"));
+        if (name is not null && !codes.Contains(name, StringComparer.OrdinalIgnoreCase))
+        {
+            codes.Add(name);
+        }
+    }
+
+    // ── Availability ─────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Generic per-advertiser index reader: yields (externalId, contentUrl) for
-    /// every <c>*IndexEntry</c> element (listing / rate / availability feeds).
+    /// Collects every night blocked by an active OwnerRez booking (or block)
+    /// overlapping the window. v2 exposes no calendar feed, so availability is
+    /// derived from the bookings list.
     /// </summary>
-    private static IEnumerable<(string ExternalId, string Url)> ParseIndexEntries(XDocument doc)
+    private async Task<HashSet<DateOnly>> FetchBookedNightsAsync(
+        ChannelCredentials credentials,
+        int propertyId,
+        DateOnly start,
+        DateOnly end,
+        CancellationToken ct)
     {
-        foreach (var entry in doc.Descendants()
-            .Where(e => e.Name.LocalName.EndsWith("IndexEntry", StringComparison.Ordinal)))
-        {
-            var externalId = Str(entry.Elements()
-                .FirstOrDefault(e => e.Name.LocalName is "listingExternalId" or "unitExternalId"));
-            var url = Str(entry.Elements()
-                .FirstOrDefault(e => e.Name.LocalName.EndsWith("Url", StringComparison.Ordinal)));
+        var path =
+            $"/v2/bookings?property_ids={propertyId}"
+            + $"&from={Date(start)}&to={Date(end)}&status=active";
 
-            if (!string.IsNullOrWhiteSpace(externalId) && !string.IsNullOrWhiteSpace(url))
+        var stays = await ReadAllPagesAsync(credentials, path, ParseStay, ct).ConfigureAwait(false);
+
+        var booked = new HashSet<DateOnly>();
+        foreach (var stay in stays)
+        {
+            // Departure day is a turnover day — the night itself is not booked.
+            for (var night = stay.Arrival; night < stay.Departure; night = night.AddDays(1))
             {
-                yield return (externalId!, url!);
+                if (night >= start && night <= end)
+                {
+                    booked.Add(night);
+                }
             }
         }
+
+        return booked;
     }
 
-    private static IEnumerable<(string ExternalId, string Url)> ParseBookingIndexEntries(XDocument doc)
+    private sealed record OwnerRezStay(DateOnly Arrival, DateOnly Departure);
+
+    private static OwnerRezStay? ParseStay(JsonElement item)
     {
-        foreach (var el in doc.Descendants()
-            .Where(e => e.Name.LocalName.EndsWith("Url", StringComparison.Ordinal)))
+        var arrival = ParseDate(Str(item, "arrival"));
+        var departure = ParseDate(Str(item, "departure"));
+        return arrival.HasValue && departure.HasValue && departure.Value > arrival.Value
+            ? new OwnerRezStay(arrival.Value, departure.Value)
+            : null;
+    }
+
+    private static List<ChannelDateBlock> CollapseToBlocks(Dictionary<DateOnly, bool> days)
+    {
+        if (days.Count == 0)
         {
-            var url = Str(el);
-            if (string.IsNullOrWhiteSpace(url))
-            {
-                continue;
-            }
-
-            var externalId = Str(el.Parent?.Element("externalId")) ?? string.Empty;
-            yield return (externalId, url!);
+            return [];
         }
-    }
 
-    private static List<ChannelDateBlock> ParseAvailabilityBlocks(XDocument doc)
-    {
+        var ordered = days.OrderBy(kv => kv.Key).ToList();
         var blocks = new List<ChannelDateBlock>();
-        foreach (var el in doc.Descendants())
+        var blockStart = ordered[0].Key;
+        var blockAvailable = ordered[0].Value;
+        var prev = ordered[0].Key;
+
+        for (var i = 1; i < ordered.Count; i++)
         {
-            var name = el.Name.LocalName;
-            var looksLikeRange = name.Contains("navail", StringComparison.OrdinalIgnoreCase)
-                || name.Contains("block", StringComparison.OrdinalIgnoreCase)
-                || name is "dateRange" or "range" or "stay";
-            if (!looksLikeRange)
+            var (date, available) = ordered[i];
+            if (available == blockAvailable && date == prev.AddDays(1))
             {
+                prev = date;
                 continue;
             }
 
-            var begin = FirstDate(el, "beginDate", "startDate", "start", "from", "min");
-            var end = FirstDate(el, "endDate", "stopDate", "end", "to", "max");
-            if (begin.HasValue && end.HasValue && end.Value >= begin.Value)
-            {
-                var available = name.Contains("avail", StringComparison.OrdinalIgnoreCase)
-                    && !name.Contains("navail", StringComparison.OrdinalIgnoreCase);
-                blocks.Add(new ChannelDateBlock(begin.Value, end.Value, available));
-            }
+            blocks.Add(new ChannelDateBlock(blockStart, prev, blockAvailable));
+            blockStart = date;
+            blockAvailable = available;
+            prev = date;
         }
 
+        blocks.Add(new ChannelDateBlock(blockStart, prev, blockAvailable));
         return blocks;
     }
 
-    // ── Booking XML builder ─────────────────────────────────────────────────
+    // ── Booking push helpers ─────────────────────────────────────────────────
 
-    private string BuildBookingXml(ChannelCredentials credentials, ChannelBookingPushRequest request)
+    /// <summary>
+    /// Finds the host's existing OwnerRez guest by email, creating one when the
+    /// traveler is new. <c>POST /v2/bookings</c> requires a <c>guest_id</c>.
+    /// </summary>
+    private async Task<int?> ResolveGuestIdAsync(
+        ChannelCredentials credentials,
+        ChannelGuest guest,
+        CancellationToken ct)
     {
-        var currency = string.IsNullOrWhiteSpace(request.Currency) ? "USD" : request.Currency;
-
-        var orderItems = new XElement("orderItemList");
-        long totalCents = 0;
-        foreach (var item in request.OrderItems)
+        if (!string.IsNullOrWhiteSpace(guest.Email))
         {
-            totalCents += item.AmountCents;
-            var orderItem = new XElement("orderItem",
-                item.ExternalId is { Length: > 0 } extId ? new XElement("externalId", extId) : null,
-                new XElement("feeType", MapFeeType(item.Type)),
-                new XElement("name", item.Name),
-                new XElement("preTaxAmount", new XAttribute("currency", currency), Money(item.AmountCents)),
-                new XElement("status", "ACCEPTED"),
-                new XElement("taxRate", "0.000000"),
-                new XElement("totalAmount", new XAttribute("currency", currency), Money(item.AmountCents)));
-            orderItems.Add(orderItem);
+            var path = $"/v2/guests?q={Uri.EscapeDataString(guest.Email)}&limit={_settings.PageSize}";
+            using var search = await GetJsonAsync(credentials, path, ct).ConfigureAwait(false);
+            if (search is not null
+                && search.RootElement.TryGetProperty("items", out var items)
+                && items.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var candidate in items.EnumerateArray())
+                {
+                    if (HasEmail(candidate, guest.Email) && Int(candidate, "id") is { } existingId)
+                    {
+                        return existingId;
+                    }
+                }
+            }
         }
 
-        var guest = request.Guest;
-        var details = new XElement("bookingRequestDetails",
-            new XElement("advertiserAssignedId", credentials.ExternalAccountId),
-            new XElement("listingExternalId", request.ExternalListingId),
-            new XElement("unitExternalId", request.ExternalListingId),
-            request.Message is { Length: > 0 } msg ? new XElement("message", msg) : null,
-            new XElement("inquirer", new XAttribute("locale", "en_US"),
-                new XElement("firstName", guest.FirstName),
-                new XElement("lastName", guest.LastName),
-                new XElement("emailAddress", guest.Email),
-                guest.Phone is { Length: > 0 } phone ? new XElement("phoneNumber", phone) : null),
-            request.OwnerCommissionCents is { } commission
-                ? new XElement("commission",
-                    new XElement("ownerFee", new XAttribute("currency", currency), Money(commission)))
-                : null,
-            request.GuestServiceFeeCents is { } serviceFee
-                ? new XElement("olbMeta",
-                    new XElement("serviceFee", new XAttribute("currency", currency), Money(serviceFee)))
-                : null,
-            new XElement("reservation",
-                new XElement("numberOfAdults", request.Adults),
-                new XElement("numberOfChildren", request.Children),
-                new XElement("numberOfPets", request.Pets),
-                new XElement("reservationDates",
-                    new XElement("beginDate", request.CheckIn.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)),
-                    new XElement("endDate", request.CheckOut.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))),
-                new XElement("reservationOriginationDate",
-                    DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture))),
-            orderItems,
-            new XElement("paymentScheduleItemList",
-                new XElement("paymentScheduleItem",
-                    new XElement("amount", new XAttribute("currency", currency), Money(totalCents)),
-                    new XElement("dueDate", DateTime.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)))),
-            new XElement("paymentForm",
-                new XElement("paymentChannelMoR",
-                    new XElement("paymentFormType", "CHANNELMOR"),
-                    new XElement("projectedDepositDate",
-                        request.CheckIn.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)))),
-            new XElement("trackingUuid", request.TrackingReference),
-            new XElement("travelerSource", _settings.SystemExternalId));
+        var body = new Dictionary<string, object?>
+        {
+            ["first_name"] = guest.FirstName,
+            ["last_name"] = guest.LastName,
+        };
 
-        var doc = new XDocument(
-            new XDeclaration("1.0", "UTF-8", null),
-            new XElement("bookingRequest",
-                new XElement("documentVersion", "1.3"),
-                details));
+        if (!string.IsNullOrWhiteSpace(guest.Email))
+        {
+            body["email_addresses"] = new[]
+            {
+                new Dictionary<string, object?> { ["address"] = guest.Email, ["is_default"] = true },
+            };
+        }
 
-        return doc.ToString(SaveOptions.DisableFormatting);
-    }
+        if (!string.IsNullOrWhiteSpace(guest.Phone))
+        {
+            body["phones"] = new[]
+            {
+                new Dictionary<string, object?>
+                {
+                    ["number"] = guest.Phone,
+                    ["type"] = "mobile",
+                    ["is_default"] = true,
+                },
+            };
+        }
 
-    // ── HTTP plumbing ────────────────────────────────────────────────────────
-
-    private async Task<XDocument?> GetXmlAsync(string requestUri, CancellationToken ct)
-    {
         try
         {
-            using var response = await httpClient
-                .GetAsync(new Uri(requestUri, UriKind.RelativeOrAbsolute), ct)
+            using var response = await SendAsync(
+                    credentials, HttpMethod.Post, "/v2/guests", JsonContent.Create(body), ct)
                 .ConfigureAwait(false);
+            var payload = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
-                LogHttpError(logger, "GET", (int)response.StatusCode, requestUri);
+                LogHttpError(logger, nameof(ResolveGuestIdAsync), (int)response.StatusCode, "/v2/guests");
                 return null;
             }
 
-            var content = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
-            return string.IsNullOrWhiteSpace(content) ? null : XDocument.Parse(content);
+            using var doc = JsonDocument.Parse(string.IsNullOrWhiteSpace(payload) ? "{}" : payload);
+            return Int(doc.RootElement, "id");
         }
-        catch (Exception ex) when (ex is HttpRequestException or System.Xml.XmlException or TaskCanceledException)
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException)
         {
-            LogRequestException(logger, $"GET {requestUri}", ex);
+            LogRequestException(logger, nameof(ResolveGuestIdAsync), ex);
             return null;
         }
     }
 
-    private async Task<XDocument?> PostXmlAsync(string requestUri, string xml, CancellationToken ct)
+    private static bool HasEmail(JsonElement guest, string email)
+    {
+        if (!guest.TryGetProperty("email_addresses", out var emails)
+            || emails.ValueKind != JsonValueKind.Array)
+        {
+            return false;
+        }
+
+        foreach (var entry in emails.EnumerateArray())
+        {
+            if (string.Equals(Str(entry, "address"), email, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// v2 bookings cannot carry charges, so the amounts Lagedra already
+    /// collected are summarised in the notes field for host reconciliation.
+    /// </summary>
+    private static string BuildBookingNotes(ChannelBookingPushRequest request)
+    {
+        var currency = string.IsNullOrWhiteSpace(request.Currency) ? "USD" : request.Currency;
+        var notes = new StringBuilder();
+        notes.Append(CultureInfo.InvariantCulture, $"Lagedra booking {request.TrackingReference}");
+        notes.Append(CultureInfo.InvariantCulture,
+            $" — {request.Adults} adult(s), {request.Children} child(ren), {request.Pets} pet(s).");
+        notes.Append(CultureInfo.InvariantCulture, $" Payment status: {request.PaymentStatus}.");
+
+        if (request.OrderItems.Count > 0)
+        {
+            notes.Append(" Charges:");
+            foreach (var item in request.OrderItems)
+            {
+                notes.Append(CultureInfo.InvariantCulture,
+                    $" {item.Name} {currency} {Money(item.AmountCents)};");
+            }
+
+            notes.Append(CultureInfo.InvariantCulture,
+                $" Total {currency} {Money(request.OrderItems.Sum(i => i.AmountCents))}.");
+        }
+
+        if (request.OwnerCommissionCents is { } commission)
+        {
+            notes.Append(CultureInfo.InvariantCulture,
+                $" Owner commission {currency} {Money(commission)}.");
+        }
+
+        if (request.GuestServiceFeeCents is { } serviceFee)
+        {
+            notes.Append(CultureInfo.InvariantCulture,
+                $" Guest service fee {currency} {Money(serviceFee)}.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Message))
+        {
+            notes.Append(CultureInfo.InvariantCulture, $" Guest message: {request.Message}");
+        }
+
+        return notes.ToString();
+    }
+
+    private static ChannelBookingUpdate? ParseBookingUpdate(JsonElement item)
+    {
+        var id = Int(item, "id");
+        if (id is null)
+        {
+            return null;
+        }
+
+        if (item.TryGetProperty("is_block", out var isBlock)
+            && isBlock.ValueKind == JsonValueKind.True)
+        {
+            return null;
+        }
+
+        var changedAt = ParseUtc(Str(item, "updated_utc"))
+            ?? ParseUtc(Str(item, "booked_utc"))
+            ?? ParseUtc(Str(item, "created_utc"))
+            ?? DateTime.UtcNow;
+
+        return new ChannelBookingUpdate(
+            id.Value.ToString(CultureInfo.InvariantCulture),
+            NormalizeBookingStatus(Str(item, "status")),
+            changedAt);
+    }
+
+    // ── HTTP / paging ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Reads every page of a v2 list endpoint, following <c>next_page_url</c>
+    /// when present and falling back to <c>limit</c>/<c>offset</c> paging.
+    /// </summary>
+    private async Task<List<T>> ReadAllPagesAsync<T>(
+        ChannelCredentials credentials,
+        string path,
+        Func<JsonElement, T?> map,
+        CancellationToken ct)
+        where T : class
+    {
+        var results = new List<T>();
+        string? nextPageUrl = null;
+        var offset = 0;
+
+        for (var page = 0; page < _settings.MaxPages; page++)
+        {
+            var requestUri = nextPageUrl
+                ?? AppendQuery(path, $"limit={_settings.PageSize}&offset={offset}");
+
+            using var doc = await GetJsonAsync(credentials, requestUri, ct).ConfigureAwait(false);
+            if (doc is null
+                || !doc.RootElement.TryGetProperty("items", out var items)
+                || items.ValueKind != JsonValueKind.Array)
+            {
+                break;
+            }
+
+            var pageCount = 0;
+            foreach (var item in items.EnumerateArray())
+            {
+                pageCount++;
+                if (map(item) is { } mapped)
+                {
+                    results.Add(mapped);
+                }
+            }
+
+            // A present-but-null next_page_url means "no more pages", so it is
+            // authoritative; offset paging is only a fallback for responses
+            // that omit the field entirely.
+            var pagesLinked = doc.RootElement.TryGetProperty("next_page_url", out var nextEl);
+            nextPageUrl = pagesLinked && nextEl.ValueKind == JsonValueKind.String
+                ? nextEl.GetString()
+                : null;
+
+            if (nextPageUrl is not null)
+            {
+                continue;
+            }
+
+            if (pagesLinked || pageCount < _settings.PageSize)
+            {
+                break;
+            }
+
+            offset += _settings.PageSize;
+        }
+
+        return results;
+    }
+
+    private async Task<JsonDocument?> GetJsonAsync(
+        ChannelCredentials credentials,
+        string path,
+        CancellationToken ct)
     {
         try
         {
-            using var content = new StringContent(xml, Encoding.UTF8, "application/xml");
-            using var response = await httpClient
-                .PostAsync(new Uri(requestUri, UriKind.RelativeOrAbsolute), content, ct)
+            using var response = await SendAsync(credentials, HttpMethod.Get, path, null, ct)
                 .ConfigureAwait(false);
-            var body = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
+            var payload = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
 
-            if (!response.IsSuccessStatusCode && string.IsNullOrWhiteSpace(body))
+            if (!response.IsSuccessStatusCode)
             {
-                LogHttpError(logger, "POST", (int)response.StatusCode, requestUri);
+                LogHttpError(logger, "GET", (int)response.StatusCode, path);
                 return null;
             }
 
-            return string.IsNullOrWhiteSpace(body) ? null : XDocument.Parse(body);
+            return string.IsNullOrWhiteSpace(payload) ? null : JsonDocument.Parse(payload);
         }
-        catch (Exception ex) when (ex is HttpRequestException or System.Xml.XmlException or TaskCanceledException)
+        catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException)
         {
-            LogRequestException(logger, $"POST {requestUri}", ex);
+            LogRequestException(logger, $"GET {path}", ex);
             return null;
         }
     }
 
-    private string WithCreds(string path)
+    private async Task<HttpResponseMessage> SendAsync(
+        ChannelCredentials credentials,
+        HttpMethod method,
+        string path,
+        HttpContent? content,
+        CancellationToken ct)
     {
-        var separator = path.Contains('?', StringComparison.Ordinal) ? '&' : '?';
-        return $"{path}{separator}type={Uri.EscapeDataString(_settings.Username)}&key={Uri.EscapeDataString(_settings.Key)}";
+        using var request = new HttpRequestMessage(method, new Uri(path, UriKind.RelativeOrAbsolute))
+        {
+            Content = content,
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Basic", BasicToken(credentials));
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
+        return await httpClient.SendAsync(request, ct).ConfigureAwait(false);
     }
 
-    private bool EnsureConfigured(string method)
+    /// <summary>
+    /// OwnerRez accepts the account email as the Basic username with the
+    /// personal access token as the password. Connections that only stored a
+    /// token fall back to the token-as-username form, which OwnerRez also
+    /// accepts for API keys.
+    /// </summary>
+    private static string BasicToken(ChannelCredentials credentials)
     {
-        if (Configured)
+        var user = string.IsNullOrWhiteSpace(credentials.Username)
+            ? credentials.Secret
+            : credentials.Username;
+        var password = string.IsNullOrWhiteSpace(credentials.Username)
+            ? string.Empty
+            : credentials.Secret;
+
+        return Convert.ToBase64String(Encoding.UTF8.GetBytes($"{user}:{password}"));
+    }
+
+    private static string AppendQuery(string path, string query)
+        => $"{path}{(path.Contains('?', StringComparison.Ordinal) ? '&' : '?')}{query}";
+
+    private static bool HasCredentials(ChannelCredentials credentials)
+        => !string.IsNullOrWhiteSpace(credentials.Secret);
+
+    private bool EnsureCredentials(ChannelCredentials credentials, string method)
+    {
+        if (HasCredentials(credentials))
         {
             return true;
         }
 
-        LogNotConfigured(logger, method);
+        LogMissingToken(logger, method);
         return false;
     }
 
-    // ── Small value parsers ──────────────────────────────────────────────────
+    private static bool TryParsePropertyId(string? externalListingId, out int propertyId)
+        => int.TryParse(externalListingId, NumberStyles.Integer, CultureInfo.InvariantCulture, out propertyId)
+           && propertyId > 0;
 
-    private static string? Str(XElement? element)
-        => element?.Value.Trim() is { Length: > 0 } v ? v : null;
-
-    private static double? Dbl(XElement? element)
-        => double.TryParse(element?.Value, NumberStyles.Any, CultureInfo.InvariantCulture, out var d) ? d : null;
-
-    private static decimal? Dec(XElement? element)
-        => decimal.TryParse(element?.Value, NumberStyles.Any, CultureInfo.InvariantCulture, out var d) ? d : null;
-
-    private static bool BoolOrTrue(XElement? element)
-        => element is null || !bool.TryParse(element.Value, out var b) || b;
-
-    private static string? FirstText(XElement? container)
-        => container?.Descendants("textValue").FirstOrDefault()?.Value.Trim() is { Length: > 0 } v ? v : null;
-
-    private static DateOnly? FirstDate(XElement parent, params string[] childNames)
+    private static string? ExtractErrorMessage(string? payload)
     {
-        foreach (var name in childNames)
+        if (string.IsNullOrWhiteSpace(payload))
         {
-            var raw = parent.Element(name)?.Value;
-            if (DateOnly.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date))
-            {
-                return date;
-            }
+            return null;
         }
 
-        return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(payload);
+            if (doc.RootElement.TryGetProperty("messages", out var messages)
+                && messages.ValueKind == JsonValueKind.Array)
+            {
+                var joined = string.Join(
+                    " ",
+                    messages.EnumerateArray()
+                        .Select(m => m.GetString())
+                        .Where(m => !string.IsNullOrWhiteSpace(m)));
+                return string.IsNullOrWhiteSpace(joined) ? null : joined;
+            }
+
+            return Str(doc.RootElement, "message");
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
-    private static DateTime? ParseDateTime(XElement? element)
-        => DateTime.TryParse(element?.Value, CultureInfo.InvariantCulture,
-            DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var dt) ? dt : null;
+    // ── Value parsers / mapping ──────────────────────────────────────────────
+
+    private static string? Str(JsonElement el, string name)
+        => el.ValueKind == JsonValueKind.Object
+           && el.TryGetProperty(name, out var v)
+           && v.ValueKind == JsonValueKind.String
+           && v.GetString()?.Trim() is { Length: > 0 } s
+            ? s
+            : null;
+
+    private static int? Int(JsonElement el, string name)
+    {
+        if (el.ValueKind != JsonValueKind.Object
+            || !el.TryGetProperty(name, out var v)
+            || v.ValueKind == JsonValueKind.Null)
+        {
+            return null;
+        }
+
+        if (v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out var i))
+        {
+            return i;
+        }
+
+        return int.TryParse(v.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
+    }
+
+    private static decimal? Dec(JsonElement el, string name)
+    {
+        if (el.ValueKind != JsonValueKind.Object
+            || !el.TryGetProperty(name, out var v)
+            || v.ValueKind == JsonValueKind.Null)
+        {
+            return null;
+        }
+
+        if (v.ValueKind == JsonValueKind.Number && v.TryGetDecimal(out var d))
+        {
+            return d;
+        }
+
+        return decimal.TryParse(v.ToString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
+    }
+
+    private static double? Dbl(JsonElement el, string name)
+    {
+        if (el.ValueKind != JsonValueKind.Object
+            || !el.TryGetProperty(name, out var v)
+            || v.ValueKind == JsonValueKind.Null)
+        {
+            return null;
+        }
+
+        if (v.ValueKind == JsonValueKind.Number && v.TryGetDouble(out var d))
+        {
+            return d;
+        }
+
+        return double.TryParse(v.ToString(), NumberStyles.Any, CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
+    }
+
+    private static string? FirstNonEmpty(params string?[] values)
+        => values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
+
+    private static decimal? SumBathrooms(int? full, int? half)
+        => full is null && half is null ? null : (full ?? 0) + ((half ?? 0) * 0.5m);
+
+    private static int? ToSquareFeet(int? livingArea, string? unit)
+    {
+        if (livingArea is null or <= 0)
+        {
+            return null;
+        }
+
+        var isMetric = unit is not null
+            && (unit.Contains('m', StringComparison.OrdinalIgnoreCase)
+                && !unit.Contains("ft", StringComparison.OrdinalIgnoreCase));
+
+        return isMetric
+            ? (int)Math.Round(livingArea.Value * 10.7639m, MidpointRounding.AwayFromZero)
+            : livingArea.Value;
+    }
+
+    private static string Date(DateOnly date)
+        => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
     private static string Money(long cents)
         => (cents / 100m).ToString("0.00", CultureInfo.InvariantCulture);
 
-    private static decimal ParseBathrooms(XElement? bathrooms)
+    private static DateOnly? ParseDate(string? raw)
+        => DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt)
+            ? DateOnly.FromDateTime(dt)
+            : null;
+
+    private static DateTime? ParseUtc(string? raw)
+        => DateTime.TryParse(raw, CultureInfo.InvariantCulture,
+            DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out var dt)
+            ? dt
+            : null;
+
+    /// <summary>Maps the v2 <c>PropertyType</c> enum onto Lagedra's listing types.</summary>
+    private static string MapPropertyType(string? propertyType) => (propertyType ?? string.Empty) switch
     {
-        if (bathrooms is null)
-        {
-            return 0m;
-        }
-
-        decimal total = 0m;
-        foreach (var bathroom in bathrooms.Elements("bathroom"))
-        {
-            var subType = Str(bathroom.Element("roomSubType"));
-            total += subType is not null && subType.Contains("HALF", StringComparison.OrdinalIgnoreCase) ? 0.5m : 1m;
-        }
-
-        return total;
-    }
-
-    private static string MapPropertyType(string? ownerRezType) => (ownerRezType ?? string.Empty) switch
-    {
-        var s when s.Contains("APARTMENT", StringComparison.OrdinalIgnoreCase) => "apartment",
-        var s when s.Contains("CONDO", StringComparison.OrdinalIgnoreCase) => "condo",
-        var s when s.Contains("TOWNHOUSE", StringComparison.OrdinalIgnoreCase) => "townhouse",
-        var s when s.Contains("TOWNHOME", StringComparison.OrdinalIgnoreCase) => "townhouse",
-        var s when s.Contains("STUDIO", StringComparison.OrdinalIgnoreCase) => "studio",
-        var s when s.Contains("LOFT", StringComparison.OrdinalIgnoreCase) => "loft",
-        var s when s.Contains("VILLA", StringComparison.OrdinalIgnoreCase) => "villa",
-        var s when s.Contains("COTTAGE", StringComparison.OrdinalIgnoreCase) => "cottage",
-        var s when s.Contains("CABIN", StringComparison.OrdinalIgnoreCase) => "cabin",
-        var s when s.Contains("HOUSE", StringComparison.OrdinalIgnoreCase) => "house",
+        "apartment" or "corporate_apartment" or "serviced_apartment" or "hotel_apartment" => "apartment",
+        "condo" => "condo",
+        "townhome" => "townhouse",
+        "studio" => "studio",
+        "loft" => "loft",
+        "villa" => "villa",
+        "cottage" => "cottage",
+        "cabin" or "log_cabin" => "cabin",
+        "house" or "bungalow" or "farmhouse" or "country_house" or "holiday_home" or "manor_house"
+            or "estate" or "mobile_home" or "tiny_house" or "house_boat" => "house",
         _ => "other",
     };
 
-    private static string MapFeeType(string type) => type.ToUpperInvariant() switch
+    private static string NormalizeBookingStatus(string? status) => (status ?? string.Empty).ToUpperInvariant() switch
     {
-        "RENT" or "RENTAL" => "RENTAL",
-        "TAX" => "TAX",
-        _ => "MISC",
-    };
-
-    private static string NormalizeBookingStatus(string status) => status.ToUpperInvariant() switch
-    {
-        "CONFIRMED" => "confirmed",
-        "CANCELLED_BY_OWNER" or "CANCELLED_BY_TRAVELER" or "CANCELLED" => "cancelled",
-        "UNCONFIRMED" => "pending",
+        "ACTIVE" => "confirmed",
+        "CANCELED" or "CANCELLED" => "cancelled",
+        "PENDING" => "pending",
         _ => "pending",
     };
-
-    private static readonly string[] WeekdayKeys = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
-
-    private sealed record OwnerRezRate(long? NightlyCents, long? DepositCents, string Currency);
 
     // ── Structured logging ───────────────────────────────────────────────────
 
     [LoggerMessage(Level = LogLevel.Warning,
-        Message = "[OwnerRez] {Method} skipped — channel credentials not configured")]
-    private static partial void LogNotConfigured(ILogger logger, string method);
+        Message = "[OwnerRez] {Method} skipped — connection is missing a personal access token")]
+    private static partial void LogMissingToken(ILogger logger, string method);
 
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "[OwnerRez] {Method} got HTTP {StatusCode} for {RequestUri}")]

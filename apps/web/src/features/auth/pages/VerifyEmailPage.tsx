@@ -1,4 +1,5 @@
-import { Link, useSearchParams } from "react-router-dom";
+import { useEffect } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { authApi } from "@/features/auth/services/authApi";
@@ -7,6 +8,7 @@ import { cn } from "@/lib/utils";
 
 export const VerifyEmailPage = () => {
   const [params] = useSearchParams();
+  const navigate = useNavigate();
   const userId = params.get("userId");
   const token = params.get("token");
 
@@ -20,10 +22,27 @@ export const VerifyEmailPage = () => {
     staleTime: Infinity,
   });
 
+  // Password-less signups (pre-launch founding hosts) chain straight into
+  // the set-password step using the token issued by the verify endpoint.
+  const needsPasswordSetup = Boolean(
+    verification.data?.requiresPasswordSetup && verification.data.passwordSetupToken,
+  );
+
+  useEffect(() => {
+    if (!needsPasswordSetup || !userId) return;
+    const setupToken = verification.data!.passwordSetupToken!;
+    const search = new URLSearchParams({
+      userId,
+      token: setupToken,
+      setup: "1",
+    });
+    navigate(`/auth/reset-password?${search.toString()}`, { replace: true });
+  }, [needsPasswordSetup, userId, verification.data, navigate]);
+
   const status: "loading" | "ok" | "error" =
     !userId || !token
       ? "error"
-      : verification.isLoading
+      : verification.isLoading || needsPasswordSetup
         ? "loading"
         : verification.isSuccess
           ? "ok"

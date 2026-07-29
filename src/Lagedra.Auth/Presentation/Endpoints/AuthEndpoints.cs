@@ -40,6 +40,8 @@ public static class AuthEndpoints
         group.MapDelete("/me/profile-photo", RemoveProfilePhoto).RequireAuthorization();
         group.MapPost("/change-password", ChangePassword).RequireAuthorization();
         group.MapPut("/users/{userId:guid}/role", UpdateRole).RequireAuthorization("RequirePlatformAdmin");
+        group.MapPost("/users/{userId:guid}/send-set-password-email", SendSetPasswordEmail)
+            .RequireAuthorization("RequirePlatformAdmin");
         group.MapGet("/users", ListUsers).RequireAuthorization("RequirePlatformAdmin");
         // Public on purpose — the DTO is hand-curated to exclude PII
         // (no email, no phone, no DOB, no emergency contacts) so the
@@ -119,9 +121,20 @@ public static class AuthEndpoints
         var decodedToken = Uri.UnescapeDataString(token);
 
         var result = await mediator.Send(new VerifyEmailCommand(userId, decodedToken), ct).ConfigureAwait(true);
-        return result.IsSuccess
-            ? Results.Ok(new { message = "Email verified successfully. You may now log in." })
-            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+        if (!result.IsSuccess)
+        {
+            return Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+        }
+
+        var dto = result.Value;
+        return Results.Ok(new
+        {
+            message = dto.RequiresPasswordSetup
+                ? "Email verified. Set a password to finish creating your account."
+                : "Email verified successfully. You may now log in.",
+            requiresPasswordSetup = dto.RequiresPasswordSetup,
+            passwordSetupToken = dto.PasswordSetupToken
+        });
     }
 
     private static async Task<IResult> ResendVerification(
@@ -169,11 +182,7 @@ public static class AuthEndpoints
             return Results.Ok(result.Value);
         }
 
-        // Surface the "launching soon" message (403) so the SPA can show it,
-        // while keeping bad credentials an opaque 401.
-        return result.Error.Code == "Auth.PreLaunchRestricted"
-            ? Results.Json(new { error = result.Error.Code, detail = result.Error.Description }, statusCode: StatusCodes.Status403Forbidden)
-            : Results.Unauthorized();
+        return ToLoginErrorResult(result.Error);
     }
 
     private static async Task<IResult> Refresh(
@@ -454,6 +463,32 @@ public static class AuthEndpoints
             : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
     }
 
+    private static async Task<IResult> SendSetPasswordEmail(
+        [FromRoute] Guid userId,
+        ClaimsPrincipal principal,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var adminId = GetUserId(principal);
+        if (adminId is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        var result = await mediator.Send(
+            new SendSetPasswordEmailCommand(adminId.Value, userId),
+            ct).ConfigureAwait(true);
+
+        if (result.IsSuccess)
+        {
+            return Results.Ok(new { message = "Set-password email sent." });
+        }
+
+        return result.Error.Code == "Auth.UserNotFound"
+            ? Results.NotFound(new { error = result.Error.Code, detail = result.Error.Description })
+            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+    }
+
     private static Guid? GetUserId(ClaimsPrincipal principal)
     {
         var claim = principal.FindFirstValue(ClaimTypes.NameIdentifier)
@@ -484,5 +519,22 @@ public static class AuthEndpoints
         return result.IsSuccess
             ? Results.Ok(result.Value)
             : Results.NotFound(new { error = result.Error.Code, detail = result.Error.Description });
+    }
+
+    /// <summary>
+    /// Login failures must return a JSON body so the SPA can show the real
+    /// reason (unverified email, inactive, pre-launch) instead of treating a
+    /// bare 401 as "session expired".
+    /// </summary>
+    private static IResult ToLoginErrorResult(Error error)
+    {
+        var payload = new { error = error.Code, detail = error.Description };
+        return error.Code switch
+        {
+            "Auth.PreLaunchRestricted" => Results.Json(payload, statusCode: StatusCodes.Status403Forbidden),
+            "Auth.EmailNotVerified" or "Auth.AccountInactive" =>
+                Results.Json(payload, statusCode: StatusCodes.Status403Forbidden),
+            _ => Results.Json(payload, statusCode: StatusCodes.Status401Unauthorized),
+        };
     }
 }

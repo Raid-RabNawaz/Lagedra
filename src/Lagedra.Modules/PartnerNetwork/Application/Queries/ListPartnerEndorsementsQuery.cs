@@ -1,7 +1,9 @@
 using Lagedra.Modules.PartnerNetwork.Application.Authorization;
 using Lagedra.Modules.PartnerNetwork.Application.DTOs;
+using Lagedra.Modules.PartnerNetwork.Application.Services;
 using Lagedra.Modules.PartnerNetwork.Domain.Enums;
 using Lagedra.Modules.PartnerNetwork.Infrastructure.Persistence;
+using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Results;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -18,7 +20,8 @@ public sealed record ListPartnerEndorsementsQuery(
 
 public sealed class ListPartnerEndorsementsQueryHandler(
     PartnerDbContext dbContext,
-    IPartnerAccessService accessService)
+    IPartnerAccessService accessService,
+    IUserDirectoryService userDirectory)
     : IRequestHandler<ListPartnerEndorsementsQuery, Result<IReadOnlyList<PartnerEndorsementDto>>>
 {
     public async Task<Result<IReadOnlyList<PartnerEndorsementDto>>> Handle(
@@ -64,8 +67,19 @@ public sealed class ListPartnerEndorsementsQueryHandler(
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
+        var identities = await PartnerUserIdentityResolver.ResolveAsync(
+            dbContext,
+            userDirectory,
+            request.OrganizationId,
+            rows.Select(e => e.TenantUserId).ToList(),
+            cancellationToken).ConfigureAwait(false);
+
         var dtos = rows
-            .Select(e => EndorsementMapper.ToDto(e, orgName))
+            .Select(e =>
+            {
+                identities.TryGetValue(e.TenantUserId, out var identity);
+                return EndorsementMapper.ToDto(e, orgName, identity?.DisplayName, identity?.Email);
+            })
             .ToList()
             .AsReadOnly();
 

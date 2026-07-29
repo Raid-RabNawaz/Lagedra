@@ -12,5 +12,12 @@ public enum TrustLedgerEntryType
     PositiveReview,
     /// <summary>Soft reputation signal from a published low stay rating (≤2). Not a violation.</summary>
     ReviewConcern,
-    IdentityVerified
+    IdentityVerified,
+    EmailVerified,
+    PhoneVerified,
+    BackgroundCheckPassed,
+    /// <summary>An approved partner endorsement — upgrades the user to the partner-guaranteed tier.</summary>
+    PartnerEndorsed,
+    PartnerEndorsementRevoked,
+    PartnerEndorsementExpired
 }

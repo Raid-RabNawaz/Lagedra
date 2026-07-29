@@ -1,3 +1,4 @@
+using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Results;
 using Lagedra.Modules.IdentityAndVerification.Infrastructure.Persistence;
 using MediatR;
@@ -17,7 +18,9 @@ public sealed record ManualVerificationItemDto(
 public sealed record GetPendingManualVerificationsQuery
     : IRequest<Result<IReadOnlyList<ManualVerificationItemDto>>>;
 
-public sealed class GetPendingManualVerificationsQueryHandler(IdentityDbContext dbContext)
+public sealed class GetPendingManualVerificationsQueryHandler(
+    IdentityDbContext dbContext,
+    IUserEmailResolver emailResolver)
     : IRequestHandler<GetPendingManualVerificationsQuery, Result<IReadOnlyList<ManualVerificationItemDto>>>
 {
     private const double SlaHours = 24;
@@ -45,12 +48,16 @@ public sealed class GetPendingManualVerificationsQueryHandler(IdentityDbContext 
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        var items = profiles.Select(p =>
+        var items = new List<ManualVerificationItemDto>(profiles.Count);
+        foreach (var p in profiles)
         {
+            var email = await emailResolver.GetEmailAsync(p.UserId, cancellationToken)
+                .ConfigureAwait(false);
             var elapsed = (utcNow - p.UpdatedAt).TotalHours;
             var remaining = Math.Max(0, SlaHours - elapsed);
-            return new ManualVerificationItemDto(p.Id, p.UserId, null, p.FirstName, p.LastName, p.UpdatedAt, remaining);
-        }).ToList();
+            items.Add(new ManualVerificationItemDto(
+                p.Id, p.UserId, email, p.FirstName, p.LastName, p.UpdatedAt, remaining));
+        }
 
         return Result<IReadOnlyList<ManualVerificationItemDto>>.Success(items);
     }

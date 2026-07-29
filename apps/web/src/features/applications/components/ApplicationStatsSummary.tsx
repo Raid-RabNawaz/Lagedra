@@ -1,16 +1,15 @@
 import { CheckCircle2, Clock, FileText, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { DealApplicationStatus } from "@/api/types";
 
-type StatusFilter = DealApplicationStatus | "All";
+type StatKey = "All" | "Pending" | "Approved" | "Rejected";
 
 type Props = {
-  counts: Record<StatusFilter, number>;
+  counts: Record<StatKey, number>;
   className?: string;
 };
 
 const statItems: {
-  key: StatusFilter;
+  key: StatKey;
   label: string;
   icon: typeof Clock;
   accent?: boolean;

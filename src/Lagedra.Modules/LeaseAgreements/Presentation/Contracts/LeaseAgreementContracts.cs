@@ -6,5 +6,3 @@ public sealed record UpdateLeaseTemplateDraftRequest(
     string BodyHtml,
     DateTime? EffectiveDate,
     string? Title);
-
-public sealed record ApproveLeaseTemplateRequest(Guid? ApproverId);

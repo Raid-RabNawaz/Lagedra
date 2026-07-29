@@ -20,8 +20,11 @@ export function useSubmitStayReview(dealId: string) {
   return useMutation({
     mutationFn: (payload: SubmitStayReviewRequest) =>
       reviewsApi.submitStayReview(dealId, payload),
-    onSuccess: () => {
+    onSuccess: (review) => {
       void qc.invalidateQueries({ queryKey: ["reviews", "deal", dealId] });
+      void qc.invalidateQueries({ queryKey: ["reviews", "listing", review.listingId] });
+      void qc.invalidateQueries({ queryKey: ["reviews", "reputation", review.revieweeUserId] });
+      void qc.invalidateQueries({ queryKey: ["reviews", "user", review.revieweeUserId] });
     },
   });
 }

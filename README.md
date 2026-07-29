@@ -27,7 +27,8 @@ Lagedra provides:
 | Database | PostgreSQL 16 (via Npgsql + EF Core 9) |
 | CQRS / Bus | MediatR 12 + domain events + Outbox pattern |
 | Auth | ASP.NET Identity + JWT + Refresh Tokens |
-| Email | MailKit → Brevo (SMTP relay) |
+| Email | Twilio SendGrid (HTTP API) |
+| SMS | Twilio Messaging Service |
 | Payments | Stripe (protocol fee only) |
 | Maps / Geocoding | Google Maps Platform |
 | KYC / Background | Persona |

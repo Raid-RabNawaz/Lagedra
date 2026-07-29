@@ -4,6 +4,8 @@ import type {
   StartKycRequest,
   CompleteKycRequest,
   BackgroundCheckConsentRequest,
+  KycDocumentType,
+  SubmitManualKycRequest,
 } from "@/api/types";
 
 type VerificationStatusOptions = {
@@ -70,6 +72,57 @@ export function useRiskView(userId: string | undefined) {
     queryKey: ["risk", userId],
     queryFn: () => verificationApi.getRiskView(userId!),
     enabled: Boolean(userId),
+    staleTime: 60_000,
+    retry: false,
+  });
+}
+
+export function useMyKycDocuments(enabled = true) {
+  return useQuery({
+    queryKey: ["kyc-documents", "me"],
+    queryFn: () => verificationApi.getMyKycDocuments(),
+    enabled,
+    staleTime: 10_000,
+    retry: false,
+  });
+}
+
+export function useUploadKycDocument() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      documentType,
+      file,
+      fileName,
+    }: {
+      documentType: KycDocumentType;
+      file: File | Blob;
+      fileName?: string;
+    }) => verificationApi.uploadKycDocument(documentType, file, fileName),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["kyc-documents", "me"] });
+    },
+  });
+}
+
+export function useSubmitManualKyc() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: SubmitManualKycRequest) =>
+      verificationApi.submitManualKyc(payload),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["verification", data.userId], data);
+      void queryClient.invalidateQueries({ queryKey: ["kyc-documents", "me"] });
+    },
+  });
+}
+
+/** Current user's resolved verification tier ("trust level"). */
+export function useMyVerificationTier(enabled = true) {
+  return useQuery({
+    queryKey: ["verification-tier", "me"],
+    queryFn: () => verificationApi.getMyVerificationTier(),
+    enabled,
     staleTime: 60_000,
     retry: false,
   });

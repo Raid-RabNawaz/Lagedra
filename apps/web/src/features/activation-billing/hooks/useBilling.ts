@@ -39,12 +39,25 @@ export function useProrationQuote(
   });
 }
 
-export function usePaymentStatus(dealId: string | undefined) {
+export function usePaymentStatus(
+  dealId: string | undefined,
+  options?: {
+    refetchInterval?:
+      | number
+      | false
+      | ((
+          query: {
+            state: { data: Awaited<ReturnType<typeof billingApi.getPaymentStatus>> | undefined };
+          },
+        ) => number | false | undefined);
+  },
+) {
   return useQuery({
     queryKey: ["payment", dealId],
     queryFn: () => billingApi.getPaymentStatus(dealId!),
     enabled: Boolean(dealId),
     staleTime: 15_000,
+    refetchInterval: options?.refetchInterval,
   });
 }
 

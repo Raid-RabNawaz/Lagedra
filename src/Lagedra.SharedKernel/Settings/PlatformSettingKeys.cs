@@ -48,8 +48,8 @@ public static class PlatformSettingKeys
     public const string StripePlatformFeePriceId = "stripe.platform_fee_price_id";
 
     // Pre-launch / go-to-market
-    // When true, the platform runs in "pre-launch" mode: self sign-up becomes a
-    // founding-partner waitlist (no password, no dashboard access) and everyone
-    // except operational staff is limited to the public marketing + browse pages.
+    // When true: institution partners join a waitlist; founding hosts get real
+    // accounts limited to listings + Hostaway import; marketplace and other
+    // product surfaces stay closed except for operational staff.
     public const string PreLaunchEnabled = "prelaunch.enabled";
 }

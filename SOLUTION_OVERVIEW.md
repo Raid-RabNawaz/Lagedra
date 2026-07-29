@@ -88,7 +88,7 @@ Lagedra is a **modular monolith** following **Clean Architecture** principles. E
 | ORM | Entity Framework Core 9 + Npgsql 9 |
 | CQRS/Bus | MediatR 12 (in-process) |
 | Auth | ASP.NET Identity + JWT (self-hosted) with refresh tokens |
-| Email | MailKit + MimeKit via Brevo SMTP relay |
+| Email | Twilio SendGrid (HTTP API) |
 | Payments | Stripe (`Stripe.net`) Connect — non-custodial: rent + deposit settle directly to the host's connected account (destination charge, `on_behalf_of`); platform only collects its service fee + insurance premium at checkout and the host protocol fee via subscription |
 | Maps/Geocoding | Google Maps Platform (Geocoding + Address Validation APIs) |
 | KYC/Identity | Persona (liveness, document auth, synthetic ID detection) |
@@ -160,7 +160,7 @@ Foundation layer with zero external dependencies. Provides:
 Cross-cutting implementation layer:
 
 - **Middleware**: AuthMiddleware, ConsentMiddleware, RateLimitingSetup, IdempotencyMiddleware, CorrelationIdMiddleware, GlobalExceptionHandlerMiddleware
-- **External integrations**: Stripe, Persona, MinIO, ClamAV, Google Maps, MailKit/Brevo
+- **External integrations**: Stripe, Persona, MinIO, ClamAV, Google Maps, Twilio (SMS + SendGrid email)
 - **Eventing**: InMemoryEventBus, OutboxProcessor, OutboxInterceptor, OutboxDispatcher
 - **MediatR behaviors**: ValidationBehavior, UnhandledExceptionBehavior, LoggingBehavior
 - **Caching**: InMemoryCacheService, CacheKeys
@@ -307,7 +307,7 @@ Legal rule packs per jurisdiction:
 
 Multi-channel notification system:
 
-- Email notifications via MailKit/Brevo
+- Email notifications via Twilio SendGrid
 - In-app notifications via SignalR
 - User notification preferences (opt-in/out per event type)
 - Notification retry with backoff
@@ -1143,7 +1143,7 @@ Event handler sends NotifyUserCommand via MediatR:
 NotificationProcessingJob (every 30 seconds):
   → Picks up queued notifications
   → Checks user preferences (opt-in/out per event type)
-  → For Email channel: sends via MailKit/Brevo SMTP
+  → For Email channel: sends via Twilio SendGrid
   → For InApp channel: creates InAppNotification record + pushes via SignalR
   ↓ NotificationDeliveredEvent
   ↓

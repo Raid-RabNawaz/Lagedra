@@ -1,4 +1,5 @@
 using Lagedra.Modules.PartnerNetwork.Application.Authorization;
+using Lagedra.Modules.PartnerNetwork.Application.Services;
 using Lagedra.Modules.PartnerNetwork.Domain.Enums;
 using Lagedra.Modules.PartnerNetwork.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Integration;
@@ -57,47 +58,20 @@ public sealed class ListEndorsedMembersQueryHandler(
                 Array.Empty<EndorsedMemberDto>());
         }
 
-        var tenantIds = endorsements.Select(e => e.TenantUserId).Distinct().ToList();
-        var directory = await userDirectory
-            .GetEntriesAsync(tenantIds, cancellationToken)
-            .ConfigureAwait(false);
-
-        // Prefer invite audit name/email when the directory entry is sparse.
-        var invites = await dbContext.GuestInvites
-            .AsNoTracking()
-            .Where(i => i.OrganizationId == request.OrganizationId
-                     && tenantIds.Contains(i.InvitedUserId))
-            .OrderByDescending(i => i.InvitedAt)
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-        var latestInviteByUser = invites
-            .GroupBy(i => i.InvitedUserId)
-            .ToDictionary(g => g.Key, g => g.First());
+        var identities = await PartnerUserIdentityResolver.ResolveAsync(
+            dbContext,
+            userDirectory,
+            request.OrganizationId,
+            endorsements.Select(e => e.TenantUserId).ToList(),
+            cancellationToken).ConfigureAwait(false);
 
         var dtos = endorsements.Select(e =>
         {
-            directory.TryGetValue(e.TenantUserId, out var entry);
-            latestInviteByUser.TryGetValue(e.TenantUserId, out var invite);
-
-            var email = !string.IsNullOrWhiteSpace(entry?.Email)
-                ? entry!.Email
-                : invite?.Email ?? string.Empty;
-            var displayName = !string.IsNullOrWhiteSpace(entry?.DisplayName)
-                && entry!.DisplayName != email
-                ? entry.DisplayName
-                : !string.IsNullOrWhiteSpace(invite?.FullName)
-                    ? invite!.FullName
-                    : !string.IsNullOrWhiteSpace(entry?.DisplayName)
-                        ? entry!.DisplayName
-                        : !string.IsNullOrWhiteSpace(email)
-                            ? email
-                            : "Member";
-
+            identities.TryGetValue(e.TenantUserId, out var identity);
             return new EndorsedMemberDto(
                 e.TenantUserId,
-                displayName,
-                email,
+                identity?.DisplayName ?? "Member",
+                identity?.Email ?? string.Empty,
                 e.Id,
                 e.ApprovedAt);
         }).ToList().AsReadOnly();

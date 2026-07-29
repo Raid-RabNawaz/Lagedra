@@ -1,3 +1,4 @@
+using Lagedra.Compliance.Domain;
 using Lagedra.Compliance.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Results;
 using MediatR;
@@ -24,6 +25,17 @@ public sealed class DismissViolationCommandHandler(ComplianceDbContext dbContext
         }
 
         violation.Dismiss();
+
+        // The dismissal restores the trust the original entry took away, so
+        // it is appended as its own ledger entry (the ledger is append-only —
+        // the original violation entry is never removed).
+        dbContext.TrustLedgerEntries.Add(TrustLedgerEntry.Create(
+            violation.TargetUserId,
+            TrustLedgerEntryType.ViolationDismissed,
+            violation.Id,
+            $"{violation.Category} violation dismissed",
+            isPublic: false));
+
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return Result.Success();

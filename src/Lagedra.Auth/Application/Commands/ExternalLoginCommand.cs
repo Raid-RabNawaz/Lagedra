@@ -27,9 +27,6 @@ public sealed partial class ExternalLoginCommandHandler(
     ILogger<ExternalLoginCommandHandler> logger)
     : IRequestHandler<ExternalLoginCommand, Result<AuthResultDto>>
 {
-    private static readonly HashSet<UserRole> PreLaunchExemptRoles =
-        [UserRole.PlatformAdmin, UserRole.Arbitrator];
-
     [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to link {Provider} login to existing user {UserId}: {Errors}")]
     private partial void LogLinkFailed(string provider, Guid userId, string errors);
 
@@ -129,7 +126,7 @@ public sealed partial class ExternalLoginCommandHandler(
             return AuthErrors.AccountInactive;
         }
 
-        if (!PreLaunchExemptRoles.Contains(user.Role))
+        if (!PreLaunchAccess.CanSignIn(user))
         {
             var preLaunch = await platformSettings
                 .GetBoolAsync(PlatformSettingKeys.PreLaunchEnabled, defaultValue: false, ct)

@@ -29,16 +29,22 @@ import type {
 } from "@/api/types";
 import { cn } from "@/lib/utils";
 
-type StatusFilter = DealApplicationStatus | "All";
+type StatusFilter = DealApplicationStatus | "All" | "NeedsAttention";
 
 const statusTabs: { value: StatusFilter; label: string }[] = [
+  { value: "NeedsAttention", label: "Needs attention" },
   { value: "All", label: "All" },
   { value: "Pending", label: "Pending" },
   { value: "Approved", label: "Approved" },
+  { value: "PaymentFailed", label: "Payment failed" },
   { value: "Rejected", label: "Declined" },
   { value: "Expired", label: "Expired" },
   { value: "Cancelled", label: "Cancelled" },
 ];
+
+function needsAttention(app: DealApplicationDto): boolean {
+  return app.status === "Pending" || app.status === "PaymentFailed";
+}
 
 type ListingGroup = {
   listing: ListingSummaryDto | null;
@@ -72,6 +78,7 @@ export const ApplicationsPage = () => {
 
   const counts = useMemo(() => {
     const base: Record<StatusFilter, number> = {
+      NeedsAttention: 0,
       All: landlordApps.length,
       Pending: 0,
       Approved: 0,
@@ -80,7 +87,10 @@ export const ApplicationsPage = () => {
       Expired: 0,
       PaymentFailed: 0,
     };
-    for (const a of landlordApps) base[a.status] += 1;
+    for (const a of landlordApps) {
+      base[a.status] += 1;
+      if (needsAttention(a)) base.NeedsAttention += 1;
+    }
     return base;
   }, [landlordApps]);
 
@@ -92,7 +102,9 @@ export const ApplicationsPage = () => {
     const filtered =
       statusFilter === "All"
         ? landlordApps
-        : landlordApps.filter((a) => a.status === statusFilter);
+        : statusFilter === "NeedsAttention"
+          ? landlordApps.filter(needsAttention)
+          : landlordApps.filter((a) => a.status === statusFilter);
 
     const grouped = new Map<string, DealApplicationDto[]>();
     for (const app of filtered) {
@@ -111,7 +123,7 @@ export const ApplicationsPage = () => {
           listingId,
           listingCity: sorted[0]?.listingCity ?? null,
           applications: sorted,
-          pendingCount: sorted.filter((a) => a.status === "Pending").length,
+          pendingCount: sorted.filter((a) => needsAttention(a)).length,
         };
       })
       .sort(
@@ -145,9 +157,12 @@ export const ApplicationsPage = () => {
         title="Booking requests"
         description="Review guests who want to stay at your listings. Click a request to see their full profile and stay details."
       >
-        {counts.Pending > 0 && (
-          <Badge variant="accent" className="h-7 px-3">
-            {counts.Pending} need your response
+        {counts.NeedsAttention > 0 && (
+          <Badge
+            variant={counts.PaymentFailed > 0 ? "destructive" : "accent"}
+            className="h-7 px-3"
+          >
+            {counts.NeedsAttention} need attention
           </Badge>
         )}
       </PageHeader>

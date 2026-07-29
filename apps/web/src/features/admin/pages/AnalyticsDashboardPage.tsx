@@ -88,60 +88,40 @@ export const AnalyticsDashboardPage = () => {
       ) : error ? (
         <p className="py-8 text-center text-destructive">{error}</p>
       ) : summary ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Total Listings
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-4xl font-bold tracking-tight">
-                {summary.totalListings.toLocaleString()}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Active Deals
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-4xl font-bold tracking-tight">
-                {summary.activeDeals.toLocaleString()}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                MRR
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-4xl font-bold tracking-tight">
-                {formatCurrency(summary.mrrCents)}
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Conversion Rate
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-4xl font-bold tracking-tight">
-                {summary.conversionRatePercent.toFixed(1)}%
-              </p>
-            </CardContent>
-          </Card>
-        </div>
+        <>
+          <p className="text-sm text-muted-foreground">
+            Period: {new Date(summary.periodStart).toLocaleDateString()} —{" "}
+            {new Date(summary.periodEnd).toLocaleDateString()}
+          </p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <StatTile label="Total Listings" value={summary.totalListings.toLocaleString()} hint="All time" />
+            <StatTile label="Listings Added" value={summary.listingsAdded.toLocaleString()} hint="In period" />
+            <StatTile label="Applications" value={summary.totalApplications.toLocaleString()} hint="In period" />
+            <StatTile label="New Deals" value={summary.newDeals.toLocaleString()} hint="In period" />
+            <StatTile label="Active Deals" value={summary.activeDeals.toLocaleString()} hint="As of period end" />
+            <StatTile label="MRR" value={formatCurrency(summary.mrrCents)} hint="From active deals" />
+            <StatTile
+              label="Conversion Rate"
+              value={`${summary.conversionRatePercent.toFixed(1)}%`}
+              hint="New deals / applications in period"
+            />
+          </div>
+        </>
       ) : null}
     </div>
   );
 };
+
+function StatTile({ label, value, hint }: { label: string; value: string; hint?: string }) {
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="text-4xl font-bold tracking-tight">{value}</p>
+        {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+      </CardContent>
+    </Card>
+  );
+}

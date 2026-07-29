@@ -3,22 +3,26 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   Building2,
-  DollarSign,
   Sparkles,
   ScrollText,
-  CalendarX,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Home,
   Check,
+  ImagePlus,
+  Loader2,
+  MapPin,
 } from "lucide-react";
 import type {
   AmenityCategory,
   AmenityDefinitionDto,
   ConsiderationDefinitionDto,
+  ListingDetailsDto,
   SafetyDeviceDefinitionDto,
 } from "@/api/types";
+import { ListingLocationEditor } from "./ListingLocationEditor";
+import { ListingPhotosEditor } from "./ListingPhotosEditor";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -78,30 +82,43 @@ const STEPS: Step[] = [
     label: "Basics",
     shortLabel: "Basics",
     icon: Home,
-    description: "Property type, title and a clear description.",
+    description: "Property type, title and a clear description. Your draft is created when you continue.",
     fields: ["propertyType", "title", "description"],
   },
   {
-    id: "property",
-    label: "Property details",
-    shortLabel: "Property",
+    id: "details",
+    label: "Details & pricing",
+    shortLabel: "Details",
     icon: Building2,
-    description: "Capacity, size and how long renters can stay.",
-    fields: ["bedrooms", "bathrooms", "squareFootage", "minStayDays", "maxStayDays"],
-  },
-  {
-    id: "pricing",
-    label: "Pricing & deposit",
-    shortLabel: "Pricing",
-    icon: DollarSign,
-    description: "Monthly rent and predetermined deposits.",
+    description: "Capacity, size, stay length, monthly rent and deposits.",
     fields: [
+      "bedrooms",
+      "bathrooms",
+      "squareFootage",
+      "minStayDays",
+      "maxStayDays",
       "monthlyRentDollars",
       "maxDepositDollars",
       "depositUnverifiedDollars",
       "depositBackgroundVerifiedDollars",
       "depositPartnerGuaranteedDollars",
     ],
+  },
+  {
+    id: "location",
+    label: "Location & address",
+    shortLabel: "Location",
+    icon: MapPin,
+    description: "Drop a pin for the general area and lock the precise address.",
+    fields: [],
+  },
+  {
+    id: "photos",
+    label: "Photos & video",
+    shortLabel: "Photos",
+    icon: ImagePlus,
+    description: "Upload photos or a virtual tour video. Listings with photos get far more applications.",
+    fields: [],
   },
   {
     id: "amenities",
@@ -113,10 +130,10 @@ const STEPS: Step[] = [
   },
   {
     id: "rules",
-    label: "House rules",
+    label: "Rules & policies",
     shortLabel: "Rules",
     icon: ScrollText,
-    description: "Check-in window, pets, smoking and any extra notes.",
+    description: "Check-in window, house rules and your cancellation policy.",
     fields: [
       "checkInTime",
       "checkOutTime",
@@ -127,16 +144,8 @@ const STEPS: Step[] = [
       "partiesAllowed",
       "quietHoursStart",
       "quietHoursEnd",
+      "leavingInstructions",
       "additionalRules",
-    ],
-  },
-  {
-    id: "cancellation",
-    label: "Cancellation policy",
-    shortLabel: "Cancellation",
-    icon: CalendarX,
-    description: "Choose how flexible cancellations should be.",
-    fields: [
       "cancellationType",
       "freeCancellationDays",
       "partialRefundPercent",
@@ -149,14 +158,24 @@ const STEPS: Step[] = [
     label: "Booking & review",
     shortLabel: "Review",
     icon: CheckCircle2,
-    description: "Review everything and create your listing.",
+    description: "Review everything and finish your listing.",
     fields: ["instantBookingEnabled", "virtualTourUrl"],
   },
 ];
 
 type ListingWizardProps = {
   defaultValues?: Partial<ListingFormValues>;
-  onSubmit: (data: ListingFormValues) => Promise<void>;
+  /**
+   * The draft created after the Basics step. Null until then; the location
+   * and photos steps need it because they save through listing-scoped APIs.
+   */
+  listing: ListingDetailsDto | null;
+  /** Called when the host completes Basics and no draft exists yet. */
+  onCreateDraft: (data: ListingFormValues) => Promise<void>;
+  /** Called when the host advances past a form step with an existing draft. */
+  onSaveProgress: (data: ListingFormValues) => Promise<void>;
+  /** Called from the final review step. */
+  onFinish: (data: ListingFormValues) => Promise<void>;
   submitLabel?: string;
   definitions: {
     amenities: AmenityDefinitionDto[];
@@ -167,8 +186,11 @@ type ListingWizardProps = {
 
 export function ListingWizard({
   defaultValues,
-  onSubmit,
-  submitLabel = "Create listing",
+  listing,
+  onCreateDraft,
+  onSaveProgress,
+  onFinish,
+  submitLabel = "Finish listing",
   definitions,
 }: ListingWizardProps) {
   const form = useForm<ListingFormValues>({
@@ -180,13 +202,35 @@ export function ListingWizard({
 
   const [stepIndex, setStepIndex] = useState(0);
   const [furthestVisited, setFurthestVisited] = useState(0);
+  const [isSaving, setIsSaving] = useState(false);
 
   const step = STEPS[stepIndex];
 
   const handleNext = async () => {
     const fields = step.fields;
-    const valid = await form.trigger(fields);
-    if (!valid) return;
+    if (fields.length > 0) {
+      const valid = await form.trigger(fields);
+      if (!valid) return;
+    }
+    // Persist progress: the Basics step creates the draft (with defaults for
+    // everything the host hasn't reached yet); later form steps update it.
+    // Location and photos steps save through their own endpoints, so
+    // advancing past them is free.
+    if (fields.length > 0) {
+      setIsSaving(true);
+      try {
+        if (!listing) {
+          await onCreateDraft(form.getValues());
+        } else {
+          await onSaveProgress(form.getValues());
+        }
+      } catch {
+        // The page surfaces the error via its mutation state; stay on the step.
+        return;
+      } finally {
+        setIsSaving(false);
+      }
+    }
     if (stepIndex < STEPS.length - 1) {
       const next = stepIndex + 1;
       setStepIndex(next);
@@ -203,7 +247,7 @@ export function ListingWizard({
   };
 
   const handleSubmit = form.handleSubmit(async (data: ListingFormValues) => {
-    await onSubmit(data);
+    await onFinish(data);
   });
 
   const toggleId = (
@@ -245,15 +289,42 @@ export function ListingWizard({
           </CardHeader>
           <CardContent className="space-y-6">
             {step.id === "basics" && <BasicsStep form={form} />}
-            {step.id === "property" && <PropertyStep form={form} />}
-            {step.id === "pricing" && <PricingStep form={form} />}
+            {step.id === "details" && (
+              <>
+                <PropertyStep form={form} />
+                <Separator />
+                <PricingStep form={form} />
+              </>
+            )}
+            {step.id === "location" &&
+              (listing ? (
+                <ListingLocationEditor listing={listing} />
+              ) : (
+                <MissingDraftNotice />
+              ))}
+            {step.id === "photos" &&
+              (listing ? (
+                <ListingPhotosEditor listing={listing} />
+              ) : (
+                <MissingDraftNotice />
+              ))}
             {step.id === "amenities" && (
               <AmenitiesStep form={form} definitions={definitions} toggleId={toggleId} />
             )}
-            {step.id === "rules" && <RulesStep form={form} />}
-            {step.id === "cancellation" && <CancellationStep form={form} />}
+            {step.id === "rules" && (
+              <>
+                <RulesStep form={form} />
+                <Separator />
+                <CancellationStep form={form} />
+              </>
+            )}
             {step.id === "review" && (
-              <ReviewStep form={form} definitions={definitions} onJump={(i) => setStepIndex(i)} />
+              <ReviewStep
+                form={form}
+                definitions={definitions}
+                listing={listing}
+                onJump={(i) => setStepIndex(i)}
+              />
             )}
           </CardContent>
         </Card>
@@ -276,14 +347,23 @@ export function ListingWizard({
               Step {stepIndex + 1} of {STEPS.length}
             </p>
             {stepIndex < STEPS.length - 1 ? (
-              <Button type="submit" variant="default">
-                Next
-                <ChevronRight className="h-4 w-4" />
+              <Button type="submit" variant="default" disabled={isSaving}>
+                {isSaving ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    {listing ? "Saving..." : "Creating draft..."}
+                  </>
+                ) : (
+                  <>
+                    {step.id === "basics" && !listing ? "Create draft & continue" : "Next"}
+                    <ChevronRight className="h-4 w-4" />
+                  </>
+                )}
               </Button>
             ) : (
               <Button type="submit" variant="accent" disabled={form.formState.isSubmitting}>
                 <Check className="h-4 w-4" />
-                {form.formState.isSubmitting ? "Creating..." : submitLabel}
+                {form.formState.isSubmitting ? "Saving..." : submitLabel}
               </Button>
             )}
           </div>
@@ -517,6 +597,12 @@ function PricingStep({ form }: StepFormProps) {
   );
 }
 
+/**
+ * How many chips a collapsed amenity category shows. Selected items beyond
+ * this cut are always kept visible so a collapse never hides a choice.
+ */
+const COLLAPSED_CATEGORY_ITEMS = 6;
+
 function AmenitiesStep({
   form,
   definitions,
@@ -538,6 +624,8 @@ function AmenitiesStep({
     return map;
   }, [definitions.amenities]);
 
+  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
+
   const selectedAmenityIds = form.watch("amenityIds");
   const selectedSafetyIds = form.watch("safetyDeviceIds");
   const selectedConsiderationIds = form.watch("considerationIds");
@@ -547,27 +635,75 @@ function AmenitiesStep({
       <section>
         <SectionHeader title="Amenities" count={selectedAmenityIds.length} />
         <div className="space-y-5">
-          {Array.from(amenitiesByCategory.entries()).map(([category, items]) => (
-            <div key={category}>
-              <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                {categoryLabels[category as AmenityCategory] ?? category}
-              </h4>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-                {items.map((a) => {
-                  const checked = selectedAmenityIds.includes(a.id);
-                  return (
-                    <ToggleChip
-                      key={a.id}
-                      checked={checked}
-                      iconKey={a.iconKey}
-                      label={a.name}
-                      onClick={() => toggleId("amenityIds", a.id)}
-                    />
-                  );
-                })}
+          {Array.from(amenitiesByCategory.entries()).map(([category, items]) => {
+            const isExpanded = Boolean(expandedCategories[category]);
+            const selectedInCategory = items.filter((a) =>
+              selectedAmenityIds.includes(a.id),
+            ).length;
+            // Collapsed view: the first few "main" items plus anything already
+            // selected, so collapsing never hides a selection.
+            const visibleItems = isExpanded
+              ? items
+              : items.filter(
+                  (a, idx) =>
+                    idx < COLLAPSED_CATEGORY_ITEMS || selectedAmenityIds.includes(a.id),
+                );
+            const hiddenCount = items.length - visibleItems.length;
+
+            return (
+              <div key={category}>
+                <div className="mb-2 flex items-center justify-between">
+                  <h4 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    {categoryLabels[category as AmenityCategory] ?? category}
+                    {selectedInCategory > 0 && (
+                      <span className="ml-2 rounded-full bg-accent/10 px-1.5 py-0.5 text-[10px] font-semibold normal-case text-accent tabular-nums">
+                        {selectedInCategory} selected
+                      </span>
+                    )}
+                  </h4>
+                  {items.length > COLLAPSED_CATEGORY_ITEMS && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpandedCategories((prev) => ({
+                          ...prev,
+                          [category]: !isExpanded,
+                        }))
+                      }
+                      className="text-xs font-medium text-accent hover:underline cursor-pointer"
+                    >
+                      {isExpanded ? "Show less" : `Show all (${items.length})`}
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                  {visibleItems.map((a) => {
+                    const checked = selectedAmenityIds.includes(a.id);
+                    return (
+                      <ToggleChip
+                        key={a.id}
+                        checked={checked}
+                        iconKey={a.iconKey}
+                        label={a.name}
+                        onClick={() => toggleId("amenityIds", a.id)}
+                      />
+                    );
+                  })}
+                </div>
+                {!isExpanded && hiddenCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpandedCategories((prev) => ({ ...prev, [category]: true }))
+                    }
+                    className="mt-1.5 text-xs text-muted-foreground hover:text-accent hover:underline cursor-pointer"
+                  >
+                    + {hiddenCount} more
+                  </button>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
@@ -675,6 +811,16 @@ function RulesStep({ form }: StepFormProps) {
       </div>
 
       <div className="sm:col-span-2">
+        <Field label="Leaving instructions (optional)">
+          <Textarea
+            rows={3}
+            placeholder="What tenants should do at move-out (keys, cleaning, trash...)"
+            {...form.register("leavingInstructions")}
+          />
+        </Field>
+      </div>
+
+      <div className="sm:col-span-2">
         <Field label="Additional rules (optional)">
           <Textarea rows={3} {...form.register("additionalRules")} />
         </Field>
@@ -746,12 +892,23 @@ function CancellationStep({ form }: StepFormProps) {
   );
 }
 
+function MissingDraftNotice() {
+  return (
+    <div className="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">
+      Complete the Basics step first — your draft listing is created there, and
+      this step saves directly to it.
+    </div>
+  );
+}
+
 function ReviewStep({
   form,
   definitions,
+  listing,
   onJump,
 }: StepFormProps & {
   definitions: ListingWizardProps["definitions"];
+  listing: ListingDetailsDto | null;
   onJump: (idx: number) => void;
 }) {
   const v = form.watch();
@@ -813,10 +970,33 @@ function ReviewStep({
           {v.squareFootage != null && (
             <ReviewRow label="Square footage" value={`${v.squareFootage.toLocaleString()} sq ft`} />
           )}
-          <ReviewRow label="Stay length" value={`${v.minStayDays}�${v.maxStayDays} days`} />
+          <ReviewRow label="Stay length" value={`${v.minStayDays}–${v.maxStayDays} days`} />
         </ReviewSection>
 
-        <ReviewSection title="Pricing" onEdit={() => onJump(2)}>
+        <ReviewSection title="Location & photos" onEdit={() => onJump(2)}>
+          <ReviewRow
+            label="Map location"
+            value={
+              listing && listing.latitude != null && listing.longitude != null
+                ? `${listing.latitude.toFixed(4)}, ${listing.longitude.toFixed(4)}`
+                : "Not set"
+            }
+          />
+          <ReviewRow
+            label="Precise address"
+            value={
+              listing?.preciseAddress
+                ? `${listing.preciseAddress.street}, ${listing.preciseAddress.city}`
+                : "Not locked"
+            }
+          />
+          <ReviewRow
+            label="Photos"
+            value={listing && listing.photos.length > 0 ? `${listing.photos.length} added` : "None"}
+          />
+        </ReviewSection>
+
+        <ReviewSection title="Pricing" onEdit={() => onJump(1)}>
           <ReviewRow label="Monthly rent" value={`$${v.monthlyRentDollars.toLocaleString()}`} />
           <ReviewRow label="Max deposit" value={`$${v.maxDepositDollars.toLocaleString()}`} />
           <ReviewRow
@@ -845,7 +1025,7 @@ function ReviewStep({
           />
         </ReviewSection>
 
-        <ReviewSection title="Amenities & safety" onEdit={() => onJump(3)}>
+        <ReviewSection title="Amenities & safety" onEdit={() => onJump(4)}>
           <ReviewRow
             label="Amenities"
             value={
@@ -872,7 +1052,7 @@ function ReviewStep({
           />
         </ReviewSection>
 
-        <ReviewSection title="Rules" onEdit={() => onJump(4)}>
+        <ReviewSection title="Rules" onEdit={() => onJump(5)}>
           <ReviewRow label="Check-in" value={v.checkInTime} />
           <ReviewRow label="Check-out" value={v.checkOutTime} />
           <ReviewRow label="Max guests" value={v.maxGuests.toString()} />
@@ -892,8 +1072,9 @@ function ReviewStep({
 
       <div className="rounded-lg border-2 border-dashed border-accent/40 bg-accent/5 p-4">
         <p className="text-sm">
-          <strong>Almost done.</strong> After creating your listing, you'll set the map location
-          and upload photos before publishing it to the marketplace.
+          <strong>Almost done.</strong> Everything is saved to your draft as you go. Finish here,
+          then submit the listing for review whenever you're ready — tenants can't see it until an
+          admin approves it.
         </p>
       </div>
     </div>
@@ -946,13 +1127,17 @@ function ToggleChip({
     <button
       type="button"
       onClick={onClick}
+      aria-pressed={checked}
       className={cn(
         "flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors cursor-pointer",
-        checked ? "border-foreground bg-secondary" : "border-border hover:bg-muted/50",
+        checked
+          ? "border-accent bg-accent/10 text-accent font-medium ring-1 ring-accent/30"
+          : "border-border hover:bg-muted/50",
       )}
     >
       <DynamicIcon iconKey={iconKey} className="shrink-0" />
-      <span className="line-clamp-2">{label}</span>
+      <span className="line-clamp-2 flex-1">{label}</span>
+      {checked && <Check className="h-3.5 w-3.5 shrink-0" />}
     </button>
   );
 }

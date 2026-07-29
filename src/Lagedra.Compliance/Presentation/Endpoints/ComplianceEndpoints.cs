@@ -110,10 +110,16 @@ public static class ComplianceEndpoints
 
     private static async Task<IResult> GetUserLedger(
         [FromRoute] Guid userId,
+        ClaimsPrincipal user,
         IMediator mediator,
         CancellationToken ct)
     {
-        var result = await mediator.Send(new GetTrustLedgerForUserQuery(userId), ct)
+        // Owners (and platform admins) see their full ledger, including
+        // non-public entries; everyone else gets the public view only.
+        var callerId = Guid.Parse(user.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var includeNonPublic = callerId == userId || user.IsInRole("PlatformAdmin");
+
+        var result = await mediator.Send(new GetTrustLedgerForUserQuery(userId, includeNonPublic), ct)
             .ConfigureAwait(true);
 
         return result.IsSuccess

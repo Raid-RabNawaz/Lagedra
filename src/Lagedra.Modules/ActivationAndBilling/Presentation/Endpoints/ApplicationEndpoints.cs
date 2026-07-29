@@ -29,7 +29,27 @@ public static class ApplicationEndpoints
         group.MapGet("/{id:guid}", GetApplication);
         group.MapGet("/listing/{listingId:guid}", ListApplicationsForListing);
 
+        // Current user's resolved verification tier ("trust level") — same
+        // resolver that picks the predetermined deposit at booking time.
+        app.MapGet("/v1/me/verification-tier", GetMyVerificationTier)
+            .WithTags("Applications")
+            .RequireAuthorization();
+
         return app;
+    }
+
+    private static async Task<IResult> GetMyVerificationTier(
+        ClaimsPrincipal user,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var userId = GetUserId(user);
+        var result = await mediator.Send(new GetMyVerificationTierQuery(userId), ct)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
     }
 
     private static async Task<IResult> CreateBookingSetupIntent(

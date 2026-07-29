@@ -7,6 +7,8 @@ public sealed record PartnerEndorsementDto(
     Guid OrganizationId,
     string OrganizationName,
     Guid TenantUserId,
+    string? TenantDisplayName,
+    string? TenantEmail,
     PartnerEndorsementStatus Status,
     DateTime RequestedAt,
     Guid RequestedByUserId,

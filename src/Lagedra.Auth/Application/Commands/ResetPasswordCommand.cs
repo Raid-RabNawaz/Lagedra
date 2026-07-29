@@ -26,6 +26,27 @@ public sealed class ResetPasswordCommandHandler(UserManager<ApplicationUser> use
             return AuthErrors.IdentityError(result.Errors.First().Description);
         }
 
+        // Possession of a valid reset token proves mailbox control — activate
+        // the account and mark email confirmed so the user can sign in after
+        // setting a password (including first-time setup for inactive signups).
+        var dirty = false;
+        if (!user.IsActive)
+        {
+            user.IsActive = true;
+            dirty = true;
+        }
+
+        if (!user.EmailConfirmed)
+        {
+            user.EmailConfirmed = true;
+            dirty = true;
+        }
+
+        if (dirty)
+        {
+            await userManager.UpdateAsync(user).ConfigureAwait(true);
+        }
+
         return Result.Success();
     }
 }

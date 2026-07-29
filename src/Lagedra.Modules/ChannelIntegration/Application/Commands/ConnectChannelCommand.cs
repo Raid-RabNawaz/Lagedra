@@ -37,6 +37,24 @@ public sealed class ConnectChannelCommandHandler(
         "Channel.AlreadyConnected",
         "This provider account is already connected for this host.");
 
+    /// <summary>
+    /// Providers where a single link covers the whole account, so a second
+    /// connection would import the same properties twice.
+    /// </summary>
+    private static readonly Dictionary<string, (string CanonicalKey, Error Error)> SingleConnectionProviders =
+        new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["hostaway"] = ("hostaway", new(
+                "Channel.HostawayAlreadyConnected",
+                "You already have a Hostaway connection. Sync that connection to update listings.")),
+            ["guesty"] = ("guesty", new(
+                "Channel.GuestyAlreadyConnected",
+                "You already have a Guesty connection. Sync that connection to update listings.")),
+            ["ownerrez"] = ("ownerrez", new(
+                "Channel.OwnerRezAlreadyConnected",
+                "You already have an OwnerRez connection. Sync that connection to update listings.")),
+        };
+
     public async Task<Result<ChannelConnectionDto>> Handle(
         ConnectChannelCommand request, CancellationToken cancellationToken)
     {
@@ -49,6 +67,19 @@ public sealed class ConnectChannelCommandHandler(
 
         var providerKey = request.ProviderKey.Trim();
         var externalAccountId = request.ExternalAccountId.Trim();
+
+        if (SingleConnectionProviders.TryGetValue(providerKey, out var singleConnection))
+        {
+            var canonicalKey = singleConnection.CanonicalKey;
+            var linked = await dbContext.Connections
+                .AnyAsync(c => c.HostUserId == request.HostUserId
+                            && c.ProviderKey == canonicalKey, cancellationToken)
+                .ConfigureAwait(false);
+            if (linked)
+            {
+                return Result<ChannelConnectionDto>.Failure(singleConnection.Error);
+            }
+        }
 
         var exists = await dbContext.Connections
             .AnyAsync(c => c.HostUserId == request.HostUserId

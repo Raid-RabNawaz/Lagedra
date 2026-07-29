@@ -9,27 +9,61 @@ namespace Lagedra.Modules.LeaseAgreements.Application.Commands;
 public sealed record SeedCaliforniaLeaseTemplateCommand : IRequest<Result>;
 
 /// <summary>
-/// Idempotent seed: creates a US-CA draft template with placeholder-driven CA lease body.
-/// Operators must still dual-approve and publish before it governs bookings.
+/// Idempotent seed: creates (or upgrades) a published US-CA lease template so
+/// Truth Surface confirmation can generate lease PDFs without a manual
+/// dual-approve + publish ceremony for the first jurisdiction pack.
+/// Subsequent edits still go through the normal draft → dual-control → publish flow.
 /// </summary>
 public sealed class SeedCaliforniaLeaseTemplateCommandHandler(LeaseAgreementDbContext db)
     : IRequestHandler<SeedCaliforniaLeaseTemplateCommand, Result>
 {
     public async Task<Result> Handle(SeedCaliforniaLeaseTemplateCommand request, CancellationToken cancellationToken)
     {
-        var exists = await db.Templates.AnyAsync(t => t.JurisdictionCode.Code == "US-CA", cancellationToken)
+        var template = await db.Templates
+            .Include(t => t.Versions)
+            .FirstOrDefaultAsync(t => t.JurisdictionCode.Code == "US-CA", cancellationToken)
             .ConfigureAwait(false);
-        if (exists)
+
+        if (template is null)
         {
+            template = LeaseAgreementTemplate.CreateDraft("US-CA", "California Residential Lease Agreement");
+            var version = template.AddVersion(CaliforniaLeaseBodyHtml);
+            version.SetEffectiveDate(DateTime.UtcNow.Date);
+            template.PublishSeedVersion(version.Id);
+            db.Templates.Add(template);
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
             return Result.Success();
         }
 
-        var template = LeaseAgreementTemplate.CreateDraft("US-CA", "California Residential Lease Agreement");
-        var version = template.AddVersion(CaliforniaLeaseBodyHtml);
-        version.SetEffectiveDate(DateTime.UtcNow.Date);
+        // Existing env: if nothing is live yet, publish the latest version so
+        // bookings don't fail with "No published lease template".
+        if (template.ActiveVersionId is null)
+        {
+            var version = template.Versions
+                .OrderByDescending(v => v.VersionNumber)
+                .FirstOrDefault();
 
-        db.Templates.Add(template);
-        await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+            if (version is null)
+            {
+                version = template.AddVersion(CaliforniaLeaseBodyHtml);
+                version.SetEffectiveDate(DateTime.UtcNow.Date);
+            }
+            else if (version.Status == Domain.Enums.LeaseTemplateVersionStatus.Draft)
+            {
+                if (string.IsNullOrWhiteSpace(version.BodyHtml))
+                {
+                    version.UpdateDraft(CaliforniaLeaseBodyHtml, DateTime.UtcNow.Date);
+                }
+                else if (version.EffectiveDate is null)
+                {
+                    version.SetEffectiveDate(DateTime.UtcNow.Date);
+                }
+            }
+
+            template.PublishSeedVersion(version.Id);
+            await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        }
+
         return Result.Success();
     }
 
@@ -41,8 +75,8 @@ public sealed class SeedCaliforniaLeaseTemplateCommandHandler(LeaseAgreementDbCo
         <strong>{{tenant.fullName}}</strong> ("Tenant").</p>
 
         <h2>Broker Disclosure</h2>
-        <p>The Landlord has engaged <strong>{{broker.name}}</strong>, a California licensed real estate broker
-        (DRE License No. <strong>{{broker.dreLicense}}</strong>), to act as the Landlord's authorized agent.
+        <p>If a licensed broker represents the Landlord for this lease, the broker is
+        <strong>{{broker.name}}</strong> (DRE License No. <strong>{{broker.dreLicense}}</strong>).
         {{broker.scopeNotes}}</p>
 
         <h2>Leased Property</h2>

@@ -94,4 +94,49 @@ export const truthSurfaceApi = {
     const filename = match?.[1] ? decodeURIComponent(match[1]) : fallback;
     return { blob: response.data as Blob, filename };
   },
+
+  /**
+   * Downloads the filled lease agreement PDF for a confirmed deal.
+   * Generates on demand when the async post-seal job has not stored one yet.
+   * Throws with a readable message when generation fails (missing profile
+   * fields, unpublished template, etc.).
+   */
+  async downloadLeasePdf(dealId: string): Promise<{ blob: Blob; filename: string } | null> {
+    try {
+      const response = await http.get(endpoints.leaseAgreements.dealPdf(dealId), {
+        responseType: "blob",
+      });
+      const disposition = response.headers["content-disposition"] as string | undefined;
+      const fallback = `lease-agreement-${dealId}.pdf`;
+      const match = disposition?.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+      const filename = match?.[1] ? decodeURIComponent(match[1]) : fallback;
+      return { blob: response.data as Blob, filename };
+    } catch (err) {
+      const axiosErr = err as AxiosError;
+      const status = axiosErr?.response?.status;
+      if (status === 404) {
+        return null;
+      }
+
+      const data = axiosErr?.response?.data;
+      if (data instanceof Blob) {
+        const text = await data.text();
+        let message = text || "Lease PDF could not be generated.";
+        try {
+          const json = JSON.parse(text) as {
+            detail?: string;
+            title?: string;
+            error?: string;
+          };
+          message =
+            json.detail || json.title || json.error || message;
+        } catch {
+          // Keep raw text when the body isn't JSON ProblemDetails.
+        }
+        throw new Error(message);
+      }
+
+      throw err;
+    }
+  },
 };

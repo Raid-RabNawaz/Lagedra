@@ -80,46 +80,24 @@ public sealed partial class ComplianceSignalProcessorJob(
 
         switch (signalType)
         {
+            // RecordViolationCommand mirrors every violation into the trust
+            // ledger itself, so no separate ledger write is needed here.
             case "InsuranceLapse":
-                var insuranceViolation = await mediator.Send(new RecordViolationCommand(
+                await mediator.Send(new RecordViolationCommand(
                     dealId, landlordId, tenantId,
                     Domain.ViolationCategory.InsuranceLapse,
                     payload ?? "Insurance lapse detected via compliance signal",
                     null), ct)
                     .ConfigureAwait(false);
-
-                if (insuranceViolation.IsSuccess)
-                {
-                    await mediator.Send(new RecordLedgerEntryCommand(
-                        tenantId,
-                        Domain.TrustLedgerEntryType.ViolationRecorded,
-                        insuranceViolation.Value.Id,
-                        "Insurance lapse violation recorded for deal",
-                        false), ct)
-                        .ConfigureAwait(false);
-                }
-
                 break;
 
             case "PaymentDefault":
-                var paymentViolation = await mediator.Send(new RecordViolationCommand(
+                await mediator.Send(new RecordViolationCommand(
                     dealId, landlordId, tenantId,
                     Domain.ViolationCategory.NonPayment,
                     payload ?? "Payment default detected via compliance signal",
                     null), ct)
                     .ConfigureAwait(false);
-
-                if (paymentViolation.IsSuccess)
-                {
-                    await mediator.Send(new RecordLedgerEntryCommand(
-                        tenantId,
-                        Domain.TrustLedgerEntryType.PaymentDefault,
-                        paymentViolation.Value.Id,
-                        "Payment default violation recorded for deal",
-                        false), ct)
-                        .ConfigureAwait(false);
-                }
-
                 break;
 
             case "DealCompleted":

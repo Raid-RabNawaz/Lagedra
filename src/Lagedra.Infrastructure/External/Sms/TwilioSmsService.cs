@@ -25,6 +25,12 @@ public sealed partial class TwilioSmsService(
         ArgumentException.ThrowIfNullOrWhiteSpace(message.ToE164);
         ArgumentException.ThrowIfNullOrWhiteSpace(message.Body);
 
+        if (!_settings.IsSmsConfigured)
+        {
+            throw new InvalidOperationException(
+                "Twilio SMS is not configured (AccountSid, MessagingServiceSid, and AuthToken or ApiKey).");
+        }
+
         using var content = new FormUrlEncodedContent(new Dictionary<string, string>
         {
             ["To"] = message.ToE164,
@@ -40,7 +46,7 @@ public sealed partial class TwilioSmsService(
         };
 
         var credentials = Convert.ToBase64String(
-            Encoding.ASCII.GetBytes($"{_settings.AccountSid}:{_settings.AuthToken}"));
+            Encoding.ASCII.GetBytes($"{_settings.SmsAuthUsername}:{_settings.SmsAuthPassword}"));
         request.Headers.Authorization = new AuthenticationHeaderValue("Basic", credentials);
 
         try

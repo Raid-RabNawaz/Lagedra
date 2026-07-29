@@ -1,0 +1,1 @@
+{"personalizations":[{"to":[{"email":"raid@lagedra.com"}]}],"from":{"email":"info@lagedra.com","name":"Lagedra"},"subject":"Lagedra SendGrid key check","content":[{"type":"text/plain","value":"SendGrid API key verification."}]}

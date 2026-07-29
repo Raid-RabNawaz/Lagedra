@@ -50,6 +50,8 @@ type ListingFormProps = {
   defaultValues?: Partial<ListingFormValues>;
   onSubmit: (data: ListingFormValues) => Promise<void>;
   submitLabel: string;
+  /** When true, fields and submit are disabled (e.g. InReview / Published). */
+  readOnly?: boolean;
   definitions: {
     amenities: AmenityDefinitionDto[];
     safetyDevices: SafetyDeviceDefinitionDto[];
@@ -57,7 +59,13 @@ type ListingFormProps = {
   };
 };
 
-export function ListingForm({ defaultValues, onSubmit, submitLabel, definitions }: ListingFormProps) {
+export function ListingForm({
+  defaultValues,
+  onSubmit,
+  submitLabel,
+  definitions,
+  readOnly = false,
+}: ListingFormProps) {
   const form = useForm<ListingFormValues>({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(listingFormSchema) as any,
@@ -89,6 +97,7 @@ export function ListingForm({ defaultValues, onSubmit, submitLabel, definitions 
 
   return (
     <form onSubmit={handleSubmit} className="space-y-8">
+      <fieldset disabled={readOnly} className="min-w-0 space-y-8 border-0 p-0 m-0">
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Basics</CardTitle>
@@ -275,6 +284,15 @@ export function ListingForm({ defaultValues, onSubmit, submitLabel, definitions 
             <Input type="time" {...form.register("quietHoursEnd")} />
           </Field>
           <div className="sm:col-span-2">
+            <Field label="Leaving instructions (optional)">
+              <Textarea
+                rows={3}
+                placeholder="What tenants should do at move-out (keys, cleaning, trash...)"
+                {...form.register("leavingInstructions")}
+              />
+            </Field>
+          </div>
+          <div className="sm:col-span-2">
             <Field label="Additional rules (optional)">
               <Textarea rows={3} {...form.register("additionalRules")} />
             </Field>
@@ -328,6 +346,262 @@ export function ListingForm({ defaultValues, onSubmit, submitLabel, definitions 
 
       <Card>
         <CardHeader>
+          <CardTitle className="text-lg">Lease terms</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <p className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
+            These terms are merged into the lease agreement generated when a
+            deal is confirmed. Sensible defaults are pre-filled — review them
+            so your lease matches how you actually run the property.
+          </p>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field
+              label="Rent due day of month"
+              error={form.formState.errors.rentDueDayOfMonth?.message}
+            >
+              <Input
+                type="number"
+                min={1}
+                max={28}
+                {...form.register("rentDueDayOfMonth", { valueAsNumber: true })}
+              />
+              <p className="text-xs text-muted-foreground">Between the 1st and the 28th.</p>
+            </Field>
+            <Field label="Accepted payment methods (optional)">
+              <Input
+                placeholder="e.g. ACH transfer, check, money order"
+                {...form.register("paymentMethods")}
+              />
+            </Field>
+            <Field
+              label="Late fee (% of rent)"
+              error={form.formState.errors.lateFeePercent?.message}
+            >
+              <Input
+                type="number"
+                step="0.1"
+                min={0}
+                max={100}
+                {...form.register("lateFeePercent", { valueAsNumber: true })}
+              />
+            </Field>
+            <Field
+              label="Late fee grace period (days)"
+              error={form.formState.errors.lateFeeGraceDays?.message}
+            >
+              <Input
+                type="number"
+                min={0}
+                {...form.register("lateFeeGraceDays", { valueAsNumber: true })}
+              />
+            </Field>
+            <Field
+              label="Returned payment fee — first (USD)"
+              error={form.formState.errors.nsfFirstFeeDollars?.message}
+            >
+              <Input
+                type="number"
+                step="0.01"
+                min={0}
+                {...form.register("nsfFirstFeeDollars", { valueAsNumber: true })}
+              />
+            </Field>
+            <Field
+              label="Returned payment fee — subsequent (USD)"
+              error={form.formState.errors.nsfSubsequentFeeDollars?.message}
+            >
+              <Input
+                type="number"
+                step="0.01"
+                min={0}
+                {...form.register("nsfSubsequentFeeDollars", { valueAsNumber: true })}
+              />
+            </Field>
+          </div>
+
+          <Separator />
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="flex flex-wrap gap-4 sm:col-span-2">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input type="checkbox" {...form.register("furnished")} className="rounded border-input" />
+                Furnished
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  {...form.register("yardMaintenanceByTenant")}
+                  className="rounded border-input"
+                />
+                Tenant handles yard maintenance
+              </label>
+            </div>
+            <div className="sm:col-span-2">
+              <Field label="Utilities responsibility (optional)">
+                <Input
+                  placeholder="e.g. Tenant pays all utilities except water and trash"
+                  {...form.register("utilitiesResponsibility")}
+                />
+              </Field>
+            </div>
+            <div className="sm:col-span-2">
+              <Field label="Included appliances (optional)">
+                <Input
+                  placeholder="e.g. Refrigerator, washer, dryer, dishwasher"
+                  {...form.register("includedAppliancesNotes")}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Leave blank to list your selected amenities in the lease.
+                </p>
+              </Field>
+            </div>
+          </div>
+
+          <Separator />
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Keys provided" error={form.formState.errors.keyCount?.message}>
+              <Input type="number" min={0} {...form.register("keyCount", { valueAsNumber: true })} />
+            </Field>
+            <Field
+              label="Mailbox keys provided"
+              error={form.formState.errors.mailboxKeyCount?.message}
+            >
+              <Input
+                type="number"
+                min={0}
+                {...form.register("mailboxKeyCount", { valueAsNumber: true })}
+              />
+            </Field>
+            <Field
+              label="Key replacement fee (USD)"
+              error={form.formState.errors.keyReplacementFeeDollars?.message}
+            >
+              <Input
+                type="number"
+                step="0.01"
+                min={0}
+                {...form.register("keyReplacementFeeDollars", { valueAsNumber: true })}
+              />
+            </Field>
+            <Field
+              label="Lockout fee (USD)"
+              error={form.formState.errors.lockoutFeeDollars?.message}
+            >
+              <Input
+                type="number"
+                step="0.01"
+                min={0}
+                {...form.register("lockoutFeeDollars", { valueAsNumber: true })}
+              />
+            </Field>
+            <Field
+              label="Parking spaces"
+              error={form.formState.errors.parkingSpaceCount?.message}
+            >
+              <Input
+                type="number"
+                min={0}
+                {...form.register("parkingSpaceCount", { valueAsNumber: true })}
+              />
+            </Field>
+            <div className="self-end pb-2">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  {...form.register("parkingIncludedInRent")}
+                  className="rounded border-input"
+                />
+                Parking included in rent
+              </label>
+            </div>
+            <div className="sm:col-span-2">
+              <Field label="Parking description (optional)">
+                <Input
+                  placeholder="e.g. One assigned spot in the garage, #12"
+                  {...form.register("parkingDescription")}
+                />
+              </Field>
+            </div>
+          </div>
+
+          <Separator />
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field
+              label="Max consecutive days for guests"
+              error={form.formState.errors.maxGuestConsecutiveDays?.message}
+            >
+              <Input
+                type="number"
+                min={0}
+                {...form.register("maxGuestConsecutiveDays", { valueAsNumber: true })}
+              />
+            </Field>
+            <Field
+              label="Renter's insurance minimum liability (USD)"
+              error={form.formState.errors.rentersInsuranceMinLiabilityDollars?.message}
+            >
+              <Input
+                type="number"
+                step="0.01"
+                min={0}
+                {...form.register("rentersInsuranceMinLiabilityDollars", { valueAsNumber: true })}
+              />
+            </Field>
+            <Field
+              label="Early termination fee (months of rent)"
+              error={form.formState.errors.earlyTerminationFeeMonths?.message}
+            >
+              <Input
+                type="number"
+                min={0}
+                {...form.register("earlyTerminationFeeMonths", { valueAsNumber: true })}
+              />
+            </Field>
+          </div>
+
+          <Separator />
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="flex flex-wrap gap-4 sm:col-span-2">
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  {...form.register("builtBefore1978")}
+                  className="rounded border-input"
+                />
+                Property was built before 1978
+              </label>
+              <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <input
+                  type="checkbox"
+                  {...form.register("rentCapJustCauseExempt")}
+                  className="rounded border-input"
+                />
+                Exempt from rent cap / just-cause rules
+              </label>
+            </div>
+            <div className="sm:col-span-2">
+              <Field label="Lead paint knowledge (optional)">
+                <Textarea
+                  rows={2}
+                  placeholder="Any known lead-based paint or hazards on the property"
+                  {...form.register("leadPaintKnowledge")}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Required disclosure for pre-1978 buildings. Leave blank for the
+                  standard "no known lead-based paint" statement.
+                </p>
+              </Field>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle className="text-lg">Amenities</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -346,7 +620,9 @@ export function ListingForm({ defaultValues, onSubmit, submitLabel, definitions 
                       onClick={() => toggleId("amenityIds", a.id)}
                       className={cn(
                         "flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors cursor-pointer",
-                        checked ? "border-foreground bg-secondary" : "border-border hover:bg-muted/50",
+                        checked
+                          ? "border-accent bg-accent/10 text-accent font-medium ring-1 ring-accent/30"
+                          : "border-border hover:bg-muted/50",
                       )}
                     >
                       <DynamicIcon iconKey={a.iconKey} className="shrink-0" />
@@ -375,7 +651,9 @@ export function ListingForm({ defaultValues, onSubmit, submitLabel, definitions 
                   onClick={() => toggleId("safetyDeviceIds", s.id)}
                   className={cn(
                     "flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm cursor-pointer",
-                    checked ? "border-foreground bg-secondary" : "border-border hover:bg-muted/50",
+                    checked
+                      ? "border-accent bg-accent/10 text-accent font-medium ring-1 ring-accent/30"
+                      : "border-border hover:bg-muted/50",
                   )}
                 >
                   <DynamicIcon iconKey={s.iconKey} className="shrink-0" />
@@ -402,7 +680,9 @@ export function ListingForm({ defaultValues, onSubmit, submitLabel, definitions 
                   onClick={() => toggleId("considerationIds", c.id)}
                   className={cn(
                     "flex items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm cursor-pointer",
-                    checked ? "border-foreground bg-secondary" : "border-border hover:bg-muted/50",
+                    checked
+                      ? "border-accent bg-accent/10 text-accent font-medium ring-1 ring-accent/30"
+                      : "border-border hover:bg-muted/50",
                   )}
                 >
                   <DynamicIcon iconKey={c.iconKey} className="shrink-0" />
@@ -431,11 +711,14 @@ export function ListingForm({ defaultValues, onSubmit, submitLabel, definitions 
 
       <Separator />
 
-      <div className="flex justify-end gap-3">
-        <Button type="submit" variant="accent" size="lg" disabled={form.formState.isSubmitting}>
-          {form.formState.isSubmitting ? "Saving..." : submitLabel}
-        </Button>
-      </div>
+      {!readOnly && (
+        <div className="flex justify-end gap-3">
+          <Button type="submit" variant="accent" size="lg" disabled={form.formState.isSubmitting}>
+            {form.formState.isSubmitting ? "Saving..." : submitLabel}
+          </Button>
+        </div>
+      )}
+      </fieldset>
     </form>
   );
 }

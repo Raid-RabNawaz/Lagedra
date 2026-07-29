@@ -232,11 +232,11 @@ export const PartnerDashboardPage = () => {
                 {endorsements.map((e) => (
                   <li
                     key={e.id}
-                    className="flex items-center justify-between rounded-md border p-3 text-sm"
+                    className="flex items-center justify-between gap-3 rounded-md border p-3 text-sm"
                   >
                     <div className="min-w-0">
-                      <p className="font-medium font-mono truncate" title={e.tenantUserId}>
-                        tenant {truncate(e.tenantUserId)}
+                      <p className="font-medium truncate" title={e.tenantUserId}>
+                        {e.tenantDisplayName?.trim() || `tenant ${truncate(e.tenantUserId)}`}
                       </p>
                       <p className="text-muted-foreground text-xs">
                         Requested {formatDate(e.requestedAt)}

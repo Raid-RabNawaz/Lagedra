@@ -14,7 +14,7 @@ public static class AuthErrors
     public static readonly Error PasswordMismatch = new("Auth.PasswordMismatch", "Current password is incorrect.");
     public static readonly Error SelfRoleElevation = new("Auth.SelfRoleElevation", "You cannot change your own role.");
     public static readonly Error PasswordRequired = new("Auth.PasswordRequired", "A password is required to create an account.");
-    public static readonly Error PreLaunchRestricted = new("Auth.PreLaunchRestricted", "Lagedra is launching soon. Your spot is reserved and we'll email you the moment sign-in opens.");
+    public static readonly Error PreLaunchRestricted = new("Auth.PreLaunchRestricted", "Lagedra is launching soon. Hosts can sign in to add listings; partner access opens at launch and we'll email you then.");
     public static readonly Error PhoneRequired = new("Auth.PhoneRequired", "Add a phone number to your profile before verifying.");
     public static readonly Error PhoneAlreadyVerified = new("Auth.PhoneAlreadyVerified", "This phone number is already verified.");
     public static readonly Error InvalidPhoneCode = new("Auth.InvalidPhoneCode", "The verification code is invalid or has expired.");

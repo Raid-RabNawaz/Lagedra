@@ -1,6 +1,7 @@
 using System.Globalization;
 using Lagedra.Modules.Notifications.Application.Commands;
 using Lagedra.Modules.Reviews.Application.Commands;
+using Lagedra.Modules.Reviews.Domain.Enums;
 using Lagedra.Modules.Reviews.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Settings;
 using Lagedra.SharedKernel.Time;
@@ -46,6 +47,29 @@ public sealed partial class PublishExpiredStayReviewsJob(
         if (due.Count > 0)
         {
             LogPublished(logger, due.Count);
+        }
+
+        // Repair: windows already marked published while a review stayed
+        // Submitted (historical race when the second party submitted).
+        var orphaned = await dbContext.StayReviews
+            .Where(r => r.Status == StayReviewStatus.Submitted)
+            .Join(
+                dbContext.StayReviewWindows.Where(w => w.IsPublished),
+                r => r.DealId,
+                w => w.DealId,
+                (r, _) => r)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        if (orphaned.Count > 0)
+        {
+            foreach (var review in orphaned)
+            {
+                review.Publish(clock);
+            }
+
+            await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+            LogOrphansPublished(logger, orphaned.Count);
         }
 
         var reminderIntervalDays = (int)await settings
@@ -133,6 +157,9 @@ public sealed partial class PublishExpiredStayReviewsJob(
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Published {Count} expired stay-review windows")]
     private static partial void LogPublished(ILogger logger, int count);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Published {Count} orphaned stay reviews left Submitted on published windows")]
+    private static partial void LogOrphansPublished(ILogger logger, int count);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Sent review reminders for {Count} windows")]
     private static partial void LogReminded(ILogger logger, int count);

@@ -110,15 +110,116 @@ public sealed partial class ListingImporter(
 
         if (created && request.Photos is { Count: > 0 } photos)
         {
+            // Provider keys are lowercase by convention ("hostaway", "ownerrez").
+            var storagePrefix = request.ExternalSource.Trim();
             foreach (var photo in photos)
             {
-                TryAddPhoto(listing, photo);
+                TryAddPhoto(listing, storagePrefix, photo);
+            }
+        }
+
+        // Amenities are matched by name against the Lagedra catalogue and, like
+        // photos, applied only on first import — later syncs must not clobber a
+        // host's curated selection with a lossy best-effort match.
+        if (created && request.AmenityNames is { Count: > 0 } amenityNames)
+        {
+            var amenityIds = await ResolveAmenityIdsAsync(amenityNames, ct).ConfigureAwait(false);
+            if (amenityIds.Count > 0)
+            {
+                listing.SetAmenities(amenityIds);
             }
         }
 
         await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
         return new ListingImportResult(listing.Id, created);
     }
+
+    /// <summary>
+    /// Resolves channel amenity names (e.g. Hostaway's "Wireless internet") to
+    /// Lagedra <c>AmenityDefinition</c> ids. Matching is best-effort: normalized
+    /// exact name match plus a small alias table for common channel spellings.
+    /// Unmatched names are skipped silently — the host reviews the draft anyway.
+    /// </summary>
+    private async Task<IReadOnlyList<Guid>> ResolveAmenityIdsAsync(
+        IReadOnlyList<string> amenityNames,
+        CancellationToken ct)
+    {
+        var definitions = await dbContext.AmenityDefinitions
+            .AsNoTracking()
+            .Where(a => a.IsActive)
+            .Select(a => new { a.Id, a.Name })
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        var byNormalizedName = new Dictionary<string, Guid>(StringComparer.Ordinal);
+        foreach (var definition in definitions)
+        {
+            byNormalizedName.TryAdd(NormalizeAmenityName(definition.Name), definition.Id);
+        }
+
+        var resolved = new List<Guid>();
+        foreach (var name in amenityNames)
+        {
+            var normalized = NormalizeAmenityName(name);
+            if (normalized.Length == 0)
+            {
+                continue;
+            }
+
+            if (AmenityAliases.TryGetValue(normalized, out var canonical))
+            {
+                normalized = canonical;
+            }
+
+            if (byNormalizedName.TryGetValue(normalized, out var id) && !resolved.Contains(id))
+            {
+                resolved.Add(id);
+            }
+        }
+
+        return resolved;
+    }
+
+    /// <summary>Lowercase with all non-alphanumerics stripped, so "Hot tub" == "Hot Tub" == "hot-tub".</summary>
+    private static string NormalizeAmenityName(string name) =>
+        new([.. name.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant)]);
+
+    /// <summary>
+    /// Common channel amenity spellings (normalized) mapped to the normalized
+    /// name of the equivalent seeded Lagedra amenity.
+    /// </summary>
+    private static readonly Dictionary<string, string> AmenityAliases = new(StringComparer.Ordinal)
+    {
+        ["wirelessinternet"] = "wifi",
+        ["internet"] = "wifi",
+        ["wirelessbroadbandinternet"] = "wifi",
+        ["freewifi"] = "wifi",
+        ["airconditioning"] = "centralairconditioning",
+        ["ac"] = "centralairconditioning",
+        ["heating"] = "centralheating",
+        ["washer"] = "inunitwasher",
+        ["washingmachine"] = "inunitwasher",
+        ["dryer"] = "inunitdryer",
+        ["freeparking"] = "freeparkingonpremises",
+        ["parking"] = "freeparkingonpremises",
+        ["swimmingpool"] = "pool",
+        ["jacuzzi"] = "hottub",
+        ["barbecue"] = "bbqgrill",
+        ["bbq"] = "bbqgrill",
+        ["grill"] = "bbqgrill",
+        ["television"] = "tv",
+        ["gym"] = "gymfitnessequipment",
+        ["fitnesscenter"] = "gymfitnessequipment",
+        ["workspace"] = "dedicatedworkspace",
+        ["laptopfriendlyworkspace"] = "dedicatedworkspace",
+        ["fridge"] = "refrigerator",
+        ["linens"] = "bedlinens",
+        ["towels"] = "towelsprovided",
+        ["hotwaterkettle"] = "kettle",
+        ["coffeemachine"] = "coffeemaker",
+        ["wheelchairaccess"] = "wheelchairaccessible",
+        ["lift"] = "elevator",
+    };
 
     private void TrySetApproxLocation(Listing listing, double latitude, double longitude)
     {
@@ -163,11 +264,13 @@ public sealed partial class ListingImporter(
         }
     }
 
-    private void TryAddPhoto(Listing listing, ListingImportPhoto photo)
+    private void TryAddPhoto(Listing listing, string storagePrefix, ListingImportPhoto photo)
     {
         try
         {
-            listing.AddPhoto($"ownerrez/{photo.ExternalId}", photo.Url, photo.Caption);
+            // Key photos by their source channel (e.g. "hostaway/123") so ids
+            // from different providers can never collide.
+            listing.AddPhoto($"{storagePrefix}/{photo.ExternalId}", photo.Url, photo.Caption);
         }
         catch (ArgumentException ex)
         {

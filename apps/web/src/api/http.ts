@@ -38,11 +38,27 @@ const toCorrelationId = (): string => {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 };
 
+/** Anonymous auth calls must not send a stale Bearer token or trigger refresh-on-401. */
+const isAnonymousAuthPath = (url?: string): boolean => {
+  if (!url) return false;
+  const anonymous = [
+    endpoints.auth.login,
+    endpoints.auth.externalLogin,
+    endpoints.auth.register,
+    endpoints.auth.refresh,
+    endpoints.auth.forgotPassword,
+    endpoints.auth.resetPassword,
+    endpoints.auth.verifyEmail,
+    endpoints.auth.resendVerification,
+  ];
+  return anonymous.some((path) => url.includes(path));
+};
+
 http.interceptors.request.use((request) => {
   const { accessToken } = authStore.getState();
   request.headers = request.headers ?? new AxiosHeaders();
   request.headers.set("X-Correlation-Id", toCorrelationId());
-  if (accessToken) {
+  if (accessToken && !isAnonymousAuthPath(request.url)) {
     request.headers.set("Authorization", `Bearer ${accessToken}`);
   }
 
@@ -79,7 +95,6 @@ const requestRefresh = async (): Promise<AuthResultDto> => {
   return activeRefreshPromise;
 };
 
-const isAuthRefreshPath = (url?: string): boolean => url?.includes(endpoints.auth.refresh) ?? false;
 const isPrivacyConsentPath = (url?: string): boolean => url?.includes("/v1/privacy/consent") ?? false;
 
 const requestRequiredConsents = async (): Promise<void> => {
@@ -148,7 +163,14 @@ http.interceptors.response.use(
       }
     }
 
-    if (!originalRequest || status !== 401 || originalRequest._retry || isAuthRefreshPath(originalRequest.url)) {
+    // Never attempt refresh for anonymous auth endpoints (login 401 = bad
+    // credentials, not an expired session).
+    if (
+      !originalRequest ||
+      status !== 401 ||
+      originalRequest._retry ||
+      isAnonymousAuthPath(originalRequest.url)
+    ) {
       return Promise.reject(error);
     }
 

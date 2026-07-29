@@ -89,6 +89,35 @@ public sealed class LeaseTemplateVersion : Entity<Guid>
 
     public bool HasDualApproval => ApprovedBy.HasValue && SecondApproverId.HasValue;
 
+    /// <summary>
+    /// Startup seed path: promote a draft (or pending) version to Active with
+    /// synthetic dual-control approvals so the initial jurisdiction template
+    /// is immediately publishable without two human admins.
+    /// </summary>
+    internal void ApplySeedPublication()
+    {
+        if (Status is LeaseTemplateVersionStatus.Deprecated)
+        {
+            throw new InvalidOperationException("Cannot seed-publish a deprecated version.");
+        }
+
+        if (EffectiveDate is null)
+        {
+            throw new InvalidOperationException("Effective date must be set before seed publishing.");
+        }
+
+        if (string.IsNullOrWhiteSpace(BodyHtml))
+        {
+            throw new InvalidOperationException("Template body must not be empty before seed publishing.");
+        }
+
+        // Well-known system principals — distinct so dual-control invariants hold.
+        ApprovedBy ??= Guid.Parse("00000000-0000-0000-0000-0000000000a1");
+        SecondApproverId ??= Guid.Parse("00000000-0000-0000-0000-0000000000a2");
+        ApprovedAt ??= DateTime.UtcNow;
+        Status = LeaseTemplateVersionStatus.Active;
+    }
+
     public void Deprecate()
     {
         if (Status != LeaseTemplateVersionStatus.Active)

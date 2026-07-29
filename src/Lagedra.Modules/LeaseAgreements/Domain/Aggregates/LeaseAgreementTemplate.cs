@@ -58,10 +58,13 @@ public sealed class LeaseAgreementTemplate : AggregateRoot<Guid>
                 $"Version must be in Active status to set as live. Current status: '{version.Status}'.");
         }
 
-        if (ActiveVersionId.HasValue && ActiveVersionId != versionId)
+        // Only one version may be Active per jurisdiction template. Deprecate
+        // every other Active version — not just the previously published one —
+        // so approved-but-never-published versions don't linger as Active.
+        foreach (var other in _versions.Where(v =>
+                     v.Id != versionId && v.Status == LeaseTemplateVersionStatus.Active))
         {
-            var previous = _versions.FirstOrDefault(v => v.Id == ActiveVersionId.Value);
-            previous?.Deprecate();
+            other.Deprecate();
         }
 
         ActiveVersionId = versionId;
@@ -77,6 +80,25 @@ public sealed class LeaseAgreementTemplate : AggregateRoot<Guid>
             throw new InvalidOperationException("Version requires dual-control approval before publishing.");
         }
 
+        ActivateVersion(versionId);
+
+        AddDomainEvent(new LeaseAgreementTemplatePublishedEvent(
+            Id,
+            JurisdictionCode.Code,
+            versionId,
+            version.VersionNumber));
+    }
+
+    /// <summary>
+    /// Idempotent startup helper: ensure the given version is dual-approved,
+    /// Active, and set as the live <see cref="ActiveVersionId"/>.
+    /// </summary>
+    public void PublishSeedVersion(Guid versionId)
+    {
+        var version = _versions.FirstOrDefault(v => v.Id == versionId)
+            ?? throw new InvalidOperationException($"Version '{versionId}' not found on this template.");
+
+        version.ApplySeedPublication();
         ActivateVersion(versionId);
 
         AddDomainEvent(new LeaseAgreementTemplatePublishedEvent(

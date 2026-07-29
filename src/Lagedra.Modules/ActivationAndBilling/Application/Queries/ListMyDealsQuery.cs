@@ -115,7 +115,10 @@ public sealed class ListMyDealsQueryHandler(
                 app.SubmittedAt,
                 app.TenantVerificationTierAtRequest,
                 app.DepositReason,
-                truthSurface?.IsSealed));
+                truthSurface?.IsSealed,
+                payment?.HostConfirmedDepositReturnedAt,
+                payment?.TenantConfirmedDepositReceivedAt,
+                payment?.DepositReturnSettledAt));
         }
 
         return Result<IReadOnlyList<DealSummaryDto>>.Success(results);

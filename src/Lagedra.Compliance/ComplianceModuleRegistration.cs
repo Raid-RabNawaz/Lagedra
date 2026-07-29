@@ -42,6 +42,18 @@ public static class ComplianceModuleRegistration
         services.AddDomainEventHandler<SharedKernel.Integration.Events.PositiveReviewEarnedEvent, OnPositiveReviewEarnedCreateSignalHandler>();
         services.AddDomainEventHandler<SharedKernel.Integration.Events.ReviewConcernRaisedEvent, OnReviewConcernRaisedCreateSignalHandler>();
 
+        // Trust ledger recorders — every event that moves a user's trust level
+        // must land in the ledger so the user-facing record is complete.
+        services.AddDomainEventHandler<SharedKernel.Integration.Events.EmailVerifiedEvent, OnEmailVerifiedRecordLedgerEntryHandler>();
+        services.AddDomainEventHandler<SharedKernel.Integration.Events.PhoneVerifiedEvent, OnPhoneVerifiedRecordLedgerEntryHandler>();
+        services.AddDomainEventHandler<SharedKernel.Integration.Events.IdentityVerifiedEvent, OnIdentityVerifiedRecordLedgerEntryHandler>();
+        services.AddDomainEventHandler<SharedKernel.Integration.Events.BackgroundCheckReceivedEvent, OnBackgroundCheckReceivedRecordLedgerEntryHandler>();
+        services.AddDomainEventHandler<SharedKernel.Integration.Events.PartnerEndorsementApprovedEvent, OnPartnerEndorsementApprovedRecordLedgerEntryHandler>();
+        services.AddDomainEventHandler<SharedKernel.Integration.Events.PartnerEndorsementRevokedEvent, OnPartnerEndorsementRevokedRecordLedgerEntryHandler>();
+        services.AddDomainEventHandler<SharedKernel.Integration.Events.PartnerEndorsementExpiredEvent, OnPartnerEndorsementExpiredRecordLedgerEntryHandler>();
+        services.AddDomainEventHandler<SharedKernel.Integration.Events.BookingCancelledEvent, OnBookingCancelledRecordLedgerEntryHandler>();
+        services.AddDomainEventHandler<SharedKernel.Integration.Events.ArbitrationRulingIssuedEvent, OnArbitrationRulingRecordLedgerEntryHandler>();
+
         return services;
     }
 }

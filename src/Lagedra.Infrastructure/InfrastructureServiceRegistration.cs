@@ -3,6 +3,7 @@ using Lagedra.Infrastructure.Caching;
 using Lagedra.Infrastructure.Eventing;
 using Lagedra.Infrastructure.External.Antivirus;
 using Lagedra.Infrastructure.External.Channels;
+using Lagedra.Infrastructure.External.Channels.Guesty;
 using Lagedra.Infrastructure.External.Channels.Hostaway;
 using Lagedra.Infrastructure.External.Channels.OwnerRez;
 using Lagedra.Infrastructure.External.Email;
@@ -52,16 +53,17 @@ public static class InfrastructureServiceRegistration
         // Data Protection
         services.AddLagedraDataProtection();
 
-        // Email
-        services.Configure<BrevoSmtpSettings>(
-            configuration.GetSection(BrevoSmtpSettings.SectionName));
-        services.AddScoped<IEmailService, MailKitEmailService>();
-
-        // SMS (Twilio Messaging API; no-op when credentials are missing)
+        // Twilio: SMS (Messaging API) + email (SendGrid)
         services.Configure<TwilioSettings>(
             configuration.GetSection(TwilioSettings.SectionName));
         var twilioSettings = configuration.GetSection(TwilioSettings.SectionName).Get<TwilioSettings>();
-        if (twilioSettings?.IsConfigured == true)
+
+        services.AddHttpClient<IEmailService, SendGridEmailService>(client =>
+        {
+            client.BaseAddress = new Uri("https://api.sendgrid.com/v3/");
+        });
+
+        if (twilioSettings?.IsSmsConfigured == true)
         {
             services.AddHttpClient<ISmsService, TwilioSmsService>(client =>
             {
@@ -139,6 +141,8 @@ public static class InfrastructureServiceRegistration
             configuration.GetSection(OwnerRezChannelSettings.SectionName));
         services.Configure<HostawayChannelSettings>(
             configuration.GetSection(HostawayChannelSettings.SectionName));
+        services.Configure<GuestyChannelSettings>(
+            configuration.GetSection(GuestyChannelSettings.SectionName));
 
         var ownerRezSettings = configuration
             .GetSection(OwnerRezChannelSettings.SectionName)
@@ -146,23 +150,18 @@ public static class InfrastructureServiceRegistration
         var hostawaySettings = configuration
             .GetSection(HostawayChannelSettings.SectionName)
             .Get<HostawayChannelSettings>() ?? new HostawayChannelSettings();
+        var guestySettings = configuration
+            .GetSection(GuestyChannelSettings.SectionName)
+            .Get<GuestyChannelSettings>() ?? new GuestyChannelSettings();
 
-        // The OwnerRez provider talks to the HAXML/HAOLB channel API over a typed
-        // HttpClient: channel-level credentials are sent as HTTP Basic auth and a
-        // descriptive User-Agent is required by OwnerRez. Per-host scoping uses
-        // the connection's advertiser id, not these static credentials.
+        // OwnerRez API v2: per-host account email + personal access token on
+        // ChannelConnection, sent as HTTP Basic per request. Only the API base
+        // URL is platform-level. OwnerRez requires a descriptive User-Agent.
         services.AddHttpClient<OwnerRezChannelProvider>(client =>
         {
             client.BaseAddress = ownerRezSettings.BaseUrl;
-            client.Timeout = TimeSpan.FromSeconds(30);
+            client.Timeout = TimeSpan.FromSeconds(60);
             client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", ownerRezSettings.UserAgent);
-            if (!string.IsNullOrWhiteSpace(ownerRezSettings.Username)
-                && !string.IsNullOrWhiteSpace(ownerRezSettings.Key))
-            {
-                var basic = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(
-                    $"{ownerRezSettings.Username}:{ownerRezSettings.Key}"));
-                client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", $"Basic {basic}");
-            }
         });
         services.AddScoped<IChannelProvider>(sp => sp.GetRequiredService<OwnerRezChannelProvider>());
 
@@ -176,6 +175,17 @@ public static class InfrastructureServiceRegistration
             client.DefaultRequestHeaders.TryAddWithoutValidation("Cache-control", "no-cache");
         });
         services.AddScoped<IChannelProvider>(sp => sp.GetRequiredService<HostawayChannelProvider>());
+
+        // Guesty Open API: per-host Client ID + Client Secret on ChannelConnection.
+        // Base URL is the Open API host (token at /oauth2/token, resources under /v1).
+        services.AddHttpClient<GuestyChannelProvider>(client =>
+        {
+            client.BaseAddress = guestySettings.BaseUrl;
+            client.Timeout = TimeSpan.FromSeconds(60);
+            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", guestySettings.UserAgent);
+            client.DefaultRequestHeaders.TryAddWithoutValidation("Cache-control", "no-cache");
+        });
+        services.AddScoped<IChannelProvider>(sp => sp.GetRequiredService<GuestyChannelProvider>());
 
         services.AddScoped<IChannelProviderRegistry, ChannelProviderRegistry>();
 

@@ -28,6 +28,7 @@ public static class LeaseAgreementsModuleRegistration
         services.AddScoped<ILeaseAgreementTemplateProvider, LeaseAgreementTemplateProvider>();
         services.AddScoped<ILeaseAgreementFiller, LeaseAgreementFiller>();
         services.AddScoped<IDealLeaseDocumentStore, DealLeaseDocumentStore>();
+        services.AddScoped<IDealLeasePdfService, DealLeasePdfService>();
         services.AddSingleton<ILeasePdfGenerator, LeasePdfGenerator>();
 
         services.AddDomainEventHandler<LeaseAgreementTemplatePublishedEvent, OnTemplatePublishedInvalidateCacheHandler>();

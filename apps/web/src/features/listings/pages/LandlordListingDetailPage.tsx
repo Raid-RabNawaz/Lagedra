@@ -133,7 +133,9 @@ export const LandlordListingDetailPage = () => {
 
   const isOwner = user?.userId === listing.landlordUserId;
   const isAdmin = user?.role === roles.platformAdmin;
-  const canManage = isOwner || isAdmin;
+  // Host listing write APIs are owner-only; admins can view and open the public page.
+  const canWrite = Boolean(isOwner);
+  const canViewActions = Boolean(isOwner || isAdmin);
 
   const cover =
     listing.photos.find((p) => p.isCover && p.url) ??
@@ -200,7 +202,7 @@ export const LandlordListingDetailPage = () => {
           </p>
         </div>
 
-        {canManage && (
+        {canViewActions && (
           <div className="flex flex-wrap gap-2 shrink-0">
             <Link
               to={`/listings/${listing.id}`}
@@ -211,14 +213,16 @@ export const LandlordListingDetailPage = () => {
               <ExternalLink className="h-4 w-4" />
               View public page
             </Link>
-            <Link
-              to={`/app/listings/${listing.id}/edit`}
-              className={cn(buttonVariants({ variant: "default" }))}
-            >
-              <Pencil className="h-4 w-4" />
-              Edit listing
-            </Link>
-            {canSubmit && (
+            {canWrite && (
+              <Link
+                to={`/app/listings/${listing.id}/edit`}
+                className={cn(buttonVariants({ variant: "default" }))}
+              >
+                <Pencil className="h-4 w-4" />
+                Edit listing
+              </Link>
+            )}
+            {canWrite && canSubmit && (
               <Button
                 variant="accent"
                 onClick={() => submitMutation.mutate()}
@@ -228,7 +232,7 @@ export const LandlordListingDetailPage = () => {
                 {submitMutation.isPending ? "Submitting..." : submitLabel}
               </Button>
             )}
-            {canClose && (
+            {canWrite && canClose && (
               <Button
                 variant="outline"
                 onClick={() => {
@@ -242,7 +246,7 @@ export const LandlordListingDetailPage = () => {
                 {closeMutation.isPending ? "Closing..." : "Close"}
               </Button>
             )}
-            {canDelete && (
+            {canWrite && canDelete && (
               <Button
                 variant="outline"
                 onClick={() => {
@@ -340,7 +344,7 @@ export const LandlordListingDetailPage = () => {
                   {photoCount}
                 </Badge>
               </CardTitle>
-              {canManage && (
+              {canWrite && (
                 <Link
                   to={`/app/listings/${listing.id}/edit`}
                   className="text-xs text-muted-foreground hover:text-foreground"
@@ -355,7 +359,7 @@ export const LandlordListingDetailPage = () => {
                   <div className="text-center">
                     <ImageOff className="mx-auto h-10 w-10 text-muted-foreground/40" />
                     <p className="mt-2 text-sm text-muted-foreground">No photos yet</p>
-                    {canManage && (
+                    {canWrite && (
                       <Link
                         to={`/app/listings/${listing.id}/edit`}
                         className={cn(buttonVariants({ variant: "outline", size: "sm" }), "mt-3")}
@@ -556,7 +560,7 @@ export const LandlordListingDetailPage = () => {
                 </li>
               </ul>
 
-              {canManage && (
+              {canWrite && (
                 <Link
                   to={`/app/listings/${listing.id}/edit`}
                   className={cn(buttonVariants({ variant: "outline", size: "sm" }), "w-full")}

@@ -134,6 +134,7 @@ export const ListingDetailPage = () => {
     .join("");
 
   const address = listing.preciseAddress;
+  const hasExactStreet = Boolean(address?.street?.trim());
   const locationText = address
     ? [address.city, address.state, address.country].filter(Boolean).join(", ")
     : null;
@@ -413,15 +414,15 @@ export const ListingDetailPage = () => {
                     <ListingApproxMap
                       latitude={listing.latitude}
                       longitude={listing.longitude}
-                      privacyRadiusMeters={address ? undefined : 350}
-                      showMarker={Boolean(address)}
+                      privacyRadiusMeters={hasExactStreet ? undefined : 350}
+                      showMarker={hasExactStreet}
                     />
                   </Suspense>
                 </div>
                 <p className="mt-2 text-xs text-muted-foreground">
-                  {address
-                    ? "Exact location is shown after your booking is confirmed."
-                    : "Approximate location is shown until the host shares the precise address."}
+                  {hasExactStreet
+                    ? "Exact street address is shown for this listing."
+                    : "Approximate area only — the full street address and host contact unlock after your booking is confirmed."}
                 </p>
               </section>
             </>

@@ -11,6 +11,10 @@ import {
   Star,
   XCircle,
   FileWarning,
+  Mail,
+  Phone,
+  Handshake,
+  Clock,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +23,8 @@ import { Loader } from "@/components/shared/Loader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { formatDate } from "@/utils/format";
 import { useDealLedger, useUserLedger } from "@/features/compliance/hooks/useCompliance";
+import { useMyVerificationTier } from "@/features/verification/hooks/useVerification";
+import { TrustLevelBadge } from "@/features/applications/components/TrustLevelBadge";
 import { useAuthStore } from "@/app/auth/authStore";
 import type { TrustLedgerEntryDto, TrustLedgerEntryType } from "@/api/types";
 
@@ -36,6 +42,12 @@ const entryConfig: Record<
   PositiveReview: { label: "Positive Review", icon: Star, color: "text-green-600", positive: true },
   ReviewConcern: { label: "Review Concern", icon: AlertTriangle, color: "text-amber-500", positive: false },
   IdentityVerified: { label: "Identity Verified", icon: UserCheck, color: "text-green-600", positive: true },
+  EmailVerified: { label: "Email Verified", icon: Mail, color: "text-green-600", positive: true },
+  PhoneVerified: { label: "Phone Verified", icon: Phone, color: "text-green-600", positive: true },
+  BackgroundCheckPassed: { label: "Background Check Passed", icon: ShieldCheck, color: "text-green-600", positive: true },
+  PartnerEndorsed: { label: "Partner Endorsement", icon: Handshake, color: "text-violet-600", positive: true },
+  PartnerEndorsementRevoked: { label: "Endorsement Revoked", icon: XCircle, color: "text-red-500", positive: false },
+  PartnerEndorsementExpired: { label: "Endorsement Expired", icon: Clock, color: "text-amber-500", positive: false },
 };
 
 function LedgerEntryRow({ entry }: { entry: TrustLedgerEntryDto }) {
@@ -182,6 +194,7 @@ export function UserTrustLedgerPage() {
   const user = useAuthStore((s) => s.user);
   const userId = user?.userId;
   const { data: entries, isLoading, error } = useUserLedger(userId);
+  const { data: tier } = useMyVerificationTier(Boolean(userId));
 
   if (isLoading) {
     return <Loader label="Loading your trust ledger..." />;
@@ -211,6 +224,8 @@ export function UserTrustLedgerPage() {
           </p>
         </div>
       </div>
+
+      {tier && <TrustLevelBadge tier={tier.tier} detailed />}
 
       <Card>
         <CardHeader className="pb-3">

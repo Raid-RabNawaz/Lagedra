@@ -6,7 +6,7 @@ public sealed class DeliveryLog : Entity<Guid>
 {
     public Guid NotificationId { get; private set; }
 
-    /// <summary>Provider message id (Brevo message id, Twilio SID, etc.).</summary>
+    /// <summary>Provider message id (SendGrid message id, Twilio SID, etc.).</summary>
     public string? ProviderMessageId { get; private set; }
 
     public DateTime? DeliveredAt { get; private set; }
