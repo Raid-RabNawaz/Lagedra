@@ -163,16 +163,14 @@ export function AuthedHeaderActions({
               </Link>
             )}
 
-            {!preLaunchLimited && (
-              <Link
-                to="/app/profile"
-                onClick={() => setOpen(false)}
-                className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
-              >
-                <User className="h-4 w-4" />
-                Profile & settings
-              </Link>
-            )}
+            <Link
+              to="/app/profile"
+              onClick={() => setOpen(false)}
+              className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+            >
+              <User className="h-4 w-4" />
+              Profile & settings
+            </Link>
 
             <button
               type="button"

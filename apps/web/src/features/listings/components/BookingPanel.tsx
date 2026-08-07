@@ -103,9 +103,9 @@ export const BookingPanel = ({ listing, isProspectiveGuest }: Props) => {
   const needsConsents =
     consents.data !== undefined && consents.data.hasRequired === false;
 
-  // Phase 17 — pre-booking inquiry hook. We only fetch for prospective
-  // guests (signed-in non-hosts); the host won't see an "ask a question"
-  // CTA on their own listing.
+  // Phase 17 — pre-booking inquiry. Listing CTA always says "Ask the host
+  // a question": open listing-scoped threads reopen; deal-linked history
+  // lives on the booking and is never continued from the listing page.
   const navigate = useNavigate();
   const existingInquiry = useMyListingInquiry(
     isProspectiveGuest ? listing.id : undefined,
@@ -306,11 +306,9 @@ export const BookingPanel = ({ listing, isProspectiveGuest }: Props) => {
       )}
 
       {/*
-       * Phase 17 — secondary "Ask the host a question" CTA. Lets the
-       * tenant start a pre-booking conversation without committing to
-       * an application. If they already have an open thread for this
-       * listing the same button reads "Continue conversation" and
-       * routes them back to the existing session.
+       * Pre-booking "Ask the host a question" CTA. Always the same label:
+       * once a prior thread is linked to a booking it is no longer returned
+       * by /inquiry/mine, so this starts a new listing-scoped thread.
        */}
       {isProspectiveGuest && (
         <Button
@@ -321,11 +319,7 @@ export const BookingPanel = ({ listing, isProspectiveGuest }: Props) => {
           disabled={startInquiry.isPending || existingInquiry.isLoading}
         >
           <MessageSquare className="h-4 w-4" />
-          {existingInquiry.data
-            ? "Continue conversation"
-            : startInquiry.isPending
-              ? "Starting…"
-              : "Ask the host a question"}
+          {startInquiry.isPending ? "Starting…" : "Ask the host a question"}
         </Button>
       )}
       {startInquiry.isError && (

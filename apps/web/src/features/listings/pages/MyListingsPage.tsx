@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -17,14 +17,17 @@ import {
   Trash2,
   Clock,
   AlertTriangle,
+  Loader2,
 } from "lucide-react";
 import { useMyListings } from "@/features/listings/hooks/useMyListings";
 import { listingApi } from "@/features/listings/services/listingApi";
 import type { ListingStatus, ListingSummaryDto } from "@/api/types";
+import { getApiErrorMessage } from "@/api/errors";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { FilterTabs } from "@/components/shared/FilterTabs";
 import { PageHeader } from "@/components/shared/PageHeader";
@@ -36,6 +39,21 @@ import { Building2, CheckCircle2 } from "lucide-react";
 import { HostChannelSyncButton } from "@/features/channels/components/HostChannelSyncButton";
 import { formatMoney, formatDate } from "@/utils/format";
 import { cn } from "@/lib/utils";
+
+function canSubmitForReview(status: ListingStatus): boolean {
+  return status === "Draft" || status === "Denied";
+}
+
+type BulkSubmitFailure = {
+  id: string;
+  title: string;
+  message: string;
+};
+
+type BulkSubmitOutcome = {
+  succeeded: number;
+  failures: BulkSubmitFailure[];
+};
 
 const statusVariant: Record<string, "secondary" | "success" | "accent" | "outline" | "default" | "destructive"> = {
   Draft: "secondary",
@@ -74,6 +92,9 @@ export const MyListingsPage = () => {
   const [search, setSearch] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
   const [syncNote, setSyncNote] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [bulkProgress, setBulkProgress] = useState<{ done: number; total: number } | null>(null);
+  const [bulkOutcome, setBulkOutcome] = useState<BulkSubmitOutcome | null>(null);
 
   // Memoise so identity is stable across renders (otherwise the `useMemo`s
   // below would recompute every render due to a fresh `[]` reference).
@@ -94,7 +115,30 @@ export const MyListingsPage = () => {
     });
   }, [items, tab, search]);
 
+  const selectableFiltered = useMemo(
+    () => filtered.filter((l) => canSubmitForReview(l.status)),
+    [filtered],
+  );
+
+  // Drop selections that are no longer eligible (status changed, filtered out,
+  // or deleted) so the toolbar never claims to act on invisible listings.
+  useEffect(() => {
+    const eligible = new Set(selectableFiltered.map((l) => l.id));
+    setSelectedIds((prev) => {
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (eligible.has(id)) next.add(id);
+        else changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [selectableFiltered]);
+
   const activeTabLabel = tabs.find((t) => t.value === tab)?.label ?? "All";
+  const allSelectableSelected =
+    selectableFiltered.length > 0 && selectableFiltered.every((l) => selectedIds.has(l.id));
+  const selectedCount = selectedIds.size;
 
   const submitMutation = useMutation({
     mutationFn: (id: string) => listingApi.submitForReview(id),
@@ -103,10 +147,7 @@ export const MyListingsPage = () => {
       void queryClient.invalidateQueries({ queryKey: ["listings", "mine"] });
     },
     onError: (err: unknown) => {
-      const detail =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
-        (err instanceof Error ? err.message : "Failed to submit listing for review.");
-      setActionError(detail);
+      setActionError(getApiErrorMessage(err, "Failed to submit listing for review."));
     },
   });
 
@@ -117,10 +158,7 @@ export const MyListingsPage = () => {
       void queryClient.invalidateQueries({ queryKey: ["listings", "mine"] });
     },
     onError: (err: unknown) => {
-      const detail =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
-        (err instanceof Error ? err.message : "Failed to close listing.");
-      setActionError(detail);
+      setActionError(getApiErrorMessage(err, "Failed to close listing."));
     },
   });
 
@@ -131,14 +169,77 @@ export const MyListingsPage = () => {
       void queryClient.invalidateQueries({ queryKey: ["listings", "mine"] });
     },
     onError: (err: unknown) => {
-      const detail =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
-        (err instanceof Error ? err.message : "Failed to delete listing.");
-      setActionError(detail);
+      setActionError(getApiErrorMessage(err, "Failed to delete listing."));
     },
   });
 
-  const isMutating = submitMutation.isPending || closeMutation.isPending || deleteMutation.isPending;
+  const bulkSubmitMutation = useMutation({
+    mutationFn: async (listings: ListingSummaryDto[]) => {
+      setBulkProgress({ done: 0, total: listings.length });
+      let succeeded = 0;
+      const failures: BulkSubmitFailure[] = [];
+
+      for (const listing of listings) {
+        try {
+          await listingApi.submitForReview(listing.id);
+          succeeded += 1;
+        } catch (error) {
+          failures.push({
+            id: listing.id,
+            title: listing.title,
+            message: getApiErrorMessage(error, "Failed to submit listing for review."),
+          });
+        }
+        setBulkProgress((p) =>
+          p ? { ...p, done: Math.min(p.done + 1, p.total) } : p,
+        );
+      }
+
+      return { succeeded, failures } satisfies BulkSubmitOutcome;
+    },
+    onSuccess: (outcome) => {
+      setActionError(null);
+      setBulkOutcome(outcome);
+      setSelectedIds(new Set());
+      void queryClient.invalidateQueries({ queryKey: ["listings", "mine"] });
+    },
+    onSettled: () => {
+      setBulkProgress(null);
+    },
+  });
+
+  const isMutating =
+    submitMutation.isPending ||
+    closeMutation.isPending ||
+    deleteMutation.isPending ||
+    bulkSubmitMutation.isPending;
+
+  const toggleSelected = (id: string, checked: boolean) => {
+    setBulkOutcome(null);
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (checked: boolean) => {
+    setBulkOutcome(null);
+    if (!checked) {
+      setSelectedIds(new Set());
+      return;
+    }
+    setSelectedIds(new Set(selectableFiltered.map((l) => l.id)));
+  };
+
+  const handleBulkSubmit = () => {
+    const selected = selectableFiltered.filter((l) => selectedIds.has(l.id));
+    if (selected.length === 0) return;
+    setBulkOutcome(null);
+    setActionError(null);
+    bulkSubmitMutation.mutate(selected);
+  };
 
   return (
     <div className="space-y-6">
@@ -173,6 +274,39 @@ export const MyListingsPage = () => {
         <Alert variant="success">
           <CheckCircle2 className="h-4 w-4" />
           <AlertDescription>{syncNote}</AlertDescription>
+        </Alert>
+      )}
+
+      {bulkOutcome && (
+        <Alert variant={bulkOutcome.failures.length > 0 ? "destructive" : "success"}>
+          {bulkOutcome.failures.length === 0 ? (
+            <CheckCircle2 className="h-4 w-4" />
+          ) : (
+            <AlertTriangle className="h-4 w-4" />
+          )}
+          <AlertDescription>
+            <div className="space-y-2">
+              <p>
+                {bulkOutcome.succeeded > 0
+                  ? `${bulkOutcome.succeeded} listing${bulkOutcome.succeeded === 1 ? "" : "s"} submitted for review.`
+                  : "No listings were submitted."}
+                {bulkOutcome.failures.length > 0
+                  ? ` ${bulkOutcome.failures.length} could not be submitted.`
+                  : ""}
+              </p>
+              {bulkOutcome.failures.length > 0 && (
+                <ul className="list-disc space-y-1 pl-5 text-sm">
+                  {bulkOutcome.failures.map((failure) => (
+                    <li key={failure.id}>
+                      <span className="font-medium">{failure.title}</span>
+                      {" — "}
+                      {failure.message}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </AlertDescription>
         </Alert>
       )}
 
@@ -229,6 +363,60 @@ export const MyListingsPage = () => {
             </div>
           </div>
 
+          {selectableFiltered.length > 0 && (
+            <div className="flex flex-col gap-3 rounded-xl border bg-muted/30 p-3 sm:flex-row sm:items-center sm:justify-between">
+              <label className="flex items-center gap-2 text-sm">
+                <Checkbox
+                  checked={allSelectableSelected}
+                  onCheckedChange={(checked) => toggleSelectAll(checked)}
+                  disabled={isMutating}
+                  aria-label="Select all listings that can be submitted for review"
+                />
+                <span>
+                  {selectedCount > 0
+                    ? `${selectedCount} selected`
+                    : `Select drafts & listings needing changes`}
+                  <span className="text-muted-foreground">
+                    {" "}
+                    ({selectableFiltered.length} eligible)
+                  </span>
+                </span>
+              </label>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {selectedCount > 0 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedIds(new Set())}
+                    disabled={isMutating}
+                  >
+                    Clear
+                  </Button>
+                )}
+                <Button
+                  type="button"
+                  variant="accent"
+                  size="sm"
+                  onClick={handleBulkSubmit}
+                  disabled={selectedCount === 0 || isMutating}
+                >
+                  {bulkSubmitMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Send className="h-4 w-4" />
+                  )}
+                  {bulkSubmitMutation.isPending && bulkProgress
+                    ? `Submitting ${bulkProgress.done} of ${bulkProgress.total}...`
+                    : selectedCount > 0
+                      ? `Submit ${selectedCount} for review`
+                      : "Submit for review"}
+                </Button>
+              </div>
+            </div>
+          )}
+
           {filtered.length === 0 ? (
             <EmptyState
               title={search ? "No matching listings" : `No ${activeTabLabel.toLowerCase()} listings`}
@@ -256,7 +444,12 @@ export const MyListingsPage = () => {
                 <ListingRowCard
                   key={l.id}
                   listing={l}
-                  onSubmitForReview={() => submitMutation.mutate(l.id)}
+                  selected={selectedIds.has(l.id)}
+                  onSelectedChange={(checked) => toggleSelected(l.id, checked)}
+                  onSubmitForReview={() => {
+                    setBulkOutcome(null);
+                    submitMutation.mutate(l.id);
+                  }}
                   onClose={() => {
                     if (window.confirm("Close this listing? It will no longer appear in search.")) {
                       closeMutation.mutate(l.id);
@@ -280,57 +473,83 @@ export const MyListingsPage = () => {
 
 function ListingRowCard({
   listing,
+  selected,
+  onSelectedChange,
   onSubmitForReview,
   onClose,
   onDelete,
   isMutating,
 }: {
   listing: ListingSummaryDto;
+  selected: boolean;
+  onSelectedChange: (checked: boolean) => void;
   onSubmitForReview: () => void;
   onClose: () => void;
   onDelete: () => void;
   isMutating: boolean;
 }) {
-  const canSubmit = listing.status === "Draft" || listing.status === "Denied";
+  const canSubmit = canSubmitForReview(listing.status);
   const canClose = listing.status === "Published" || listing.status === "Activated";
   const canDelete = listing.status === "Draft" || listing.status === "Denied";
   const submitLabel = listing.status === "Denied" ? "Resubmit" : "Submit for review";
 
   return (
-    <Card className="overflow-hidden transition-shadow hover:shadow-md">
-      <Link
-        to={`/app/listings/${listing.id}`}
-        aria-label={`Open ${listing.title}`}
-        className="block aspect-[16/10] overflow-hidden bg-muted relative"
-      >
-        {listing.coverPhotoUrl ? (
-          <img
-            src={listing.coverPhotoUrl}
-            alt={listing.title}
-            className="h-full w-full object-cover transition-transform hover:scale-[1.02]"
-            loading="lazy"
-          />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center">
-            <ImageOff className="h-10 w-10 text-muted-foreground/40" />
-          </div>
-        )}
-        <div className="absolute left-3 top-3">
-          <Badge variant={statusVariant[listing.status] ?? "secondary"}>
-            {listing.status === "InReview" && <Clock className="h-3 w-3" />}
-            {listing.status === "Denied" && <AlertTriangle className="h-3 w-3" />}
-            {statusLabel[listing.status] ?? listing.status}
-          </Badge>
-        </div>
-        {listing.qualityScore != null && (
-          <div className="absolute right-3 top-3">
-            <Badge variant="secondary" className="gap-1 bg-background/90 backdrop-blur">
-              <Sparkles className="h-3 w-3" />
-              {Math.round(listing.qualityScore)}
+    <Card
+      className={cn(
+        "transition-shadow hover:shadow-md",
+        selected && "ring-2 ring-primary/40",
+      )}
+    >
+      <div className="relative">
+        <Link
+          to={`/app/listings/${listing.id}`}
+          aria-label={`Open ${listing.title}`}
+          className="block aspect-[16/10] overflow-hidden rounded-t-xl bg-muted relative"
+        >
+          {listing.coverPhotoUrl ? (
+            <img
+              src={listing.coverPhotoUrl}
+              alt={listing.title}
+              className="h-full w-full object-cover transition-transform hover:scale-[1.02]"
+              loading="lazy"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center">
+              <ImageOff className="h-10 w-10 text-muted-foreground/40" />
+            </div>
+          )}
+          <div className="absolute left-3 top-3">
+            <Badge variant={statusVariant[listing.status] ?? "secondary"}>
+              {listing.status === "InReview" && <Clock className="h-3 w-3" />}
+              {listing.status === "Denied" && <AlertTriangle className="h-3 w-3" />}
+              {statusLabel[listing.status] ?? listing.status}
             </Badge>
           </div>
+          {listing.qualityScore != null && (
+            <div className="absolute right-3 top-3">
+              <Badge variant="secondary" className="gap-1 bg-background/90 backdrop-blur">
+                <Sparkles className="h-3 w-3" />
+                {Math.round(listing.qualityScore)}
+              </Badge>
+            </div>
+          )}
+        </Link>
+
+        {canSubmit && (
+          <label
+            className="absolute left-3 bottom-3 z-10 flex items-center gap-2 rounded-md bg-background/95 px-2 py-1.5 text-xs font-medium shadow-sm backdrop-blur"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Checkbox
+              checked={selected}
+              onCheckedChange={(checked) => onSelectedChange(checked)}
+              disabled={isMutating}
+              aria-label={`Select ${listing.title}`}
+            />
+            Select
+          </label>
         )}
-      </Link>
+      </div>
 
       <CardContent className="space-y-3 p-4">
         <div>
@@ -360,21 +579,47 @@ function ListingRowCard({
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Link
-            to={`/app/listings/${listing.id}`}
-            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "flex-1")}
-          >
-            <Eye className="h-4 w-4" />
-            View
-          </Link>
-          <Link
-            to={`/app/listings/${listing.id}/edit`}
-            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "flex-1")}
-          >
-            <Pencil className="h-4 w-4" />
-            Edit
-          </Link>
+        <div className="space-y-2">
+          <div className="flex items-center gap-2">
+            <Link
+              to={`/app/listings/${listing.id}`}
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "flex-1")}
+            >
+              <Eye className="h-4 w-4" />
+              View
+            </Link>
+            <Link
+              to={`/app/listings/${listing.id}/edit`}
+              className={cn(buttonVariants({ variant: "outline", size: "sm" }), "flex-1")}
+            >
+              <Pencil className="h-4 w-4" />
+              Edit
+            </Link>
+            {canClose && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={onClose}
+                disabled={isMutating}
+                title="Close listing"
+              >
+                <Ban className="h-4 w-4" />
+                Close
+              </Button>
+            )}
+            {canDelete && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={onDelete}
+                disabled={isMutating}
+                title="Delete listing permanently"
+                className="shrink-0 text-destructive hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
           {canSubmit && (
             <Button
               variant="accent"
@@ -382,33 +627,10 @@ function ListingRowCard({
               onClick={onSubmitForReview}
               disabled={isMutating}
               title="Submit to admins for review"
+              className="w-full"
             >
               <Send className="h-4 w-4" />
               {submitLabel}
-            </Button>
-          )}
-          {canClose && (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onClose}
-              disabled={isMutating}
-              title="Close listing"
-            >
-              <Ban className="h-4 w-4" />
-              Close
-            </Button>
-          )}
-          {canDelete && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onDelete}
-              disabled={isMutating}
-              title="Delete listing permanently"
-              className="text-destructive hover:text-destructive"
-            >
-              <Trash2 className="h-4 w-4" />
             </Button>
           )}
         </div>

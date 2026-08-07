@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
@@ -19,12 +19,15 @@ import { Loader } from "@/components/shared/Loader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { usePublicConfigStore } from "@/app/config/publicConfigStore";
 import { getApiErrorMessage } from "@/api/errors";
+import { DisconnectChannelButton } from "@/features/channels/components/DisconnectChannelButton";
 import {
   useChannelConnections,
   useConnectChannel,
   useSyncChannel,
   useSetChannelEnabled,
   useChannelListings,
+  useChannelProviders,
+  useStartOwnerRezOAuth,
 } from "@/features/channels/hooks/useChannels";
 import type {
   ChannelConnectionDto,
@@ -47,11 +50,13 @@ import {
 const OWNERREZ_PROVIDER_KEY = "ownerrez";
 const HOSTAWAY_PROVIDER_KEY = "hostaway";
 const GUESTY_PROVIDER_KEY = "guesty";
+const SMOOBU_PROVIDER_KEY = "smoobu";
 
 const PROVIDER_LABELS: Record<string, string> = {
   [OWNERREZ_PROVIDER_KEY]: "OwnerRez",
   [HOSTAWAY_PROVIDER_KEY]: "Hostaway",
   [GUESTY_PROVIDER_KEY]: "Guesty",
+  [SMOOBU_PROVIDER_KEY]: "Smoobu",
 };
 
 function providerLabel(key: string): string {
@@ -71,12 +76,16 @@ export function ChannelsPage() {
   const ownerRezConnection = (connections ?? []).find(
     (c) => c.providerKey.toLowerCase() === OWNERREZ_PROVIDER_KEY,
   );
+  const smoobuConnection = (connections ?? []).find(
+    (c) => c.providerKey.toLowerCase() === SMOOBU_PROVIDER_KEY,
+  );
   const otherConnections = (connections ?? []).filter((c) => {
     const key = c.providerKey.toLowerCase();
     return (
       key !== HOSTAWAY_PROVIDER_KEY &&
       key !== GUESTY_PROVIDER_KEY &&
-      key !== OWNERREZ_PROVIDER_KEY
+      key !== OWNERREZ_PROVIDER_KEY &&
+      key !== SMOOBU_PROVIDER_KEY
     );
   });
 
@@ -86,10 +95,12 @@ export function ChannelsPage() {
         <h1 className="text-2xl font-bold tracking-tight">Import from your PMS</h1>
         <p className="mt-1 text-muted-foreground">
           {preLaunchEnabled
-            ? "Connect Hostaway, Guesty, or OwnerRez once and Lagedra will pull your properties in as draft listings. Sync anytime to update existing listings and import new ones."
+            ? "Connect Hostaway or OwnerRez once and Lagedra will pull your properties in as draft listings. Sync anytime to update existing listings and import new ones. More channels are on the way."
             : "Connect a PMS once, then sync anytime to update existing listings and import new ones. Once live, paid bookings are pushed back to your PMS automatically."}
         </p>
       </div>
+
+      <OwnerRezReturnNotice />
 
       <div className="grid gap-4">
         {isLoading ? (
@@ -101,15 +112,24 @@ export function ChannelsPage() {
             ) : (
               <ConnectHostawayCard />
             )}
-            {guestyConnection ? (
-              <GuestyConnectedCard connection={guestyConnection} />
-            ) : (
-              <ConnectGuestyCard />
-            )}
             {ownerRezConnection ? (
               <OwnerRezConnectedCard connection={ownerRezConnection} />
             ) : (
               <ConnectOwnerRezCard />
+            )}
+            {guestyConnection ? (
+              <GuestyConnectedCard connection={guestyConnection} />
+            ) : preLaunchEnabled ? (
+              <ComingSoonChannelCard providerName="Guesty" />
+            ) : (
+              <ConnectGuestyCard />
+            )}
+            {smoobuConnection ? (
+              <SmoobuConnectedCard connection={smoobuConnection} />
+            ) : preLaunchEnabled ? (
+              <ComingSoonChannelCard providerName="Smoobu" />
+            ) : (
+              <ConnectSmoobuCard />
             )}
           </>
         )}
@@ -131,18 +151,113 @@ export function ChannelsPage() {
         !hostawayConnection &&
         !guestyConnection &&
         !ownerRezConnection &&
+        !smoobuConnection &&
         otherConnections.length === 0 && (
         <>
           <Separator />
           <EmptyState
             title="No channels connected yet"
-            description="Connect Hostaway, Guesty, or OwnerRez above to import your listings into Lagedra."
+            description={
+              preLaunchEnabled
+                ? "Connect Hostaway or OwnerRez above to import your listings into Lagedra."
+                : "Connect Hostaway, Guesty, OwnerRez, or Smoobu above to import your listings into Lagedra."
+            }
           />
         </>
       )}
 
       <HowItWorks />
     </div>
+  );
+}
+
+/**
+ * Reports how the OwnerRez authorization went once OwnerRez has redirected the
+ * host back here, and imports their properties straight away so a successful
+ * connection lands them on listings rather than on an empty card.
+ *
+ * The query parameters are cleared immediately so reloading the page does not
+ * replay the message.
+ */
+function OwnerRezReturnNotice() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const sync = useSyncChannel();
+  const [outcome, setOutcome] = useState<{
+    variant: "success" | "destructive";
+    message: string;
+  } | null>(null);
+  const handled = useRef(false);
+
+  const result = searchParams.get("ownerrez");
+  const connectionId = searchParams.get("connection");
+
+  useEffect(() => {
+    if (!result || handled.current) {
+      return;
+    }
+    handled.current = true;
+
+    const params = new URLSearchParams(searchParams);
+    params.delete("ownerrez");
+    params.delete("connection");
+    params.delete("reason");
+    setSearchParams(params, { replace: true });
+
+    if (result === "denied") {
+      setOutcome({
+        variant: "destructive",
+        message:
+          "OwnerRez access was not approved, so nothing was connected. You can try again whenever you are ready.",
+      });
+      return;
+    }
+
+    if (result !== "connected" || !connectionId) {
+      setOutcome({
+        variant: "destructive",
+        message:
+          "We could not finish connecting OwnerRez. Please start the connection again.",
+      });
+      return;
+    }
+
+    setOutcome({
+      variant: "success",
+      message: "OwnerRez connected. Importing your properties...",
+    });
+
+    sync
+      .mutateAsync(connectionId)
+      .then((syncResult) => {
+        setOutcome({
+          variant: "success",
+          message: formatOwnerRezSyncSuccess(syncResult, "OwnerRez connected. "),
+        });
+      })
+      .catch((e: unknown) => {
+        setOutcome({
+          variant: "destructive",
+          message: getApiErrorMessage(
+            e,
+            "OwnerRez is connected, but importing your listings failed. Use Sync from OwnerRez to try again.",
+          ),
+        });
+      });
+  }, [result, connectionId, searchParams, setSearchParams, sync]);
+
+  if (!outcome) {
+    return null;
+  }
+
+  return (
+    <Alert variant={outcome.variant}>
+      {outcome.variant === "success" ? (
+        <CheckCircle2 className="h-4 w-4" />
+      ) : (
+        <AlertTriangle className="h-4 w-4" />
+      )}
+      <AlertDescription>{outcome.message}</AlertDescription>
+    </Alert>
   );
 }
 
@@ -251,6 +366,12 @@ function OwnerRezConnectedCard({
             count={listings.data?.length}
             onToggle={() => setExpanded((v) => !v)}
           />
+          <DisconnectChannelButton
+            connectionId={connection.id}
+            providerLabel="OwnerRez"
+            listingCount={listings.data?.length}
+            disabled={busy}
+          />
         </div>
 
         {expanded && (
@@ -265,7 +386,104 @@ function OwnerRezConnectedCard({
   );
 }
 
+/**
+ * OwnerRez can be linked two ways, and which one is live is a server-side
+ * decision: once an OwnerRez OAuth app is configured, `usesOAuth` flips and the
+ * redirect flow replaces the token form. Until then hosts paste an account email
+ * and personal access token.
+ *
+ * Worth knowing about the token path: OwnerRez rate limits personal access
+ * tokens to two different accounts per IP address per 24 hours, so it does not
+ * scale past a small pilot — see
+ * https://www.ownerrez.com/support/articles/api-auth.
+ */
 function ConnectOwnerRezCard() {
+  const providers = useChannelProviders();
+  const usesOAuth = providers.data?.some(
+    (p) => p.providerKey.toLowerCase() === OWNERREZ_PROVIDER_KEY && p.usesOAuth,
+  );
+
+  // Wait for the answer rather than flashing the wrong card at a host who is
+  // part-way through reading the instructions.
+  if (providers.isLoading) {
+    return (
+      <Card>
+        <CardContent className="py-6">
+          <Loader label="Loading OwnerRez connection options..." />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return usesOAuth ? <ConnectOwnerRezOAuthCard /> : <ConnectOwnerRezTokenCard />;
+}
+
+function ConnectOwnerRezOAuthCard() {
+  const start = useStartOwnerRezOAuth();
+  const [error, setError] = useState<string | null>(null);
+
+  const handleConnect = async () => {
+    setError(null);
+    try {
+      const { authorizationUrl } = await start.mutateAsync();
+      window.location.assign(authorizationUrl);
+    } catch (e) {
+      setError(
+        getApiErrorMessage(
+          e,
+          "Could not start the OwnerRez connection. Please try again.",
+        ),
+      );
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center gap-2">
+          <Plug className="h-5 w-5" />
+          Connect OwnerRez
+        </CardTitle>
+        <CardDescription>
+          Approve Lagedra in your OwnerRez account once. No API keys to copy, and
+          you can withdraw access from either side at any time.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {error && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+
+        <ol className="list-decimal space-y-2 pl-4 text-sm text-muted-foreground">
+          <li>
+            Click <span className="text-foreground">Connect with OwnerRez</span>.
+            We&apos;ll send you to OwnerRez to sign in.
+          </li>
+          <li>
+            Approve access for Lagedra. OwnerRez then returns you straight back
+            here.
+          </li>
+          <li>Your active OwnerRez properties are imported as draft listings.</li>
+          <li>
+            After that, use{" "}
+            <span className="text-foreground">Sync from OwnerRez</span> anytime
+            to update existing listings and import new ones.
+          </li>
+        </ol>
+
+        <Button onClick={handleConnect} disabled={start.isPending} className="gap-2">
+          <Link2 className="h-4 w-4" />
+          {start.isPending ? "Redirecting..." : "Connect with OwnerRez"}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ConnectOwnerRezTokenCard() {
   const connect = useConnectChannel();
   const sync = useSyncChannel();
 
@@ -287,7 +505,7 @@ function ConnectOwnerRezCard() {
       return;
     }
     if (!accessToken.trim()) {
-      setError("Enter your OwnerRez personal access token.");
+      setError("Enter your OwnerRez API key.");
       return;
     }
 
@@ -309,7 +527,7 @@ function ConnectOwnerRezCard() {
       setError(
         getApiErrorMessage(
           e,
-          "Could not connect to OwnerRez. Check your email and access token.",
+          "Could not connect to OwnerRez. Check your sign-in email and API key.",
         ),
       );
     }
@@ -323,8 +541,8 @@ function ConnectOwnerRezCard() {
           Connect OwnerRez
         </CardTitle>
         <CardDescription>
-          Connect once with an OwnerRez personal access token. After that
-          you&apos;ll only need Sync to refresh listings.
+          Connect once with an OwnerRez API key. After that you&apos;ll only need
+          Sync to refresh listings.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -345,18 +563,19 @@ function ConnectOwnerRezCard() {
           <li>
             In OwnerRez, go to{" "}
             <span className="text-foreground">
-              Settings → Application Access → Personal Access Tokens
+              Settings → Advanced Tools → Developer/API Settings
             </span>
             .
           </li>
           <li>
-            Create a token for Lagedra and copy it. It starts with{" "}
-            <code className="text-[11px]">pt_</code> and is shown only once —
-            Lagedra encrypts it and never shows it again.
+            Create an API key (OwnerRez calls it a personal access token) and copy
+            it. It starts with <code className="text-[11px]">pt_</code> and is shown
+            only once — Lagedra encrypts it and never shows it again.
           </li>
           <li>
-            Paste the token below along with the email address you use to sign in
-            to OwnerRez.
+            Paste the key below along with the email address you sign in to
+            OwnerRez with. OwnerRez identifies the account by that email, not by
+            your numeric user id.
           </li>
           <li>
             Click <span className="text-foreground">Connect &amp; import listings</span>.
@@ -371,7 +590,7 @@ function ConnectOwnerRezCard() {
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label htmlFor="or-email">OwnerRez account email</Label>
+            <Label htmlFor="or-email">OwnerRez sign-in email</Label>
             <Input
               id="or-email"
               type="email"
@@ -394,7 +613,7 @@ function ConnectOwnerRezCard() {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="or-token">Personal access token</Label>
+          <Label htmlFor="or-token">API key</Label>
           <Input
             id="or-token"
             type="password"
@@ -528,6 +747,12 @@ function HostawayConnectedCard({
             expanded={expanded}
             count={listings.data?.length}
             onToggle={() => setExpanded((v) => !v)}
+          />
+          <DisconnectChannelButton
+            connectionId={connection.id}
+            providerLabel="Hostaway"
+            listingCount={listings.data?.length}
+            disabled={busy}
           />
         </div>
 
@@ -802,6 +1027,12 @@ function GuestyConnectedCard({
             count={listings.data?.length}
             onToggle={() => setExpanded((v) => !v)}
           />
+          <DisconnectChannelButton
+            connectionId={connection.id}
+            providerLabel="Guesty"
+            listingCount={listings.data?.length}
+            disabled={busy}
+          />
         </div>
 
         {expanded && (
@@ -958,6 +1189,305 @@ function ConnectGuestyCard() {
   );
 }
 
+function formatSmoobuSyncSuccess(
+  result: ChannelSyncResultDto,
+  prefix: string,
+): string {
+  const importPart =
+    result.pulled > 0
+      ? `Imported ${result.created} new and updated ${result.updated} listing(s) as drafts.`
+      : "No listings were found yet — try syncing again once properties are active in Smoobu.";
+  return `${prefix}${importPart}`;
+}
+
+function SmoobuConnectedCard({
+  connection,
+}: {
+  connection: ChannelConnectionDto;
+}) {
+  const sync = useSyncChannel();
+  const setEnabled = useSetChannelEnabled();
+  const [expanded, setExpanded] = useState(false);
+  const listings = useChannelListings(connection.id);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const disabled = connection.status === "Disabled";
+  const busy = sync.isPending || setEnabled.isPending;
+
+  const handleSync = async () => {
+    setError(null);
+    setSuccess(null);
+    try {
+      const result = await sync.mutateAsync(connection.id);
+      setSuccess(
+        formatSmoobuSyncSuccess(
+          result,
+          "Synced. Updates existing drafts and imports any new Smoobu properties. ",
+        ),
+      );
+    } catch (e) {
+      setError(getApiErrorMessage(e, "Sync failed. Please try again."));
+    }
+  };
+
+  const handleToggle = async () => {
+    setError(null);
+    try {
+      await setEnabled.mutateAsync({ id: connection.id, enabled: disabled });
+    } catch (e) {
+      setError(getApiErrorMessage(e, "Could not update the connection."));
+    }
+  };
+
+  return (
+    <Card className="border-primary/20 bg-primary/5">
+      <CardHeader>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Building2 className="h-5 w-5" />
+              Smoobu connected
+            </CardTitle>
+            <CardDescription className="mt-0.5">
+              {connection.displayName} · {connection.externalAccountId}
+            </CardDescription>
+          </div>
+          <StatusBadge status={connection.status} />
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {error && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        {success && (
+          <Alert variant="success">
+            <CheckCircle2 className="h-4 w-4" />
+            <AlertDescription>{success}</AlertDescription>
+          </Alert>
+        )}
+        {connection.lastError && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>{connection.lastError}</AlertDescription>
+          </Alert>
+        )}
+
+        <p className="text-sm text-muted-foreground">
+          Sync updates listings already imported from Smoobu and pulls in any
+          new ones as drafts. Last sync: {formatDate(connection.lastContentSyncAt)}.
+        </p>
+
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={handleSync} disabled={busy || disabled} className="gap-2">
+            <RefreshCw className={sync.isPending ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+            {sync.isPending ? "Syncing..." : "Sync from Smoobu"}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleToggle}
+            disabled={busy}
+          >
+            {disabled ? "Enable" : "Disable"}
+          </Button>
+          <ImportedListingsToggle
+            expanded={expanded}
+            count={listings.data?.length}
+            onToggle={() => setExpanded((v) => !v)}
+          />
+          <DisconnectChannelButton
+            connectionId={connection.id}
+            providerLabel="Smoobu"
+            listingCount={listings.data?.length}
+            disabled={busy}
+          />
+        </div>
+
+        {expanded && (
+          <ImportedListingsList
+            listings={listings.data}
+            isLoading={listings.isLoading}
+            providerLabel="Smoobu"
+          />
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ConnectSmoobuCard() {
+  const connect = useConnectChannel();
+  const sync = useSyncChannel();
+
+  const [displayName, setDisplayName] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [apiSecret, setApiSecret] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const busy = connect.isPending || sync.isPending;
+
+  const handleConnect = async () => {
+    setError(null);
+    setSuccess(null);
+
+    const trimmedApiKey = apiKey.trim();
+    if (!trimmedApiKey) {
+      setError("Enter your Smoobu API key.");
+      return;
+    }
+    if (!apiSecret.trim()) {
+      setError("Enter your Smoobu API secret.");
+      return;
+    }
+
+    try {
+      const connection = await connect.mutateAsync({
+        providerKey: SMOOBU_PROVIDER_KEY,
+        externalAccountId: trimmedApiKey,
+        displayName: displayName.trim() || "Smoobu",
+        secret: apiSecret.trim(),
+      });
+
+      const result = await sync.mutateAsync(connection.id);
+      setDisplayName("");
+      setApiKey("");
+      setApiSecret("");
+      setSuccess(formatSmoobuSyncSuccess(result, "Connected. "));
+    } catch (e) {
+      setError(
+        getApiErrorMessage(
+          e,
+          "Could not connect to Smoobu. Check your API key and API secret.",
+        ),
+      );
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center gap-2">
+          <Plug className="h-5 w-5" />
+          Connect Smoobu
+        </CardTitle>
+        <CardDescription>
+          Connect once with a Smoobu API key and secret. After that you&apos;ll
+          only need Sync to refresh listings.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {error && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        {success && (
+          <Alert variant="success">
+            <CheckCircle2 className="h-4 w-4" />
+            <AlertDescription>{success}</AlertDescription>
+          </Alert>
+        )}
+
+        <ol className="list-decimal space-y-2 pl-4 text-sm text-muted-foreground">
+          <li>
+            In Smoobu, go to{" "}
+            <span className="text-foreground">
+              Settings → Advanced → API Keys
+            </span>{" "}
+            and click <span className="text-foreground">Create API Key</span>.
+          </li>
+          <li>
+            Use <span className="text-foreground">Generate Secret</span> to
+            create the API secret. It is shown only once — paste both below.
+            Lagedra encrypts them and never shows them again.
+          </li>
+          <li>
+            Click <span className="text-foreground">Connect &amp; import listings</span>.
+            Your Smoobu properties are imported as draft listings.
+          </li>
+          <li>
+            After connecting, use{" "}
+            <span className="text-foreground">Sync from Smoobu</span> anytime to
+            update existing listings and import new ones.
+          </li>
+        </ol>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="sb-apiKey">Smoobu API key</Label>
+            <Input
+              id="sb-apiKey"
+              placeholder="usr_live_..."
+              value={apiKey}
+              onChange={(e) => setApiKey(e.target.value)}
+              autoComplete="off"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="sb-displayName">Label (optional)</Label>
+            <Input
+              id="sb-displayName"
+              placeholder="My Smoobu account"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              autoComplete="off"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="sb-secret">API secret</Label>
+          <Input
+            id="sb-secret"
+            type="password"
+            placeholder="Paste your Smoobu API secret"
+            value={apiSecret}
+            onChange={(e) => setApiSecret(e.target.value)}
+            autoComplete="off"
+          />
+        </div>
+
+        <Button onClick={handleConnect} disabled={busy} className="gap-2">
+          <Link2 className="h-4 w-4" />
+          {busy ? "Connecting & importing..." : "Connect & import listings"}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Placeholder for channels that exist in the product but are still being
+ * tested during pre-launch. Shown instead of the connect form so hosts know
+ * the integration is on the way without being able to connect yet.
+ */
+function ComingSoonChannelCard({ providerName }: { providerName: string }) {
+  return (
+    <Card className="border-dashed">
+      <CardHeader>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle className="text-lg flex items-center gap-2 text-muted-foreground">
+              <Plug className="h-5 w-5" />
+              Connect {providerName}
+            </CardTitle>
+            <CardDescription className="mt-0.5">
+              We&apos;re finishing testing the {providerName} integration — it
+              will open up at launch.
+            </CardDescription>
+          </div>
+          <Badge variant="secondary">Coming soon</Badge>
+        </div>
+      </CardHeader>
+    </Card>
+  );
+}
+
 function ConnectionCard({ connection }: { connection: ChannelConnectionDto }) {
   const sync = useSyncChannel();
   const setEnabled = useSetChannelEnabled();
@@ -1043,6 +1573,13 @@ function ConnectionCard({ connection }: { connection: ChannelConnectionDto }) {
             expanded={expanded}
             count={listings.data?.length}
             onToggle={() => setExpanded((v) => !v)}
+            size="sm"
+          />
+          <DisconnectChannelButton
+            connectionId={connection.id}
+            providerLabel={label}
+            listingCount={listings.data?.length}
+            disabled={busy}
             size="sm"
           />
         </div>
@@ -1188,6 +1725,11 @@ function HowItWorks() {
         <li>
           Sync anytime to update listings you already imported and pull in new
           ones from your PMS.
+        </li>
+        <li>
+          One connection per PMS. To switch accounts or replace an API key,
+          disconnect the existing connection and connect again — your imported
+          listings stay put.
         </li>
       </ul>
     </div>

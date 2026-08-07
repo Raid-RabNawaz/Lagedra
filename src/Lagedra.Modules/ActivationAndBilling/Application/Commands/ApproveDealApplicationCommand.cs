@@ -55,6 +55,9 @@ public sealed partial class ApproveDealApplicationCommandHandler(
     private static readonly Error PaymentNotReady = new(
         "Application.PaymentNotReady",
         "This request is not ready to accept yet. The tenant must complete payment authorization and Truth Surface consent first.");
+    private static readonly Error PreciseAddressRequired = new(
+        "Application.PreciseAddressRequired",
+        "Lock the full property address on this listing before accepting a request. The address is required for the lease agreement and stay details.");
 
     public async Task<Result<DealApplicationDto>> Handle(
         ApproveDealApplicationCommand request,
@@ -116,6 +119,13 @@ public sealed partial class ApproveDealApplicationCommandHandler(
         if (listing is null)
         {
             return Result<DealApplicationDto>.Failure(ListingNotFound);
+        }
+
+        if (listing.PreciseAddress is null
+            || string.IsNullOrWhiteSpace(listing.PreciseAddress.Street)
+            || string.IsNullOrWhiteSpace(listing.PreciseAddress.City))
+        {
+            return Result<DealApplicationDto>.Failure(PreciseAddressRequired);
         }
 
         var isAvailable = await listingProvider

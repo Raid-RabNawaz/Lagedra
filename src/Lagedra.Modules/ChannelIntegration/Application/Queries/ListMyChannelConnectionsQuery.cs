@@ -1,4 +1,5 @@
 using Lagedra.Modules.ChannelIntegration.Application.DTOs;
+using Lagedra.Modules.ChannelIntegration.Domain.Enums;
 using Lagedra.Modules.ChannelIntegration.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Results;
 using MediatR;
@@ -18,9 +19,12 @@ public sealed class ListMyChannelConnectionsQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        // Revoked rows are retained only to keep listing mappings alive across a
+        // disconnect/reconnect; to the host they no longer exist.
         var connections = await dbContext.Connections
             .AsNoTracking()
-            .Where(c => c.HostUserId == request.HostUserId)
+            .Where(c => c.HostUserId == request.HostUserId
+                     && c.Status != ChannelConnectionStatus.Revoked)
             .OrderByDescending(c => c.CreatedAt)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);

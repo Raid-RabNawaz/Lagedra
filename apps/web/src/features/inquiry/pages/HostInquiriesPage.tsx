@@ -21,6 +21,7 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { ErrorState } from "@/components/shared/ErrorState";
 import { useHostInquiries } from "@/features/inquiry/hooks/useInquiry";
 import { InquiryStatusBadge } from "@/features/inquiry/components/InquiryStatusBadge";
+import { inquiryThreadHref } from "@/features/inquiry/utils/inquiryThreadHref";
 import { formatDate } from "@/utils/format";
 import type { HostInquirySummaryDto, InquirySessionStatus } from "@/api/types";
 import { cn } from "@/lib/utils";
@@ -183,7 +184,7 @@ export const HostInquiriesPage = () => {
 };
 
 const InquiryRow = ({ row }: { row: HostInquirySummaryDto }) => {
-  const threadHref = `/app/inquiry/${row.sessionId}`;
+  const threadHref = inquiryThreadHref(row);
 
   return (
     <Card className="overflow-hidden transition-colors hover:border-primary/40">

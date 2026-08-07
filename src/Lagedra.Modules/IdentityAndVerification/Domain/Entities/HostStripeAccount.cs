@@ -65,6 +65,8 @@ public sealed class HostStripeAccount : Entity<Guid>
         bool taxRequirementPastDue,
         bool taxRequirementPendingVerification,
         bool isRestricted,
+        bool hasOutstandingBankRequirement,
+        bool bankRequirementPastDue,
         IClock clock)
     {
         ArgumentNullException.ThrowIfNull(clock);
@@ -74,12 +76,16 @@ public sealed class HostStripeAccount : Entity<Guid>
 
         OnboardingStatus = detailsSubmitted && chargesEnabled
             ? StripeOnboardingStatus.Completed
-            : detailsSubmitted
+            : detailsSubmitted || isRestricted
                 ? StripeOnboardingStatus.Restricted
                 : StripeOnboardingStatus.Pending;
 
         BankAccountStatus = DeriveBankStatus(
-            payoutsEnabled, detailsSubmitted, hasExternalAccount, isRestricted);
+            payoutsEnabled,
+            detailsSubmitted,
+            hasExternalAccount,
+            hasOutstandingBankRequirement,
+            bankRequirementPastDue);
 
         TaxStatus = DeriveTaxStatus(
             detailsSubmitted,
@@ -91,9 +97,16 @@ public sealed class HostStripeAccount : Entity<Guid>
     }
 
     private static HostAccountRequirementStatus DeriveBankStatus(
-        bool payoutsEnabled, bool detailsSubmitted, bool hasExternalAccount, bool isRestricted)
+        bool payoutsEnabled,
+        bool detailsSubmitted,
+        bool hasExternalAccount,
+        bool hasOutstandingBankRequirement,
+        bool bankRequirementPastDue)
     {
-        if (isRestricted)
+        // Only treat bank as "Action needed" when Stripe specifically requires
+        // an external_account — not when the account is restricted for other
+        // reasons (e.g. TOS acceptance), which previously caused a false loop.
+        if (bankRequirementPastDue || (hasOutstandingBankRequirement && !hasExternalAccount))
         {
             return HostAccountRequirementStatus.Restricted;
         }
@@ -101,6 +114,11 @@ public sealed class HostStripeAccount : Entity<Guid>
         if (payoutsEnabled)
         {
             return HostAccountRequirementStatus.Verified;
+        }
+
+        if (hasOutstandingBankRequirement)
+        {
+            return HostAccountRequirementStatus.Pending;
         }
 
         return hasExternalAccount || detailsSubmitted

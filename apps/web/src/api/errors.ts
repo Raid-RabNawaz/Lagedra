@@ -75,17 +75,21 @@ export const getApiErrorMessage = (
     if (data?.detail) return data.detail;
     if (data?.message) return data.message;
 
+    // Axios surfaces client aborts as ECONNABORTED with no response body —
+    // prefer a readable message over "timeout of 10000ms exceeded".
+    if (
+      error.code === "ECONNABORTED" ||
+      /timeout/i.test(error.message)
+    ) {
+      return "The request took too long. Please try again.";
+    }
+
     if (code) {
-      if (
-        status === 409 &&
-        (code === "Channel.AlreadyConnected" ||
-          code === "Channel.HostawayAlreadyConnected" ||
-          code === "Channel.GuestyAlreadyConnected")
-      ) {
-        if (code === "Channel.GuestyAlreadyConnected") {
-          return "Guesty is already connected. Use Sync to update existing listings and import new ones.";
-        }
-        return "Hostaway is already connected. Use Sync to update existing listings and import new ones.";
+      if (status === 409 && code === "Channel.ProviderAlreadyConnected") {
+        return (
+          "That PMS is already connected. Use Sync to update existing listings, " +
+          "or disconnect it first to connect a different account."
+        );
       }
 
       if (status === 403) {

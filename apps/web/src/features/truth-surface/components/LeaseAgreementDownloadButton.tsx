@@ -39,7 +39,12 @@ export function LeaseAgreementDownloadButton({
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
-      setMessage(extractErrorMessage(err));
+      const raw = extractErrorMessage(err);
+      setMessage(
+        /property address|fullAddress|precise address/i.test(raw)
+          ? "This listing has no locked property address, so the lease PDF can't be generated. Open the listing, lock the full street address, then try again."
+          : raw,
+      );
     } finally {
       setBusy(false);
     }

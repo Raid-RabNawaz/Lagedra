@@ -106,6 +106,13 @@ namespace Lagedra.Infrastructure.Migrations
                         },
                         new
                         {
+                            Key = "stripe.platform_fee_price_id",
+                            Description = "Stripe Price ID (price_…) for the host monthly protocol fee subscription",
+                            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Value = ""
+                        },
+                        new
+                        {
                             Key = "payment.grace_period_days",
                             Description = "Days after booking confirmation before payment is considered overdue",
                             UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),

@@ -421,8 +421,8 @@ export function DealDetailPage() {
           <SectionLink
             to={`/app/deals/${deal.dealId}/inquiry`}
             icon={<MessageSquare className="h-5 w-5" />}
-            title="Inquiry"
-            description="View questions and answers about this listing"
+            title="Booking conversation"
+            description="View the inquiry thread linked to this booking"
           />
         )}
 

@@ -6,6 +6,7 @@ using Lagedra.Infrastructure.External.Channels;
 using Lagedra.Infrastructure.External.Channels.Guesty;
 using Lagedra.Infrastructure.External.Channels.Hostaway;
 using Lagedra.Infrastructure.External.Channels.OwnerRez;
+using Lagedra.Infrastructure.External.Channels.Smoobu;
 using Lagedra.Infrastructure.External.Email;
 using Lagedra.Infrastructure.External.Geocoding;
 using Lagedra.Infrastructure.External.Insurance;
@@ -143,6 +144,8 @@ public static class InfrastructureServiceRegistration
             configuration.GetSection(HostawayChannelSettings.SectionName));
         services.Configure<GuestyChannelSettings>(
             configuration.GetSection(GuestyChannelSettings.SectionName));
+        services.Configure<SmoobuChannelSettings>(
+            configuration.GetSection(SmoobuChannelSettings.SectionName));
 
         var ownerRezSettings = configuration
             .GetSection(OwnerRezChannelSettings.SectionName)
@@ -153,17 +156,29 @@ public static class InfrastructureServiceRegistration
         var guestySettings = configuration
             .GetSection(GuestyChannelSettings.SectionName)
             .Get<GuestyChannelSettings>() ?? new GuestyChannelSettings();
+        var smoobuSettings = configuration
+            .GetSection(SmoobuChannelSettings.SectionName)
+            .Get<SmoobuChannelSettings>() ?? new SmoobuChannelSettings();
 
-        // OwnerRez API v2: per-host account email + personal access token on
-        // ChannelConnection, sent as HTTP Basic per request. Only the API base
-        // URL is platform-level. OwnerRez requires a descriptive User-Agent.
+        // OwnerRez API v2: hosts authorize the Lagedra OAuth app, and the issued
+        // per-host access token on ChannelConnection is sent as a bearer token.
+        // The OAuth app's client id/secret are the only platform-level values.
+        // OwnerRez requires a User-Agent naming the app and its client id.
+        var ownerRezUserAgent = ownerRezSettings.BuildUserAgent();
         services.AddHttpClient<OwnerRezChannelProvider>(client =>
         {
             client.BaseAddress = ownerRezSettings.BaseUrl;
             client.Timeout = TimeSpan.FromSeconds(60);
-            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", ownerRezSettings.UserAgent);
+            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", ownerRezUserAgent);
         });
         services.AddScoped<IChannelProvider>(sp => sp.GetRequiredService<OwnerRezChannelProvider>());
+
+        services.AddHttpClient<OwnerRezOAuthClient>(client =>
+        {
+            client.BaseAddress = ownerRezSettings.BaseUrl;
+            client.Timeout = TimeSpan.FromSeconds(30);
+            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", ownerRezUserAgent);
+        });
 
         // Hostaway uses per-host OAuth2 client credentials (account ID + API
         // secret on ChannelConnection). Only the API base URL is platform-level.
@@ -186,6 +201,17 @@ public static class InfrastructureServiceRegistration
             client.DefaultRequestHeaders.TryAddWithoutValidation("Cache-control", "no-cache");
         });
         services.AddScoped<IChannelProvider>(sp => sp.GetRequiredService<GuestyChannelProvider>());
+
+        // Smoobu: per-host API key + API secret on ChannelConnection; every
+        // request is HMAC-SHA256 signed, so only the base URL is platform-level.
+        services.AddHttpClient<SmoobuChannelProvider>(client =>
+        {
+            client.BaseAddress = smoobuSettings.BaseUrl;
+            client.Timeout = TimeSpan.FromSeconds(60);
+            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", smoobuSettings.UserAgent);
+            client.DefaultRequestHeaders.TryAddWithoutValidation("Cache-control", "no-cache");
+        });
+        services.AddScoped<IChannelProvider>(sp => sp.GetRequiredService<SmoobuChannelProvider>());
 
         services.AddScoped<IChannelProviderRegistry, ChannelProviderRegistry>();
 

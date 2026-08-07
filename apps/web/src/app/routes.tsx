@@ -166,7 +166,7 @@ export const router = createBrowserRouter([
     children: [
       {
         // Pre-launch: staff + founding hosts enter the app; hosts are then
-        // limited to listings + Hostaway by RequirePreLaunchHostSurface.
+        // limited to listings, Hostaway, profile, verification, and payout by RequirePreLaunchHostSurface.
         element: <RequireLaunchAccess surface="app" />,
         children: [
       {

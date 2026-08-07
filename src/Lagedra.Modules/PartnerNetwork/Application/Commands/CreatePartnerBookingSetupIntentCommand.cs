@@ -56,20 +56,20 @@ public sealed partial class CreatePartnerBookingSetupIntentCommandHandler(
                 new Error("Partner.NotFound", "Partner organization not found."));
         }
 
-        var customerId = await orgBilling
+        var existingCustomerId = await orgBilling
             .GetStripeCustomerIdAsync(request.OrganizationId, cancellationToken)
             .ConfigureAwait(false);
 
-        if (string.IsNullOrEmpty(customerId))
-        {
-            // Stripe customers are keyed by a stable owner id; use the org id.
-            customerId = await stripeService
-                .GetOrCreateCustomerAsync(
-                    request.OrganizationId,
-                    $"partner-{request.OrganizationId:N}@lagedra.partners",
-                    cancellationToken)
-                .ConfigureAwait(false);
+        var customerId = await stripeService
+            .EnsureCustomerAsync(
+                request.OrganizationId,
+                $"partner-{request.OrganizationId:N}@lagedra.partners",
+                existingCustomerId,
+                cancellationToken)
+            .ConfigureAwait(false);
 
+        if (!string.Equals(existingCustomerId, customerId, StringComparison.Ordinal))
+        {
             await orgBilling
                 .SetStripeCustomerIdAsync(request.OrganizationId, customerId, cancellationToken)
                 .ConfigureAwait(false);
@@ -78,7 +78,7 @@ public sealed partial class CreatePartnerBookingSetupIntentCommandHandler(
         }
 
         var idempotencyKey =
-            $"si-partner-{request.OrganizationId:N}-{request.ListingId:N}-{request.CallerUserId:N}";
+            $"si-partner-{request.OrganizationId:N}-{request.ListingId:N}-{request.CallerUserId:N}-{customerId}";
 
         var setupIntent = await stripeService
             .CreateSetupIntentAsync(

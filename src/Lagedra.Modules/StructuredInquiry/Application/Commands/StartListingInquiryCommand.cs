@@ -11,10 +11,10 @@ namespace Lagedra.Modules.StructuredInquiry.Application.Commands;
 
 /// <summary>
 /// Phase 17 — start (or return the existing open) pre-booking inquiry
-/// thread the calling tenant has for a given listing. Idempotent: there
-/// is at most one open listing-scoped session per (listingId, tenantUserId)
-/// at a time, which both prevents thread-spam and gives the listing detail
-/// page a stable "Continue conversation" handle.
+/// thread the calling tenant has for a given listing. Idempotent for
+/// open <em>listing-scoped</em> sessions only (<c>DealId == null</c>).
+/// Once a thread is linked to a booking, a new ask-the-host CTA creates
+/// a fresh pre-booking thread for a potential next booking.
 /// </summary>
 public sealed record StartListingInquiryCommand(
     Guid ListingId,
@@ -51,7 +51,8 @@ public sealed class StartListingInquiryCommandHandler(
                     "You cannot start an inquiry on your own listing."));
         }
 
-        // One open thread per (listing, tenant): if it exists, return it.
+        // One open pre-booking thread per (listing, tenant). Deal-linked
+        // threads stay on the booking and must not be reused from the listing.
         var existing = await dbContext.Sessions
             .AsNoTracking()
             .Include(s => s.Questions)
@@ -59,6 +60,7 @@ public sealed class StartListingInquiryCommandHandler(
             .Include(s => s.Offers)
             .Where(s => s.ListingId == request.ListingId
                 && s.TenantUserId == request.TenantUserId
+                && s.DealId == null
                 && s.Status == InquirySessionStatus.Open)
             .OrderByDescending(s => s.CreatedAt)
             .FirstOrDefaultAsync(cancellationToken)

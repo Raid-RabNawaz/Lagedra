@@ -1,5 +1,6 @@
 using Lagedra.Infrastructure.External.Channels.Hostaway;
 using Lagedra.Modules.ChannelIntegration.Application.DTOs;
+using Lagedra.Modules.ChannelIntegration.Domain.Enums;
 using Lagedra.Modules.ChannelIntegration.Infrastructure.Persistence;
 using Lagedra.Modules.ChannelIntegration.Infrastructure.Services;
 using Lagedra.SharedKernel.Results;
@@ -46,7 +47,9 @@ public sealed partial class SyncChannelConnectionCommandHandler(
 
         var connection = await dbContext.Connections
             .FirstOrDefaultAsync(
-                c => c.Id == request.ConnectionId && c.HostUserId == request.HostUserId,
+                c => c.Id == request.ConnectionId
+                  && c.HostUserId == request.HostUserId
+                  && c.Status != ChannelConnectionStatus.Revoked,
                 cancellationToken)
             .ConfigureAwait(false);
 
@@ -59,6 +62,16 @@ public sealed partial class SyncChannelConnectionCommandHandler(
         connection.Activate(clock);
 
         var result = await importer.SyncAsync(connection, cancellationToken).ConfigureAwait(false);
+
+        // The importer records why a pull failed on the connection rather than
+        // throwing. Reporting that as a failure here is what stops the host being
+        // told "no listings found" when the real answer is "we were refused".
+        if (connection.Status == ChannelConnectionStatus.Error
+            && !string.IsNullOrWhiteSpace(connection.LastError))
+        {
+            return Result<ChannelSyncResultDto>.Failure(
+                new Error("Channel.SyncFailed", connection.LastError));
+        }
 
         bool? webhookRegistered = null;
         if (string.Equals(connection.ProviderKey, "hostaway", StringComparison.OrdinalIgnoreCase)

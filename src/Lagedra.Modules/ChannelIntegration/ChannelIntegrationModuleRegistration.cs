@@ -27,6 +27,13 @@ public static class ChannelIntegrationModuleRegistration
         services.AddScoped<ChannelContentImporter>();
         services.AddScoped<ChannelBookingUpdateReconciler>();
 
+        // Enforces one connection per provider per host for every link path.
+        services.AddScoped<ChannelConnectionLinker>();
+
+        // Redirect URI + signed state shared by both ends of the OwnerRez
+        // OAuth handshake.
+        services.AddScoped<OwnerRezOAuthFlow>();
+
         // Cross-module hook: ActivationAndBilling pushes paid bookings here.
         services.AddScoped<IChannelBookingPublisher, ChannelBookingPublisher>();
 

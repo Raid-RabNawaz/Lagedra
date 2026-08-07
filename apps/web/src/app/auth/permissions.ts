@@ -59,7 +59,7 @@ const memberHostingGroup: NavGroup = {
   ],
 };
 
-/** Pre-launch host surface: listings + Hostaway import only. */
+/** Pre-launch host surface: listings, import, profile, verification, payouts. */
 const preLaunchHostSidebarGroups: NavGroup[] = [
   {
     label: "Hosting",
@@ -67,6 +67,14 @@ const preLaunchHostSidebarGroups: NavGroup[] = [
       { to: "/app/listings", label: "My listings", icon: "Building2", end: true },
       { to: "/app/listings/new", label: "Create listing", icon: "Plus" },
       { to: "/app/channels", label: "Import (PMS)", icon: "Link2" },
+      { to: "/app/payout-setup", label: "Payout setup", icon: "Wallet" },
+    ],
+  },
+  {
+    label: "Account",
+    items: [
+      { to: "/app/profile", label: "Profile", icon: "User" },
+      { to: "/app/verification", label: "Verification", icon: "ShieldCheck" },
     ],
   },
 ];
@@ -74,7 +82,8 @@ const preLaunchHostSidebarGroups: NavGroup[] = [
 const preLaunchHostBottomTabs: NavItem[] = [
   { to: "/app/listings", label: "Listings", icon: "Building2", end: true },
   { to: "/app/listings/new", label: "Create", icon: "Plus" },
-  { to: "/app/channels", label: "Import", icon: "Link2" },
+  { to: "/app/payout-setup", label: "Payouts", icon: "Wallet" },
+  { to: "/app/profile", label: "Profile", icon: "User" },
 ];
 
 const arbitratorCasesGroup: NavGroup = {
@@ -87,11 +96,18 @@ const arbitratorCasesGroup: NavGroup = {
 
 // ── Admin sidebar groups ────────────────────────────────────
 //
-// Admins inherit the full member-side nav (bookings + hosting) so
-// they can reach those screens for support, but they do not get the
-// Travelling ↔ Hosting mode toggle — that switch is Member-only.
-// Below sit the admin-only sections, prefixed with "Admin · " so
-// they stand out from member groups in the sidebar.
+// Platform admins do NOT inherit member Hosting / Bookings menus —
+// those are Member (host/tenant) surfaces. Admins get Main + the
+// admin-only sections below, prefixed with "Admin · " so they stand
+// out in the sidebar.
+
+const adminMainGroup: NavGroup = {
+  label: "Main",
+  items: [
+    { to: "/app", label: "Dashboard", icon: "LayoutDashboard", end: true },
+    { to: "/listings", label: "Browse listings", icon: "Search", end: true },
+  ],
+};
 
 const adminTrustSafetyGroup: NavGroup = {
   label: "Admin · Trust & safety",
@@ -131,6 +147,13 @@ const adminConfigGroup: NavGroup = {
   ],
 };
 
+const partnerMainGroup: NavGroup = {
+  label: "Main",
+  items: [
+    { to: "/listings", label: "Browse listings", icon: "Search", end: true },
+  ],
+};
+
 const partnerGroup: NavGroup = {
   label: "Partner portal",
   items: [
@@ -141,6 +164,15 @@ const partnerGroup: NavGroup = {
     { to: "/app/partner/guests", label: "Invite guests", icon: "Mail" },
     { to: "/app/partner/endorsements", label: "Endorsements", icon: "ShieldCheck" },
     { to: "/app/partner/inquiries", label: "Inquiries", icon: "MessageSquare" },
+  ],
+};
+
+const partnerAccountGroup: NavGroup = {
+  label: "Account",
+  items: [
+    { to: "/app/profile", label: "Profile", icon: "User" },
+    { to: "/app/notifications", label: "Notifications", icon: "Bell" },
+    { to: "/app/notification-preferences", label: "Notification settings", icon: "SlidersHorizontal" },
   ],
 };
 
@@ -241,12 +273,24 @@ const adminSidebarGroups: NavGroup[] = [
   adminInsightsGroup,
 ];
 
+const platformAdminSidebarGroups: NavGroup[] = [
+  adminMainGroup,
+  ...adminSidebarGroups,
+  compactAccountGroup,
+];
+
+const partnerSidebarGroups: NavGroup[] = [
+  partnerMainGroup,
+  partnerGroup,
+  partnerAccountGroup,
+];
+
 const roleSidebarGroups: Record<UserRole, NavGroup[]> = {
   [roles.member]: memberAllSidebarGroups,
   [roles.arbitrator]: [compactMainGroup, arbitratorCasesGroup, compactAccountGroup],
-  [roles.platformAdmin]: [...memberAllSidebarGroups, ...adminSidebarGroups],
+  [roles.platformAdmin]: platformAdminSidebarGroups,
   [roles.insurancePartner]: [compactMainGroup, compactAccountGroup],
-  [roles.institutionPartner]: [compactMainGroup, partnerGroup, compactAccountGroup],
+  [roles.institutionPartner]: partnerSidebarGroups,
 };
 
 const memberModeGroups: Record<AppMode, NavGroup[]> = {
@@ -313,17 +357,28 @@ const arbitratorBottomTabs: NavItem[] = [
   { to: "/app/profile", label: "Profile", icon: "User" },
 ];
 
+const adminBottomTabs: NavItem[] = [
+  { to: "/listings", label: "Explore", icon: "Search", end: true },
+  { to: "/app", label: "Dashboard", icon: "LayoutDashboard", end: true },
+  { to: "/app/admin/listing-review", label: "Review", icon: "ClipboardCheck" },
+  { to: "/app/notifications", label: "Notifications", icon: "Bell" },
+  { to: "/app/profile", label: "Profile", icon: "User" },
+];
+
+const partnerBottomTabs: NavItem[] = [
+  { to: "/listings", label: "Explore", icon: "Search", end: true },
+  { to: "/app/partner", label: "Portal", icon: "Building2", end: true },
+  { to: "/app/partner/reservations", label: "Bookings", icon: "CalendarCheck" },
+  { to: "/app/notifications", label: "Notifications", icon: "Bell" },
+  { to: "/app/profile", label: "Profile", icon: "User" },
+];
+
 const roleBottomTabs: Record<UserRole, NavItem[]> = {
   [roles.member]: memberBottomTabs,
   [roles.arbitrator]: arbitratorBottomTabs,
-  [roles.platformAdmin]: memberBottomTabs,
+  [roles.platformAdmin]: adminBottomTabs,
   [roles.insurancePartner]: compactAuthedBottomTabs,
-  [roles.institutionPartner]: [
-    { to: "/listings", label: "Explore", icon: "Search", end: true },
-    { to: "/app/partner", label: "Portal", icon: "Building2", end: true },
-    { to: "/app/notifications", label: "Notifications", icon: "Bell" },
-    { to: "/app/profile", label: "Profile", icon: "User" },
-  ],
+  [roles.institutionPartner]: partnerBottomTabs,
 };
 
 const guestBottomTabs: NavItem[] = [

@@ -52,16 +52,15 @@ public sealed class SyncHostStripeStatusCommandHandler(
                 new Error("HostStripe.NotFound", "No Stripe account found for this host."));
         }
 
-        await SyncFromStripe(account, cancellationToken).ConfigureAwait(false);
+        var stripeStatus = await SyncFromStripe(account, cancellationToken).ConfigureAwait(false);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        return Result<HostStripeStatusDto>.Success(
-            new HostStripeStatusDto(account.Id, account.HostUserId, account.StripeAccountId,
-                account.OnboardingStatus, account.ChargesEnabled, account.PayoutsEnabled,
-                account.TaxStatus, account.BankAccountStatus, null));
+        return Result<HostStripeStatusDto>.Success(MapToDto(account, null, stripeStatus));
     }
 
-    private async Task SyncFromStripe(HostStripeAccount account, CancellationToken ct)
+    private async Task<StripeAccountStatusResult> SyncFromStripe(
+        HostStripeAccount account,
+        CancellationToken ct)
     {
         var status = await stripeService
             .GetAccountStatusAsync(account.StripeAccountId, ct)
@@ -76,6 +75,37 @@ public sealed class SyncHostStripeStatusCommandHandler(
             status.TaxRequirementPastDue,
             status.TaxRequirementPendingVerification,
             status.IsRestricted,
+            status.HasOutstandingBankRequirement,
+            status.BankRequirementPastDue,
             clock);
+
+        return status;
+    }
+
+    internal static HostStripeStatusDto MapToDto(
+        HostStripeAccount account,
+        Uri? onboardingUrl,
+        StripeAccountStatusResult? stripeStatus = null)
+    {
+        IReadOnlyList<string>? outstanding = null;
+        if (stripeStatus is not null)
+        {
+            outstanding = stripeStatus.PastDue
+                .Concat(stripeStatus.CurrentlyDue)
+                .Distinct(StringComparer.Ordinal)
+                .ToList();
+        }
+
+        return new HostStripeStatusDto(
+            account.Id,
+            account.HostUserId,
+            account.StripeAccountId,
+            account.OnboardingStatus,
+            account.ChargesEnabled,
+            account.PayoutsEnabled,
+            account.TaxStatus,
+            account.BankAccountStatus,
+            onboardingUrl,
+            outstanding is { Count: > 0 } ? outstanding : null);
     }
 }

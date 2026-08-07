@@ -49,7 +49,8 @@ public static class PlatformSettingKeys
 
     // Pre-launch / go-to-market
     // When true: institution partners join a waitlist; founding hosts get real
-    // accounts limited to listings + Hostaway import; marketplace and other
-    // product surfaces stay closed except for operational staff.
+    // accounts limited to listings, PMS import, profile, phone verification,
+    // and Stripe payout setup; marketplace and other product surfaces stay
+    // closed except for operational staff.
     public const string PreLaunchEnabled = "prelaunch.enabled";
 }

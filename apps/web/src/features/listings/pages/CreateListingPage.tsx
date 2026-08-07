@@ -9,6 +9,7 @@ import {
   ImportFromUrlPanel,
   type ApplyImportPayload,
 } from "@/features/listings/components/ImportFromUrlPanel";
+import { ImportFromExcelDialog } from "@/features/listings/components/ImportFromExcelDialog";
 import { useListingDefinitions } from "@/features/listings/hooks/useListingDefinitions";
 import {
   toCreateListingRequest,
@@ -191,13 +192,16 @@ export const CreateListingPage = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <BackLink fallbackTo="/app/listings" label="Back to my listings" />
-        <h1 className="mt-2 text-3xl font-bold tracking-tight">Create a listing</h1>
-        <p className="mt-1 text-muted-foreground">
-          We'll walk you through everything step by step — details, location, photos and rules.
-          Your draft is created after the first step and saved as you go.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <BackLink fallbackTo="/app/listings" label="Back to my listings" />
+          <h1 className="mt-2 text-3xl font-bold tracking-tight">Create a listing</h1>
+          <p className="mt-1 text-muted-foreground">
+            We'll walk you through everything step by step — details, location, photos and rules.
+            Your draft is created after the first step and saved as you go.
+          </p>
+        </div>
+        <ImportFromExcelDialog amenities={defs.data.amenities} />
       </div>
 
       <ImportFromUrlPanel

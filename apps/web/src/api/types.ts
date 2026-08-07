@@ -1026,6 +1026,8 @@ export type HostStripeStatusDto = {
   taxStatus: HostAccountRequirementStatus;
   bankAccountStatus: HostAccountRequirementStatus;
   onboardingUrl: string | null;
+  /** Stripe requirement keys still due (e.g. external_account, tos_acceptance.date). */
+  outstandingRequirements?: string[] | null;
 };
 
 // ── Host Payment Details ─────────────────────────────────────
@@ -1049,6 +1051,12 @@ export type ChannelConnectionStatus =
 /** An installed channel provider the host can connect to. */
 export type ChannelProviderDto = {
   providerKey: string;
+  /**
+   * True when the host links this provider by authorizing Lagedra at the
+   * provider rather than pasting credentials. Deployment-dependent: OwnerRez
+   * only reports true once an OAuth app is configured server-side.
+   */
+  usesOAuth: boolean;
 };
 
 export type ChannelConnectionDto = {
@@ -1087,6 +1095,11 @@ export type ConnectChannelRequest = {
   displayName: string;
   username?: string | null;
   secret?: string | null;
+};
+
+/** Where to send the host to authorize Lagedra's OwnerRez app. */
+export type OwnerRezAuthorizationDto = {
+  authorizationUrl: string;
 };
 
 // ── Checkout ─────────────────────────────────────────────────

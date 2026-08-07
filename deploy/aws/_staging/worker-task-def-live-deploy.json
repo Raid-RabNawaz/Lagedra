@@ -11,7 +11,7 @@
   "containerDefinitions": [
     {
       "name": "worker",
-      "image": "930218374225.dkr.ecr.us-west-1.amazonaws.com/lagedra/worker@sha256:978dfa721d0cc3c6bcb3d187475537468b1dfcac763aa42a0c276885af5f1774",
+      "image": "930218374225.dkr.ecr.us-west-1.amazonaws.com/lagedra/worker@sha256:8d465ded6928acdcee2fe9d430a4613d1de0451ac54329bdc62ee4d7b0b1be40",
       "essential": true,
       "environment": [
         {
@@ -56,7 +56,7 @@
         },
         {
           "name": "Stripe__PublishableKey",
-          "value": "pk_test_51TH4W49C1zhcxwIed13rUO089U9x7zqymxW7pjkgeEDIUFss6MBN9WPwXfQQSH3JWOOdnUSm0EYObonbUpprqBbh004eAq2YhU"
+          "value": "pk_live_51Tw2UBJHpE3nFjtjkhYox4Qz3gjEQc0q0L8l4HzVWwUxb44bOEvRoY06AoG7UtCS0g3W2ixKECnklTSU5CgLAwov00bPgq2epa"
         },
         {
           "name": "Twilio__FromEmail",
@@ -92,19 +92,15 @@
         },
         {
           "name": "Channels__OwnerRez__BaseUrl",
-          "value": "https://faststage.ownerrez.com"
+          "value": "https://api.ownerrez.com"
         },
         {
-          "name": "Channels__OwnerRez__Username",
-          "value": "HaXmlSandboxMoR"
-        },
-        {
-          "name": "Channels__OwnerRez__Key",
-          "value": "0beefaaa-963c-407c-bd64-bdeadb949417"
+          "name": "Channels__OwnerRez__AuthorizeUrl",
+          "value": "https://app.ownerrez.com/oauth/authorize"
         },
         {
           "name": "Channels__OwnerRez__UserAgent",
-          "value": "Lagedra/1.0 (+https://lagedra.com)"
+          "value": "Lagedra/1.0"
         },
         {
           "name": "Channels__Hostaway__BaseUrl",
@@ -121,6 +117,18 @@
         {
           "name": "Channels__Hostaway__AutoRegisterWebhooks",
           "value": "true"
+        },
+        {
+          "name": "Channels__Guesty__BaseUrl",
+          "value": "https://open-api.guesty.com"
+        },
+        {
+          "name": "Channels__Guesty__UserAgent",
+          "value": "Lagedra/1.0 (+https://lagedra.com)"
+        },
+        {
+          "name": "Channels__Guesty__ReservationSource",
+          "value": "manual"
         },
         {
           "name": "FeatureFlags__BookingFlow.V2",

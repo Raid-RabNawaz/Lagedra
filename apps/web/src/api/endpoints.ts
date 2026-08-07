@@ -88,11 +88,15 @@ export const endpoints = {
   hostStripe: {
     onboard: "/v1/hosts/stripe/onboard",
     refreshLink: "/v1/hosts/stripe/refresh-link",
+    expressLogin: "/v1/hosts/stripe/express-login",
+    updateLink: "/v1/hosts/stripe/update-link",
     status: "/v1/hosts/stripe/status",
   },
   hostPayouts: {
     start: "/v1/hosts/payouts/start",
     refreshLink: "/v1/hosts/payouts/refresh-link",
+    expressLogin: "/v1/hosts/payouts/express-login",
+    updateLink: "/v1/hosts/payouts/update-link",
     status: "/v1/hosts/payouts/status",
   },
   hostPayment: {
@@ -106,6 +110,8 @@ export const endpoints = {
     disable: (id: string) => `/v1/channels/${id}/disable`,
     sync: (id: string) => `/v1/channels/${id}/sync`,
     listings: (id: string) => `/v1/channels/${id}/listings`,
+    disconnect: (id: string) => `/v1/channels/${id}`,
+    ownerRezOAuthStart: "/v1/channels/ownerrez/oauth/start",
   },
   deals: {
     mine: "/v1/deals/mine",

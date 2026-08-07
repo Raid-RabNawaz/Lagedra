@@ -6,7 +6,10 @@ export function useHostStripeStatus() {
   return useQuery({
     queryKey: ["hostStripe", "status"],
     queryFn: () => hostStripeApi.getStatus(),
-    staleTime: 30_000,
+    // Always re-sync from Stripe when landing back from Account Links.
+    staleTime: 0,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
     retry: false,
   });
 }
@@ -25,6 +28,18 @@ export function useHostStripeOnboard() {
 export function useRefreshOnboardingLink() {
   return useMutation({
     mutationFn: () => hostStripeApi.refreshLink(),
+  });
+}
+
+export function useHostExpressLogin() {
+  return useMutation({
+    mutationFn: () => hostStripeApi.openExpressDashboard(),
+  });
+}
+
+export function useHostAccountUpdateLink() {
+  return useMutation({
+    mutationFn: () => hostStripeApi.updateAccountLink(),
   });
 }
 

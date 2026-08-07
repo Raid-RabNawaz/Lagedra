@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, Navigate } from "react-router-dom";
 import {
   ArrowRight,
   CheckCircle2,
@@ -144,6 +144,11 @@ export const ListingInquiryPage = () => {
 
   if (isLoading) {
     return <Loader fullPage label="Loading inquiry..." />;
+  }
+
+  // Deal-linked threads belong to the booking — only viewable from the deal page.
+  if (inquiry?.dealId) {
+    return <Navigate to={`/app/deals/${inquiry.dealId}/inquiry`} replace />;
   }
 
   if (isError && is404) {

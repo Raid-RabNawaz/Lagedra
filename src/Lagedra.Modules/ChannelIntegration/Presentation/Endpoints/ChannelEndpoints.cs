@@ -3,6 +3,7 @@ using Lagedra.Infrastructure.External.Channels;
 using Lagedra.Modules.ChannelIntegration.Application.Commands;
 using Lagedra.Modules.ChannelIntegration.Application.DTOs;
 using Lagedra.Modules.ChannelIntegration.Application.Queries;
+using Lagedra.Modules.ChannelIntegration.Infrastructure.Services;
 using Lagedra.Modules.ChannelIntegration.Presentation.Contracts;
 using Lagedra.SharedKernel.Results;
 using MediatR;
@@ -24,10 +25,12 @@ public static class ChannelEndpoints
             .RequireAuthorization("RequireMember")
             .WithTags("Channels");
 
-        group.MapGet("/providers", (IChannelProviderRegistry registry) =>
+        group.MapGet("/providers", (IChannelProviderRegistry registry, OwnerRezOAuthFlow ownerRezOAuth) =>
         {
             var providers = registry.All
-                .Select(p => new ChannelProviderDto(p.ProviderKey))
+                .Select(p => new ChannelProviderDto(
+                    p.ProviderKey,
+                    UsesOAuth: p.ProviderKey == OwnerRezOAuthFlow.ProviderKey && ownerRezOAuth.IsConfigured))
                 .ToList();
             return Results.Ok(providers);
         });
@@ -52,6 +55,15 @@ public static class ChannelEndpoints
             return result.IsSuccess
                 ? Results.Created($"/v1/channels/{result.Value.Id}", result.Value)
                 : ToHttpResult(result);
+        });
+
+        // OwnerRez is linked by authorizing Lagedra's OAuth app rather than by
+        // pasting a key, so connecting is a redirect the host is sent on.
+        group.MapPost("/ownerrez/oauth/start", async (ClaimsPrincipal user, ISender sender) =>
+        {
+            var result = await sender.Send(new StartOwnerRezOAuthCommand(GetUserId(user)))
+                .ConfigureAwait(false);
+            return ToHttpResult(result);
         });
 
         group.MapPost("/{id:guid}/enable", async (Guid id, ClaimsPrincipal user, ISender sender) =>
@@ -84,6 +96,47 @@ public static class ChannelEndpoints
                 .ConfigureAwait(false);
             return ToHttpResult(result);
         });
+
+        // Disconnect the account so the host can link a different one for this
+        // provider. Imported listings are kept; the credentials are destroyed.
+        group.MapDelete("/{id:guid}", async (Guid id, ClaimsPrincipal user, ISender sender) =>
+        {
+            var result = await sender.Send(new DisconnectChannelCommand(id, GetUserId(user)))
+                .ConfigureAwait(false);
+            return ToHttpResult(result);
+        });
+
+        // Where OwnerRez returns the host after the consent screen. Anonymous
+        // because it arrives as a top-level browser redirect carrying no token —
+        // the signed state parameter is what identifies the host. Always ends in a
+        // redirect back to the SPA, since the host is looking at this response.
+        app.MapGet("/v1/channels/ownerrez/oauth/callback", async (
+            string? code,
+            string? state,
+            string? error,
+            IConfiguration configuration,
+            ISender sender) =>
+        {
+            var appUrl = (configuration["App:FrontendUrl"] ?? "http://localhost:3000").TrimEnd('/');
+            var channels = $"{appUrl}/app/channels";
+
+            if (!string.IsNullOrWhiteSpace(error))
+            {
+                // access_denied means the host chose not to authorize, which is a
+                // normal outcome rather than something that went wrong.
+                var outcome = string.Equals(error, "access_denied", StringComparison.OrdinalIgnoreCase)
+                    ? "denied"
+                    : "error";
+                return Results.Redirect($"{channels}?ownerrez={outcome}");
+            }
+
+            var result = await sender.Send(new CompleteOwnerRezOAuthCommand(code, state))
+                .ConfigureAwait(false);
+
+            return Results.Redirect(result.IsSuccess
+                ? $"{channels}?ownerrez=connected&connection={result.Value}"
+                : $"{channels}?ownerrez=error&reason={Uri.EscapeDataString(result.Error.Code)}");
+        }).AllowAnonymous().WithTags("Channels");
 
         // Public deep-link target handed to channels (e.g. OwnerRez "redirect"
         // mode) so an external listing page sends the guest to our listing.
@@ -123,9 +176,7 @@ public static class ChannelEndpoints
             "Channel.NotFound" or
             "Channel.ListingNotMapped" => Results.NotFound(error),
 
-            "Channel.AlreadyConnected" or
-            "Channel.HostawayAlreadyConnected" or
-            "Channel.GuestyAlreadyConnected" =>
+            "Channel.ProviderAlreadyConnected" =>
                 Results.Json(error, statusCode: StatusCodes.Status409Conflict),
 
             _ => Results.BadRequest(error)

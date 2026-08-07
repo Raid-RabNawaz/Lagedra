@@ -52,7 +52,7 @@ export type ImportMappingResult = {
   importedFields: string[];
 };
 
-function matchPropertyType(raw: string | null | undefined): PropertyType | undefined {
+export function matchPropertyType(raw: string | null | undefined): PropertyType | undefined {
   if (!raw) return undefined;
   const normalized = raw.trim().toLowerCase();
   const direct = PROPERTY_TYPES.find((t) => t.toLowerCase() === normalized);
@@ -63,7 +63,7 @@ function matchPropertyType(raw: string | null | undefined): PropertyType | undef
 // Maps a third-party cancellation-policy label onto our closest enum. Airbnb's
 // "Firm"/"Strict"/"Super Strict" all collapse to our strictest non-custom tier;
 // unknown labels are dropped so the form keeps its default policy.
-function matchCancellationType(
+export function matchCancellationType(
   raw: string | null | undefined,
 ): CancellationPolicyType | undefined {
   if (!raw) return undefined;
@@ -80,7 +80,7 @@ function matchCancellationType(
 // Normalizes amenity names so values that differ only cosmetically still match:
 // case, punctuation, and "&" vs "and" are all folded away
 // (e.g. "Wi-Fi", "WiFi", "wifi" → "wifi"; "Dishes & Silverware" → "dishes and silverware").
-function normalizeAmenityName(value: string): string {
+export function normalizeAmenityName(value: string): string {
   return value
     .toLowerCase()
     .replace(/&/g, " and ")

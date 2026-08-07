@@ -33,6 +33,17 @@ public sealed class CreateHostStripeAccountCommandHandler(
 
         if (existing is not null)
         {
+            var stripeStatus = await SyncFromStripe(existing, cancellationToken).ConfigureAwait(false);
+            await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+            // Already fully enabled — do not send the host back through Stripe
+            // (Account Links for complete accounts redirect immediately → UI loop).
+            if (existing.ChargesEnabled && existing.PayoutsEnabled)
+            {
+                return Result<HostStripeStatusDto>.Success(
+                    SyncHostStripeStatusCommandHandler.MapToDto(existing, null, stripeStatus));
+            }
+
             var link = await stripeService
                 .CreateAccountOnboardingLinkAsync(
                     existing.StripeAccountId,
@@ -41,7 +52,8 @@ public sealed class CreateHostStripeAccountCommandHandler(
                     cancellationToken)
                 .ConfigureAwait(false);
 
-            return Result<HostStripeStatusDto>.Success(MapToDto(existing, link));
+            return Result<HostStripeStatusDto>.Success(
+                SyncHostStripeStatusCommandHandler.MapToDto(existing, link, stripeStatus));
         }
 
         var result = await stripeService
@@ -57,10 +69,31 @@ public sealed class CreateHostStripeAccountCommandHandler(
         dbContext.HostStripeAccounts.Add(account);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        return Result<HostStripeStatusDto>.Success(MapToDto(account, result.OnboardingUrl));
+        return Result<HostStripeStatusDto>.Success(
+            SyncHostStripeStatusCommandHandler.MapToDto(account, result.OnboardingUrl));
     }
 
-    private static HostStripeStatusDto MapToDto(HostStripeAccount a, Uri? onboardingUrl) =>
-        new(a.Id, a.HostUserId, a.StripeAccountId, a.OnboardingStatus,
-            a.ChargesEnabled, a.PayoutsEnabled, a.TaxStatus, a.BankAccountStatus, onboardingUrl);
+    private async Task<StripeAccountStatusResult> SyncFromStripe(
+        HostStripeAccount account,
+        CancellationToken ct)
+    {
+        var status = await stripeService
+            .GetAccountStatusAsync(account.StripeAccountId, ct)
+            .ConfigureAwait(false);
+
+        account.SyncStatus(
+            status.ChargesEnabled,
+            status.PayoutsEnabled,
+            status.DetailsSubmitted,
+            status.HasExternalAccount,
+            status.HasOutstandingTaxRequirement,
+            status.TaxRequirementPastDue,
+            status.TaxRequirementPendingVerification,
+            status.IsRestricted,
+            status.HasOutstandingBankRequirement,
+            status.BankRequirementPastDue,
+            clock);
+
+        return status;
+    }
 }

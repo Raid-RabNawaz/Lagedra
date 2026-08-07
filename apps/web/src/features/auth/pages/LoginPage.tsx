@@ -1,179 +1,28 @@
-import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Mail, Lock, ArrowRight } from "lucide-react";
-import { authApi } from "@/features/auth/services/authApi";
-import { useAuthStore } from "@/app/auth/authStore";
+import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { usePublicConfigStore } from "@/app/config/publicConfigStore";
 import { PRE_LAUNCH_HOST_HOME } from "@/app/auth/preLaunchAccess";
-import { getApiErrorMessage } from "@/api/errors";
-import { appConfig } from "@/app/config";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
-import { FormError } from "@/components/shared/FormError";
-import { GoogleSignInButton } from "@/components/shared/GoogleSignInButton";
-
-const schema = z.object({
-  email: z.string().email("Enter a valid email address"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
-});
-
-type FormData = z.infer<typeof schema>;
+import { SignInForm } from "@/features/auth/components/SignInForm";
 
 export const LoginPage = () => {
-  const [serverError, setServerError] = useState<string | null>(null);
-  const [googleLoading, setGoogleLoading] = useState(false);
-  const preLaunchEnabled = usePublicConfigStore((s) => s.preLaunchEnabled);
-  const setUser = useAuthStore((state) => state.setUser);
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
+  const preLaunchEnabled = usePublicConfigStore((s) => s.preLaunchEnabled);
   const defaultNext = preLaunchEnabled ? PRE_LAUNCH_HOST_HOME : "/app";
-  const nextPath = (location.state as { from?: string } | null)?.from ?? defaultNext;
-
-  const form = useForm<FormData>({
-    resolver: zodResolver(schema),
-    defaultValues: { email: "", password: "" },
-  });
-
-  const completeLogin = async () => {
-    const me = await authApi.getCurrentUser();
-    setUser(me);
-    navigate(nextPath, { replace: true });
-  };
-
-  const onSubmit = form.handleSubmit(async (data) => {
-    setServerError(null);
-    try {
-      await authApi.login(data);
-      await completeLogin();
-    } catch (error) {
-      setServerError(
-        getApiErrorMessage(
-          error,
-          "Login failed. Check your credentials and try again.",
-        ),
-      );
-    }
-  });
-
-  const handleGoogleLogin = async (idToken: string) => {
-    setServerError(null);
-    setGoogleLoading(true);
-    try {
-      await authApi.externalLogin({ provider: "Google", idToken });
-      await completeLogin();
-    } catch (error) {
-      setServerError(
-        getApiErrorMessage(error, "Google sign-in failed. Please try again."),
-      );
-    } finally {
-      setGoogleLoading(false);
-    }
-  };
-
-  const isSubmitting = form.formState.isSubmitting || googleLoading;
+  const redirectParam = searchParams.get("redirect");
+  const safeRedirect =
+    redirectParam && redirectParam.startsWith("/") && !redirectParam.startsWith("//")
+      ? redirectParam
+      : null;
+  const nextPath =
+    (location.state as { from?: string } | null)?.from ?? safeRedirect ?? defaultNext;
 
   return (
-    <div>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">Welcome back</h1>
-        <p className="mt-2 text-muted-foreground">
-          {preLaunchEnabled
-            ? "Sign in to add listings and import from Hostaway."
-            : "Sign in to your Lagedra account to continue."}
-        </p>
-      </div>
-
-      {appConfig.googleClientId && !preLaunchEnabled && (
-        <>
-          <GoogleSignInButton
-            onSuccess={handleGoogleLogin}
-            onError={() => setServerError("Google sign-in failed.")}
-            text="signin_with"
-          />
-
-          <div className="relative my-6">
-            <Separator />
-            <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-background px-3 text-xs text-muted-foreground">
-              or
-            </span>
-          </div>
-        </>
-      )}
-
-      <form onSubmit={onSubmit} className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
-          <div className="relative">
-            <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              id="email"
-              type="email"
-              placeholder="you@example.com"
-              className="pl-10"
-              disabled={isSubmitting}
-              {...form.register("email")}
-            />
-          </div>
-          <FormError message={form.formState.errors.email?.message} />
-        </div>
-
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="password">Password</Label>
-            <Link
-              to="/auth/forgot-password"
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              Forgot password?
-            </Link>
-          </div>
-          <div className="relative">
-            <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              id="password"
-              type="password"
-              placeholder="Enter your password"
-              className="pl-10"
-              disabled={isSubmitting}
-              {...form.register("password")}
-            />
-          </div>
-          <FormError message={form.formState.errors.password?.message} />
-        </div>
-
-        <FormError message={serverError} />
-
-        <Button
-          type="submit"
-          variant="accent"
-          size="lg"
-          className="w-full"
-          disabled={isSubmitting}
-        >
-          {form.formState.isSubmitting ? (
-            "Signing in..."
-          ) : (
-            <>
-              Sign in
-              <ArrowRight className="h-4 w-4" />
-            </>
-          )}
-        </Button>
-      </form>
-
-      <Separator className="my-8" />
-
-      <p className="text-center text-sm text-muted-foreground">
-        Don&apos;t have an account?{" "}
-        <Link to="/join" className="font-medium text-foreground hover:underline">
-          Sign up
-        </Link>
-      </p>
-    </div>
+    <SignInForm
+      variant="page"
+      onSuccess={() => {
+        navigate(nextPath, { replace: true });
+      }}
+    />
   );
 };

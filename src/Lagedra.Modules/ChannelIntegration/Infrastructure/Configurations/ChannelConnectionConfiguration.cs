@@ -19,6 +19,7 @@ public sealed class ChannelConnectionConfiguration : IEntityTypeConfiguration<Ch
         builder.Property(c => c.DisplayName).HasMaxLength(500).IsRequired();
         builder.Property(c => c.Username).HasMaxLength(500);
         builder.Property(c => c.EncryptedSecret).HasMaxLength(8000);
+        builder.Property(c => c.EncryptedRefreshToken).HasMaxLength(8000);
 
         builder.Property(c => c.Status)
             .HasConversion<string>()

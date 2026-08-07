@@ -53,6 +53,34 @@ public sealed partial class StripeService(
         return created.Id;
     }
 
+    public async Task<string> EnsureCustomerAsync(
+        Guid ownerId,
+        string email,
+        string? existingCustomerId,
+        CancellationToken ct = default)
+    {
+        if (!string.IsNullOrWhiteSpace(existingCustomerId))
+        {
+            try
+            {
+                var opts = NewRequestOptions();
+                var service = new CustomerService();
+                await service.GetAsync(existingCustomerId, null, opts, ct).ConfigureAwait(false);
+                return existingCustomerId;
+            }
+            catch (StripeException ex) when (IsMissingResource(ex))
+            {
+                LogStaleCustomerIgnored(logger, existingCustomerId, ownerId);
+            }
+        }
+
+        return await GetOrCreateCustomerAsync(ownerId, email, ct).ConfigureAwait(false);
+    }
+
+    private static bool IsMissingResource(StripeException ex) =>
+        string.Equals(ex.StripeError?.Code, "resource_missing", StringComparison.Ordinal)
+        || (ex.Message?.Contains("No such customer", StringComparison.OrdinalIgnoreCase) ?? false);
+
     public async Task<StripeSubscriptionResult> CreateSubscriptionAsync(string customerId, string priceId, string? idempotencyKey = null, CancellationToken ct = default)
     {
         var opts = NewRequestOptions(idempotencyKey);
@@ -175,6 +203,40 @@ public sealed partial class StripeService(
         return new Uri(link.Url);
     }
 
+    public async Task<Uri> CreateAccountUpdateLinkAsync(string accountId, Uri? returnUrl = null, Uri? refreshUrl = null, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(accountId);
+
+        var opts = NewRequestOptions();
+        var linkService = new AccountLinkService();
+
+        var link = await linkService.CreateAsync(new AccountLinkCreateOptions
+        {
+            Account = accountId,
+            RefreshUrl = (refreshUrl ?? _settings.ConnectRefreshUrl).ToString(),
+            ReturnUrl = (returnUrl ?? _settings.ConnectReturnUrl).ToString(),
+            Type = "account_update"
+        }, opts, ct).ConfigureAwait(false);
+
+        LogAccountUpdateLinkCreated(logger, accountId);
+        return new Uri(link.Url);
+    }
+
+    public async Task<Uri> CreateExpressLoginLinkAsync(string accountId, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(accountId);
+
+        var opts = NewRequestOptions();
+        var loginLinkService = new AccountLoginLinkService();
+
+        var loginLink = await loginLinkService
+            .CreateAsync(accountId, null, opts, ct)
+            .ConfigureAwait(false);
+
+        LogExpressLoginLinkCreated(logger, accountId);
+        return new Uri(loginLink.Url);
+    }
+
     public async Task<StripeAccountStatusResult> GetAccountStatusAsync(string accountId, CancellationToken ct = default)
     {
         var opts = NewRequestOptions();
@@ -191,6 +253,9 @@ public sealed partial class StripeService(
             currentlyDue.Any(IsTaxRequirement) || pastDue.Any(IsTaxRequirement);
         var taxRequirementPastDue = pastDue.Any(IsTaxRequirement);
         var taxRequirementPendingVerification = pendingVerification.Any(IsTaxRequirement);
+        var hasOutstandingBankRequirement =
+            currentlyDue.Any(IsBankRequirement) || pastDue.Any(IsBankRequirement);
+        var bankRequirementPastDue = pastDue.Any(IsBankRequirement);
         var isRestricted = !string.IsNullOrEmpty(requirements?.DisabledReason);
         var hasExternalAccount = account.ExternalAccounts?.Data?.Count > 0;
 
@@ -203,7 +268,11 @@ public sealed partial class StripeService(
             hasOutstandingTaxRequirement,
             taxRequirementPastDue,
             taxRequirementPendingVerification,
-            isRestricted);
+            isRestricted,
+            hasOutstandingBankRequirement,
+            bankRequirementPastDue,
+            currentlyDue.ToList(),
+            pastDue.ToList());
     }
 
     // Stripe expresses tax-form needs (W-9/W-8, EIN/SSN) as requirement keys such
@@ -213,6 +282,9 @@ public sealed partial class StripeService(
         requirement.Contains("tax_id", StringComparison.OrdinalIgnoreCase)
         || requirement.Contains("id_number", StringComparison.OrdinalIgnoreCase)
         || requirement.Contains("ssn", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsBankRequirement(string requirement) =>
+        requirement.Contains("external_account", StringComparison.OrdinalIgnoreCase);
 
     public async Task<StripePaymentIntentResult> CreateDestinationPaymentIntentAsync(
         long amountCents, string currency, string destinationAccountId,
@@ -449,6 +521,12 @@ public sealed partial class StripeService(
     [LoggerMessage(Level = LogLevel.Information, Message = "Stripe connected account created for host {HostUserId}: {AccountId}")]
     private static partial void LogConnectedAccountCreated(ILogger logger, Guid hostUserId, string accountId);
 
+    [LoggerMessage(Level = LogLevel.Information, Message = "Stripe Express login link created for account {AccountId}")]
+    private static partial void LogExpressLoginLinkCreated(ILogger logger, string accountId);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Stripe account_update link created for account {AccountId}")]
+    private static partial void LogAccountUpdateLinkCreated(ILogger logger, string accountId);
+
     [LoggerMessage(Level = LogLevel.Information, Message = "Stripe PaymentIntent created: {PaymentIntentId}, amount {AmountCents}, destination {DestinationAccountId}")]
     private static partial void LogPaymentIntentCreated(ILogger logger, string paymentIntentId, long amountCents, string destinationAccountId);
 
@@ -460,6 +538,9 @@ public sealed partial class StripeService(
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Stripe SetupIntent created: {SetupIntentId} for customer {CustomerId}")]
     private static partial void LogSetupIntentCreated(ILogger logger, string setupIntentId, string customerId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Cached Stripe customer {CustomerId} for owner {OwnerId} is missing on this Stripe account — recreating")]
+    private static partial void LogStaleCustomerIgnored(ILogger logger, string customerId, Guid ownerId);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Stripe off-session charge created: {PaymentIntentId} amount {AmountCents} customer {CustomerId}")]
     private static partial void LogOffSessionChargeCreated(ILogger logger, string paymentIntentId, long amountCents, string customerId);

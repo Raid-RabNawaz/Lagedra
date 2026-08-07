@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using Lagedra.Modules.LeaseAgreements.Application.Services;
 using Lagedra.Modules.LeaseAgreements.Infrastructure.Services;
 using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Results;
@@ -38,8 +39,7 @@ public sealed class GenerateDealLeasePdfCommandHandler(
             {
                 return Result<DealLeaseDocument>.Failure(new Error(
                     "LeaseTemplate.MissingFields",
-                    "Missing required lease fields: "
-                    + string.Join(", ", filled.MissingRequiredPlaceholders.Select(k => "{{" + k + "}}"))));
+                    FormatMissingFieldsMessage(filled.MissingRequiredPlaceholders)));
             }
 
             var pdf = pdfGenerator.Generate(filled.Title, filled.FilledHtml);
@@ -62,5 +62,27 @@ public sealed class GenerateDealLeasePdfCommandHandler(
         {
             return Result<DealLeaseDocument>.Failure(new Error("LeaseTemplate.FillFailed", ex.Message));
         }
+    }
+
+    private static string FormatMissingFieldsMessage(IReadOnlyList<string> missingKeys)
+    {
+        var labels = missingKeys
+            .Select(key =>
+            {
+                var def = LeasePlaceholderCatalog.All
+                    .FirstOrDefault(p => string.Equals(p.Key, key, StringComparison.OrdinalIgnoreCase));
+                return def is null ? key : def.Label;
+            })
+            .ToList();
+
+        var list = string.Join(", ", labels);
+        if (missingKeys.Any(k => string.Equals(k, "listing.fullAddress", StringComparison.OrdinalIgnoreCase)))
+        {
+            return "Cannot generate the lease PDF because the listing has no locked property address. "
+                + "Open the listing, lock the full street address, then try downloading again. "
+                + $"Missing: {list}.";
+        }
+
+        return $"Cannot generate the lease PDF — missing required information: {list}.";
     }
 }

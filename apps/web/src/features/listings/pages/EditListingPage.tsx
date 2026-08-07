@@ -347,7 +347,7 @@ export const EditListingPage = () => {
                     }`
               }
               jumpLabel="Edit profile"
-              onJump={() => navigate("/profile")}
+              onJump={() => navigate("/app/profile")}
             />
             <ChecklistRow
               done={hasPhotos}

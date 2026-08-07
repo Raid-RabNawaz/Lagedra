@@ -11,18 +11,21 @@ import {
   useHostStripeStatus,
   useHostStripeOnboard,
   useRefreshOnboardingLink,
+  useHostExpressLogin,
+  useHostAccountUpdateLink,
   useHostPaymentDetails,
   useSaveHostPaymentDetails,
 } from "@/features/host-onboarding/hooks/useHostStripe";
 import { useHostBillingStatement } from "@/features/activation-billing/hooks/useBilling";
 import { formatMoney } from "@/utils/format";
+import { getApiErrorMessage } from "@/api/errors";
 import type {
   HostAccountRequirementStatus,
   HostStripeStatusDto,
 } from "@/api/types";
 import {
   Wallet, Save, CheckCircle2, AlertTriangle, ExternalLink,
-  Clock, Building2, FileText, CreditCard, Banknote,
+  Clock, Building2, FileText, CreditCard, Banknote, LayoutDashboard,
 } from "lucide-react";
 
 export default function HostStripeOnboardingPage() {
@@ -101,9 +104,15 @@ function StripeConnectSection({
 }) {
   const onboard = useHostStripeOnboard();
   const refresh = useRefreshOnboardingLink();
+  const expressLogin = useHostExpressLogin();
+  const accountUpdate = useHostAccountUpdateLink();
   const [error, setError] = useState<string | null>(null);
 
-  const busy = onboard.isPending || refresh.isPending;
+  const busy =
+    onboard.isPending ||
+    refresh.isPending ||
+    expressLogin.isPending ||
+    accountUpdate.isPending;
 
   const startOnboarding = async () => {
     setError(null);
@@ -116,7 +125,7 @@ function StripeConnectSection({
       // No URL means the account is already fully enabled — the status query
       // refresh from onSuccess will reflect the ready state.
     } catch (e) {
-      setError((e as Error)?.message ?? "Could not start Stripe onboarding.");
+      setError(getApiErrorMessage(e, "Could not start Stripe onboarding."));
     }
   };
 
@@ -128,7 +137,36 @@ function StripeConnectSection({
         window.location.href = onboardingUrl;
       }
     } catch (e) {
-      setError((e as Error)?.message ?? "Could not refresh your Stripe link.");
+      setError(getApiErrorMessage(e, "Could not refresh your Stripe link."));
+    }
+  };
+
+  const openExpressDashboard = async () => {
+    setError(null);
+    try {
+      const { url } = await expressLogin.mutateAsync();
+      if (url) {
+        window.location.href = url;
+      }
+    } catch (e) {
+      setError(
+        getApiErrorMessage(
+          e,
+          "Could not open the Stripe Express Dashboard. Finish onboarding first.",
+        ),
+      );
+    }
+  };
+
+  const updatePayoutDetails = async () => {
+    setError(null);
+    try {
+      const { url } = await accountUpdate.mutateAsync();
+      if (url) {
+        window.location.href = url;
+      }
+    } catch (e) {
+      setError(getApiErrorMessage(e, "Could not open Stripe account update."));
     }
   };
 
@@ -199,11 +237,29 @@ function StripeConnectSection({
           </div>
         )}
 
+        {hasAccount && !ready && (status?.outstandingRequirements?.length ?? 0) > 0 && (
+          <Alert>
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              <p className="font-medium">Stripe still needs:</p>
+              <ul className="mt-1 list-disc pl-4 text-sm">
+                {status!.outstandingRequirements!.map((req) => (
+                  <li key={req}>{formatStripeRequirement(req)}</li>
+                ))}
+              </ul>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Finish every step in Stripe (including bank details and Terms of
+                Service) before returning here — leaving early keeps payouts disabled.
+              </p>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {!ready && (
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button onClick={startOnboarding} disabled={busy} className="gap-2">
               <ExternalLink className="h-4 w-4" />
-              {busy
+              {busy && (onboard.isPending || refresh.isPending)
                 ? "Opening Stripe..."
                 : hasAccount
                   ? "Continue Stripe setup"
@@ -222,17 +278,69 @@ function StripeConnectSection({
           </div>
         )}
 
+        {hasAccount && (
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Button
+              variant={ready ? "default" : "outline"}
+              onClick={openExpressDashboard}
+              disabled={busy}
+              className="gap-2"
+            >
+              <LayoutDashboard className="h-4 w-4" />
+              {expressLogin.isPending
+                ? "Opening dashboard..."
+                : "Open Stripe Express"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={updatePayoutDetails}
+              disabled={busy}
+              className="gap-2"
+            >
+              <Building2 className="h-4 w-4" />
+              {accountUpdate.isPending
+                ? "Opening Stripe..."
+                : "Update bank & tax details"}
+            </Button>
+          </div>
+        )}
+
+        {hasAccount && (
+          <p className="text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">Open Stripe Express</span>{" "}
+            to view balances, payouts, and transactions.{" "}
+            <span className="font-medium text-foreground">Update bank &amp; tax details</span>{" "}
+            opens Stripe so you can change payout destination or tax forms.
+          </p>
+        )}
+
         {!ready && (
           <p className="text-xs text-muted-foreground">
             You'll be redirected to Stripe to enter your business/personal
             details, bank account, and tax forms. Stripe sends you back here
-            when you're done — keep this app's dev server running while you
-            complete Stripe (don't stop <code className="rounded bg-muted px-1">npm run dev</code>).
+            when you're done.
           </p>
         )}
       </CardContent>
     </Card>
   );
+}
+
+function formatStripeRequirement(requirement: string): string {
+  const key = requirement.toLowerCase();
+  if (key.includes("external_account")) {
+    return "Bank account for payouts";
+  }
+  if (key.includes("tos_acceptance")) {
+    return "Accept Stripe Terms of Service";
+  }
+  if (key.includes("tax_id") || key.includes("id_number") || key.includes("ssn")) {
+    return "Tax information (W-9 / W-8)";
+  }
+  if (key.includes("individual") || key.includes("company") || key.includes("business")) {
+    return `Business / personal details (${requirement})`;
+  }
+  return requirement;
 }
 
 function requirementBadge(

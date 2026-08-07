@@ -21,6 +21,7 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { ErrorState } from "@/components/shared/ErrorState";
 import { useMyInquiries } from "@/features/inquiry/hooks/useInquiry";
 import { InquiryStatusBadge } from "@/features/inquiry/components/InquiryStatusBadge";
+import { inquiryThreadHref } from "@/features/inquiry/utils/inquiryThreadHref";
 import { formatDate } from "@/utils/format";
 import type { InquirySessionStatus, TenantInquirySummaryDto } from "@/api/types";
 import { cn } from "@/lib/utils";
@@ -191,7 +192,7 @@ export const MyInquiriesPage = () => {
 };
 
 const ConversationRow = ({ row }: { row: TenantInquirySummaryDto }) => {
-  const threadHref = `/app/inquiry/${row.sessionId}`;
+  const threadHref = inquiryThreadHref(row);
 
   return (
     <Card className="overflow-hidden transition-colors hover:border-primary/40">

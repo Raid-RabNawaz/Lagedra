@@ -28,6 +28,7 @@
     <ProjectReference Include="..\..\src\Lagedra.Modules\Reviews\Reviews.csproj" />
     <ProjectReference Include="..\..\src\Lagedra.Modules\VerificationAndRisk\VerificationAndRisk.csproj" />
     <ProjectReference Include="..\..\src\Lagedra.Modules\LeaseAgreements\LeaseAgreements.csproj" />
+    <ProjectReference Include="..\..\src\Lagedra.Modules\ChannelIntegration\ChannelIntegration.csproj" />
   </ItemGroup>
 
   <ItemGroup>

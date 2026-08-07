@@ -1,4 +1,5 @@
 using Lagedra.Modules.ChannelIntegration.Application.DTOs;
+using Lagedra.Modules.ChannelIntegration.Domain.Enums;
 using Lagedra.Modules.ChannelIntegration.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Results;
 using MediatR;
@@ -29,7 +30,9 @@ public sealed class ListChannelListingsQueryHandler(
 
         var ownsConnection = await dbContext.Connections
             .AsNoTracking()
-            .AnyAsync(c => c.Id == request.ConnectionId && c.HostUserId == request.HostUserId, cancellationToken)
+            .AnyAsync(c => c.Id == request.ConnectionId
+                        && c.HostUserId == request.HostUserId
+                        && c.Status != ChannelConnectionStatus.Revoked, cancellationToken)
             .ConfigureAwait(false);
 
         if (!ownsConnection)

@@ -1,19 +1,23 @@
 using Lagedra.Infrastructure.External.Channels;
 using Lagedra.Modules.ChannelIntegration.Application.DTOs;
-using Lagedra.Modules.ChannelIntegration.Domain.Aggregates;
 using Lagedra.Modules.ChannelIntegration.Infrastructure.Persistence;
+using Lagedra.Modules.ChannelIntegration.Infrastructure.Services;
 using Lagedra.SharedKernel.Results;
 using Lagedra.SharedKernel.Security;
-using Lagedra.SharedKernel.Time;
 using MediatR;
-using Microsoft.EntityFrameworkCore;
 
 namespace Lagedra.Modules.ChannelIntegration.Application.Commands;
 
 /// <summary>
-/// Connects a host's external PMS / channel account to Lagedra. Provider-agnostic:
-/// the chosen <paramref name="ProviderKey"/> is validated against the registry of
+/// Connects a host's external PMS / channel account to Lagedra using credentials
+/// the host supplies directly (an API key or token pair). Provider-agnostic: the
+/// chosen <paramref name="ProviderKey"/> is validated against the registry of
 /// installed providers. The API secret is encrypted before it touches the DB.
+///
+/// A host may hold at most one connection per provider — a single API credential
+/// covers the whole PMS account, so a second one would import the same properties
+/// twice. To move to a different account the host disconnects the existing
+/// connection first.
 /// </summary>
 public sealed record ConnectChannelCommand(
     Guid HostUserId,
@@ -25,89 +29,74 @@ public sealed record ConnectChannelCommand(
 
 public sealed class ConnectChannelCommandHandler(
     ChannelDbContext dbContext,
+    ChannelConnectionLinker linker,
+    OwnerRezOAuthFlow ownerRezOAuth,
     IChannelProviderRegistry providers,
-    IEncryptionService encryption,
-    IClock clock) : IRequestHandler<ConnectChannelCommand, Result<ChannelConnectionDto>>
+    IEncryptionService encryption) : IRequestHandler<ConnectChannelCommand, Result<ChannelConnectionDto>>
 {
     private static readonly Error UnknownProvider = new(
         "Channel.UnknownProvider",
         "No channel provider is registered for the requested key.");
 
-    private static readonly Error AlreadyConnected = new(
-        "Channel.AlreadyConnected",
-        "This provider account is already connected for this host.");
+    private static readonly Error InvalidAccount = new(
+        "Channel.InvalidAccount",
+        "An account identifier and a name for the connection are both required.");
 
-    /// <summary>
-    /// Providers where a single link covers the whole account, so a second
-    /// connection would import the same properties twice.
-    /// </summary>
-    private static readonly Dictionary<string, (string CanonicalKey, Error Error)> SingleConnectionProviders =
-        new(StringComparer.OrdinalIgnoreCase)
-        {
-            ["hostaway"] = ("hostaway", new(
-                "Channel.HostawayAlreadyConnected",
-                "You already have a Hostaway connection. Sync that connection to update listings.")),
-            ["guesty"] = ("guesty", new(
-                "Channel.GuestyAlreadyConnected",
-                "You already have a Guesty connection. Sync that connection to update listings.")),
-            ["ownerrez"] = ("ownerrez", new(
-                "Channel.OwnerRezAlreadyConnected",
-                "You already have an OwnerRez connection. Sync that connection to update listings.")),
-        };
+    private static readonly Error OwnerRezRequiresOAuth = new(
+        "Channel.OwnerRezRequiresOAuth",
+        "OwnerRez is now connected by authorizing Lagedra in your OwnerRez account, not with an API "
+        + "token. Use Connect with OwnerRez.");
 
     public async Task<Result<ChannelConnectionDto>> Handle(
         ConnectChannelCommand request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        if (providers.Resolve(request.ProviderKey) is null)
+        var provider = providers.Resolve(request.ProviderKey);
+        if (provider is null)
         {
             return Result<ChannelConnectionDto>.Failure(UnknownProvider);
         }
 
-        var providerKey = request.ProviderKey.Trim();
-        var externalAccountId = request.ExternalAccountId.Trim();
-
-        if (SingleConnectionProviders.TryGetValue(providerKey, out var singleConnection))
+        // Once an OwnerRez OAuth app is configured it becomes the only way in:
+        // personal access tokens are capped at two accounts per IP per day, so
+        // letting them back in after the switch would silently reintroduce that
+        // ceiling for whoever used the older path.
+        if (provider.ProviderKey == OwnerRezOAuthFlow.ProviderKey && ownerRezOAuth.IsConfigured)
         {
-            var canonicalKey = singleConnection.CanonicalKey;
-            var linked = await dbContext.Connections
-                .AnyAsync(c => c.HostUserId == request.HostUserId
-                            && c.ProviderKey == canonicalKey, cancellationToken)
-                .ConfigureAwait(false);
-            if (linked)
-            {
-                return Result<ChannelConnectionDto>.Failure(singleConnection.Error);
-            }
+            return Result<ChannelConnectionDto>.Failure(OwnerRezRequiresOAuth);
         }
 
-        var exists = await dbContext.Connections
-            .AnyAsync(c => c.HostUserId == request.HostUserId
-                        && c.ProviderKey == providerKey
-                        && c.ExternalAccountId == externalAccountId, cancellationToken)
-            .ConfigureAwait(false);
-
-        if (exists)
+        if (string.IsNullOrWhiteSpace(request.ExternalAccountId)
+            || string.IsNullOrWhiteSpace(request.DisplayName))
         {
-            return Result<ChannelConnectionDto>.Failure(AlreadyConnected);
+            return Result<ChannelConnectionDto>.Failure(InvalidAccount);
         }
 
         var encryptedSecret = string.IsNullOrWhiteSpace(request.Secret)
             ? null
             : encryption.Encrypt(request.Secret);
 
-        var connection = ChannelConnection.Create(
-            request.HostUserId,
-            request.ProviderKey,
-            request.ExternalAccountId,
-            request.DisplayName,
-            request.Username,
-            encryptedSecret,
-            clock);
+        // Use the registry's key rather than the caller's spelling so the
+        // one-per-provider rule cannot be sidestepped by casing.
+        var linked = await linker.LinkAsync(
+                new LinkChannelRequest(
+                    request.HostUserId,
+                    provider.ProviderKey,
+                    request.ExternalAccountId,
+                    request.DisplayName,
+                    request.Username,
+                    encryptedSecret),
+                cancellationToken)
+            .ConfigureAwait(false);
 
-        dbContext.Connections.Add(connection);
+        if (linked.IsFailure)
+        {
+            return Result<ChannelConnectionDto>.Failure(linked.Error);
+        }
+
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        return Result<ChannelConnectionDto>.Success(ChannelConnectionMapper.ToDto(connection));
+        return Result<ChannelConnectionDto>.Success(ChannelConnectionMapper.ToDto(linked.Value));
     }
 }

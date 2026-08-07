@@ -12,7 +12,11 @@ public sealed record StripeAccountStatusResult(
     bool HasOutstandingTaxRequirement,
     bool TaxRequirementPastDue,
     bool TaxRequirementPendingVerification,
-    bool IsRestricted);
+    bool IsRestricted,
+    bool HasOutstandingBankRequirement,
+    bool BankRequirementPastDue,
+    IReadOnlyList<string> CurrentlyDue,
+    IReadOnlyList<string> PastDue);
 public sealed record StripePaymentIntentResult(string PaymentIntentId, string ClientSecret, string Status, long Amount, string Currency);
 public sealed record StripeRefundResult(string RefundId, long AmountRefunded, string Status);
 
@@ -25,6 +29,18 @@ public sealed record StripeSetupIntentResult(string SetupIntentId, string Client
 public interface IStripeService
 {
     Task<string> GetOrCreateCustomerAsync(Guid userId, string email, CancellationToken ct = default);
+
+    /// <summary>
+    /// Returns <paramref name="existingCustomerId"/> when it still exists in the
+    /// current Stripe account; otherwise creates (or reuses-by-email) a customer.
+    /// Used after Stripe account migrations where cached <c>cus_…</c> ids go stale.
+    /// </summary>
+    Task<string> EnsureCustomerAsync(
+        Guid ownerId,
+        string email,
+        string? existingCustomerId,
+        CancellationToken ct = default);
+
     Task<StripeSubscriptionResult> CreateSubscriptionAsync(string customerId, string priceId, string? idempotencyKey = null, CancellationToken ct = default);
     Task CancelSubscriptionAsync(string subscriptionId, CancellationToken ct = default);
     Task<StripeInvoiceResult> CreateProratedInvoiceAsync(string subscriptionId, string priceId, CancellationToken ct = default);
@@ -45,6 +61,20 @@ public interface IStripeService
         Uri? refreshUrl = null,
         CancellationToken ct = default);
     Task<Uri> CreateAccountOnboardingLinkAsync(string accountId, Uri? returnUrl = null, Uri? refreshUrl = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Creates an Account Link with <c>type=account_update</c> so the host can
+    /// change bank, tax, or identity details on an existing Express account.
+    /// </summary>
+    Task<Uri> CreateAccountUpdateLinkAsync(string accountId, Uri? returnUrl = null, Uri? refreshUrl = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Creates a one-time Express Dashboard login URL for the connected account
+    /// (balances, payouts, transactions). Requires the account to have submitted
+    /// onboarding details.
+    /// </summary>
+    Task<Uri> CreateExpressLoginLinkAsync(string accountId, CancellationToken ct = default);
+
     Task<StripeAccountStatusResult> GetAccountStatusAsync(string accountId, CancellationToken ct = default);
 
     /// <summary>

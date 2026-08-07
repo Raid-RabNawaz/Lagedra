@@ -8,14 +8,17 @@ import {
 import { roles } from "./roles";
 
 describe("preLaunchAccess", () => {
-  it("allows listings and channels paths only", () => {
+  it("allows listings, channels, profile, verification, and payout paths", () => {
     expect(isPreLaunchHostPath("/app/listings")).toBe(true);
     expect(isPreLaunchHostPath("/app/listings/new")).toBe(true);
     expect(isPreLaunchHostPath("/app/listings/abc")).toBe(true);
     expect(isPreLaunchHostPath("/app/listings/abc/edit")).toBe(true);
     expect(isPreLaunchHostPath("/app/channels")).toBe(true);
+    expect(isPreLaunchHostPath("/app/profile")).toBe(true);
+    expect(isPreLaunchHostPath("/app/verification")).toBe(true);
+    expect(isPreLaunchHostPath("/app/payout-setup")).toBe(true);
+    expect(isPreLaunchHostPath("/app/stripe-onboarding")).toBe(true);
     expect(isPreLaunchHostPath("/app")).toBe(false);
-    expect(isPreLaunchHostPath("/app/profile")).toBe(false);
     expect(isPreLaunchHostPath("/app/deals")).toBe(false);
     expect(isPreLaunchHostPath("/listings")).toBe(false);
   });

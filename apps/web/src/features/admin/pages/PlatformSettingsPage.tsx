@@ -77,6 +77,7 @@ const labelOverrides: Record<string, string> = {
   "service_fee.tenant_use_flat": "Fee type",
   "service_fee.tenant_bps": "Percentage rate",
   "service_fee.tenant_flat_cents": "Flat amount",
+  "stripe.platform_fee_price_id": "Platform fee price ID",
 };
 
 // Custom on/off labels for boolean settings (default is Enabled/Disabled).

@@ -11,6 +11,8 @@ import {
   LayoutDashboard,
   CalendarCheck,
   Bell,
+  Building2,
+  ClipboardCheck,
   Facebook,
   Instagram,
   Linkedin,
@@ -34,6 +36,8 @@ const iconMap: Record<string, typeof Search> = {
   Bell,
   LogIn,
   UserPlus,
+  Building2,
+  ClipboardCheck,
 };
 
 function resolveIcon(name: string) {

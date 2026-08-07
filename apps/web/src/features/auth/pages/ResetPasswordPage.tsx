@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { Link, useSearchParams } from "react-router-dom";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Lock, CheckCircle2, ArrowRight } from "lucide-react";
+import { Lock, CheckCircle2, ArrowRight, Eye, EyeOff } from "lucide-react";
 import { authApi } from "@/features/auth/services/authApi";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
@@ -33,6 +33,8 @@ export const ResetPasswordPage = () => {
   const [params] = useSearchParams();
   const [message, setMessage] = useState<string | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const userId = params.get("userId");
   const token = params.get("token");
   // First-time password setup (email just verified) vs a forgotten-password
@@ -117,11 +119,19 @@ export const ResetPasswordPage = () => {
             <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               id="password"
-              type="password"
+              type={showPassword ? "text" : "password"}
               placeholder="Enter new password"
-              className="pl-10"
+              className="pl-10 pr-10"
               {...form.register("password")}
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword((v) => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+              aria-label={showPassword ? "Hide password" : "Show password"}
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
           </div>
           <FormError message={form.formState.errors.password?.message} />
         </div>
@@ -132,11 +142,19 @@ export const ResetPasswordPage = () => {
             <Lock className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               id="confirmPassword"
-              type="password"
+              type={showConfirmPassword ? "text" : "password"}
               placeholder="Confirm new password"
-              className="pl-10"
+              className="pl-10 pr-10"
               {...form.register("confirmPassword")}
             />
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword((v) => !v)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground cursor-pointer"
+              aria-label={showConfirmPassword ? "Hide password" : "Show password"}
+            >
+              {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
           </div>
           <FormError message={form.formState.errors.confirmPassword?.message} />
         </div>

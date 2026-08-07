@@ -46,13 +46,18 @@ public sealed partial class CreateBookingSetupIntentCommandHandler(
                     "Could not resolve the tenant user for SetupIntent creation."));
         }
 
-        var customerId = profile.StripeCustomerId;
-        if (string.IsNullOrEmpty(customerId))
-        {
-            customerId = await stripeService
-                .GetOrCreateCustomerAsync(profile.UserId, profile.Email, cancellationToken)
-                .ConfigureAwait(false);
+        // After a Stripe account migration, cached cus_ ids from the previous
+        // platform are invalid. EnsureCustomer recreates when resource_missing.
+        var customerId = await stripeService
+            .EnsureCustomerAsync(
+                profile.UserId,
+                profile.Email,
+                profile.StripeCustomerId,
+                cancellationToken)
+            .ConfigureAwait(false);
 
+        if (!string.Equals(profile.StripeCustomerId, customerId, StringComparison.Ordinal))
+        {
             await userStripeProfile
                 .SetStripeCustomerIdAsync(profile.UserId, customerId, cancellationToken)
                 .ConfigureAwait(false);
@@ -60,10 +65,10 @@ public sealed partial class CreateBookingSetupIntentCommandHandler(
             LogCustomerCachedOnUser(logger, profile.UserId, customerId);
         }
 
-        // Idempotency keyed on the (tenant, listing) tuple keeps the
-        // SetupIntent stable if the dialog is opened twice in quick
-        // succession (e.g. modal re-mounts on hot reload).
-        var idempotencyKey = $"si-apply-{request.TenantUserId:N}-{request.ListingId:N}";
+        // Include customer id so a stale idempotency key from a failed attempt
+        // against a missing customer does not keep returning the cached error.
+        var idempotencyKey =
+            $"si-apply-{request.TenantUserId:N}-{request.ListingId:N}-{customerId}";
         var setupIntent = await stripeService
             .CreateSetupIntentAsync(
                 customerId,

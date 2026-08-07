@@ -49,14 +49,13 @@ public sealed partial class LeaseAgreementFiller(
             ["tenant.phone"] = tenant?.Phone ?? string.Empty,
             ["tenant.email"] = tenant?.Email ?? string.Empty,
             ["tenant.mailingAddress"] = tenant?.MailingAddress
-                ?? (address is null
-                    ? string.Empty
-                    : $"{address.Street}, {address.City}, {address.State} {address.ZipCode}"),
+                ?? FormatFullAddress(address),
             ["tenant.additionalOccupants"] = string.Empty,
             ["listing.propertyTypeLabel"] = HumanizePropertyType(listing.PropertyType),
-            ["listing.fullAddress"] = address is null
-                ? string.Empty
-                : $"{address.Street}, {address.City}, {address.State} {address.ZipCode}, {address.Country}",
+            // Treat blank owned-entity rows the same as a missing address so the
+            // required-placeholder check fails with a clear message instead of
+            // embedding ", ,  , " into a signed lease.
+            ["listing.fullAddress"] = FormatFullAddress(address),
             ["listing.paymentMethods"] = terms?.PaymentMethods ?? string.Empty,
             ["listing.rentDueDay"] = FormatDueDay(terms?.RentDueDayOfMonth ?? 1),
             ["listing.nsfFirstFee"] = FormatMoney(terms?.NsfFirstFeeCents ?? 2500),
@@ -171,6 +170,21 @@ public sealed partial class LeaseAgreementFiller(
             };
 
     private static string YesNo(bool value) => value ? "Yes" : "No";
+
+    private static string FormatFullAddress(ListingAddressDto? address)
+    {
+        if (address is null
+            || string.IsNullOrWhiteSpace(address.Street)
+            || string.IsNullOrWhiteSpace(address.City)
+            || string.IsNullOrWhiteSpace(address.State)
+            || string.IsNullOrWhiteSpace(address.ZipCode))
+        {
+            return string.Empty;
+        }
+
+        var country = string.IsNullOrWhiteSpace(address.Country) ? "US" : address.Country.Trim();
+        return $"{address.Street.Trim()}, {address.City.Trim()}, {address.State.Trim()} {address.ZipCode.Trim()}, {country}";
+    }
 
     [GeneratedRegex(@"\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}")]
     private static partial Regex PlaceholderRegex();

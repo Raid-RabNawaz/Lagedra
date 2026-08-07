@@ -110,7 +110,14 @@ export const listingApi = {
   },
 
   async submitForReview(id: string): Promise<ListingDetailsDto> {
-    const response = await http.post<ListingDetailsDto>(endpoints.listings.submitForReview(id));
+    // Submit checks ownership, precise address, Stripe payout readiness, and
+    // host profile completeness — against a remote API this can exceed the
+    // default 10s client timeout (especially on cold starts / slow DB).
+    const response = await http.post<ListingDetailsDto>(
+      endpoints.listings.submitForReview(id),
+      undefined,
+      { timeout: 60_000 },
+    );
     return response.data;
   },
 

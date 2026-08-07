@@ -24,6 +24,21 @@ export const hostStripeApi = {
     return response.data;
   },
 
+  async openExpressDashboard(): Promise<{ url: string }> {
+    const response = await http.post<{ url: string }>(
+      endpoints.hostPayouts.expressLogin,
+    );
+    return response.data;
+  },
+
+  async updateAccountLink(): Promise<{ url: string }> {
+    const response = await http.post<{ url: string }>(
+      endpoints.hostPayouts.updateLink,
+      stripeConnectReturnUrls(),
+    );
+    return response.data;
+  },
+
   async getStatus(): Promise<HostStripeStatusDto> {
     const response = await http.get<HostStripeStatusDto>(
       endpoints.hostPayouts.status,

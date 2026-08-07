@@ -1,3 +1,4 @@
+using Lagedra.Modules.ChannelIntegration.Domain.Enums;
 using Lagedra.Modules.ChannelIntegration.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Results;
 using Lagedra.SharedKernel.Time;
@@ -26,7 +27,9 @@ public sealed class SetChannelStatusCommandHandler(
 
         var connection = await dbContext.Connections
             .FirstOrDefaultAsync(
-                c => c.Id == request.ConnectionId && c.HostUserId == request.HostUserId,
+                c => c.Id == request.ConnectionId
+                  && c.HostUserId == request.HostUserId
+                  && c.Status != ChannelConnectionStatus.Revoked,
                 cancellationToken)
             .ConfigureAwait(false);
 

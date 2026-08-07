@@ -38,6 +38,9 @@ public sealed class PlatformSettingsDbContext(DbContextOptions<PlatformSettingsD
             Seed(PlatformSettingKeys.TenantServiceFeeUseFlat, "false",
                 "When true, charge a flat tenant service fee (service_fee.tenant_flat_cents); when false, charge a percentage (service_fee.tenant_bps)"),
 
+            Seed(PlatformSettingKeys.StripePlatformFeePriceId, "",
+                "Stripe Price ID (price_…) for the host monthly protocol fee subscription"),
+
             Seed(PlatformSettingKeys.PaymentGracePeriodDays, "3",
                 "Days after booking confirmation before payment is considered overdue"),
             Seed(PlatformSettingKeys.PaymentReminderAfterDays, "4",

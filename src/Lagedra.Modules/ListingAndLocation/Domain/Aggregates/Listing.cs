@@ -620,7 +620,8 @@ public sealed class Listing : AggregateRoot<Guid>
     {
         ArgumentNullException.ThrowIfNull(geoPoint);
 
-        if (Status is not (ListingStatus.Draft or ListingStatus.Denied or ListingStatus.Published))
+        if (Status is not (ListingStatus.Draft or ListingStatus.Denied or ListingStatus.Published
+            or ListingStatus.Activated))
         {
             throw new InvalidOperationException(
                 $"Cannot update approximate location while locking address in status '{Status}'.");
@@ -633,7 +634,11 @@ public sealed class Listing : AggregateRoot<Guid>
     {
         ArgumentNullException.ThrowIfNull(address);
 
-        if (Status is not (ListingStatus.Draft or ListingStatus.Denied or ListingStatus.Published))
+        // Published and Activated stays can still lock/correct the street
+        // address — lease PDF generation and stay access both need it, and
+        // some older or imported listings may reach a booking without one.
+        if (Status is not (ListingStatus.Draft or ListingStatus.Denied or ListingStatus.Published
+            or ListingStatus.Activated))
         {
             throw new InvalidOperationException($"Cannot lock address in status '{Status}'.");
         }

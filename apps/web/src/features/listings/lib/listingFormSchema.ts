@@ -1,7 +1,7 @@
 import { z } from "zod";
 import type { CancellationPolicyType, PropertyType } from "@/api/types";
 
-const propertyTypes = [
+export const propertyTypes = [
   "Apartment",
   "House",
   "Condo",
@@ -14,7 +14,7 @@ const propertyTypes = [
   "Other",
 ] as const satisfies readonly PropertyType[];
 
-const cancellationTypes = [
+export const cancellationTypes = [
   "Flexible",
   "Moderate",
   "Strict",

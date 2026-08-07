@@ -47,6 +47,7 @@ public sealed class SubmitListingForReviewCommandHandler(
         ArgumentNullException.ThrowIfNull(request);
 
         var listing = await dbContext.Listings
+            .AsSplitQuery()
             .Include(l => l.Amenities).ThenInclude(a => a.AmenityDefinition)
             .Include(l => l.SafetyDevices).ThenInclude(s => s.SafetyDeviceDefinition)
             .Include(l => l.Considerations).ThenInclude(c => c.ConsiderationDefinition)

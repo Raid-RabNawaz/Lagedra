@@ -22,6 +22,9 @@ echo "  PARAM_GOOGLE_MAPS_KEY='AIza...' \\"
 echo "  PARAM_PERSONA_API_KEY='persona_...' \\"
 echo "  PARAM_ENCRYPTION_KEY='...' \\"
 echo "  PARAM_SIGNING_SECRET='...' \\"
+echo "  PARAM_OWNERREZ_CLIENT_ID='c_...' \\"
+echo "  PARAM_OWNERREZ_CLIENT_SECRET='s_...' \\"
+echo "  PARAM_OWNERREZ_WEBHOOK_PASSWORD='...' \\"
 echo "  RDS_MASTER_PASSWORD='...' \\"
 echo "  bash deploy/aws/04-secrets.sh"
 echo ""
@@ -54,6 +57,16 @@ put_ssm_param "google-maps-key"       "${PARAM_GOOGLE_MAPS_KEY:-}"
 put_ssm_param "persona-api-key"       "${PARAM_PERSONA_API_KEY:-}"
 put_ssm_param "encryption-key"        "${PARAM_ENCRYPTION_KEY:-}"
 put_ssm_param "signing-secret"        "${PARAM_SIGNING_SECRET:-}"
+
+# OwnerRez OAuth app, created under Developer/API Settings in OwnerRez. Unused
+# right now: hosts connect with their own API key instead, so the task definitions
+# deliberately do not reference these. Re-enabling OAuth means populating them here
+# AND adding the matching "secrets" entries back to the task definitions — in that
+# order, because ECS resolves every secret at container start and fails the task if
+# one is missing.
+put_ssm_param "ownerrez-client-id"        "${PARAM_OWNERREZ_CLIENT_ID:-}"
+put_ssm_param "ownerrez-client-secret"    "${PARAM_OWNERREZ_CLIENT_SECRET:-}"
+put_ssm_param "ownerrez-webhook-password" "${PARAM_OWNERREZ_WEBHOOK_PASSWORD:-}"
 
 # DB password in Secrets Manager (~$0.40/secret/month)
 if [ -n "${RDS_MASTER_PASSWORD:-}" ]; then

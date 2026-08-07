@@ -47,12 +47,35 @@ export function useSyncChannel() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (connectionId: string) => channelsApi.sync(connectionId),
-    onSuccess: (_data, connectionId) => {
+    // Refetched even on failure: a rejected sync records the reason on the
+    // connection, and that is worth showing on the card.
+    onSettled: (_data, _error, connectionId) => {
       void queryClient.invalidateQueries({ queryKey: channelKeys.connections });
       void queryClient.invalidateQueries({
         queryKey: channelKeys.listings(connectionId),
       });
     },
+  });
+}
+
+export function useDisconnectChannel() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (connectionId: string) => channelsApi.disconnect(connectionId),
+    onSuccess: (_data, connectionId) => {
+      void queryClient.invalidateQueries({ queryKey: channelKeys.connections });
+      queryClient.removeQueries({ queryKey: channelKeys.listings(connectionId) });
+    },
+  });
+}
+
+/**
+ * Asks the API where to send the host to authorize Lagedra in OwnerRez. Nothing
+ * is created until OwnerRez calls back, so there is no cache to invalidate here.
+ */
+export function useStartOwnerRezOAuth() {
+  return useMutation({
+    mutationFn: () => channelsApi.startOwnerRezOAuth(),
   });
 }
 

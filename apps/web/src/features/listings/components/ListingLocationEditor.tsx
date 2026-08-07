@@ -386,9 +386,12 @@ export function ListingLocationEditor({
   const isEditable = listing.status === "Draft" || listing.status === "Denied";
   const canEditApproxLocation = !readOnly && isEditable;
   const canLockPreciseAddress =
-    !readOnly && (isEditable || listing.status === "Published");
+    !readOnly && (isEditable || listing.status === "Published" || listing.status === "Activated");
   const showPreciseAddressCard =
-    isEditable || listing.status === "Published" || Boolean(listing.preciseAddress);
+    isEditable
+    || listing.status === "Published"
+    || listing.status === "Activated"
+    || Boolean(listing.preciseAddress);
 
   return (
     <div className="grid gap-6">

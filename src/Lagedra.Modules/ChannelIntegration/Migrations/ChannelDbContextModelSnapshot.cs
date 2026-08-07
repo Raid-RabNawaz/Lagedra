@@ -75,6 +75,10 @@ namespace ChannelIntegration.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
+                    b.Property<string>("EncryptedRefreshToken")
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
                     b.Property<string>("EncryptedSecret")
                         .HasMaxLength(8000)
                         .HasColumnType("character varying(8000)");
@@ -109,6 +113,9 @@ namespace ChannelIntegration.Migrations
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime?>("TokenExpiresAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");

@@ -39,11 +39,15 @@ public sealed partial class OwnerRezChannelProvider(
             return [];
         }
 
+        // This is the sync the host watches, so a refusal is reported rather than
+        // swallowed: "no properties yet" and "your authorization expired" must not
+        // look the same on the Channels page.
         var properties = await ReadAllPagesAsync(
                 credentials,
                 "/v2/properties?active=true",
                 ParseProperty,
-                ct)
+                ct,
+                reportFailure: true)
             .ConfigureAwait(false);
         if (properties.Count == 0)
         {
@@ -678,7 +682,13 @@ public sealed partial class OwnerRezChannelProvider(
         return notes.ToString();
     }
 
-    private static ChannelBookingUpdate? ParseBookingUpdate(JsonElement item)
+    /// <summary>
+    /// Maps one OwnerRez booking object to a status update, returning null for
+    /// blocks (which are not reservations) and for anything without an id. Public
+    /// because webhook deliveries carry the same booking shape as the polled list,
+    /// and the two paths must agree on what counts as cancelled.
+    /// </summary>
+    public static ChannelBookingUpdate? ParseBookingUpdate(JsonElement item)
     {
         var id = Int(item, "id");
         if (id is null)
@@ -713,7 +723,8 @@ public sealed partial class OwnerRezChannelProvider(
         ChannelCredentials credentials,
         string path,
         Func<JsonElement, T?> map,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool reportFailure = false)
         where T : class
     {
         var results = new List<T>();
@@ -725,7 +736,8 @@ public sealed partial class OwnerRezChannelProvider(
             var requestUri = nextPageUrl
                 ?? AppendQuery(path, $"limit={_settings.PageSize}&offset={offset}");
 
-            using var doc = await GetJsonAsync(credentials, requestUri, ct).ConfigureAwait(false);
+            using var doc = await GetJsonAsync(credentials, requestUri, ct, reportFailure)
+                .ConfigureAwait(false);
             if (doc is null
                 || !doc.RootElement.TryGetProperty("items", out var items)
                 || items.ValueKind != JsonValueKind.Array)
@@ -767,30 +779,100 @@ public sealed partial class OwnerRezChannelProvider(
         return results;
     }
 
+    /// <param name="reportFailure">
+    /// When true, a rejected request throws instead of yielding null, so a caller
+    /// on a host-visible path (the content sync) can record why it failed rather
+    /// than reporting "no listings found". Background paths leave it false and
+    /// degrade quietly.
+    /// </param>
     private async Task<JsonDocument?> GetJsonAsync(
         ChannelCredentials credentials,
         string path,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool reportFailure = false)
     {
+        // Built inside the try but thrown outside it, so the catch below cannot
+        // mistake a rejection for a transport failure and wrap it twice.
+        string? rejection = null;
+
         try
         {
             using var response = await SendAsync(credentials, HttpMethod.Get, path, null, ct)
                 .ConfigureAwait(false);
             var payload = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
 
-            if (!response.IsSuccessStatusCode)
+            if (response.IsSuccessStatusCode)
             {
-                LogHttpError(logger, "GET", (int)response.StatusCode, path);
-                return null;
+                return string.IsNullOrWhiteSpace(payload) ? null : JsonDocument.Parse(payload);
             }
 
-            return string.IsNullOrWhiteSpace(payload) ? null : JsonDocument.Parse(payload);
+            LogHttpError(logger, "GET", (int)response.StatusCode, path);
+            rejection = DescribeFailure(response, credentials);
         }
         catch (Exception ex) when (ex is HttpRequestException or JsonException or TaskCanceledException)
         {
             LogRequestException(logger, $"GET {path}", ex);
-            return null;
+
+            if (!reportFailure || ct.IsCancellationRequested)
+            {
+                return null;
+            }
+
+            throw new HttpRequestException(
+                "Lagedra could not reach OwnerRez. Try syncing again shortly.", ex);
         }
+
+        if (reportFailure)
+        {
+            throw new HttpRequestException(rejection);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Turns a rejection into something a host can act on.
+    ///
+    /// 429 is OwnerRez's documented request-volume limit — 300 requests per IP per
+    /// 5 minutes — which clears on its own, so the message says to wait.
+    ///
+    /// The other limit worth naming is the cap of two accounts per IP per 24 hours
+    /// on personal access tokens. OwnerRez documents the cap but not the status code
+    /// it is enforced with, so it is raised only as a possibility on a 403 (the
+    /// bucket their docs use for address-level blocks) rather than asserted on a
+    /// specific code we would only be guessing at.
+    /// </summary>
+    private static string DescribeFailure(HttpResponseMessage response, ChannelCredentials credentials)
+    {
+        var tokenExpired = response.Headers.WwwAuthenticate
+            .Any(h => h.Parameter?.Contains("token_expired", StringComparison.OrdinalIgnoreCase) == true);
+        var personalToken = !(credentials.Secret ?? string.Empty).StartsWith("at_", StringComparison.Ordinal);
+
+        return (int)response.StatusCode switch
+        {
+            401 when tokenExpired =>
+                "Your OwnerRez authorization has expired. Disconnect and connect OwnerRez again.",
+            401 when personalToken =>
+                "OwnerRez rejected these credentials. Check that the email matches your OwnerRez "
+                + "sign-in and that the access token is still active, then reconnect.",
+            401 =>
+                "OwnerRez rejected Lagedra's access to this account. Disconnect and connect OwnerRez again.",
+            403 when personalToken =>
+                "OwnerRez denied access with these credentials. Check the token is still active "
+                + "under Settings, Advanced Tools, Developer/API Settings in OwnerRez. OwnerRez "
+                + "also limits access tokens to two accounts per day from one address, which can "
+                + "cause this even when your token is valid — contact us if it keeps happening.",
+            403 =>
+                "OwnerRez denied access to this account. Check that Lagedra is still authorized in "
+                + "OwnerRez under Settings, Advanced Tools, Developer/API Settings.",
+            429 =>
+                "OwnerRez is rate limiting Lagedra right now. The next scheduled sync will pick up "
+                + "where this one stopped.",
+            var status when status >= 500 =>
+                $"OwnerRez is temporarily unavailable (HTTP {status}). Try syncing again shortly.",
+            var status =>
+                $"OwnerRez rejected the request (HTTP {status}).",
+        };
     }
 
     private async Task<HttpResponseMessage> SendAsync(
@@ -804,28 +886,32 @@ public sealed partial class OwnerRezChannelProvider(
         {
             Content = content,
         };
-        request.Headers.Authorization = new AuthenticationHeaderValue("Basic", BasicToken(credentials));
+        request.Headers.Authorization = Authorization(credentials);
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
         return await httpClient.SendAsync(request, ct).ConfigureAwait(false);
     }
 
     /// <summary>
-    /// OwnerRez accepts the account email as the Basic username with the
-    /// personal access token as the password. Connections that only stored a
-    /// token fall back to the token-as-username form, which OwnerRez also
-    /// accepts for API keys.
+    /// OwnerRez token prefixes are part of its documented contract: OAuth access
+    /// tokens (<c>at_</c>) are sent as bearer tokens, while personal access tokens
+    /// (<c>pt_</c>) use HTTP Basic with the account email as the username. Both are
+    /// live — which one a host has depends on whether an OAuth app was configured
+    /// when they connected — so the prefix, not deployment config, picks the scheme.
     /// </summary>
-    private static string BasicToken(ChannelCredentials credentials)
+    private static AuthenticationHeaderValue Authorization(ChannelCredentials credentials)
     {
-        var user = string.IsNullOrWhiteSpace(credentials.Username)
-            ? credentials.Secret
-            : credentials.Username;
-        var password = string.IsNullOrWhiteSpace(credentials.Username)
-            ? string.Empty
-            : credentials.Secret;
+        var secret = credentials.Secret ?? string.Empty;
+        if (secret.StartsWith("at_", StringComparison.Ordinal))
+        {
+            return new AuthenticationHeaderValue("bearer", secret);
+        }
 
-        return Convert.ToBase64String(Encoding.UTF8.GetBytes($"{user}:{password}"));
+        var user = string.IsNullOrWhiteSpace(credentials.Username) ? secret : credentials.Username;
+        var password = string.IsNullOrWhiteSpace(credentials.Username) ? string.Empty : secret;
+
+        return new AuthenticationHeaderValue(
+            "Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes($"{user}:{password}")));
     }
 
     private static string AppendQuery(string path, string query)

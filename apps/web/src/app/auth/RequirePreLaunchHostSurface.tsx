@@ -9,9 +9,9 @@ import {
 } from "./preLaunchAccess";
 
 /**
- * While pre-launch is on, founding hosts may only use My Listings / create /
- * edit / Hostaway import. Staff are unrestricted. When the flag is off this
- * is a passthrough.
+ * While pre-launch is on, founding hosts may use listings, PMS import,
+ * profile, phone verification, and Stripe payout setup. Staff are
+ * unrestricted. When the flag is off this is a passthrough.
  */
 export const RequirePreLaunchHostSurface = () => {
   const preLaunchEnabled = usePublicConfigStore((s) => s.preLaunchEnabled);

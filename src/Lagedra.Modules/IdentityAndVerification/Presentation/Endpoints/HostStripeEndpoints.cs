@@ -23,6 +23,8 @@ public static class HostStripeEndpoints
 
         group.MapPost("/onboard", Onboard);
         group.MapPost("/refresh-link", RefreshLink);
+        group.MapPost("/express-login", ExpressLogin);
+        group.MapPost("/update-link", UpdateLink);
         group.MapGet("/status", GetStatus);
 
         // Provider-agnostic aliases for host payout UX.
@@ -32,6 +34,8 @@ public static class HostStripeEndpoints
 
         payouts.MapPost("/start", Onboard);
         payouts.MapPost("/refresh-link", RefreshLink);
+        payouts.MapPost("/express-login", ExpressLogin);
+        payouts.MapPost("/update-link", UpdateLink);
         payouts.MapGet("/status", GetStatus);
 
         return app;
@@ -111,6 +115,58 @@ public static class HostStripeEndpoints
 
         return result.IsSuccess
             ? Results.Ok(new { onboardingUrl = result.Value })
+            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+    }
+
+    private static async Task<IResult> ExpressLogin(
+        ClaimsPrincipal user,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var userId = GetUserId(user);
+        var result = await mediator
+            .Send(new CreateHostExpressLoginLinkCommand(userId), ct)
+            .ConfigureAwait(false);
+
+        return result.IsSuccess
+            ? Results.Ok(new { url = result.Value })
+            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+    }
+
+    private static async Task<IResult> UpdateLink(
+        ClaimsPrincipal user,
+        IMediator mediator,
+        IConfiguration configuration,
+        IOptions<StripeSettings> stripeSettings,
+        HostStripeOnboardRequest? body,
+        CancellationToken ct)
+    {
+        var userId = GetUserId(user);
+
+        var returnUrl = ResolveConnectUrl(body?.ReturnUrl, stripeSettings.Value.ConnectReturnUrl, configuration);
+        if (returnUrl.IsFailure)
+        {
+            return Results.BadRequest(new { error = returnUrl.Error.Code, detail = returnUrl.Error.Description });
+        }
+
+        var refreshUrl = ResolveConnectUrl(
+            body?.RefreshUrl ?? body?.ReturnUrl,
+            stripeSettings.Value.ConnectRefreshUrl,
+            configuration);
+        if (refreshUrl.IsFailure)
+        {
+            return Results.BadRequest(new { error = refreshUrl.Error.Code, detail = refreshUrl.Error.Description });
+        }
+
+        var result = await mediator
+            .Send(new CreateHostAccountUpdateLinkCommand(
+                userId,
+                returnUrl.Value,
+                refreshUrl.Value), ct)
+            .ConfigureAwait(false);
+
+        return result.IsSuccess
+            ? Results.Ok(new { url = result.Value })
             : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
     }
 

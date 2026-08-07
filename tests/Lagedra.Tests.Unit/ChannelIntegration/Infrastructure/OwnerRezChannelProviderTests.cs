@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -124,6 +125,106 @@ public sealed class OwnerRezChannelProviderTests
 
         var expected = Convert.ToBase64String(Encoding.UTF8.GetBytes("pt_key_only:"));
         handler.Calls.Should().OnlyContain(c => c.Authorization == $"Basic {expected}");
+    }
+
+    [Fact]
+    public async Task PullListingsAsync_OAuthToken_SendsBearerAuth()
+    {
+        var handler = new StubHandler(request => request.RequestUri!.AbsolutePath switch
+        {
+            "/v2/properties" => Ok(PropertiesPage),
+            "/v2/listings" => Ok(ListingsPage),
+            _ => (HttpStatusCode.NotFound, "{}"),
+        });
+        var credentials = new ChannelCredentials(
+            "ownerrez", "123456", Username: null, Secret: "at_host_token");
+
+        await CreateProvider(handler).PullListingsAsync(credentials, CancellationToken.None);
+
+        handler.Calls.Should().OnlyContain(c => c.Authorization == "bearer at_host_token");
+    }
+
+    /// <summary>
+    /// A refused sync must not be reported to the host as "you have no
+    /// properties" — the two are indistinguishable to them otherwise.
+    /// </summary>
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized, "access token is still active")]
+    [InlineData(HttpStatusCode.Forbidden, "denied access")]
+    [InlineData((HttpStatusCode)429, "rate limiting")]
+    [InlineData(HttpStatusCode.ServiceUnavailable, "temporarily unavailable")]
+    public async Task PullListingsAsync_RejectedRequest_ThrowsWithActionableMessage(
+        HttpStatusCode status,
+        string expectedFragment)
+    {
+        var handler = new StubHandler(_ => (status, """{"messages":["nope"]}"""));
+
+        var pull = async () => await CreateProvider(handler)
+            .PullListingsAsync(Credentials, CancellationToken.None);
+
+        (await pull.Should().ThrowAsync<HttpRequestException>())
+            .WithMessage($"*{expectedFragment}*");
+    }
+
+    /// <summary>
+    /// A host whose token is fine but who tripped OwnerRez's cap of two accounts per
+    /// address per day would otherwise be sent to re-check a token that is not the
+    /// problem, so the refusal names the cap as a possible cause.
+    /// </summary>
+    [Fact]
+    public async Task PullListingsAsync_ForbiddenPersonalToken_MentionsAccountCap()
+    {
+        var handler = new StubHandler(_ => (HttpStatusCode.Forbidden, "{}"));
+
+        var pull = async () => await CreateProvider(handler)
+            .PullListingsAsync(Credentials, CancellationToken.None);
+
+        (await pull.Should().ThrowAsync<HttpRequestException>())
+            .WithMessage("*two accounts per day*");
+    }
+
+    [Fact]
+    public async Task PullListingsAsync_RejectedOAuthToken_SaysReconnect()
+    {
+        var handler = new StubHandler(_ => (HttpStatusCode.Unauthorized, "{}"));
+        var credentials = new ChannelCredentials(
+            "ownerrez", "123456", Username: null, Secret: "at_host_token");
+
+        var pull = async () => await CreateProvider(handler)
+            .PullListingsAsync(credentials, CancellationToken.None);
+
+        (await pull.Should().ThrowAsync<HttpRequestException>())
+            .WithMessage("*connect OwnerRez again*");
+    }
+
+    [Fact]
+    public async Task PullListingsAsync_ExpiredOAuthToken_SaysAuthorizationExpired()
+    {
+        var handler = new StubHandler(_ => (HttpStatusCode.Unauthorized, "{}"))
+        {
+            WwwAuthenticate = ("Bearer", "error=\"token_expired\""),
+        };
+
+        var pull = async () => await CreateProvider(handler)
+            .PullListingsAsync(Credentials, CancellationToken.None);
+
+        (await pull.Should().ThrowAsync<HttpRequestException>())
+            .WithMessage("*authorization has expired*");
+    }
+
+    /// <summary>
+    /// Background pulls stay tolerant: one unavailable channel must not take a
+    /// scheduled job down with it.
+    /// </summary>
+    [Fact]
+    public async Task PullAvailabilityAsync_RejectedRequest_ReturnsEmptyWithoutThrowing()
+    {
+        var handler = new StubHandler(_ => (HttpStatusCode.Unauthorized, "{}"));
+
+        var calendar = await CreateProvider(handler)
+            .PullAvailabilityAsync(Credentials, "4321", CancellationToken.None);
+
+        calendar.Blocks.Should().OnlyContain(b => b.Available);
     }
 
     [Fact]
@@ -509,6 +610,9 @@ public sealed class OwnerRezChannelProviderTests
     {
         public List<Call> Calls { get; } = [];
 
+        /// <summary>Set to reproduce OwnerRez's expired-token challenge header.</summary>
+        public (string Scheme, string Parameter)? WwwAuthenticate { get; init; }
+
         protected override async Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
             CancellationToken cancellationToken)
@@ -525,10 +629,18 @@ public sealed class OwnerRezChannelProviderTests
                 body));
 
             var (status, responseBody) = router(request);
-            return new HttpResponseMessage(status)
+            var response = new HttpResponseMessage(status)
             {
                 Content = new StringContent(responseBody, Encoding.UTF8, "application/json"),
             };
+
+            if (WwwAuthenticate is { } challenge)
+            {
+                response.Headers.WwwAuthenticate.Add(
+                    new AuthenticationHeaderValue(challenge.Scheme, challenge.Parameter));
+            }
+
+            return response;
         }
     }
 }

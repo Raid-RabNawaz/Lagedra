@@ -378,6 +378,7 @@ try
     app.MapPartnerEndpoints();
     app.MapChannelEndpoints();
     app.MapHostawayWebhookEndpoints();
+    app.MapOwnerRezWebhookEndpoints();
     app.MapReviewsEndpoints();
     app.MapPlatformSettingsEndpoints();
     app.MapPublicConfigEndpoints();

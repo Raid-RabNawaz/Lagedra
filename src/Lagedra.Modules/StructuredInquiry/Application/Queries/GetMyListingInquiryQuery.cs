@@ -1,5 +1,5 @@
 using Lagedra.Modules.StructuredInquiry.Application.DTOs;
-using Lagedra.Modules.StructuredInquiry.Domain.Aggregates;
+using Lagedra.Modules.StructuredInquiry.Domain.Enums;
 using Lagedra.Modules.StructuredInquiry.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Results;
 using MediatR;
@@ -8,10 +8,11 @@ using Microsoft.EntityFrameworkCore;
 namespace Lagedra.Modules.StructuredInquiry.Application.Queries;
 
 /// <summary>
-/// Phase 17 — fetch the calling tenant's pre-booking inquiry thread for a
-/// specific listing, if one exists. Returns <c>Inquiry.NotFound</c> when
-/// the tenant has not yet started a thread (the listing detail page uses
-/// this to decide between "Ask a question" and "Continue conversation").
+/// Phase 17 — fetch the calling tenant's open pre-booking inquiry thread
+/// for a specific listing, if one exists. Deal-linked threads belong to
+/// the booking and are not returned here (listing CTA must start a new
+/// thread for a new potential booking). Returns <c>Inquiry.NotFound</c>
+/// when no open listing-scoped thread exists.
 /// </summary>
 public sealed record GetMyListingInquiryQuery(
     Guid ListingId,
@@ -26,16 +27,15 @@ public sealed class GetMyListingInquiryQueryHandler(InquiryDbContext dbContext)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        // Most-recent thread first — under steady state there is exactly
-        // one open session per (listing, tenant), but if the tenant
-        // previously closed and re-opened we still want the latest one.
         var session = await dbContext.Sessions
             .AsNoTracking()
             .Include(s => s.Questions)
                 .ThenInclude(q => q.Answer)
             .Include(s => s.Offers)
             .Where(s => s.ListingId == request.ListingId
-                && s.TenantUserId == request.TenantUserId)
+                && s.TenantUserId == request.TenantUserId
+                && s.DealId == null
+                && s.Status == InquirySessionStatus.Open)
             .OrderByDescending(s => s.CreatedAt)
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);

@@ -35,6 +35,7 @@ import {
   useStartPartnerListingInquiry,
 } from "@/features/inquiry/hooks/useInquiry";
 import { InquiryStatusBadge } from "@/features/inquiry/components/InquiryStatusBadge";
+import { inquiryThreadHref } from "@/features/inquiry/utils/inquiryThreadHref";
 import { usePartnerMembership } from "@/features/partners/hooks/usePartnerMembership";
 import { partnerApi } from "@/features/partners/services/partnerApi";
 import { formatDate } from "@/utils/format";
@@ -125,7 +126,7 @@ export const PartnerInquiriesPage = () => {
           setStartOpen(false);
           setListingId("");
           setTenantUserId("");
-          void navigate(`/app/inquiry/${session.sessionId}`);
+          void navigate(inquiryThreadHref(session));
         },
       },
     );
@@ -215,7 +216,7 @@ export const PartnerInquiriesPage = () => {
           ) : (
             <div className="space-y-3">
               {filtered.map((row) => (
-                <Link key={row.sessionId} to={`/app/inquiry/${row.sessionId}`}>
+                <Link key={row.sessionId} to={inquiryThreadHref(row)}>
                   <Card className="transition-colors hover:bg-muted/40">
                     <CardContent className="flex gap-4 py-4">
                       <div className="h-16 w-16 shrink-0 overflow-hidden rounded-md bg-muted">

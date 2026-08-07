@@ -6,6 +6,7 @@ import type {
   ChannelProviderDto,
   ChannelSyncResultDto,
   ConnectChannelRequest,
+  OwnerRezAuthorizationDto,
 } from "@/api/types";
 
 export const channelsApi = {
@@ -42,6 +43,18 @@ export const channelsApi = {
   async sync(id: string): Promise<ChannelSyncResultDto> {
     const response = await http.post<ChannelSyncResultDto>(
       endpoints.channels.sync(id),
+    );
+    return response.data;
+  },
+
+  async disconnect(id: string): Promise<void> {
+    await http.delete(endpoints.channels.disconnect(id));
+  },
+
+  /** Returns the OwnerRez consent screen to send the host to. */
+  async startOwnerRezOAuth(): Promise<OwnerRezAuthorizationDto> {
+    const response = await http.post<OwnerRezAuthorizationDto>(
+      endpoints.channels.ownerRezOAuthStart,
     );
     return response.data;
   },

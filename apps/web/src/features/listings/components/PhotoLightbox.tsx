@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, X } from "lucide-react";
+import { lockBodyScroll } from "@/lib/bodyScrollLock";
 import { cn } from "@/lib/utils";
 
 type PhotoLightboxProps = {
@@ -12,6 +13,7 @@ type PhotoLightboxProps = {
 
 export function PhotoLightbox({ open, photos, initialIndex = 0, onClose }: PhotoLightboxProps) {
   const [index, setIndex] = useState(initialIndex);
+  const stageRef = useRef<HTMLDivElement>(null);
   // Track the "session" the lightbox is in so we re-seed `index` when it
   // re-opens or the requested initialIndex changes — without an effect.
   const [seed, setSeed] = useState({ open, initialIndex });
@@ -38,20 +40,29 @@ export function PhotoLightbox({ open, photos, initialIndex = 0, onClose }: Photo
       else if (e.key === "ArrowLeft") prev();
     };
     document.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden";
+    const unlock = lockBodyScroll();
     return () => {
       document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
+      unlock();
     };
   }, [open, onClose, next, prev]);
+
+  // Start each photo at the top-left so tall/wide images are browsable from
+  // the beginning instead of mid-crop.
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    stage.scrollTop = 0;
+    stage.scrollLeft = 0;
+  }, [index, open]);
 
   if (!open || photos.length === 0) return null;
 
   const photo = photos[index];
 
   return createPortal(
-    <div className="fixed inset-0 z-[1000] flex flex-col bg-black/95">
-      <div className="flex items-center justify-between px-4 py-3 text-white">
+    <div className="fixed inset-0 z-[1001] flex flex-col bg-black">
+      <div className="flex shrink-0 items-center justify-between px-4 py-3 text-white">
         <p className="text-sm tabular-nums">
           {index + 1} <span className="text-white/50">/ {photos.length}</span>
         </p>
@@ -65,14 +76,28 @@ export function PhotoLightbox({ open, photos, initialIndex = 0, onClose }: Photo
         </button>
       </div>
 
-      <div className="relative flex flex-1 items-center justify-center px-4">
-        {photo?.url && (
-          <img
-            src={photo.url}
-            alt={photo.caption ?? `Photo ${index + 1}`}
-            className="max-h-full max-w-full object-contain"
-          />
-        )}
+      {/*
+        Show the full image at its natural size. If it's taller or wider than
+        the stage, the guest can scroll — nothing is cropped. Tall photos
+        start at the top so the whole image is reachable by scrolling down.
+      */}
+      <div className="relative min-h-0 flex-1">
+        <div
+          ref={stageRef}
+          className="h-full w-full overflow-auto overscroll-contain"
+        >
+          <div className="flex w-max min-h-full min-w-full items-start justify-center p-4">
+            {photo?.url && (
+              <img
+                key={photo.id}
+                src={photo.url}
+                alt={photo.caption ?? `Photo ${index + 1}`}
+                className="block h-auto w-auto max-w-none select-none"
+                draggable={false}
+              />
+            )}
+          </div>
+        </div>
 
         {photos.length > 1 && (
           <>
@@ -80,7 +105,7 @@ export function PhotoLightbox({ open, photos, initialIndex = 0, onClose }: Photo
               type="button"
               onClick={prev}
               aria-label="Previous photo"
-              className="absolute left-4 top-1/2 -translate-y-1/2 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 cursor-pointer"
+              className="absolute left-4 top-1/2 z-10 -translate-y-1/2 flex h-12 w-12 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 cursor-pointer"
             >
               <ChevronLeft className="h-6 w-6" />
             </button>
@@ -88,7 +113,7 @@ export function PhotoLightbox({ open, photos, initialIndex = 0, onClose }: Photo
               type="button"
               onClick={next}
               aria-label="Next photo"
-              className="absolute right-4 top-1/2 -translate-y-1/2 flex h-12 w-12 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 cursor-pointer"
+              className="absolute right-4 top-1/2 z-10 -translate-y-1/2 flex h-12 w-12 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 cursor-pointer"
             >
               <ChevronRight className="h-6 w-6" />
             </button>
@@ -97,12 +122,12 @@ export function PhotoLightbox({ open, photos, initialIndex = 0, onClose }: Photo
       </div>
 
       {photo?.caption && (
-        <div className="px-4 pb-2 text-center text-sm text-white/80">{photo.caption}</div>
+        <div className="shrink-0 px-4 pb-2 text-center text-sm text-white/80">{photo.caption}</div>
       )}
 
       {photos.length > 1 && (
-        <div className="overflow-x-auto p-3">
-          <div className="mx-auto flex gap-2 w-fit">
+        <div className="shrink-0 overflow-x-auto p-3">
+          <div className="mx-auto flex w-fit gap-2">
             {photos.map((p, i) => (
               <button
                 key={p.id}

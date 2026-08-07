@@ -81,6 +81,9 @@ internal static class JobRegistry
         Register<ChannelContentSyncJob>(q, "0 0 6,18 * * ?");
         Register<ChannelAvailabilitySyncJob>(q, "0 0 */3 * * ?");
         Register<ChannelBookingUpdateJob>(q, "0 0 */6 * * ?");
+
+        // OwnerRez OAuth tokens expire after thirty days; renew well ahead of that.
+        Register<OwnerRezTokenRefreshJob>(q, "0 30 4 * * ?");
     }
 
     private static void Register<T>(IServiceCollectionQuartzConfigurator q, string cronExpression)

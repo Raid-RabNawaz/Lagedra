@@ -11,7 +11,7 @@
   "containerDefinitions": [
     {
       "name": "api",
-      "image": "930218374225.dkr.ecr.us-west-1.amazonaws.com/lagedra/api@sha256:dd57d4aab0d3ce17fb5f8400a347037eba34c131bf74b3565cabf3d423d5a7e2",
+      "image": "930218374225.dkr.ecr.us-west-1.amazonaws.com/lagedra/api@sha256:c7db854bf97903a59f45013ac47a2768150af2c8f32791440280156d3ee38edf",
       "essential": true,
       "portMappings": [
         {
@@ -50,7 +50,7 @@
         },
         {
           "name": "Stripe__PublishableKey",
-          "value": "pk_test_51TH4W49C1zhcxwIed13rUO089U9x7zqymxW7pjkgeEDIUFss6MBN9WPwXfQQSH3JWOOdnUSm0EYObonbUpprqBbh004eAq2YhU"
+          "value": "pk_test_51Tw2UkJMSA7VwQkWPC9pDzLC9Ja8TC2RyTUYsceEM4aPusZ8S1CE9osgYkFWbxBlr9ntFePSQxQBnQ7XvrG5KksF00iPhRMCJV"
         },
         {
           "name": "MinIO__Endpoint",
@@ -105,8 +105,16 @@
           "value": "https://api.ownerrez.com"
         },
         {
+          "name": "Channels__OwnerRez__AuthorizeUrl",
+          "value": "https://app.ownerrez.com/oauth/authorize"
+        },
+        {
           "name": "Channels__OwnerRez__UserAgent",
-          "value": "Lagedra/1.0 (+https://staging.lagedra.com)"
+          "value": "Lagedra/1.0 (staging)"
+        },
+        {
+          "name": "Channels__OwnerRez__WebhookUsername",
+          "value": "lagedra-ownerrez"
         },
         {
           "name": "Channels__Hostaway__BaseUrl",

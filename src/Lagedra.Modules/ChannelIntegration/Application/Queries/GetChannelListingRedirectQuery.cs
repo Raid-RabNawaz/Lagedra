@@ -1,3 +1,4 @@
+using Lagedra.Modules.ChannelIntegration.Domain.Enums;
 using Lagedra.Modules.ChannelIntegration.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Results;
 using MediatR;
@@ -34,6 +35,7 @@ public sealed class GetChannelListingRedirectQueryHandler(
             join connection in dbContext.Connections.AsNoTracking()
                 on map.ConnectionId equals connection.Id
             where connection.ProviderKey == providerKey
+               && connection.Status != ChannelConnectionStatus.Revoked
                && map.ProviderListingId == externalListingId
                && map.ListingId != null
             select map.ListingId)

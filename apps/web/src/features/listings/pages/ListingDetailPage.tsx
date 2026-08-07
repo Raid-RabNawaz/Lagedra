@@ -23,7 +23,7 @@ import {
   ArrowUpRight,
   Star,
 } from "lucide-react";
-import { useState, lazy, Suspense } from "react";
+import { useState, useRef, useLayoutEffect, lazy, Suspense } from "react";
 import { useListingDetail, useSimilarListings } from "@/features/listings/hooks/useListings";
 import { usePublicProfile } from "@/features/auth/hooks/usePublicProfile";
 import { useListingReviews, useUserReputation } from "@/features/reviews/hooks/useReviews";
@@ -39,6 +39,7 @@ import { HouseRulesSection } from "@/features/listings/components/HouseRulesSect
 import { CancellationPolicySummary } from "@/features/listings/components/CancellationPolicySummary";
 import { ListingCard } from "@/features/listings/components/ListingCard";
 import { PhotoLightbox } from "@/features/listings/components/PhotoLightbox";
+import { PhotoGalleryModal } from "@/features/listings/components/PhotoGalleryModal";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -89,10 +90,15 @@ export const ListingDetailPage = () => {
   const [copied, setCopied] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [galleryOpen, setGalleryOpen] = useState(false);
 
   const openLightbox = (idx: number) => {
     setLightboxIndex(idx);
     setLightboxOpen(true);
+  };
+
+  const openGallery = () => {
+    setGalleryOpen(true);
   };
 
   if (isLoading) return <Loader fullPage label="Loading listing..." />;
@@ -196,7 +202,7 @@ export const ListingDetailPage = () => {
                   <Button
                     variant="secondary"
                     size="sm"
-                    onClick={() => openLightbox(0)}
+                    onClick={openGallery}
                     className="bg-background/85 backdrop-blur hover:bg-background"
                   >
                     <Images className="h-4 w-4" />
@@ -240,6 +246,13 @@ export const ListingDetailPage = () => {
           </div>
         )}
       </div>
+
+      <PhotoGalleryModal
+        open={galleryOpen}
+        photos={photos}
+        onClose={() => setGalleryOpen(false)}
+        onSelectPhoto={openLightbox}
+      />
 
       <PhotoLightbox
         open={lightboxOpen}
@@ -316,9 +329,7 @@ export const ListingDetailPage = () => {
           {/* Description */}
           <section>
             <h2 className="text-lg font-semibold mb-3">About this place</h2>
-            <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line">
-              {listing.description}
-            </p>
+            <ExpandableDescription text={listing.description} />
           </section>
 
           {listing.virtualTourUrl && (
@@ -734,3 +745,39 @@ export const ListingDetailPage = () => {
     </div>
   );
 };
+
+/** Collapses long listing descriptions to 10 lines with a Show more control. */
+function ExpandableDescription({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [canExpand, setCanExpand] = useState(false);
+  const ref = useRef<HTMLParagraphElement>(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || expanded) return;
+    setCanExpand(el.scrollHeight > el.clientHeight + 1);
+  }, [text, expanded]);
+
+  return (
+    <div>
+      <p
+        ref={ref}
+        className={cn(
+          "text-sm leading-relaxed text-muted-foreground whitespace-pre-line",
+          !expanded && "line-clamp-10",
+        )}
+      >
+        {text}
+      </p>
+      {canExpand && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-2 text-sm font-semibold text-foreground underline-offset-2 hover:underline cursor-pointer"
+        >
+          {expanded ? "Show less" : "Show more"}
+        </button>
+      )}
+    </div>
+  );
+}

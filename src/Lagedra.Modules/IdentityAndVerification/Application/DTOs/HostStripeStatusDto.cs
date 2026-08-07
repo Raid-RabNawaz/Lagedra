@@ -11,4 +11,5 @@ public sealed record HostStripeStatusDto(
     bool PayoutsEnabled,
     HostAccountRequirementStatus TaxStatus,
     HostAccountRequirementStatus BankAccountStatus,
-    Uri? OnboardingUrl);
+    Uri? OnboardingUrl,
+    IReadOnlyList<string>? OutstandingRequirements = null);
