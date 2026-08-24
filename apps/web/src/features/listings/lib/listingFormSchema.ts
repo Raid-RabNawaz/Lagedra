@@ -1,5 +1,7 @@
 import { z } from "zod";
-import type { CancellationPolicyType, PropertyType } from "@/api/types";
+import type { CancellationPolicyType, ListingManagerRole, PropertyType } from "@/api/types";
+
+export const listingManagerRoles = ["Owner", "PropertyManager"] as const satisfies readonly ListingManagerRole[];
 
 export const propertyTypes = [
   "Apartment",
@@ -65,6 +67,11 @@ export const listingFormSchema = z
     squareFootage: optionalInt,
     instantBookingEnabled: z.boolean(),
     virtualTourUrl: z.string().optional().nullable(),
+    managerRole: z.enum(listingManagerRoles),
+    homeOwnerUserId: z.string().optional().nullable(),
+    homeOwnerEmail: z.string().optional().nullable(),
+    homeOwnerDisplayName: z.string().optional().nullable(),
+    includeBrokerClause: z.boolean(),
     amenityIds: z.array(z.string()),
     safetyDeviceIds: z.array(z.string()),
     considerationIds: z.array(z.string()),
@@ -199,6 +206,11 @@ export const defaultListingFormValues: ListingFormValues = {
   squareFootage: undefined,
   instantBookingEnabled: false,
   virtualTourUrl: "",
+  managerRole: "Owner",
+  homeOwnerUserId: "",
+  homeOwnerEmail: "",
+  homeOwnerDisplayName: "",
+  includeBrokerClause: false,
   amenityIds: [],
   safetyDeviceIds: [],
   considerationIds: [],

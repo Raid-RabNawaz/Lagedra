@@ -12,6 +12,8 @@ import type {
   CancelBookingRequest,
   ConfirmDepositReturnRequest,
   FileDamageClaimRequest,
+  RentCheckInDto,
+  RespondToRentCheckInRequest,
 } from "@/api/types";
 
 export const billingApi = {
@@ -51,6 +53,25 @@ export const billingApi = {
   async stopBilling(dealId: string): Promise<BillingStatusDto> {
     const response = await http.post<BillingStatusDto>(
       endpoints.billing.stopBilling(dealId),
+    );
+    return response.data;
+  },
+
+  async getRentCheckIns(dealId: string): Promise<RentCheckInDto[]> {
+    const response = await http.get<RentCheckInDto[]>(
+      endpoints.billing.rentCheckIns(dealId),
+    );
+    return response.data;
+  },
+
+  async respondToRentCheckIn(
+    dealId: string,
+    checkInId: string,
+    payload: RespondToRentCheckInRequest,
+  ): Promise<RentCheckInDto> {
+    const response = await http.post<RentCheckInDto>(
+      endpoints.billing.respondRentCheckIn(dealId, checkInId),
+      payload,
     );
     return response.data;
   },

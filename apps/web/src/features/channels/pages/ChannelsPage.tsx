@@ -50,12 +50,14 @@ import {
 const OWNERREZ_PROVIDER_KEY = "ownerrez";
 const HOSTAWAY_PROVIDER_KEY = "hostaway";
 const GUESTY_PROVIDER_KEY = "guesty";
+const HOSTHUB_PROVIDER_KEY = "hosthub";
 const SMOOBU_PROVIDER_KEY = "smoobu";
 
 const PROVIDER_LABELS: Record<string, string> = {
   [OWNERREZ_PROVIDER_KEY]: "OwnerRez",
   [HOSTAWAY_PROVIDER_KEY]: "Hostaway",
   [GUESTY_PROVIDER_KEY]: "Guesty",
+  [HOSTHUB_PROVIDER_KEY]: "Hosthub",
   [SMOOBU_PROVIDER_KEY]: "Smoobu",
 };
 
@@ -79,11 +81,15 @@ export function ChannelsPage() {
   const smoobuConnection = (connections ?? []).find(
     (c) => c.providerKey.toLowerCase() === SMOOBU_PROVIDER_KEY,
   );
+  const hosthubConnection = (connections ?? []).find(
+    (c) => c.providerKey.toLowerCase() === HOSTHUB_PROVIDER_KEY,
+  );
   const otherConnections = (connections ?? []).filter((c) => {
     const key = c.providerKey.toLowerCase();
     return (
       key !== HOSTAWAY_PROVIDER_KEY &&
       key !== GUESTY_PROVIDER_KEY &&
+      key !== HOSTHUB_PROVIDER_KEY &&
       key !== OWNERREZ_PROVIDER_KEY &&
       key !== SMOOBU_PROVIDER_KEY
     );
@@ -95,7 +101,7 @@ export function ChannelsPage() {
         <h1 className="text-2xl font-bold tracking-tight">Import from your PMS</h1>
         <p className="mt-1 text-muted-foreground">
           {preLaunchEnabled
-            ? "Connect Hostaway or OwnerRez once and Lagedra will pull your properties in as draft listings. Sync anytime to update existing listings and import new ones. More channels are on the way."
+            ? "Connect Hostaway, Guesty, Hosthub, or OwnerRez once and Lagedra will pull your properties in as draft listings. Sync anytime to update existing listings and import new ones. More channels are on the way."
             : "Connect a PMS once, then sync anytime to update existing listings and import new ones. Once live, paid bookings are pushed back to your PMS automatically."}
         </p>
       </div>
@@ -119,10 +125,13 @@ export function ChannelsPage() {
             )}
             {guestyConnection ? (
               <GuestyConnectedCard connection={guestyConnection} />
-            ) : preLaunchEnabled ? (
-              <ComingSoonChannelCard providerName="Guesty" />
             ) : (
               <ConnectGuestyCard />
+            )}
+            {hosthubConnection ? (
+              <HosthubConnectedCard connection={hosthubConnection} />
+            ) : (
+              <ConnectHosthubCard />
             )}
             {smoobuConnection ? (
               <SmoobuConnectedCard connection={smoobuConnection} />
@@ -150,6 +159,7 @@ export function ChannelsPage() {
       {!isLoading &&
         !hostawayConnection &&
         !guestyConnection &&
+        !hosthubConnection &&
         !ownerRezConnection &&
         !smoobuConnection &&
         otherConnections.length === 0 && (
@@ -159,8 +169,8 @@ export function ChannelsPage() {
             title="No channels connected yet"
             description={
               preLaunchEnabled
-                ? "Connect Hostaway or OwnerRez above to import your listings into Lagedra."
-                : "Connect Hostaway, Guesty, OwnerRez, or Smoobu above to import your listings into Lagedra."
+                ? "Connect Hostaway, Guesty, Hosthub, or OwnerRez above to import your listings into Lagedra."
+                : "Connect Hostaway, Guesty, Hosthub, OwnerRez, or Smoobu above to import your listings into Lagedra."
             }
           />
         </>
@@ -1176,6 +1186,260 @@ function ConnectGuestyCard() {
             placeholder="Paste your Guesty Client Secret"
             value={clientSecret}
             onChange={(e) => setClientSecret(e.target.value)}
+            autoComplete="off"
+          />
+        </div>
+
+        <Button onClick={handleConnect} disabled={busy} className="gap-2">
+          <Link2 className="h-4 w-4" />
+          {busy ? "Connecting & importing..." : "Connect & import listings"}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+function formatHosthubSyncSuccess(
+  result: ChannelSyncResultDto,
+  prefix: string,
+): string {
+  const importPart =
+    result.pulled > 0
+      ? `Imported ${result.created} new and updated ${result.updated} listing(s) as drafts.`
+      : "No listings were found yet — try syncing again once rentals are active in Hosthub.";
+  return `${prefix}${importPart}`;
+}
+
+function HosthubConnectedCard({
+  connection,
+}: {
+  connection: ChannelConnectionDto;
+}) {
+  const sync = useSyncChannel();
+  const setEnabled = useSetChannelEnabled();
+  const [expanded, setExpanded] = useState(false);
+  const listings = useChannelListings(connection.id);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const disabled = connection.status === "Disabled";
+  const busy = sync.isPending || setEnabled.isPending;
+
+  const handleSync = async () => {
+    setError(null);
+    setSuccess(null);
+    try {
+      const result = await sync.mutateAsync(connection.id);
+      setSuccess(
+        formatHosthubSyncSuccess(
+          result,
+          "Synced. Updates existing drafts and imports any new Hosthub rentals. ",
+        ),
+      );
+    } catch (e) {
+      setError(getApiErrorMessage(e, "Sync failed. Please try again."));
+    }
+  };
+
+  const handleToggle = async () => {
+    setError(null);
+    try {
+      await setEnabled.mutateAsync({ id: connection.id, enabled: disabled });
+    } catch (e) {
+      setError(getApiErrorMessage(e, "Could not update the connection."));
+    }
+  };
+
+  return (
+    <Card className="border-primary/20 bg-primary/5">
+      <CardHeader>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Building2 className="h-5 w-5" />
+              Hosthub connected
+            </CardTitle>
+            <CardDescription className="mt-0.5">
+              {connection.displayName} · {connection.externalAccountId}
+            </CardDescription>
+          </div>
+          <StatusBadge status={connection.status} />
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {error && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        {success && (
+          <Alert variant="success">
+            <CheckCircle2 className="h-4 w-4" />
+            <AlertDescription>{success}</AlertDescription>
+          </Alert>
+        )}
+        {connection.lastError && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>{connection.lastError}</AlertDescription>
+          </Alert>
+        )}
+
+        <p className="text-sm text-muted-foreground">
+          Sync updates listings already imported from Hosthub and pulls in any
+          new rentals as drafts. Last sync: {formatDate(connection.lastContentSyncAt)}.
+        </p>
+
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={handleSync} disabled={busy || disabled} className="gap-2">
+            <RefreshCw className={sync.isPending ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+            {sync.isPending ? "Syncing..." : "Sync from Hosthub"}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={handleToggle}
+            disabled={busy}
+          >
+            {disabled ? "Enable" : "Disable"}
+          </Button>
+          <ImportedListingsToggle
+            expanded={expanded}
+            count={listings.data?.length}
+            onToggle={() => setExpanded((v) => !v)}
+          />
+          <DisconnectChannelButton
+            connectionId={connection.id}
+            providerLabel="Hosthub"
+            listingCount={listings.data?.length}
+            disabled={busy}
+          />
+        </div>
+
+        {expanded && (
+          <ImportedListingsList
+            listings={listings.data}
+            isLoading={listings.isLoading}
+            providerLabel="Hosthub"
+          />
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ConnectHosthubCard() {
+  const connect = useConnectChannel();
+  const sync = useSyncChannel();
+
+  const [displayName, setDisplayName] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const busy = connect.isPending || sync.isPending;
+
+  const handleConnect = async () => {
+    setError(null);
+    setSuccess(null);
+
+    const trimmedKey = apiKey.trim();
+    if (!trimmedKey) {
+      setError("Enter your Hosthub API key.");
+      return;
+    }
+
+    const suffix = trimmedKey.slice(-4);
+    try {
+      const connection = await connect.mutateAsync({
+        providerKey: HOSTHUB_PROVIDER_KEY,
+        externalAccountId: suffix ? `••••${suffix}` : "hosthub",
+        displayName: displayName.trim() || "Hosthub",
+        secret: trimmedKey,
+      });
+
+      const result = await sync.mutateAsync(connection.id);
+      setDisplayName("");
+      setApiKey("");
+      setSuccess(formatHosthubSyncSuccess(result, "Connected. "));
+    } catch (e) {
+      setError(
+        getApiErrorMessage(
+          e,
+          "Could not connect to Hosthub. Check your API key.",
+        ),
+      );
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center gap-2">
+          <Plug className="h-5 w-5" />
+          Connect Hosthub
+        </CardTitle>
+        <CardDescription>
+          Connect once with a Hosthub API key from the account owner. After that
+          you&apos;ll only need Sync to refresh listings.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {error && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        {success && (
+          <Alert variant="success">
+            <CheckCircle2 className="h-4 w-4" />
+            <AlertDescription>{success}</AlertDescription>
+          </Alert>
+        )}
+
+        <ol className="list-decimal space-y-2 pl-4 text-sm text-muted-foreground">
+          <li>
+            In Hosthub, the account owner goes to{" "}
+            <span className="text-foreground">Settings → API keys</span> and
+            creates a new API key.
+          </li>
+          <li>
+            Copy the key and paste it below. It is shown only once — Lagedra
+            encrypts it and never shows it again.
+          </li>
+          <li>
+            Click <span className="text-foreground">Connect &amp; import listings</span>.
+            Your Hosthub rentals are imported as draft listings.
+          </li>
+          <li>
+            After connecting, use{" "}
+            <span className="text-foreground">Sync from Hosthub</span> anytime to
+            update existing listings and import new ones.
+          </li>
+        </ol>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5 sm:col-span-1">
+            <Label htmlFor="hh-displayName">Label (optional)</Label>
+            <Input
+              id="hh-displayName"
+              placeholder="My Hosthub account"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              autoComplete="off"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="hh-apiKey">API key</Label>
+          <Input
+            id="hh-apiKey"
+            type="password"
+            placeholder="Paste your Hosthub API key"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
             autoComplete="off"
           />
         </div>

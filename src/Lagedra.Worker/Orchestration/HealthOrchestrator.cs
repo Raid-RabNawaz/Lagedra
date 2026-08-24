@@ -1,8 +1,8 @@
 using System.Collections.Concurrent;
 using System.Net;
-using Lagedra.Modules.ActivationAndBilling.Infrastructure.Jobs;
 using Lagedra.Modules.Evidence.Infrastructure.Jobs;
 using Lagedra.SharedKernel.Email;
+using Lagedra.Worker.Scheduling;
 using Quartz;
 using Quartz.Impl.Matchers;
 
@@ -19,7 +19,9 @@ internal sealed partial class HealthOrchestrator(
     private static readonly HashSet<string> CriticalJobs =
     [
         nameof(MalwareScanPollingJob),
-        nameof(PaymentConfirmationTimeoutJob)
+        // Payment-confirmation timeouts run inside the hourly sweep, so the
+        // sweep carries the critical flag on their behalf.
+        nameof(HourlySweepJob)
     ];
 
     public string Name => nameof(HealthOrchestrator);

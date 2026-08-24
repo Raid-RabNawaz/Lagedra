@@ -1,6 +1,7 @@
 using Lagedra.Infrastructure.External.Payments;
 using Lagedra.Modules.IdentityAndVerification.Application.DTOs;
 using Lagedra.Modules.IdentityAndVerification.Domain.Entities;
+using Lagedra.Modules.IdentityAndVerification.Domain.Enums;
 using Lagedra.Modules.IdentityAndVerification.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Results;
 using Lagedra.SharedKernel.Time;
@@ -88,12 +89,16 @@ public sealed class SyncHostStripeStatusCommandHandler(
         StripeAccountStatusResult? stripeStatus = null)
     {
         IReadOnlyList<string>? outstanding = null;
+        IReadOnlyList<string>? pending = null;
         if (stripeStatus is not null)
         {
             outstanding = stripeStatus.PastDue
                 .Concat(stripeStatus.CurrentlyDue)
                 .Distinct(StringComparer.Ordinal)
                 .ToList();
+            pending = stripeStatus.PendingVerification.Count > 0
+                ? stripeStatus.PendingVerification
+                : null;
         }
 
         return new HostStripeStatusDto(
@@ -106,6 +111,10 @@ public sealed class SyncHostStripeStatusCommandHandler(
             account.TaxStatus,
             account.BankAccountStatus,
             onboardingUrl,
-            outstanding is { Count: > 0 } ? outstanding : null);
+            outstanding is { Count: > 0 } ? outstanding : null,
+            pending,
+            stripeStatus?.DetailsSubmitted ?? account.OnboardingStatus
+                is StripeOnboardingStatus.Completed or StripeOnboardingStatus.Restricted,
+            stripeStatus?.DisabledReason);
     }
 }

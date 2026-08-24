@@ -54,7 +54,9 @@ internal static class PartnerUserIdentityResolver
                 : invite?.Email ?? string.Empty;
 
             // Prefer a directory display name that isn't just the email; then
-            // the invite's full name; then whatever is left.
+            // the invite's full name; then the email. When nothing resolves
+            // (e.g. the account no longer exists) leave the name empty so the
+            // UI falls back to the user id instead of showing a made-up label.
             var displayName = !string.IsNullOrWhiteSpace(entry?.DisplayName)
                 && entry!.DisplayName != email
                 ? entry.DisplayName
@@ -64,7 +66,7 @@ internal static class PartnerUserIdentityResolver
                         ? entry!.DisplayName
                         : !string.IsNullOrWhiteSpace(email)
                             ? email
-                            : "Member";
+                            : string.Empty;
 
             result[userId] = new ResolvedUserIdentity(displayName, email);
         }

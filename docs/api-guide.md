@@ -44,9 +44,10 @@ Short, practical reference for the Lagedra HTTP API (`v1`).
 ### Host reviews applications
 
 1. `GET /v1/applications/listing/{listingId}` — apps for a listing  
-2. `POST /v1/applications/{id}/approve` — approve (consent fields required)  
-3. or `POST /v1/applications/{id}/reject`  
-4. Email-link approve: `POST /v1/actions/approve-application` with token  
+2. If the listing is managed by a property manager, the named home owner must consent first (`POST /v1/applications/{id}/owner-consent` or email token `/v1/actions/consent-owner-tenancy`)  
+3. `POST /v1/applications/{id}/approve` — approve (blocked until owner consents on PM listings)  
+4. or `POST /v1/applications/{id}/reject`  
+5. Email-link approve: `POST /v1/actions/approve-application` with token  
 
 ### Checkout and stay
 
@@ -152,12 +153,17 @@ Admin review:
 | POST | `/v1/applications/setup-intent` | Stripe setup intent |
 | POST | `/v1/applications` | Submit application |
 | GET | `/v1/applications/mine` | My applications |
+| GET | `/v1/applications/owner-pending` | Owner consent inbox |
 | GET | `/v1/applications/{id}` | One application |
 | GET | `/v1/applications/listing/{listingId}` | By listing (host) |
-| POST | `/v1/applications/{id}/approve` | Host approve |
+| POST | `/v1/applications/{id}/approve` | Host approve (blocked until owner consents on PM listings) |
 | POST | `/v1/applications/{id}/reject` | Host reject |
+| POST | `/v1/applications/{id}/owner-consent` | Home owner consents to the tenancy |
+| POST | `/v1/applications/{id}/owner-decline` | Home owner declines the tenancy |
 | POST | `/v1/applications/{id}/attach-payment` | Attach payment method |
 | POST | `/v1/actions/approve-application` | Approve via email token |
+| POST | `/v1/actions/consent-owner-tenancy` | Owner consent via email token |
+| POST | `/v1/actions/decline-owner-tenancy` | Owner decline via email token |
 
 ---
 
@@ -207,6 +213,8 @@ Billing:
 ---
 
 ## Channels (PMS / channel managers)
+
+Installed providers today: Hostaway, OwnerRez, Guesty, Hosthub, Smoobu. Hosthub uses the host’s own API key from Hosthub **Settings → API keys** (`providerKey: hosthub`, `secret`). See [hosthub-integration.md](./hosthub-integration.md) for Hosthub staging vs production bases and the property-manager flow.
 
 | Method | Path | Notes |
 |--------|------|--------|

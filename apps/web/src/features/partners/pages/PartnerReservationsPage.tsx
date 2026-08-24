@@ -26,6 +26,7 @@ import type {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -393,22 +394,24 @@ function NewReservationDialog({
               <Label htmlFor="resv-check-in">
                 Check-in <span className="text-muted-foreground">(optional)</span>
               </Label>
-              <Input
+              <DatePicker
                 id="resv-check-in"
-                type="date"
                 value={checkIn}
-                onChange={(e) => setCheckIn(e.target.value)}
+                onChange={setCheckIn}
+                max={checkOut || undefined}
+                placeholder="Add date"
               />
             </div>
             <div className="space-y-2">
               <Label htmlFor="resv-check-out">
                 Check-out <span className="text-muted-foreground">(optional)</span>
               </Label>
-              <Input
+              <DatePicker
                 id="resv-check-out"
-                type="date"
                 value={checkOut}
-                onChange={(e) => setCheckOut(e.target.value)}
+                onChange={setCheckOut}
+                min={checkIn || undefined}
+                placeholder="Add date"
               />
             </div>
           </div>

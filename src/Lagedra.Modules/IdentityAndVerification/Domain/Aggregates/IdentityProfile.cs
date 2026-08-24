@@ -25,12 +25,22 @@ public sealed class IdentityProfile : AggregateRoot<Guid>
             UserId = userId,
             FirstName = firstName,
             LastName = lastName,
-            DateOfBirth = dateOfBirth,
+            DateOfBirth = AsUtcDate(dateOfBirth),
             Status = VerificationStatus.NotStarted,
             VerificationClass = VerificationClass.Low,
             CreatedAt = DateTime.UtcNow
         };
     }
+
+    /// <summary>
+    /// A date of birth is a calendar date: request bodies deserialize it with
+    /// Kind=Unspecified, which Npgsql refuses to write to a timestamptz
+    /// column ("only UTC is supported") — that 500'd every manual-KYC submit
+    /// that included a DOB. Anchor the date at midnight UTC regardless of
+    /// the incoming Kind.
+    /// </summary>
+    private static DateTime? AsUtcDate(DateTime? value) =>
+        value is { } v ? DateTime.SpecifyKind(v.Date, DateTimeKind.Utc) : null;
 
     public void StartVerification()
     {
@@ -116,6 +126,6 @@ public sealed class IdentityProfile : AggregateRoot<Guid>
     {
         FirstName = firstName;
         LastName = lastName;
-        DateOfBirth = dateOfBirth;
+        DateOfBirth = AsUtcDate(dateOfBirth);
     }
 }

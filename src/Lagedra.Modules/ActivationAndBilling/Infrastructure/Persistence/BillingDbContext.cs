@@ -18,6 +18,7 @@ public sealed class BillingDbContext(
     public DbSet<Invoice> Invoices => Set<Invoice>();
     public DbSet<DealPaymentConfirmation> DealPaymentConfirmations => Set<DealPaymentConfirmation>();
     public DbSet<DamageClaim> DamageClaims => Set<DamageClaim>();
+    public DbSet<RentCheckIn> RentCheckIns => Set<RentCheckIn>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

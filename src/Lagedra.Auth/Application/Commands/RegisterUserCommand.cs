@@ -5,6 +5,7 @@ using Lagedra.Auth.Domain;
 using Lagedra.SharedKernel.Email;
 using Lagedra.SharedKernel.Results;
 using Lagedra.SharedKernel.Settings;
+using Lagedra.SharedKernel.Sms;
 using Lagedra.SharedKernel.Time;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
@@ -66,7 +67,7 @@ public sealed class RegisterUserCommandHandler(
             LastName = lastName,
             DisplayName = string.IsNullOrWhiteSpace(request.FullName) ? null : request.FullName.Trim(),
             CompanyName = Trim(request.CompanyName),
-            PhoneNumber = Trim(request.Phone),
+            PhoneNumber = NormalizePhone(request.Phone),
             City = Trim(request.City),
             SignupType = Trim(request.SignupType),
             PortfolioSize = Trim(request.PortfolioSize),
@@ -209,4 +210,20 @@ public sealed class RegisterUserCommandHandler(
 
     private static string? Trim(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    /// <summary>
+    /// Best-effort E.164 normalization: signup phone is a lead-capture field,
+    /// so registration is never rejected over its format — un-normalizable
+    /// input is stored trimmed and enforced later at profile save /
+    /// verification time.
+    /// </summary>
+    private static string? NormalizePhone(string? phone)
+    {
+        if (string.IsNullOrWhiteSpace(phone))
+        {
+            return null;
+        }
+
+        return PhoneNumberE164.TryNormalize(phone, out var normalized) ? normalized : phone.Trim();
+    }
 }

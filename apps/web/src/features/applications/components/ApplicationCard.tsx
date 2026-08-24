@@ -18,7 +18,7 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import { ConsentTickButton } from "@/features/applications/components/ConsentTickButton";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { ApplicationStatusBadge } from "./ApplicationStatusBadge";
@@ -36,8 +36,10 @@ import {
 } from "@/features/applications/hooks/useApplications";
 import {
   BOOKING_CONSENT_VERSION,
+  isAwaitingOwnerConsent,
   tierLabel,
 } from "@/features/applications/lib/bookingConsent";
+import { OwnerConsentPanel } from "@/features/applications/components/OwnerConsentPanel";
 import { getApiErrorMessage } from "@/api/errors";
 import { StarRatingDisplay } from "@/features/reviews/components/StarRating";
 import type { DealApplicationDto } from "@/api/types";
@@ -45,7 +47,7 @@ import { cn } from "@/lib/utils";
 
 type Props = {
   application: DealApplicationDto;
-  /** Host inbox passes "host"; tenant my-applications passes "tenant". */
+  /** Host inbox passes "host"; tenant my-applications passes "tenant"; named owners pass "owner". */
   perspective: ApplicationPerspective;
   /** Show a compact listing row on tenant cards inside a group. */
   showListingPreview?: boolean;
@@ -57,8 +59,10 @@ export const ApplicationCard = ({
   showListingPreview = false,
 }: Props) => {
   const isHostView = perspective === "host";
+  const isOwnerView = perspective === "owner";
   const stayLabel = `${application.requestedCheckIn} → ${application.requestedCheckOut}`;
   const isPending = application.status === "Pending";
+  const awaitingOwnerConsent = isAwaitingOwnerConsent(application);
   const isPartnerDirect =
     application.source === "PartnerDirectReservation" ||
     Boolean(application.partnerOrganizationId);
@@ -74,10 +78,10 @@ export const ApplicationCard = ({
   const approveMutation = useApproveApplication();
   const rejectMutation = useRejectApplication();
 
-  const counterpartyUserId = isHostView
+  const counterpartyUserId = isHostView || isOwnerView
     ? application.tenantUserId
     : application.landlordUserId;
-  const counterpartyLabel = isHostView ? "Guest" : "Host";
+  const counterpartyLabel = isHostView || isOwnerView ? "Guest" : "Host";
   const {
     query: counterpartyQuery,
     profile: counterpartyProfile,
@@ -359,9 +363,11 @@ export const ApplicationCard = ({
               <XCircle className="h-3.5 w-3.5 shrink-0" />
               <span>
                 Declined {formatDate(application.decidedAt)}.
-                {isHostView
-                  ? " The guest has been notified."
-                  : " The host has notified you."}
+                {application.ownerConsentDeclined
+                  ? " The home owner declined this tenancy."
+                  : isHostView
+                    ? " The guest has been notified."
+                    : " The host has notified you."}
               </span>
             </div>
           )}
@@ -397,8 +403,26 @@ export const ApplicationCard = ({
             </div>
           )}
 
+          {isOwnerView && isPending && awaitingOwnerConsent && (
+            <div className="relative z-10 rounded-b-[inherit] border-t px-4 py-3" onClick={stop}>
+              <OwnerConsentPanel application={application} />
+            </div>
+          )}
+
+          {!isHostView && !isOwnerView && isPending && awaitingOwnerConsent && (
+            <div className="relative z-10 rounded-b-[inherit] border-t bg-amber-50 px-4 py-2.5 text-xs text-amber-900">
+              Waiting for the home owner to consent before the property manager can accept.
+            </div>
+          )}
+
           {isHostView && isPending && (
             <div className="relative z-10 rounded-b-[inherit] border-t px-4 py-3" onClick={stop}>
+              {awaitingOwnerConsent && (
+                <p className="mb-2 text-xs text-amber-800">
+                  Awaiting home-owner consent. You can accept after the owner
+                  approves this tenancy.
+                </p>
+              )}
               {isPartnerDirect && !paymentReady && (
                 <p className="mb-2 text-xs text-muted-foreground">
                   Waiting for the member to complete payment authorization and Truth Surface
@@ -409,7 +433,7 @@ export const ApplicationCard = ({
                 <div className="flex items-center gap-2">
                   <Button
                     size="sm"
-                    disabled={!canApprovePartnerRequest}
+                    disabled={!canApprovePartnerRequest || awaitingOwnerConsent}
                     onClick={() => {
                       setActionError(null);
                       setShowApproveForm(true);
@@ -465,25 +489,21 @@ export const ApplicationCard = ({
 
                   <HostPayoutReadinessNotice className="text-[11px]" />
 
-                  <label className="flex items-start gap-2 text-[11px] text-muted-foreground cursor-pointer">
-                    <Checkbox
-                      checked={consentChecked}
-                      onCheckedChange={(checked) => {
-                        setConsentChecked(checked);
-                        if (checked) setActionError(null);
-                      }}
-                      className="mt-0.5"
-                    />
-                    <span>
-                      I agree to the Truth Surface agreement for this booking.
-                      Accepting seals an immutable signed record and automatically
-                      charges the guest&apos;s saved card and activates the booking.
-                      The rent and deposit are paid directly to my Stripe account;
-                      I return the deposit to the guest directly after move-out, and
-                      the booking only completes once I confirm the return and the
-                      guest confirms receipt.
-                    </span>
-                  </label>
+                  <ConsentTickButton
+                    checked={consentChecked}
+                    onCheckedChange={(next) => {
+                      setConsentChecked(next);
+                      if (next) setActionError(null);
+                    }}
+                  >
+                    I agree to the Truth Surface agreement for this booking.
+                    Accepting seals an immutable signed record and automatically
+                    charges the guest&apos;s saved card and activates the booking.
+                    The rent and deposit are paid directly to my Stripe account;
+                    I return the deposit to the guest directly after move-out, and
+                    the booking only completes once I confirm the return and the
+                    guest confirms receipt.
+                  </ConsentTickButton>
 
                   {actionError && (
                     <Alert variant="destructive" className="text-xs">

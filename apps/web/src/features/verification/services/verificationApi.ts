@@ -64,10 +64,13 @@ export const verificationApi = {
     const form = new FormData();
     form.append("documentType", documentType);
     form.append("file", file, fileName ?? (file instanceof File ? file.name : "capture.jpg"));
+    // Do NOT set Content-Type manually — the browser must add the multipart
+    // boundary. Forcing "multipart/form-data" without a boundary makes ASP.NET
+    // fail to bind the file and returns a 500 to the user.
     const response = await http.post<KycDocumentDto>(
       endpoints.identity.manualKycDocuments,
       form,
-      { headers: { "Content-Type": "multipart/form-data" } },
+      { timeout: 120_000 },
     );
     return response.data;
   },

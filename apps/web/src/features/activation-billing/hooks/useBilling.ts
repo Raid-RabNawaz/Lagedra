@@ -70,6 +70,34 @@ export function usePaymentDetails(dealId: string | undefined) {
   });
 }
 
+export function useRentCheckIns(dealId: string | undefined) {
+  return useQuery({
+    queryKey: ["rentCheckIns", dealId],
+    queryFn: () => billingApi.getRentCheckIns(dealId!),
+    enabled: Boolean(dealId),
+    staleTime: 30_000,
+  });
+}
+
+export function useRespondToRentCheckIn() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      dealId,
+      checkInId,
+      received,
+    }: {
+      dealId: string;
+      checkInId: string;
+      received: boolean;
+    }) => billingApi.respondToRentCheckIn(dealId, checkInId, { received }),
+    onSuccess: (data) => {
+      void queryClient.invalidateQueries({ queryKey: ["rentCheckIns", data.dealId] });
+    },
+  });
+}
+
 export function useActivateDeal() {
   const queryClient = useQueryClient();
 

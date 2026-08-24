@@ -24,7 +24,13 @@ public sealed record CreateListingRequest(
     long? DefaultDepositCents = null,
     long? DepositUnverifiedCents = null,
     long? DepositBackgroundVerifiedCents = null,
-    long? DepositPartnerGuaranteedCents = null);
+    long? DepositPartnerGuaranteedCents = null,
+    ListingManagerRole ManagerRole = ListingManagerRole.Owner,
+    Guid? HomeOwnerUserId = null,
+    string? HomeOwnerEmail = null,
+    bool IncludeBrokerClause = false,
+    ListingAddedVia AddedVia = ListingAddedVia.Manual,
+    string? AddedViaDetail = null);
 
 public sealed record HouseRulesRequest(
     TimeOnly CheckInTime,

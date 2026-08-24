@@ -257,6 +257,8 @@ export function ListingPhotosEditor({
                   <img
                     src={p.url}
                     alt={p.caption ?? ""}
+                    loading="lazy"
+                    decoding="async"
                     className="h-10 w-10 rounded object-cover shrink-0"
                   />
                 )}

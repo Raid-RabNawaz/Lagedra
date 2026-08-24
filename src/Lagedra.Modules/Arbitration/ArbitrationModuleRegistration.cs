@@ -2,7 +2,6 @@ using Lagedra.Infrastructure.Eventing;
 using Lagedra.Modules.Arbitration.Application.Services;
 using Lagedra.Modules.Arbitration.Application.EventHandlers;
 using Lagedra.Modules.Arbitration.Domain.Events;
-using Lagedra.Modules.Arbitration.Infrastructure.Jobs;
 using Lagedra.Modules.Arbitration.Infrastructure.Persistence;
 using Lagedra.Modules.Arbitration.Infrastructure.Repositories;
 using Lagedra.Modules.Arbitration.Infrastructure.Services;
@@ -10,7 +9,6 @@ using Lagedra.SharedKernel.Integration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Quartz;
 
 namespace Lagedra.Modules.Arbitration;
 
@@ -46,16 +44,6 @@ public static class ArbitrationModuleRegistration
 
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(ArbitrationModuleRegistration).Assembly));
-
-        services.AddQuartz(q =>
-        {
-            var jobKey = new JobKey("ArbitrationBacklogSla");
-            q.AddJob<ArbitrationBacklogSlaJob>(opts => opts.WithIdentity(jobKey));
-            q.AddTrigger(opts => opts
-                .ForJob(jobKey)
-                .WithIdentity("ArbitrationBacklogSla-trigger")
-                .WithCronSchedule("0 0 * ? * *"));
-        });
 
         return services;
     }

@@ -15,6 +15,7 @@ import type {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import {
@@ -451,11 +452,11 @@ export const JurisdictionPackVersionsPage = () => {
             {/* Effective Date */}
             <div>
               <label className="text-sm font-medium">Effective Date</label>
-              <Input
-                type="date"
+              <DatePicker
                 value={draftEffectiveDate}
-                onChange={(e) => setDraftEffectiveDate(e.target.value)}
+                onChange={setDraftEffectiveDate}
                 className="mt-1 max-w-xs"
+                aria-label="Effective date"
               />
             </div>
 
@@ -642,12 +643,12 @@ export const JurisdictionPackVersionsPage = () => {
                           placeholder="DepositCapRule"
                         />
                       </div>
-                      <div className="w-40">
+                      <div className="w-44">
                         <label className="text-xs text-muted-foreground">Effective Date</label>
-                        <Input
-                          type="date"
+                        <DatePicker
                           value={rule.effectiveDate ? rule.effectiveDate.slice(0, 10) : ""}
-                          onChange={(e) => updateEffectiveDateRule(idx, "effectiveDate", e.target.value ? new Date(e.target.value).toISOString() : "")}
+                          onChange={(v) => updateEffectiveDateRule(idx, "effectiveDate", v ? new Date(v).toISOString() : "")}
+                          aria-label="Rule effective date"
                         />
                       </div>
                       <Button variant="ghost" size="sm" onClick={() => removeEffectiveDateRule(idx)}>

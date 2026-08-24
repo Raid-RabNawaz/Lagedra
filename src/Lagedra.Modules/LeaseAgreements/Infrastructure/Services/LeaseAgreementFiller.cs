@@ -31,8 +31,18 @@ public sealed partial class LeaseAgreementFiller(
 
         var host = await partyProfileProvider.GetAsync(deal.LandlordUserId, ct).ConfigureAwait(false);
         var tenant = await partyProfileProvider.GetAsync(deal.TenantUserId, ct).ConfigureAwait(false);
+        var ownerUserId = deal.HomeOwnerUserId ?? listing.HomeOwnerUserId;
+        var owner = ownerUserId is Guid ownerId
+            ? await partyProfileProvider.GetAsync(ownerId, ct).ConfigureAwait(false)
+            : null;
+        var includeBroker = listing.IncludeBrokerClause;
         var terms = listing.LeaseTerms;
         var address = listing.PreciseAddress;
+        var rentCents = deal.FirstMonthRentCents ?? listing.MonthlyRentCents;
+        var latePercent = terms?.LateFeePercent ?? 5m;
+        var lateFeeCents = (long)Math.Round(rentCents * latePercent / 100m, MidpointRounding.AwayFromZero);
+        var earlyFeeMonths = terms?.EarlyTerminationFeeMonths ?? 2;
+        var earlyFeeCents = rentCents * earlyFeeMonths;
 
         var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -42,9 +52,18 @@ public sealed partial class LeaseAgreementFiller(
             ["host.email"] = host?.Email ?? string.Empty,
             ["host.mailingAddress"] = host?.MailingAddress ?? string.Empty,
             ["host.noticeAddress"] = host?.NoticeAddress ?? host?.MailingAddress ?? string.Empty,
-            ["broker.name"] = host?.BrokerName ?? string.Empty,
-            ["broker.dreLicense"] = host?.BrokerDreLicense ?? string.Empty,
-            ["broker.scopeNotes"] = host?.BrokerScopeNotes ?? string.Empty,
+            ["owner.fullName"] = owner?.FullName ?? string.Empty,
+            ["owner.email"] = owner?.Email ?? string.Empty,
+            ["owner.phone"] = owner?.Phone ?? string.Empty,
+            ["owner.mailingAddress"] = owner?.MailingAddress ?? string.Empty,
+            ["owner.consentDate"] = deal.OwnerTenancyConsentAt is DateTime consentedAt
+                ? FormatDate(consentedAt)
+                : string.Empty,
+            ["owner.consentVersion"] = deal.OwnerConsentVersion ?? string.Empty,
+            ["owner.consented"] = YesNo(deal.OwnerTenancyConsentGiven),
+            ["broker.name"] = includeBroker ? host?.BrokerName ?? string.Empty : string.Empty,
+            ["broker.dreLicense"] = includeBroker ? host?.BrokerDreLicense ?? string.Empty : string.Empty,
+            ["broker.scopeNotes"] = includeBroker ? host?.BrokerScopeNotes ?? string.Empty : string.Empty,
             ["tenant.fullName"] = tenant?.FullName ?? string.Empty,
             ["tenant.phone"] = tenant?.Phone ?? string.Empty,
             ["tenant.email"] = tenant?.Email ?? string.Empty,
@@ -61,8 +80,15 @@ public sealed partial class LeaseAgreementFiller(
             ["listing.nsfFirstFee"] = FormatMoney(terms?.NsfFirstFeeCents ?? 2500),
             ["listing.nsfSubsequentFee"] = FormatMoney(terms?.NsfSubsequentFeeCents ?? 3500),
             ["listing.lateFeePercent"] = $"{(terms?.LateFeePercent ?? 5m).ToString("0.##", CultureInfo.InvariantCulture)}%",
+            ["listing.lateFeeAmount"] = FormatMoney(lateFeeCents),
             ["listing.lateFeeGraceDays"] = (terms?.LateFeeGraceDays ?? 3).ToString(CultureInfo.InvariantCulture),
-            ["listing.utilitiesResponsibility"] = terms?.UtilitiesResponsibility ?? "Tenant pays all utilities",
+            ["listing.isFurnished"] = YesNo(terms?.Furnished ?? false),
+            ["listing.maintenanceContactName"] = !string.IsNullOrWhiteSpace(host?.BrokerName)
+                ? host!.BrokerName!
+                : host?.FullName ?? string.Empty,
+            ["listing.maintenanceContactPhone"] = host?.Phone ?? string.Empty,
+            ["listing.maintenanceContactEmail"] = host?.Email ?? string.Empty,
+            ["listing.utilitiesResponsibility"] = ExpandUtilities(terms?.UtilitiesResponsibility),
             ["listing.yardMaintenanceByTenant"] = YesNo(terms?.YardMaintenanceByTenant ?? false),
             ["listing.furnished"] = terms?.Furnished == true ? "furnished" : "unfurnished",
             ["listing.includedAppliances"] = terms?.IncludedAppliancesNotes
@@ -81,8 +107,9 @@ public sealed partial class LeaseAgreementFiller(
             ["listing.petsNotes"] = listing.HouseRules?.PetsNotes ?? string.Empty,
             ["listing.smokingAllowed"] = YesNo(listing.HouseRules?.SmokingAllowed ?? false),
             ["listing.rentersInsuranceMinLiability"] = FormatMoney(terms?.RentersInsuranceMinLiabilityCents ?? 100_000_00),
-            ["listing.earlyTerminationFeeMonths"] = (terms?.EarlyTerminationFeeMonths ?? 2)
+            ["listing.earlyTerminationFeeMonths"] = earlyFeeMonths
                 .ToString(CultureInfo.InvariantCulture),
+            ["listing.earlyTerminationFeeAmount"] = FormatMoney(earlyFeeCents),
             ["listing.leadPaintKnowledge"] = terms?.LeadPaintKnowledge
                 ?? "The Landlord has no records or reports pertaining to lead-based paint and/or lead-based paint hazards in the Leased Property.",
             ["listing.builtBefore1978"] = YesNo(terms?.BuiltBefore1978 ?? false),
@@ -101,7 +128,8 @@ public sealed partial class LeaseAgreementFiller(
             .OrderBy(k => k, StringComparer.Ordinal)
             .ToList();
 
-        var filledHtml = ReplacePlaceholders(template.BodyHtml, values);
+        var withConditionals = LeaseTemplateConditionals.Apply(template.BodyHtml, values);
+        var filledHtml = ReplacePlaceholders(withConditionals, values);
 
         return new FilledLeaseAgreement(
             template.TemplateId,
@@ -171,6 +199,17 @@ public sealed partial class LeaseAgreementFiller(
 
     private static string YesNo(bool value) => value ? "Yes" : "No";
 
+    private static string ExpandUtilities(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)
+            || text.Equals("Tenant pays all utilities", StringComparison.OrdinalIgnoreCase))
+        {
+            return "The Tenant agrees to pay all charges for all utilities, including electricity, internet, cable, gas, water, garbage disposal, and telephones, used in or on the Leased Property during the term of this Lease. The Tenant shall make payments for these utilities directly to the Landlord. The Landlord shall be responsible for making payments to the respective utility companies.";
+        }
+
+        return text.Trim();
+    }
+
     private static string FormatFullAddress(ListingAddressDto? address)
     {
         if (address is null
@@ -183,7 +222,15 @@ public sealed partial class LeaseAgreementFiller(
         }
 
         var country = string.IsNullOrWhiteSpace(address.Country) ? "US" : address.Country.Trim();
-        return $"{address.Street.Trim()}, {address.City.Trim()}, {address.State.Trim()} {address.ZipCode.Trim()}, {country}";
+        var line = $"{address.Street.Trim()}, {address.City.Trim()}, {address.State.Trim()} {address.ZipCode.Trim()}";
+        if (country.Equals("US", StringComparison.OrdinalIgnoreCase)
+            || country.Equals("USA", StringComparison.OrdinalIgnoreCase)
+            || country.Equals("United States", StringComparison.OrdinalIgnoreCase))
+        {
+            return line;
+        }
+
+        return $"{line}, {country}";
     }
 
     [GeneratedRegex(@"\{\{\s*([a-zA-Z0-9_.]+)\s*\}\}")]

@@ -40,7 +40,7 @@ public static class IdentityEndpoints
 
     private static async Task<IResult> UploadManualKycDocument(
         [FromForm] string documentType,
-        IFormFile file,
+        [FromForm] IFormFile? file,
         ClaimsPrincipal principal,
         IMediator mediator,
         CancellationToken ct)
@@ -56,7 +56,7 @@ public static class IdentityEndpoints
             return Results.BadRequest(new
             {
                 error = "Identity.Kyc.EmptyFile",
-                detail = "No file was uploaded.",
+                detail = "No file was uploaded. Please choose a photo and try again.",
             });
         }
 
@@ -69,19 +69,29 @@ public static class IdentityEndpoints
             });
         }
 
-        var result = await mediator.Send(
-            new UploadKycDocumentCommand(
-                userId.Value,
-                parsedType,
-                file.FileName,
-                file.ContentType,
-                file.Length,
-                _ => Task.FromResult(file.OpenReadStream())),
-            ct).ConfigureAwait(false);
+        var stream = file.OpenReadStream();
+        await using (stream.ConfigureAwait(false))
+        {
+            // Buffer so the stream stays readable after the request ends (some
+            // hosts dispose the form file stream aggressively).
+            using var buffered = new MemoryStream();
+            await stream.CopyToAsync(buffered, ct).ConfigureAwait(false);
+            var bytes = buffered.ToArray();
 
-        return result.IsSuccess
-            ? Results.Ok(result.Value)
-            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+            var result = await mediator.Send(
+                new UploadKycDocumentCommand(
+                    userId.Value,
+                    parsedType,
+                    file.FileName,
+                    file.ContentType ?? string.Empty,
+                    bytes.LongLength,
+                    _ => Task.FromResult<Stream>(new MemoryStream(bytes))),
+                ct).ConfigureAwait(false);
+
+            return result.IsSuccess
+                ? Results.Ok(result.Value)
+                : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+        }
     }
 
     private static async Task<IResult> GetMyManualKycDocuments(

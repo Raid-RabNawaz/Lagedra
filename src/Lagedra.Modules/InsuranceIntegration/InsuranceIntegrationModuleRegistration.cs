@@ -1,7 +1,6 @@
 using Lagedra.SharedKernel.Integration.Events;
 using Lagedra.Modules.InsuranceIntegration.Application.EventHandlers;
 using Lagedra.Modules.InsuranceIntegration.Application.Services;
-using Lagedra.Modules.InsuranceIntegration.Infrastructure.Jobs;
 using Lagedra.Modules.InsuranceIntegration.Infrastructure.Persistence;
 using Lagedra.Modules.InsuranceIntegration.Infrastructure.Repositories;
 using Lagedra.Infrastructure.Eventing;
@@ -9,7 +8,6 @@ using Lagedra.SharedKernel.Insurance;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Quartz;
 using Lagedra.Modules.InsuranceIntegration.Infrastructure.Services;
 
 namespace Lagedra.Modules.InsuranceIntegration;
@@ -76,23 +74,6 @@ public static class InsuranceIntegrationModuleRegistration
 
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(InsuranceIntegrationModuleRegistration).Assembly));
-
-        services.AddQuartz(q =>
-        {
-            var pollerKey = new JobKey("InsurancePoller");
-            q.AddJob<InsurancePollerJob>(opts => opts.WithIdentity(pollerKey));
-            q.AddTrigger(opts => opts
-                .ForJob(pollerKey)
-                .WithIdentity("InsurancePoller-trigger")
-                .WithCronSchedule("0 0 * ? * *"));
-
-            var slaKey = new JobKey("InsuranceUnknownSla");
-            q.AddJob<InsuranceUnknownSlaJob>(opts => opts.WithIdentity(slaKey));
-            q.AddTrigger(opts => opts
-                .ForJob(slaKey)
-                .WithIdentity("InsuranceUnknownSla-trigger")
-                .WithCronSchedule("0 */30 * ? * *"));
-        });
 
         return services;
     }

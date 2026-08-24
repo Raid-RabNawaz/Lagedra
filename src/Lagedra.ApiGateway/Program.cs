@@ -55,7 +55,6 @@ using Lagedra.Infrastructure.Observability;
 using Lagedra.Infrastructure.RealTime;
 using Lagedra.Infrastructure.Settings;
 using Lagedra.SharedKernel.Settings;
-using Quartz;
 using Serilog;
 using System.Text.Json;
 
@@ -98,7 +97,6 @@ try
     builder.Services.AddReviews(builder.Configuration);
     builder.Services.AddAuditLog(builder.Configuration);
     builder.Services.AddAnalytics(builder.Configuration);
-    builder.Services.AddQuartzHostedService(q => q.WaitForJobsToComplete = true);
 
     builder.Services.AddValidatorsFromAssemblies(
         AppDomain.CurrentDomain.GetAssemblies()
@@ -379,6 +377,7 @@ try
     app.MapChannelEndpoints();
     app.MapHostawayWebhookEndpoints();
     app.MapOwnerRezWebhookEndpoints();
+    app.MapTwilioWebhookEndpoints();
     app.MapReviewsEndpoints();
     app.MapPlatformSettingsEndpoints();
     app.MapPublicConfigEndpoints();

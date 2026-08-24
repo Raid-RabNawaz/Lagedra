@@ -28,6 +28,7 @@ public sealed class GetListingDetailsQueryHandler(
     ListingsDbContext dbContext,
     IHostVerificationProvider hostVerificationProvider,
     IHostProfileProvider hostProfileProvider,
+    IUserLookupService userLookup,
     IServiceProvider serviceProvider)
     : IRequestHandler<GetListingDetailsQuery, Result<ListingDetailsDto>>
 {
@@ -64,13 +65,22 @@ public sealed class GetListingDetailsQueryHandler(
             return Result<ListingDetailsDto>.Failure(NotFound);
         }
 
-        var hostVerification = await hostVerificationProvider
-            .GetVerificationAsync(listing.LandlordUserId, cancellationToken)
+        var hostVerificationTask = hostVerificationProvider
+            .GetVerificationAsync(listing.LandlordUserId, cancellationToken);
+        var hostProfileTask = hostProfileProvider
+            .GetProfileAsync(listing.LandlordUserId, cancellationToken);
+
+        var reviewReputationProvider = serviceProvider.GetService<IReviewReputationProvider>();
+        var hostReputationTask = reviewReputationProvider is null
+            ? Task.FromResult<UserReputationDto?>(null)
+            : reviewReputationProvider.GetListingHostReputationAsync(listing.Id, cancellationToken);
+
+        await Task.WhenAll(hostVerificationTask, hostProfileTask, hostReputationTask)
             .ConfigureAwait(false);
 
-        var hostProfile = await hostProfileProvider
-            .GetProfileAsync(listing.LandlordUserId, cancellationToken)
-            .ConfigureAwait(false);
+        var hostVerification = await hostVerificationTask.ConfigureAwait(false);
+        var hostProfile = await hostProfileTask.ConfigureAwait(false);
+        var hostReputation = await hostReputationTask.ConfigureAwait(false);
 
         var badges = hostVerification is not null
             ? new ListingVerificationBadgesDto(
@@ -78,13 +88,6 @@ public sealed class GetListingDetailsQueryHandler(
                 hostVerification.IsKycComplete,
                 null)
             : null;
-
-        var reviewReputationProvider = serviceProvider.GetService<IReviewReputationProvider>();
-        var hostReputation = reviewReputationProvider is null
-            ? null
-            : await reviewReputationProvider
-                .GetListingHostReputationAsync(listing.Id, cancellationToken)
-                .ConfigureAwait(false);
 
         var qualityScore = ListingQualityScoreCalculator.Calculate(
             listing.Photos.Count,
@@ -97,21 +100,38 @@ public sealed class GetListingDetailsQueryHandler(
             hostProfile?.ResponseRatePercent,
             hostReputation?.AverageOverall);
 
-        var details = ListingMapper.ToDetails(listing, badges, hostProfile, qualityScore);
+        ListingHomeOwnerDto? homeOwner = null;
+        if (listing.HomeOwnerUserId is Guid ownerId
+            && (isOwner || request.RequesterIsPlatformAdmin))
+        {
+            var account = await userLookup
+                .FindAccountByIdAsync(ownerId, cancellationToken)
+                .ConfigureAwait(false);
+            if (account is not null)
+            {
+                homeOwner = new ListingHomeOwnerDto(account.UserId, account.DisplayName, account.Email);
+            }
+        }
+
+        var details = ListingMapper.ToDetails(listing, badges, hostProfile, qualityScore, homeOwner);
 
         // Public shoppers (and any non-owner) only get city/region — never the
         // street or ZIP — until they are a confirmed booking party (see deal
         // stay-access endpoint). Owners and platform admins keep the full address.
-        if (!isOwner && !request.RequesterIsPlatformAdmin && details.PreciseAddress is { } addr)
+        if (!isOwner && !request.RequesterIsPlatformAdmin)
         {
             details = details with
             {
-                PreciseAddress = new AddressDto(
-                    string.Empty,
-                    addr.City,
-                    addr.State,
-                    string.Empty,
-                    addr.Country),
+                PreciseAddress = details.PreciseAddress is { } addr
+                    ? new AddressDto(
+                        string.Empty,
+                        addr.City,
+                        addr.State,
+                        string.Empty,
+                        addr.Country)
+                    : null,
+                HomeOwnerUserId = null,
+                HomeOwner = null,
             };
         }
 

@@ -5,6 +5,7 @@ using Lagedra.Infrastructure.External.Antivirus;
 using Lagedra.Infrastructure.External.Channels;
 using Lagedra.Infrastructure.External.Channels.Guesty;
 using Lagedra.Infrastructure.External.Channels.Hostaway;
+using Lagedra.Infrastructure.External.Channels.Hosthub;
 using Lagedra.Infrastructure.External.Channels.OwnerRez;
 using Lagedra.Infrastructure.External.Channels.Smoobu;
 using Lagedra.Infrastructure.External.Email;
@@ -40,7 +41,8 @@ public static class InfrastructureServiceRegistration
 {
     public static IServiceCollection AddInfrastructure(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        RealTimePushMode realTimePush = RealTimePushMode.SignalRHub)
     {
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
@@ -146,6 +148,8 @@ public static class InfrastructureServiceRegistration
             configuration.GetSection(GuestyChannelSettings.SectionName));
         services.Configure<SmoobuChannelSettings>(
             configuration.GetSection(SmoobuChannelSettings.SectionName));
+        services.Configure<HosthubChannelSettings>(
+            configuration.GetSection(HosthubChannelSettings.SectionName));
 
         var ownerRezSettings = configuration
             .GetSection(OwnerRezChannelSettings.SectionName)
@@ -159,6 +163,9 @@ public static class InfrastructureServiceRegistration
         var smoobuSettings = configuration
             .GetSection(SmoobuChannelSettings.SectionName)
             .Get<SmoobuChannelSettings>() ?? new SmoobuChannelSettings();
+        var hosthubSettings = configuration
+            .GetSection(HosthubChannelSettings.SectionName)
+            .Get<HosthubChannelSettings>() ?? new HosthubChannelSettings();
 
         // OwnerRez API v2: hosts authorize the Lagedra OAuth app, and the issued
         // per-host access token on ChannelConnection is sent as a bearer token.
@@ -213,6 +220,17 @@ public static class InfrastructureServiceRegistration
         });
         services.AddScoped<IChannelProvider>(sp => sp.GetRequiredService<SmoobuChannelProvider>());
 
+        // Hosthub public API: per-host API key on ChannelConnection. Only the
+        // origin (app vs eric) and optional source_id are platform-level.
+        services.AddHttpClient<HosthubChannelProvider>(client =>
+        {
+            client.BaseAddress = hosthubSettings.BaseUrl;
+            client.Timeout = TimeSpan.FromSeconds(60);
+            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", hosthubSettings.UserAgent);
+            client.DefaultRequestHeaders.TryAddWithoutValidation("Cache-control", "no-cache");
+        });
+        services.AddScoped<IChannelProvider>(sp => sp.GetRequiredService<HosthubChannelProvider>());
+
         services.AddScoped<IChannelProviderRegistry, ChannelProviderRegistry>();
 
         // Caching — swap InMemoryCacheService for a distributed impl (e.g. Redis) here
@@ -239,9 +257,19 @@ public static class InfrastructureServiceRegistration
         });
         services.AddSingleton<IActionTokenService, ActionTokenService>();
 
-        // SignalR (real-time notifications)
+        // SignalR (real-time notifications). Browsers only connect to the API
+        // host's hub, so the worker must not push to its own (empty) hub
+        // context — it publishes over Postgres NOTIFY and the API relays.
         services.AddSignalR();
-        services.AddSingleton<INotificationPusher, SignalRNotificationPusher>();
+        if (realTimePush == RealTimePushMode.SignalRHub)
+        {
+            services.AddSingleton<INotificationPusher, SignalRNotificationPusher>();
+            services.AddHostedService<PgNotificationRelayService>();
+        }
+        else
+        {
+            services.AddSingleton<INotificationPusher, PgNotifyNotificationPusher>();
+        }
 
         // MediatR Pipeline Behaviors (order matters: validation → logging → exception handling)
         services.AddTransient(typeof(IPipelineBehavior<,>), typeof(ValidationBehavior<,>));

@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Lagedra.SharedKernel.Sms;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -14,6 +15,7 @@ namespace Lagedra.Infrastructure.External.Sms;
 public sealed partial class TwilioSmsService(
     HttpClient httpClient,
     IOptions<TwilioSettings> settings,
+    IConfiguration configuration,
     ILogger<TwilioSmsService> logger)
     : ISmsService
 {
@@ -31,12 +33,33 @@ public sealed partial class TwilioSmsService(
                 "Twilio SMS is not configured (AccountSid, MessagingServiceSid, and AuthToken or ApiKey).");
         }
 
-        using var content = new FormUrlEncodedContent(new Dictionary<string, string>
+        // Last line of defense: whatever a caller hands us (older accounts
+        // still hold numbers like "(818) 305-6520"), Twilio must only ever
+        // see E.164.
+        if (!PhoneNumberE164.TryNormalize(message.ToE164, out var to))
         {
-            ["To"] = message.ToE164,
+            throw new InvalidOperationException(
+                $"Recipient phone number '{message.ToE164}' cannot be normalized to E.164.");
+        }
+
+        var form = new Dictionary<string, string>
+        {
+            ["To"] = to,
             ["MessagingServiceSid"] = _settings.MessagingServiceSid,
             ["Body"] = message.Body
-        });
+        };
+
+        // Ask Twilio to report async delivery outcomes (delivered /
+        // undelivered / failed) to our webhook. Without this, carrier-side
+        // blocks (e.g. error 30034, unregistered A2P 10DLC sender) are
+        // invisible: the API accepts the message and we log "SMS sent".
+        var statusCallback = BuildStatusCallbackUrl();
+        if (statusCallback is not null)
+        {
+            form["StatusCallback"] = statusCallback;
+        }
+
+        using var content = new FormUrlEncodedContent(form);
 
         using var request = new HttpRequestMessage(
             HttpMethod.Post,
@@ -69,14 +92,31 @@ public sealed partial class TwilioSmsService(
                 }
             }
 
-            LogSmsSent(logger, message.ToE164, sid);
+            LogSmsSent(logger, to, sid);
             return sid;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            LogSmsFailed(logger, ex, message.ToE164);
+            LogSmsFailed(logger, ex, to);
             throw;
         }
+    }
+
+    /// <summary>
+    /// Public URL Twilio posts delivery-status callbacks to. Skipped when the
+    /// API base URL is not configured or not publicly reachable (local dev).
+    /// </summary>
+    private string? BuildStatusCallbackUrl()
+    {
+        var baseUrl = configuration["App:BaseUrl"];
+        if (string.IsNullOrWhiteSpace(baseUrl)
+            || baseUrl.Contains("localhost", StringComparison.OrdinalIgnoreCase)
+            || !Uri.TryCreate(baseUrl, UriKind.Absolute, out _))
+        {
+            return null;
+        }
+
+        return $"{baseUrl.TrimEnd('/')}{TwilioWebhookPaths.SmsStatus}";
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "SMS sent to {Recipient} | Sid: {MessageSid}")]

@@ -29,7 +29,7 @@ import { useHostBillingStatement } from "@/features/activation-billing/hooks/use
 import { formatDate, formatMoney } from "@/utils/format";
 import type { DealApplicationDto } from "@/api/types";
 
-export type ApplicationPerspective = "host" | "tenant";
+export type ApplicationPerspective = "host" | "tenant" | "owner";
 
 type Props = {
   application: DealApplicationDto;
@@ -45,7 +45,7 @@ export const ApplicationDetailDialog = ({
   onOpenChange,
   perspective,
 }: Props) => {
-  const isHostView = perspective === "host";
+  const isHostView = perspective === "host" || perspective === "owner";
   const { data: statement } = useHostBillingStatement(isHostView && open);
   const profileUserId = isHostView
     ? application.tenantUserId

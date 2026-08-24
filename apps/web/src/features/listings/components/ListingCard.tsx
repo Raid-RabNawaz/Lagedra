@@ -55,42 +55,39 @@ export function ListingCard({ listing, className }: ListingCardProps) {
       */}
       <div className="relative grid aspect-[4/5] grid-rows-[4fr_1fr] overflow-hidden rounded-2xl bg-card ring-1 ring-border/60 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[var(--shadow-soft)] hover:ring-border">
         {/*
-          Image is absolute-filled inside a fixed cell so its intrinsic
-          width/height never shifts layout. Overlays live in a separate
-          z-10 layer pinned to the cell corners — not to the photo pixels —
-          so wide/tall covers (and hover scale) can't cover the heart.
+          Photo is clipped in its own stacking context so a wide/tall cover
+          (or hover scale) cannot paint over the heart. Chrome lives on the
+          card, not on the image pixels.
         */}
-        <div className="relative min-h-0 overflow-hidden bg-muted">
+        <div className="relative isolate z-0 min-h-0 overflow-hidden bg-muted">
           {listing.coverPhotoUrl ? (
             <img
               src={listing.coverPhotoUrl}
               alt={listing.title}
-              className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+              className="absolute inset-0 z-0 h-full w-full object-cover object-center transition-transform duration-300 group-hover:scale-105"
               loading="lazy"
             />
           ) : (
-            <div className="absolute inset-0 flex items-center justify-center">
+            <div className="absolute inset-0 z-0 flex items-center justify-center">
               <ImageOff className="h-10 w-10 text-muted-foreground/40" />
             </div>
           )}
-
-          <div className="pointer-events-none absolute inset-0 z-10">
-            <Badge
-              className="pointer-events-none absolute left-3 top-3 rounded-full bg-background text-[10px] font-semibold text-foreground shadow-sm"
-              variant="secondary"
-            >
-              {propertyTypeLabels[listing.propertyType] ?? listing.propertyType}
-            </Badge>
-            <div className="pointer-events-auto absolute right-3 top-3">
-              <SaveButton
-                listingId={listing.id}
-                className="shadow-sm ring-1 ring-black/10"
-              />
-            </div>
-          </div>
         </div>
 
-        <div className="flex min-h-0 flex-col justify-between gap-1 px-3 py-2.5">
+        <Badge
+          className="pointer-events-none absolute left-3 top-3 z-20 rounded-full bg-background text-[10px] font-semibold text-foreground shadow-sm"
+          variant="secondary"
+        >
+          {propertyTypeLabels[listing.propertyType] ?? listing.propertyType}
+        </Badge>
+        <div className="absolute right-3 top-3 z-20">
+          <SaveButton
+            listingId={listing.id}
+            className="shadow-sm ring-1 ring-black/10"
+          />
+        </div>
+
+        <div className="relative z-10 flex min-h-0 flex-col justify-between gap-1 px-3 py-2.5">
           <div className="flex h-5 items-center gap-2">
             <h3 className="min-w-0 flex-1 truncate text-sm font-semibold leading-none text-foreground transition-colors group-hover:text-primary">
               {listing.title}

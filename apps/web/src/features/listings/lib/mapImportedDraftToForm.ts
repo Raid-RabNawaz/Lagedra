@@ -92,8 +92,9 @@ export function normalizeAmenityName(value: string): string {
 // Maps common third-party amenity wording (normalized) onto our canonical
 // vocabulary (normalized). Imported platforms — Airbnb in particular — name the
 // same amenity differently ("Shower gel" vs "Body Wash", "Ceiling fan" vs
-// "Ceiling Fans"), so an exact match alone misses most of them.
-const AMENITY_SYNONYMS: Record<string, string> = {
+// "Ceiling Fans"), so an exact match alone misses most of them. Also used by
+// the bulk file importers (listingImportShared.ts).
+export const AMENITY_SYNONYMS: Record<string, string> = {
   "shower gel": "body wash",
   "bluetooth sound system": "sound system",
   "portable speaker": "sound system",

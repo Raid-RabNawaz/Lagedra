@@ -40,6 +40,7 @@ import {
 import { useHostStripeStatus } from "@/features/host-onboarding/hooks/useHostStripe";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -107,6 +108,16 @@ const toNullable = (value: string): string | null => {
   return trimmed.length > 0 ? trimmed : null;
 };
 
+/**
+ * Latest selectable date of birth (today minus 18 years, local timezone) —
+ * users must be legal adults, matching the backend's Auth.Underage validation.
+ */
+const latestAdultDob = (): string => {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - 18);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
 const toFormData = (
   profile: ReturnType<typeof useAuthStore.getState>["user"],
 ): ProfileFormData => ({
@@ -121,7 +132,8 @@ const toFormData = (
   country: profile?.country ?? "",
   languages: profile?.languages ?? "",
   occupation: profile?.occupation ?? "",
-  dateOfBirth: profile?.dateOfBirth ?? "",
+  // API may return a full ISO datetime; the date picker works with YYYY-MM-DD.
+  dateOfBirth: (profile?.dateOfBirth ?? "").slice(0, 10),
   emergencyContactName: profile?.emergencyContactName ?? "",
   emergencyContactPhone: profile?.emergencyContactPhone ?? "",
   mailingStreet: profile?.mailingStreet ?? "",
@@ -335,17 +347,24 @@ export const ProfilePage = () => {
   };
 
   // Profile completeness — counts the fields that meaningfully build trust.
+  // Role-aware: only Members (tenants & hosts) are asked for the marketplace
+  // trust fields; every other role just needs the identity basics.
   const completeness = useMemo(() => {
     if (!user) return { filled: 0, total: 1, percent: 0, missing: [] as string[] };
+    const isMemberRole = String(user.role) === roles.member;
     const checks: { label: string; ok: boolean }[] = [
       { label: "Profile photo", ok: Boolean(user.profilePhotoUrl?.trim()) },
       { label: "First & last name", ok: Boolean(user.firstName?.trim() && user.lastName?.trim()) },
       { label: "Phone number", ok: Boolean(user.phoneNumber?.trim()) },
-      { label: "Date of birth", ok: Boolean(user.dateOfBirth) },
-      { label: "City / location", ok: Boolean(user.city?.trim()) },
-      { label: "Bio", ok: Boolean(user.bio?.trim() && user.bio.trim().length >= 40) },
       { label: "Email verified", ok: Boolean(user.emailConfirmed ?? user.isActive) },
-      { label: "Government ID verified", ok: Boolean(user.isGovernmentIdVerified) },
+      ...(isMemberRole
+        ? [
+            { label: "Date of birth", ok: Boolean(user.dateOfBirth) },
+            { label: "City / location", ok: Boolean(user.city?.trim()) },
+            { label: "Bio", ok: Boolean(user.bio?.trim() && user.bio.trim().length >= 40) },
+            { label: "Government ID verified", ok: Boolean(user.isGovernmentIdVerified) },
+          ]
+        : []),
     ];
     const filled = checks.filter((c) => c.ok).length;
     const missing = checks.filter((c) => !c.ok).map((c) => c.label);
@@ -383,7 +402,18 @@ export const ProfilePage = () => {
       })
     : null;
 
-  const isHostProfile = String(user?.role) === roles.member || String(user?.role) === roles.platformAdmin;
+  // Role-driven sections: Members (tenants & hosts) fill the marketplace
+  // trust and lease fields the platform actually needs from them; partners,
+  // arbitrators, insurance partners, and admins only manage identity basics —
+  // their working data lives in their own workspaces (partner org, cases, …).
+  const role = String(user?.role ?? "");
+  const isMember = role === roles.member;
+  const sections = {
+    about: isMember,
+    leaseDetails: isMember,
+    broker: isMember,
+    hosting: isMember,
+  };
   const locationText = [user?.city, user?.state, user?.country].filter(Boolean).join(", ");
   const isDirty = form.formState.isDirty;
 
@@ -432,7 +462,7 @@ export const ProfilePage = () => {
       <div className="grid gap-8 lg:grid-cols-3">
         {/* Sidebar */}
         <div className="space-y-6 lg:col-span-1">
-          <Card className={isHostProfile ? "border-primary/20 shadow-sm" : undefined}>
+          <Card className={isMember ? "border-primary/20 shadow-sm" : undefined}>
             <CardContent className="p-6">
               <div className="flex flex-col items-center text-center">
                 <div className="relative group">
@@ -499,7 +529,7 @@ export const ProfilePage = () => {
 
                 <h2 className="mt-4 text-xl font-semibold">{fullName}</h2>
                 <p className="text-sm text-muted-foreground">{user?.email}</p>
-                {isHostProfile && locationText && (
+                {isMember && locationText && (
                   <p className="mt-2 flex items-center gap-1 text-sm text-muted-foreground">
                     <MapPin className="h-4 w-4" />
                     {locationText}
@@ -574,10 +604,10 @@ export const ProfilePage = () => {
                 to="/app/verification"
                 className="flex items-center justify-between text-sm text-primary hover:underline group"
               >
-                <span>{isHostProfile ? "Manage trust checks" : "Manage verification"}</span>
+                <span>{isMember ? "Manage trust checks" : "Manage verification"}</span>
                 <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
               </Link>
-              {isHostProfile && (
+              {sections.hosting && (
                 <Link
                   to="/app/payout-setup"
                   className="flex items-center justify-between text-sm text-primary hover:underline group"
@@ -592,7 +622,7 @@ export const ProfilePage = () => {
             </CardContent>
           </Card>
 
-          {isHostProfile && (
+          {sections.about && (
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">About this host</CardTitle>
@@ -616,7 +646,7 @@ export const ProfilePage = () => {
 
         {/* Main content */}
         <div className="lg:col-span-2">
-          {isHostProfile && <HostingStatusCard />}
+          {sections.hosting && <HostingStatusCard />}
 
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList>
@@ -643,6 +673,9 @@ export const ProfilePage = () => {
                 <Card>
                   <CardHeader>
                     <CardTitle className="text-lg">Personal information</CardTitle>
+                    <CardDescription>
+                      Your basic details — shown to people you interact with on Lagedra.
+                    </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="grid gap-4 sm:grid-cols-2">
@@ -655,17 +688,8 @@ export const ProfilePage = () => {
                       <FormField label="Display name" id="displayName">
                         <Input id="displayName" placeholder="Jane Doe" {...form.register("displayName")} />
                       </FormField>
-                      <FormField label="Phone number" id="phoneNumber" hint="Use international format, e.g. +1 555 123 4567">
+                      <FormField label="Phone number" id="phoneNumber" hint="e.g. (555) 123-4567 or +1 555 123 4567">
                         <Input id="phoneNumber" placeholder="+1 555 123 4567" {...form.register("phoneNumber")} />
-                      </FormField>
-                      <FormField label="Occupation" id="occupation">
-                        <Input id="occupation" placeholder="Product Manager" {...form.register("occupation")} />
-                      </FormField>
-                      <FormField label="Languages" id="languages">
-                        <Input id="languages" placeholder="English, Spanish" {...form.register("languages")} />
-                      </FormField>
-                      <FormField label="Date of birth" id="dateOfBirth">
-                        <Input id="dateOfBirth" type="date" {...form.register("dateOfBirth")} />
                       </FormField>
                     </div>
 
@@ -698,130 +722,176 @@ export const ProfilePage = () => {
                   </CardContent>
                 </Card>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Location</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid gap-4 sm:grid-cols-3">
-                      <FormField label="City" id="city">
-                        <Input id="city" placeholder="San Francisco" {...form.register("city")} />
-                      </FormField>
-                      <FormField label="State" id="state">
-                        <Input id="state" placeholder="CA" {...form.register("state")} />
-                      </FormField>
-                      <FormField label="Country" id="country">
-                        <Input id="country" placeholder="USA" {...form.register("country")} />
-                      </FormField>
-                    </div>
-                  </CardContent>
-                </Card>
+                {!isMember && (
+                  <Alert>
+                    <ShieldCheck className="h-4 w-4" />
+                    <AlertDescription>
+                      {roleLabel(role)} accounts only need the basics above.
+                      {role === roles.institutionPartner &&
+                        " Your organization's details, members, and referrals are managed in the partner workspace."}
+                      {role === roles.arbitrator &&
+                        " Case assignments and decisions are managed in the arbitration workspace."}
+                    </AlertDescription>
+                  </Alert>
+                )}
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Emergency contact</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <FormField label="Contact name" id="emergencyContactName">
-                        <Input id="emergencyContactName" placeholder="John Doe" {...form.register("emergencyContactName")} />
+                {sections.about && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">About you</CardTitle>
+                      <CardDescription>
+                        Shown on your public profile — a complete story builds trust with
+                        hosts and tenants before they commit.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <FormField
+                        label="Bio"
+                        id="bio"
+                        hint={`${bioValue.length}/${BIO_MAX} characters${bioValue.length > BIO_MAX ? " — too long" : ""}`}
+                        hintClass={bioValue.length > BIO_MAX ? "text-destructive" : undefined}
+                      >
+                        <Textarea
+                          id="bio"
+                          rows={4}
+                          maxLength={BIO_MAX + 50}
+                          placeholder="Tell others a little about yourself, your interests, and what you're looking for..."
+                          {...form.register("bio")}
+                        />
                       </FormField>
-                      <FormField label="Contact phone" id="emergencyContactPhone">
-                        <Input id="emergencyContactPhone" placeholder="+1 555 222 3333" {...form.register("emergencyContactPhone")} />
-                      </FormField>
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Lease mailing address</CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      Used on lease agreements for notices and landlord/tenant contact blocks.
-                    </p>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <FormField label="Street" id="mailingStreet">
-                      <Input id="mailingStreet" placeholder="123 Main St" {...form.register("mailingStreet")} />
-                    </FormField>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <FormField label="City" id="mailingCity">
-                        <Input id="mailingCity" {...form.register("mailingCity")} />
-                      </FormField>
-                      <FormField label="State" id="mailingState">
-                        <Input id="mailingState" {...form.register("mailingState")} />
-                      </FormField>
-                      <FormField label="ZIP" id="mailingZip">
-                        <Input id="mailingZip" {...form.register("mailingZip")} />
-                      </FormField>
-                      <FormField label="Country" id="mailingCountry">
-                        <Input id="mailingCountry" {...form.register("mailingCountry")} />
-                      </FormField>
-                    </div>
-                    <label className="flex items-center gap-2 text-sm">
-                      <input type="checkbox" {...form.register("noticeAddressSameAsMailing")} />
-                      Notice address same as mailing
-                    </label>
-                    {!form.watch("noticeAddressSameAsMailing") && (
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <FormField label="Notice street" id="noticeStreet">
-                          <Input id="noticeStreet" {...form.register("noticeStreet")} />
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <FormField label="Occupation" id="occupation">
+                          <Input id="occupation" placeholder="Product Manager" {...form.register("occupation")} />
                         </FormField>
-                        <FormField label="Notice city" id="noticeCity">
-                          <Input id="noticeCity" {...form.register("noticeCity")} />
-                        </FormField>
-                        <FormField label="Notice state" id="noticeState">
-                          <Input id="noticeState" {...form.register("noticeState")} />
-                        </FormField>
-                        <FormField label="Notice ZIP" id="noticeZip">
-                          <Input id="noticeZip" {...form.register("noticeZip")} />
+                        <FormField label="Languages" id="languages">
+                          <Input id="languages" placeholder="English, Spanish" {...form.register("languages")} />
                         </FormField>
                       </div>
-                    )}
-                  </CardContent>
-                </Card>
+                      <div className="grid gap-4 sm:grid-cols-3">
+                        <FormField label="City" id="city">
+                          <Input id="city" placeholder="San Francisco" {...form.register("city")} />
+                        </FormField>
+                        <FormField label="State" id="state">
+                          <Input id="state" placeholder="CA" {...form.register("state")} />
+                        </FormField>
+                        <FormField label="Country" id="country">
+                          <Input id="country" placeholder="USA" {...form.register("country")} />
+                        </FormField>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Broker disclosure (hosts)</CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      Optional California broker fields for lease generation.
-                    </p>
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <FormField label="Broker name" id="brokerName">
-                      <Input id="brokerName" {...form.register("brokerName")} />
-                    </FormField>
-                    <FormField label="DRE license #" id="brokerDreLicense">
-                      <Input id="brokerDreLicense" {...form.register("brokerDreLicense")} />
-                    </FormField>
-                    <FormField label="Scope notes" id="brokerScopeNotes">
-                      <Input id="brokerScopeNotes" {...form.register("brokerScopeNotes")} />
-                    </FormField>
-                  </CardContent>
-                </Card>
+                {sections.leaseDetails && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">Lease &amp; legal details</CardTitle>
+                      <CardDescription>
+                        Required when you sign a lease — these appear on the agreement,
+                        receive legal notices, and are used in an emergency during a stay.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-5">
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <FormField label="Date of birth" id="dateOfBirth" hint="You must be 18 or older">
+                          <DatePicker
+                            id="dateOfBirth"
+                            value={form.watch("dateOfBirth") ?? ""}
+                            onChange={(v) =>
+                              form.setValue("dateOfBirth", v, { shouldDirty: true })
+                            }
+                            max={latestAdultDob()}
+                            placeholder="Select your date of birth"
+                          />
+                        </FormField>
+                      </div>
 
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">About</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <FormField
-                      label="Bio"
-                      id="bio"
-                      hint={`${bioValue.length}/${BIO_MAX} characters${bioValue.length > BIO_MAX ? " — too long" : ""}`}
-                      hintClass={bioValue.length > BIO_MAX ? "text-destructive" : undefined}
-                    >
-                      <Textarea
-                        id="bio"
-                        rows={4}
-                        maxLength={BIO_MAX + 50}
-                        placeholder="Tell others a little about yourself, your interests, and what you're looking for..."
-                        {...form.register("bio")}
-                      />
-                    </FormField>
-                  </CardContent>
-                </Card>
+                      <div>
+                        <p className="text-sm font-medium">Emergency contact</p>
+                        <div className="mt-2 grid gap-4 sm:grid-cols-2">
+                          <FormField label="Contact name" id="emergencyContactName">
+                            <Input id="emergencyContactName" placeholder="John Doe" {...form.register("emergencyContactName")} />
+                          </FormField>
+                          <FormField label="Contact phone" id="emergencyContactPhone">
+                            <Input id="emergencyContactPhone" placeholder="+1 555 222 3333" {...form.register("emergencyContactPhone")} />
+                          </FormField>
+                        </div>
+                      </div>
+
+                      <Separator />
+
+                      <div>
+                        <p className="text-sm font-medium">Mailing address</p>
+                        <p className="text-xs text-muted-foreground mt-0.5 mb-2">
+                          Used on lease agreements for notices and landlord/tenant contact blocks.
+                        </p>
+                        <div className="space-y-3">
+                          <FormField label="Street" id="mailingStreet">
+                            <Input id="mailingStreet" placeholder="123 Main St" {...form.register("mailingStreet")} />
+                          </FormField>
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <FormField label="City" id="mailingCity">
+                              <Input id="mailingCity" {...form.register("mailingCity")} />
+                            </FormField>
+                            <FormField label="State" id="mailingState">
+                              <Input id="mailingState" {...form.register("mailingState")} />
+                            </FormField>
+                            <FormField label="ZIP" id="mailingZip">
+                              <Input id="mailingZip" {...form.register("mailingZip")} />
+                            </FormField>
+                            <FormField label="Country" id="mailingCountry">
+                              <Input id="mailingCountry" {...form.register("mailingCountry")} />
+                            </FormField>
+                          </div>
+                          <label className="flex items-center gap-2 text-sm">
+                            <input type="checkbox" {...form.register("noticeAddressSameAsMailing")} />
+                            Notice address same as mailing
+                          </label>
+                          {!form.watch("noticeAddressSameAsMailing") && (
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              <FormField label="Notice street" id="noticeStreet">
+                                <Input id="noticeStreet" {...form.register("noticeStreet")} />
+                              </FormField>
+                              <FormField label="Notice city" id="noticeCity">
+                                <Input id="noticeCity" {...form.register("noticeCity")} />
+                              </FormField>
+                              <FormField label="Notice state" id="noticeState">
+                                <Input id="noticeState" {...form.register("noticeState")} />
+                              </FormField>
+                              <FormField label="Notice ZIP" id="noticeZip">
+                                <Input id="noticeZip" {...form.register("noticeZip")} />
+                              </FormField>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {sections.broker && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="text-lg">Broker disclosure</CardTitle>
+                      <CardDescription>
+                        Only for hosts working with a licensed California broker — these
+                        fields are printed on generated lease agreements. Leave blank
+                        otherwise.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <FormField label="Broker name" id="brokerName">
+                        <Input id="brokerName" {...form.register("brokerName")} />
+                      </FormField>
+                      <FormField label="DRE license #" id="brokerDreLicense">
+                        <Input id="brokerDreLicense" {...form.register("brokerDreLicense")} />
+                      </FormField>
+                      <FormField label="Scope notes" id="brokerScopeNotes">
+                        <Input id="brokerScopeNotes" {...form.register("brokerScopeNotes")} />
+                      </FormField>
+                    </CardContent>
+                  </Card>
+                )}
 
                 <Separator />
 
@@ -895,7 +965,7 @@ export const ProfilePage = () => {
 
             <TabsContent value="account">
               <div className="space-y-6">
-                <TenantEndorsementsPanel />
+                {isMember && <TenantEndorsementsPanel />}
                 <AccountAndDataSection />
               </div>
             </TabsContent>
@@ -913,11 +983,14 @@ function HostingStatusCard() {
   const payoutLabel = stripeStatus
     ? stripeStatus.payoutsEnabled
       ? "Active"
-      : stripeStatus.onboardingStatus === "Pending"
-        ? "Onboarding"
-        : stripeStatus.onboardingStatus === "Restricted"
-          ? "Restricted"
-          : "Set up needed"
+      : stripeStatus.detailsSubmitted &&
+          !(stripeStatus.outstandingRequirements?.length)
+        ? "Under review"
+        : stripeStatus.onboardingStatus === "Pending"
+          ? "Onboarding"
+          : stripeStatus.onboardingStatus === "Restricted"
+            ? "Action needed"
+            : "Set up needed"
     : "Set up needed";
   const payoutGood = stripeStatus?.payoutsEnabled === true;
   const idGood = Boolean(user?.isGovernmentIdVerified);

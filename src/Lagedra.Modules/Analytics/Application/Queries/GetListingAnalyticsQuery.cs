@@ -1,5 +1,6 @@
-using Lagedra.SharedKernel.Results;
+using Lagedra.Modules.Analytics.Application;
 using Lagedra.Modules.Analytics.Application.DTOs;
+using Lagedra.SharedKernel.Results;
 using MediatR;
 using Npgsql;
 using NpgsqlTypes;
@@ -66,9 +67,22 @@ public sealed class GetListingAnalyticsQueryHandler(NpgsqlDataSource dataSource)
                    (l.house_rules_max_guests IS NOT NULL
                         OR l.house_rules_pets_allowed IS NOT NULL) AS has_house_rules,
                    (l.cancellation_policy_type IS NOT NULL) AS has_cancellation_policy,
-                   COALESCE(u."IsGovernmentIdVerified", false) AS host_verified
+                   COALESCE(u."IsGovernmentIdVerified", false) AS host_verified,
+                   l."AddedVia",
+                   l."AddedViaDetail",
+                   ch."ProviderKey"
             FROM listings.listings l
             LEFT JOIN auth."AspNetUsers" u ON u."Id" = l."LandlordUserId"
+            LEFT JOIN LATERAL (
+                SELECT c."ProviderKey"
+                FROM channel_integration.channel_listing_maps m
+                INNER JOIN channel_integration.channel_connections c ON c."Id" = m."ConnectionId"
+                WHERE m."ListingId" = l."Id"
+                  AND m."IsDeleted" = false
+                  AND c."IsDeleted" = false
+                ORDER BY m."LastImportedAt" DESC NULLS LAST
+                LIMIT 1
+            ) ch ON true
             LEFT JOIN (
                 SELECT "ListingId", COUNT(*) AS app_count
                 FROM activation_billing.deal_applications WHERE "IsDeleted" = false
@@ -152,6 +166,15 @@ public sealed class GetListingAnalyticsQueryHandler(NpgsqlDataSource dataSource)
             var hasHouseRules = reader.GetBoolean(15);
             var hasCancellationPolicy = reader.GetBoolean(16);
             var hostVerified = reader.GetBoolean(17);
+            var addedVia = await reader.IsDBNullAsync(18, cancellationToken).ConfigureAwait(false)
+                ? null
+                : reader.GetString(18);
+            var addedViaDetail = await reader.IsDBNullAsync(19, cancellationToken).ConfigureAwait(false)
+                ? null
+                : reader.GetString(19);
+            var channelProviderKey = await reader.IsDBNullAsync(20, cancellationToken).ConfigureAwait(false)
+                ? null
+                : reader.GetString(20);
 
             var landlordName = $"{firstName} {lastName}".Trim();
             if (landlordName.Length == 0)
@@ -167,7 +190,8 @@ public sealed class GetListingAnalyticsQueryHandler(NpgsqlDataSource dataSource)
             items.Add(new ListingAnalyticsItemDto(
                 listingId, title, landlordUserId, landlordName, email,
                 listingStatus, createdAt, rentCents,
-                appCount, Math.Round(conversionPercent, 2), qualityScore));
+                appCount, Math.Round(conversionPercent, 2), qualityScore,
+                ListingAddedViaFormatter.Format(addedVia, addedViaDetail, channelProviderKey)));
         }
 
         return Result<IReadOnlyList<ListingAnalyticsItemDto>>.Success(items);

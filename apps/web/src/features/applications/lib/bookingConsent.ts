@@ -8,6 +8,23 @@ import type { TenantVerificationTier } from "@/api/types";
  */
 export const BOOKING_CONSENT_VERSION = "ts-consent-v3";
 
+/** Mirrors backend `OwnerTenancyConsent.CurrentVersion`. */
+export const OWNER_TENANCY_CONSENT_VERSION = "owner-tenancy-consent-v1";
+
+export function isAwaitingOwnerConsent(application: {
+  status: string;
+  ownerConsentRequired?: boolean;
+  ownerConsentGiven?: boolean;
+  ownerConsentDeclined?: boolean;
+}): boolean {
+  return (
+    application.status === "Pending" &&
+    application.ownerConsentRequired === true &&
+    application.ownerConsentGiven !== true &&
+    application.ownerConsentDeclined !== true
+  );
+}
+
 /** Human-readable label for a tenant verification tier. */
 export function tierLabel(tier: string | null | undefined): string {
   switch (tier) {

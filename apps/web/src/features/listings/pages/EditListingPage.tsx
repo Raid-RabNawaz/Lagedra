@@ -29,6 +29,11 @@ import { getApiErrorMessage } from "@/api/errors";
 import { Loader } from "@/components/shared/Loader";
 import { HostPayoutReadinessNotice } from "@/components/shared/HostPayoutReadinessNotice";
 import { useHostPayoutReadiness } from "@/features/host-onboarding/hooks/useHostStripe";
+import {
+  REQUIRE_PAYOUT_SETUP_TO_SUBMIT_FOR_REVIEW,
+  canEditListingDetails,
+  canSubmitListingForReview,
+} from "@/features/listings/lib/listingSubmitGates";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -82,18 +87,22 @@ export const EditListingPage = () => {
   const hasLocation = listing ? listing.latitude != null && listing.longitude != null : false;
   const hasPreciseAddress = listing ? Boolean(listing.preciseAddress) : false;
   const hasPhotos = listing ? listing.photos.length > 0 : false;
-  const isDraft = listing?.status === "Draft";
+  const isPropertyManager = listing?.managerRole === "PropertyManager";
+  const hasHomeOwner = Boolean(listing?.homeOwnerUserId || listing?.homeOwner?.userId);
   const isDenied = listing?.status === "Denied";
   const isInReview = listing?.status === "InReview";
-  const isEditable = isDraft || isDenied;
+  const isLive = listing?.status === "Published" || listing?.status === "Activated";
+  const canResubmit = listing ? canSubmitListingForReview(listing.status) : false;
+  const canEditDetails = listing ? canEditListingDetails(listing.status) : false;
 
   // Mirror the server-side rule: SubmitForReview() requires Draft|Denied +
   // ApproxGeoPoint + a locked precise address (so the binding agreement never
-  // seals with a blank city — Listing.PreciseAddressRequired), and the listing
-  // can only go live once the host has a payout destination
-  // (Listing.PayoutSetupRequired). Don't block while the payout lookup is
-  // still in flight so we never flash a false "blocked" state.
-  const payoutBlocks = payoutSettled && !payoutsReady;
+  // seals with a blank city — Listing.PreciseAddressRequired). Payout setup
+  // is gated by REQUIRE_PAYOUT_SETUP_TO_SUBMIT_FOR_REVIEW (temporarily off).
+  // Don't block while the payout lookup is still in flight so we never flash
+  // a false "blocked" state.
+  const payoutBlocks =
+    REQUIRE_PAYOUT_SETUP_TO_SUBMIT_FOR_REVIEW && payoutSettled && !payoutsReady;
 
   // Mirror the server-side host-profile gate: a faceless host can't go live,
   // because guests need to see who they're renting from before authorising a
@@ -107,11 +116,16 @@ export const EditListingPage = () => {
   const profileComplete = profileCompleteness.meetsListingThreshold;
 
   const canSubmit =
-    isEditable && hasLocation && hasPreciseAddress && !payoutBlocks && profileComplete;
+    canResubmit
+    && hasLocation
+    && hasPreciseAddress
+    && !payoutBlocks
+    && profileComplete
+    && (!isPropertyManager || hasHomeOwner);
   const submitLabel = isDenied ? "Resubmit for review" : "Submit for review";
   const submitBlockedReason = !listing
     ? ""
-    : !isEditable
+    : !canResubmit
       ? isInReview
         ? "Listing is being reviewed by an admin."
         : `Already ${listing.status.toLowerCase()}.`
@@ -123,7 +137,9 @@ export const EditListingPage = () => {
             ? "Set up your payout details before submitting this listing."
             : !profileComplete
               ? `Complete at least ${MIN_HOST_PROFILE_COMPLETENESS}% of your host profile before submitting (you're at ${profileCompleteness.percent}%).`
-              : "";
+              : isPropertyManager && !hasHomeOwner
+                ? "Select the home owner (they need a Lagedra account) before submitting this property-manager listing."
+                : "";
 
   const scrollToId = useCallback((targetId: string) => {
     const el = document.getElementById(targetId);
@@ -155,7 +171,13 @@ export const EditListingPage = () => {
       <div className="space-y-4">
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>Listing not found or failed to load.</AlertDescription>
+          <AlertDescription>
+            {listingQuery.isError
+              ? getApiErrorMessage(listingQuery.error, "Listing not found or failed to load.")
+              : defs.isError
+                ? getApiErrorMessage(defs.error, "Could not load listing form definitions.")
+                : "Listing not found or failed to load."}
+          </AlertDescription>
         </Alert>
         <BackLink fallbackTo="/app/listings" label="Back to my listings" />
       </div>
@@ -174,7 +196,7 @@ export const EditListingPage = () => {
   }
 
   const canWrite = isOwner;
-  const formReadOnly = !isEditable || !canWrite;
+  const formReadOnly = !canEditDetails || !canWrite;
   const defaultValues = listingDetailsToFormValues(listing);
 
   return (
@@ -192,7 +214,7 @@ export const EditListingPage = () => {
         </div>
         {canWrite && (
           <div className="flex flex-wrap gap-2">
-            {isEditable && (
+            {canResubmit && (
               <Button
                 variant="accent"
                 disabled={submitMutation.isPending || !canSubmit}
@@ -230,7 +252,7 @@ export const EditListingPage = () => {
         </Alert>
       )}
 
-      {isEditable && canWrite && (
+      {canResubmit && canWrite && REQUIRE_PAYOUT_SETUP_TO_SUBMIT_FOR_REVIEW && (
         <HostPayoutReadinessNotice
           message={
             <>
@@ -256,12 +278,21 @@ export const EditListingPage = () => {
         </Alert>
       )}
 
+      {isLive && canWrite && (
+        <Alert>
+          <AlertDescription>
+            This listing is live. Changes to title, pricing, amenities, house rules, and
+            location go live immediately. Bookings that are already confirmed keep the terms
+            that were sealed at checkout.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {formReadOnly && !isInReview && canWrite && (
         <Alert>
           <AlertDescription>
             Listing details can&apos;t be edited while status is{" "}
-            <span className="font-medium">{listing.status}</span>. You can still update photos
-            {listing.status === "Published" ? " and the precise address" : ""}.
+            <span className="font-medium">{listing.status}</span>. You can still update photos.
           </AlertDescription>
         </Alert>
       )}
@@ -303,7 +334,7 @@ export const EditListingPage = () => {
         </Alert>
       )}
 
-      {isEditable && canWrite && (
+      {canResubmit && canWrite && (
         <Card className="border-accent/40 bg-accent/5">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
@@ -333,6 +364,16 @@ export const EditListingPage = () => {
               jumpLabel="Add address"
               onJump={() => scrollToId("precise-address")}
             />
+            {isPropertyManager && (
+              <ChecklistRow
+                done={hasHomeOwner}
+                required
+                label="Select the home owner"
+                detail="California stays over 30 days need the owner's consent on the lease. Look them up by the email on their Lagedra account in Ownership & lease parties."
+                jumpLabel="Add owner"
+                onJump={() => scrollToId("ownership")}
+              />
+            )}
             <ChecklistRow
               done={profileComplete}
               required

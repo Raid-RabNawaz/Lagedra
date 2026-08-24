@@ -11,6 +11,7 @@ import { Select } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { FormError } from "@/components/shared/FormError";
 import { DynamicIcon } from "./DynamicIcon";
+import { ListingOwnershipFields } from "./ListingOwnershipFields";
 import { cn } from "@/lib/utils";
 import {
   listingFormSchema,
@@ -50,7 +51,7 @@ type ListingFormProps = {
   defaultValues?: Partial<ListingFormValues>;
   onSubmit: (data: ListingFormValues) => Promise<void>;
   submitLabel: string;
-  /** When true, fields and submit are disabled (e.g. InReview / Published). */
+  /** When true, fields and submit are disabled (e.g. InReview / Closed). */
   readOnly?: boolean;
   definitions: {
     amenities: AmenityDefinitionDto[];
@@ -120,6 +121,15 @@ export function ListingForm({
               <Textarea rows={6} placeholder="Describe the space, neighborhood, and what makes it a great mid-term stay..." {...form.register("description")} />
             </Field>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card id="ownership" className="scroll-mt-24">
+        <CardHeader>
+          <CardTitle className="text-lg">Ownership & lease parties</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ListingOwnershipFields form={form} showBrokerClause />
         </CardContent>
       </Card>
 

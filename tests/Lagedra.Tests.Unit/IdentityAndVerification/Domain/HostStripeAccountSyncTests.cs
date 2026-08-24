@@ -76,4 +76,30 @@ public sealed class HostStripeAccountSyncTests
         Assert.Equal(HostAccountRequirementStatus.Verified, account.TaxStatus);
         Assert.Equal(StripeOnboardingStatus.Completed, account.OnboardingStatus);
     }
+
+    [Fact]
+    public void SyncStatus_KeepsBankVerified_WhenPayoutsDisabledForUnrelatedRequirement()
+    {
+        var account = HostStripeAccount.Create(
+            Guid.NewGuid(),
+            "acct_test",
+            new FixedClock(DateTime.UtcNow));
+
+        account.SyncStatus(
+            chargesEnabled: false,
+            payoutsEnabled: false,
+            detailsSubmitted: true,
+            hasExternalAccount: true,
+            hasOutstandingTaxRequirement: false,
+            taxRequirementPastDue: false,
+            taxRequirementPendingVerification: false,
+            isRestricted: true,
+            hasOutstandingBankRequirement: false,
+            bankRequirementPastDue: false,
+            new FixedClock(DateTime.UtcNow));
+
+        Assert.Equal(HostAccountRequirementStatus.Verified, account.BankAccountStatus);
+        Assert.Equal(HostAccountRequirementStatus.Verified, account.TaxStatus);
+        Assert.Equal(StripeOnboardingStatus.Restricted, account.OnboardingStatus);
+    }
 }

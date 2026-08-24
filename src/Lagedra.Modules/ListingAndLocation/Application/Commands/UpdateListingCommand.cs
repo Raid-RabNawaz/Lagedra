@@ -6,6 +6,7 @@ using Lagedra.Modules.ListingAndLocation.Domain.Enums;
 using Lagedra.Modules.ListingAndLocation.Domain.ValueObjects;
 using Lagedra.Modules.ListingAndLocation.Infrastructure.Persistence;
 using IAuditTrailWriter = Lagedra.SharedKernel.Integration.IAuditTrailWriter;
+using IUserLookupService = Lagedra.SharedKernel.Integration.IUserLookupService;
 using Lagedra.SharedKernel.Results;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -38,7 +39,11 @@ public sealed record UpdateListingCommand(
     long? DepositUnverifiedCents = null,
     long? DepositBackgroundVerifiedCents = null,
     long? DepositPartnerGuaranteedCents = null,
-    LeaseTermsDto? LeaseTerms = null) : IRequest<Result<ListingDetailsDto>>;
+    LeaseTermsDto? LeaseTerms = null,
+    ListingManagerRole ManagerRole = ListingManagerRole.Owner,
+    Guid? HomeOwnerUserId = null,
+    string? HomeOwnerEmail = null,
+    bool IncludeBrokerClause = false) : IRequest<Result<ListingDetailsDto>>;
 
 public sealed class UpdateListingCommandValidator : AbstractValidator<UpdateListingCommand>
 {
@@ -77,7 +82,8 @@ public sealed class UpdateListingCommandValidator : AbstractValidator<UpdateList
 public sealed class UpdateListingCommandHandler(
     ListingsDbContext dbContext,
     IGeocodingService geocodingService,
-    IAuditTrailWriter auditTrail)
+    IAuditTrailWriter auditTrail,
+    IUserLookupService userLookup)
     : IRequestHandler<UpdateListingCommand, Result<ListingDetailsDto>>
 {
     private static readonly Error NotFound = new("Listing.NotFound", "Listing not found.");
@@ -105,6 +111,18 @@ public sealed class UpdateListingCommandHandler(
         if (listing.LandlordUserId != request.CallerUserId)
         {
             return Result<ListingDetailsDto>.Failure(Forbidden);
+        }
+
+        var management = await ListingManagementGuard.ResolveAsync(
+            userLookup,
+            request.ManagerRole,
+            request.HomeOwnerUserId,
+            request.HomeOwnerEmail,
+            request.CallerUserId,
+            cancellationToken).ConfigureAwait(false);
+        if (management.IsFailure)
+        {
+            return Result<ListingDetailsDto>.Failure(management.Error);
         }
 
         var rentChanged = listing.MonthlyRentCents != request.MonthlyRentCents;
@@ -224,6 +242,11 @@ public sealed class UpdateListingCommandHandler(
                 request.DepositBackgroundVerifiedCents,
                 request.DepositPartnerGuaranteedCents);
 
+            listing.SetManagement(
+                management.Value.ManagerRole,
+                management.Value.HomeOwnerUserId,
+                request.IncludeBrokerClause);
+
             if (rentChanged)
             {
                 var newRecord = ListingPriceHistory.Create(listing.Id, request.MonthlyRentCents, today);
@@ -258,6 +281,7 @@ public sealed class UpdateListingCommandHandler(
             CreateListingCommandHandler.FormatDepositDetails(listing),
             ct: cancellationToken).ConfigureAwait(false);
 
-        return Result<ListingDetailsDto>.Success(ListingMapper.ToDetails(listing));
+        return Result<ListingDetailsDto>.Success(
+            ListingMapper.ToDetails(listing, homeOwner: management.Value.HomeOwner));
     }
 }

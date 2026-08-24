@@ -10,7 +10,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { getApiErrorMessage } from "@/api/errors";
@@ -34,6 +34,17 @@ type Props = {
 
 const ACCEPTED_TYPES = "image/jpeg,image/png,image/webp,image/heic,image/heif";
 
+/**
+ * Latest selectable date of birth (today minus 18 years, local timezone) —
+ * users must be legal adults, matching the backend's Identity.Kyc.Underage
+ * validation.
+ */
+function latestAdultDob(): string {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - 18);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 function findDoc(docs: KycDocumentDto[] | undefined, type: KycDocumentType) {
   return docs?.find((d) => d.documentType === type);
 }
@@ -56,9 +67,11 @@ export function ManualKycUpload({
 
   const [error, setError] = useState<string | null>(null);
   const [uploadingType, setUploadingType] = useState<KycDocumentType | null>(null);
-  const [dobInput, setDobInput] = useState(dateOfBirth ?? "");
+  // The profile may hand us a full ISO datetime; the picker works with
+  // plain YYYY-MM-DD, so keep just the date part.
+  const [dobInput, setDobInput] = useState((dateOfBirth ?? "").slice(0, 10));
   useEffect(() => {
-    setDobInput(dateOfBirth ?? "");
+    setDobInput((dateOfBirth ?? "").slice(0, 10));
   }, [dateOfBirth]);
 
   const idFront = findDoc(docs, "IdFront");
@@ -133,14 +146,15 @@ export function ManualKycUpload({
 
       <div className="space-y-2 max-w-xs">
         <Label htmlFor="manual-kyc-dob">Date of birth</Label>
-        <Input
+        <DatePicker
           id="manual-kyc-dob"
-          type="date"
           value={dobInput}
-          onChange={(e) => setDobInput(e.target.value)}
+          onChange={setDobInput}
+          max={latestAdultDob()}
+          placeholder="Select your date of birth"
         />
         <p className="text-xs text-muted-foreground">
-          Must match the date of birth on the ID you uploaded.
+          Must match the date of birth on the ID you uploaded. You must be 18 or older.
         </p>
       </div>
 

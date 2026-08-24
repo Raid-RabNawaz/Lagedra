@@ -37,12 +37,9 @@ import { ErrorState } from "@/components/shared/ErrorState";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Building2, CheckCircle2 } from "lucide-react";
 import { HostChannelSyncButton } from "@/features/channels/components/HostChannelSyncButton";
+import { canSubmitListingForReview } from "@/features/listings/lib/listingSubmitGates";
 import { formatMoney, formatDate } from "@/utils/format";
 import { cn } from "@/lib/utils";
-
-function canSubmitForReview(status: ListingStatus): boolean {
-  return status === "Draft" || status === "Denied";
-}
 
 type BulkSubmitFailure = {
   id: string;
@@ -116,7 +113,7 @@ export const MyListingsPage = () => {
   }, [items, tab, search]);
 
   const selectableFiltered = useMemo(
-    () => filtered.filter((l) => canSubmitForReview(l.status)),
+    () => filtered.filter((l) => canSubmitListingForReview(l.status)),
     [filtered],
   );
 
@@ -488,7 +485,7 @@ function ListingRowCard({
   onDelete: () => void;
   isMutating: boolean;
 }) {
-  const canSubmit = canSubmitForReview(listing.status);
+  const canSubmit = canSubmitListingForReview(listing.status);
   const canClose = listing.status === "Published" || listing.status === "Activated";
   const canDelete = listing.status === "Draft" || listing.status === "Denied";
   const submitLabel = listing.status === "Denied" ? "Resubmit" : "Submit for review";

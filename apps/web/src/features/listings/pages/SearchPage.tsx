@@ -28,6 +28,7 @@ import type {
   SearchListingsSortBy,
 } from "@/api/types";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -810,26 +811,29 @@ export const SearchPage = () => {
               <FilterSection icon={<Calendar className="h-3.5 w-3.5" />} title="Stay window">
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                   <FilterField label="Available from">
-                    <Input
-                      type="date"
+                    <DatePicker
                       value={availableFrom}
-                      onChange={(e) => {
-                        setAvailableFrom(e.target.value);
+                      onChange={(v) => {
+                        setAvailableFrom(v);
                         setPage(1);
                       }}
+                      max={availableTo || undefined}
+                      placeholder="Any date"
                       className="h-9"
+                      aria-label="Available from"
                     />
                   </FilterField>
                   <FilterField label="Available until">
-                    <Input
-                      type="date"
+                    <DatePicker
                       value={availableTo}
                       min={availableFrom || undefined}
-                      onChange={(e) => {
-                        setAvailableTo(e.target.value);
+                      onChange={(v) => {
+                        setAvailableTo(v);
                         setPage(1);
                       }}
+                      placeholder="Any date"
                       className="h-9"
+                      aria-label="Available until"
                     />
                   </FilterField>
                   <div className="flex items-end">

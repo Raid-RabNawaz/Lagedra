@@ -2,6 +2,7 @@ using System.Globalization;
 using Lagedra.Auth;
 using Lagedra.Compliance;
 using Lagedra.Infrastructure;
+using Lagedra.Infrastructure.RealTime;
 using Lagedra.Modules.ActivationAndBilling;
 using Lagedra.Modules.AntiAbuseAndIntegrity;
 using Lagedra.Modules.ChannelIntegration;
@@ -42,7 +43,9 @@ try
         {
             var configuration = hostContext.Configuration;
 
-            services.AddInfrastructure(configuration);
+            // PostgresNotify: the worker has no connected browsers, so its
+            // real-time pushes travel over Postgres NOTIFY to the API's hub.
+            services.AddInfrastructure(configuration, RealTimePushMode.PostgresNotify);
             services.AddAuth(configuration);
             services.AddTruthSurface(configuration);
             services.AddCompliance(configuration);

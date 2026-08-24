@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Plus, Users, Loader2 } from "lucide-react";
+import { Plus, Users, Loader2, Trash2 } from "lucide-react";
 import { partnerApi } from "@/features/partners/services/partnerApi";
 import { usePartnerMembership } from "@/features/partners/hooks/usePartnerMembership";
+import { useAuthStore } from "@/app/auth/authStore";
 import { extractErrorMessage } from "@/lib/errors";
 import type { PartnerMemberDto, PartnerMemberRole } from "@/api/types";
 import { PersonCell } from "@/features/partners/components/PersonCell";
@@ -30,14 +31,20 @@ import { FormError } from "@/components/shared/FormError";
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString(undefined, { dateStyle: "medium" });
 
+const memberLabel = (m: PartnerMemberDto) =>
+  m.displayName?.trim() || m.email?.trim() || `${m.userId.slice(0, 8)}…`;
+
 export const PartnerMembersPage = () => {
   const { membership, isLoading: membershipLoading, error: membershipError, refresh } =
     usePartnerMembership();
+
+  const currentUserId = useAuthStore((s) => s.user?.userId);
 
   const [members, setMembers] = useState<PartnerMemberDto[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<unknown>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [memberToRemove, setMemberToRemove] = useState<PartnerMemberDto | null>(null);
 
   const orgId = membership?.organization.id;
   const isAdmin = membership?.memberRole === "Admin";
@@ -118,6 +125,7 @@ export const PartnerMembersPage = () => {
                     <TableHead>Role</TableHead>
                     <TableHead className="hidden md:table-cell">Joined</TableHead>
                     <TableHead className="hidden lg:table-cell">Invited by</TableHead>
+                    {isAdmin && <TableHead className="w-12" />}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -145,6 +153,21 @@ export const PartnerMembersPage = () => {
                         {m.invitedByDisplayName?.trim() ||
                           (m.invitedBy ? `${m.invitedBy.slice(0, 8)}…` : "—")}
                       </TableCell>
+                      {isAdmin && (
+                        <TableCell className="text-right">
+                          {m.userId !== currentUserId && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                              title="Remove member"
+                              onClick={() => setMemberToRemove(m)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </TableCell>
+                      )}
                     </TableRow>
                   ))}
                 </TableBody>
@@ -162,9 +185,88 @@ export const PartnerMembersPage = () => {
           onSuccess={() => void loadMembers()}
         />
       )}
+
+      {orgId && (
+        <RemoveMemberDialog
+          member={memberToRemove}
+          orgId={orgId}
+          onClose={() => setMemberToRemove(null)}
+          onSuccess={() => void loadMembers()}
+        />
+      )}
     </div>
   );
 };
+
+function RemoveMemberDialog({
+  member,
+  orgId,
+  onClose,
+  onSuccess,
+}: {
+  member: PartnerMemberDto | null;
+  orgId: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}) {
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleClose = (next: boolean) => {
+    if (!next) {
+      setError(null);
+      setSubmitting(false);
+      onClose();
+    }
+  };
+
+  const handleConfirm = async () => {
+    if (!member) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await partnerApi.removeMember(orgId, member.id);
+      onSuccess();
+      handleClose(false);
+    } catch (err) {
+      setError(extractErrorMessage(err));
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <Dialog open={member !== null} onOpenChange={handleClose}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Remove member</DialogTitle>
+          <DialogDescription>
+            {member ? (
+              <>
+                <strong>{memberLabel(member)}</strong> will lose access to this partner
+                organization. This does not delete their Lagedra account.
+              </>
+            ) : null}
+          </DialogDescription>
+        </DialogHeader>
+        {error && <FormError message={error} />}
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => handleClose(false)}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={submitting}
+            onClick={() => void handleConfirm()}
+          >
+            {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
+            Remove member
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 function AddMemberDialog({
   open,
@@ -177,13 +279,13 @@ function AddMemberDialog({
   orgId: string;
   onSuccess: () => void;
 }) {
-  const [userId, setUserId] = useState("");
+  const [email, setEmail] = useState("");
   const [role, setRole] = useState<PartnerMemberRole>("Member");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const reset = () => {
-    setUserId("");
+    setEmail("");
     setRole("Member");
     setError(null);
     setSubmitting(false);
@@ -196,11 +298,11 @@ function AddMemberDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userId.trim()) return;
+    if (!email.trim()) return;
     setSubmitting(true);
     setError(null);
     try {
-      await partnerApi.addMember(orgId, { userId: userId.trim(), role });
+      await partnerApi.addMember(orgId, { email: email.trim(), role });
       onSuccess();
       handleClose(false);
     } catch (err) {
@@ -215,18 +317,20 @@ function AddMemberDialog({
         <DialogHeader>
           <DialogTitle>Add member</DialogTitle>
           <DialogDescription>
-            Add an existing Lagedra user to your partner organization. Use their user ID — you can
-            ask them to copy it from their Profile page.
+            Enter the email address of the teammate you want to add. They need an existing
+            Lagedra account with that email.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="member-user-id">User ID</Label>
+            <Label htmlFor="member-email">Email address</Label>
             <Input
-              id="member-user-id"
-              value={userId}
-              onChange={(e) => setUserId(e.target.value)}
-              placeholder="00000000-0000-0000-0000-000000000000"
+              id="member-email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="teammate@company.com"
+              autoComplete="off"
               required
             />
           </div>

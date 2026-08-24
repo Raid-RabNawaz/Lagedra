@@ -493,7 +493,7 @@ export function HostingDashboard({ user }: { user: UserProfileDto }) {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <QuickAction label="Create listing" description="List a new property" to="/app/listings/new" icon={Plus} />
           <QuickAction label="My listings" description="Manage your properties" to="/app/listings" icon={Building2} />
-          <QuickAction label="Import (PMS)" description="Sync from OwnerRez or Hostaway" to="/app/channels" icon={Link2} />
+          <QuickAction label="Import (PMS)" description="Sync from OwnerRez, Hostaway, or Hosthub" to="/app/channels" icon={Link2} />
           <QuickAction label="Booking requests" description="Review & approve guests" to="/app/applications" icon={Inbox} />
           <QuickAction label="Guest inquiries" description="Answer questions" to="/app/inquiries" icon={MessageSquare} />
           <QuickAction label="Payout setup" description="Get paid via Stripe" to="/app/payout-setup" icon={Wallet} />

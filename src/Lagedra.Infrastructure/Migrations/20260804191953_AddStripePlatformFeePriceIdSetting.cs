@@ -1,5 +1,4 @@
-﻿using System;
-using Microsoft.EntityFrameworkCore.Migrations;
+﻿using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
@@ -11,11 +10,15 @@ namespace Lagedra.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.InsertData(
-                schema: "platform",
-                table: "platform_settings",
-                columns: new[] { "Key", "Description", "UpdatedAt", "UpdatedByUserId", "Value" },
-                values: new object[] { "stripe.platform_fee_price_id", "Stripe Price ID (price_…) for the host monthly protocol fee subscription", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, "" });
+            // ON CONFLICT DO NOTHING: the row may already exist (created at
+            // runtime via the admin settings UI before this migration ran) —
+            // a plain INSERT crashed the staging API on startup (2026-08-08).
+            migrationBuilder.Sql(
+                """
+                INSERT INTO platform.platform_settings ("Key", "Description", "UpdatedAt", "UpdatedByUserId", "Value")
+                VALUES ('stripe.platform_fee_price_id', 'Stripe Price ID (price_…) for the host monthly protocol fee subscription', TIMESTAMPTZ '2026-01-01T00:00:00Z', NULL, '')
+                ON CONFLICT ("Key") DO NOTHING;
+                """);
         }
 
         /// <inheritdoc />

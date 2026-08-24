@@ -43,4 +43,8 @@
     <PackageReference Include="Serilog.Enrichers.Environment" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Scheduling\quartz_tables_postgres.sql" />
+  </ItemGroup>
+
 </Project>

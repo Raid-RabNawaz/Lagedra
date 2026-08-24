@@ -6,18 +6,11 @@ using Microsoft.Extensions.Logging;
 namespace Lagedra.Modules.LeaseAgreements.Infrastructure.Services;
 
 public sealed partial class DealLeasePdfService(
-    IDealLeaseDocumentStore store,
     IMediator mediator,
     ILogger<DealLeasePdfService> logger) : IDealLeasePdfService
 {
     public async Task<DealLeaseDocument?> GetOrGenerateAsync(Guid dealId, CancellationToken ct = default)
     {
-        var existing = await store.GetByDealIdAsync(dealId, ct).ConfigureAwait(false);
-        if (existing is not null)
-        {
-            return existing;
-        }
-
         var result = await mediator.Send(new GenerateDealLeasePdfCommand(dealId), ct)
             .ConfigureAwait(false);
 

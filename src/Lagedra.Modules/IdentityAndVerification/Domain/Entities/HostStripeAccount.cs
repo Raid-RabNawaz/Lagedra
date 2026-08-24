@@ -111,14 +111,18 @@ public sealed class HostStripeAccount : Entity<Guid>
             return HostAccountRequirementStatus.Restricted;
         }
 
-        if (payoutsEnabled)
-        {
-            return HostAccountRequirementStatus.Verified;
-        }
-
         if (hasOutstandingBankRequirement)
         {
             return HostAccountRequirementStatus.Pending;
+        }
+
+        // Bank can be fine while payouts are disabled for an unrelated
+        // requirement (phone, identity document, TOS). Don't flip the bank
+        // row back to Pending — that is what made hosts think they had to
+        // re-verify payouts they already completed.
+        if (payoutsEnabled || (hasExternalAccount && detailsSubmitted))
+        {
+            return HostAccountRequirementStatus.Verified;
         }
 
         return hasExternalAccount || detailsSubmitted

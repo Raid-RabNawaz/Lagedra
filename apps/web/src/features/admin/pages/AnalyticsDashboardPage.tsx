@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
+import { Download } from "lucide-react";
 import { adminApi } from "@/features/admin/services/adminApi";
+import { downloadPlatformAnalyticsReport } from "@/features/admin/lib/analyticsReports";
 import type { PlatformSummaryDto } from "@/api/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Loader } from "@/components/shared/Loader";
 import { formatMoney } from "@/utils/format";
@@ -45,11 +47,24 @@ export const AnalyticsDashboardPage = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Analytics Dashboard</h1>
-        <p className="mt-1 text-muted-foreground">
-          Platform performance overview.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Analytics Dashboard</h1>
+          <p className="mt-1 text-muted-foreground">
+            Platform performance overview.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          className="shrink-0 gap-2"
+          disabled={!summary || isLoading}
+          onClick={() => {
+            if (summary) downloadPlatformAnalyticsReport(summary);
+          }}
+        >
+          <Download className="h-4 w-4" />
+          Download report
+        </Button>
       </div>
 
       <Card>
@@ -60,20 +75,20 @@ export const AnalyticsDashboardPage = () => {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
             <div className="space-y-1.5">
               <Label htmlFor="startDate">Start Date</Label>
-              <Input
+              <DatePicker
                 id="startDate"
-                type="date"
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                onChange={setStartDate}
+                max={endDate || undefined}
               />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="endDate">End Date</Label>
-              <Input
+              <DatePicker
                 id="endDate"
-                type="date"
                 value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
+                onChange={setEndDate}
+                min={startDate || undefined}
               />
             </div>
             <Button onClick={handleApply} disabled={isLoading}>

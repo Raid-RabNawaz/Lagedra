@@ -26,6 +26,7 @@ export const endpoints = {
   listings: {
     search: "/v1/listings",
     importFromUrl: "/v1/listings/import-from-url",
+    homeOwnerLookup: "/v1/listings/home-owner-lookup",
     mine: "/v1/listings/mine",
     detail: (id: string) => `/v1/listings/${id}`,
     similar: (id: string) => `/v1/listings/${id}/similar`,
@@ -41,6 +42,7 @@ export const endpoints = {
     lockAddress: (id: string) => `/v1/listings/${id}/lock-address`,
     addPhoto: (id: string) => `/v1/listings/${id}/photos`,
     uploadMedia: (id: string) => `/v1/listings/${id}/media/upload`,
+    importPhotosFromUrls: (id: string) => `/v1/listings/${id}/media/import-from-urls`,
     photo: (listingId: string, photoId: string) => `/v1/listings/${listingId}/photos/${photoId}`,
     coverPhoto: (listingId: string, photoId: string) =>
       `/v1/listings/${listingId}/photos/${photoId}/cover`,
@@ -63,14 +65,22 @@ export const endpoints = {
     safetyDevices: "/v1/listing-definitions/safety-devices",
     considerations: "/v1/listing-definitions/considerations",
   },
+  actions: {
+    approveApplication: "/v1/actions/approve-application",
+    consentOwnerTenancy: "/v1/actions/consent-owner-tenancy",
+    declineOwnerTenancy: "/v1/actions/decline-owner-tenancy",
+  },
   applications: {
     submit: "/v1/applications",
     setupIntent: "/v1/applications/setup-intent",
     preview: "/v1/applications/preview",
     mine: "/v1/applications/mine",
+    ownerPending: "/v1/applications/owner-pending",
     detail: (id: string) => `/v1/applications/${id}`,
     approve: (id: string) => `/v1/applications/${id}/approve`,
     reject: (id: string) => `/v1/applications/${id}/reject`,
+    ownerConsent: (id: string) => `/v1/applications/${id}/owner-consent`,
+    ownerDecline: (id: string) => `/v1/applications/${id}/owner-decline`,
     attachPayment: (id: string) => `/v1/applications/${id}/attach-payment`,
     forListing: (listingId: string) => `/v1/applications/listing/${listingId}`,
   },
@@ -128,6 +138,9 @@ export const endpoints = {
     stopBilling: (dealId: string) => `/v1/deals/${dealId}/stop-billing`,
     activate: (dealId: string) => `/v1/deals/${dealId}/activate`,
     hostStatement: "/v1/me/billing/statement",
+    rentCheckIns: (dealId: string) => `/v1/deals/${dealId}/rent-checkins`,
+    respondRentCheckIn: (dealId: string, checkInId: string) =>
+      `/v1/deals/${dealId}/rent-checkins/${checkInId}/respond`,
   },
   payment: {
     details: (dealId: string) => `/v1/deals/${dealId}/payment/details`,
@@ -338,6 +351,7 @@ export const endpoints = {
     detail: (id: string) => `/v1/partners/${id}`,
     verify: (id: string) => `/v1/partners/${id}/verify`,
     members: (id: string) => `/v1/partners/${id}/members`,
+    member: (id: string, memberId: string) => `/v1/partners/${id}/members/${memberId}`,
     referralLinks: (id: string) => `/v1/partners/${id}/referral-links`,
     deactivateReferralLink: (id: string, linkId: string) =>
       `/v1/partners/${id}/referral-links/${linkId}/deactivate`,

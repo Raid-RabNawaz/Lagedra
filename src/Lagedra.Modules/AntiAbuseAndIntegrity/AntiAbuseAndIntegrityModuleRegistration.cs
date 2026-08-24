@@ -1,11 +1,9 @@
-using Lagedra.Modules.AntiAbuseAndIntegrity.Infrastructure.Jobs;
 using Lagedra.Modules.AntiAbuseAndIntegrity.Infrastructure.Persistence;
 using Lagedra.Modules.AntiAbuseAndIntegrity.Infrastructure.Repositories;
 using Lagedra.Infrastructure.Eventing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Quartz;
 
 namespace Lagedra.Modules.AntiAbuseAndIntegrity;
 
@@ -32,16 +30,6 @@ public static class AntiAbuseAndIntegrityModuleRegistration
 
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(AntiAbuseAndIntegrityModuleRegistration).Assembly));
-
-        services.AddQuartz(q =>
-        {
-            var jobKey = new JobKey("PatternDetection");
-            q.AddJob<PatternDetectionSchedulerJob>(opts => opts.WithIdentity(jobKey));
-            q.AddTrigger(opts => opts
-                .ForJob(jobKey)
-                .WithIdentity("PatternDetection-trigger")
-                .WithCronSchedule("0 0 */4 ? * *"));
-        });
 
         return services;
     }

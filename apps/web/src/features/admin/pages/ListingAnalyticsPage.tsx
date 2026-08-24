@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
-import { ArrowUp, ArrowDown, Search, X } from "lucide-react";
+import { ArrowUp, ArrowDown, Download, Search, X } from "lucide-react";
 import { adminApi } from "@/features/admin/services/adminApi";
+import { downloadListingAnalyticsReport } from "@/features/admin/lib/analyticsReports";
 import type { AdminListingStatus, ListingAnalyticsItemDto } from "@/api/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -14,7 +16,7 @@ import { formatMoney } from "@/utils/format";
 
 type SortKey = keyof Pick<
   ListingAnalyticsItemDto,
-  "title" | "landlordName" | "status" | "createdAt" | "monthlyRentCents" | "applicationCount" | "conversionPercent" | "qualityScore"
+  "title" | "landlordName" | "status" | "createdAt" | "monthlyRentCents" | "applicationCount" | "conversionPercent" | "qualityScore" | "addedVia"
 >;
 type SortDir = "asc" | "desc";
 
@@ -135,11 +137,22 @@ export const ListingAnalyticsPage = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Listing Analytics</h1>
-        <p className="mt-1 text-muted-foreground">
-          Per-listing performance metrics.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Listing Analytics</h1>
+          <p className="mt-1 text-muted-foreground">
+            Per-listing performance metrics.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          className="shrink-0 gap-2"
+          disabled={isLoading || sorted.length === 0}
+          onClick={() => downloadListingAnalyticsReport(sorted)}
+        >
+          <Download className="h-4 w-4" />
+          Download report
+        </Button>
       </div>
 
       <Card>
@@ -177,20 +190,22 @@ export const ListingAnalyticsPage = () => {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="filter-added-from">Added from</Label>
-              <Input
+              <DatePicker
                 id="filter-added-from"
-                type="date"
                 value={addedFrom}
-                onChange={(e) => setAddedFrom(e.target.value)}
+                onChange={setAddedFrom}
+                max={addedTo || undefined}
+                placeholder="Any date"
               />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="filter-added-to">Added to</Label>
-              <Input
+              <DatePicker
                 id="filter-added-to"
-                type="date"
                 value={addedTo}
-                onChange={(e) => setAddedTo(e.target.value)}
+                onChange={setAddedTo}
+                min={addedFrom || undefined}
+                placeholder="Any date"
               />
             </div>
           </div>
@@ -243,6 +258,7 @@ export const ListingAnalyticsPage = () => {
                   <TableHead>{headerButton("Applications", "applicationCount")}</TableHead>
                   <TableHead className="hidden md:table-cell">{headerButton("Conversion %", "conversionPercent")}</TableHead>
                   <TableHead>{headerButton("Quality", "qualityScore")}</TableHead>
+                  <TableHead>{headerButton("Added via", "addedVia")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -283,6 +299,9 @@ export const ListingAnalyticsPage = () => {
                     </TableCell>
                     <TableCell className="text-sm">
                       {item.qualityScore}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {item.addedVia}
                     </TableCell>
                   </TableRow>
                 ))}

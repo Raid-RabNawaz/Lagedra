@@ -24,7 +24,9 @@ public sealed class ListMyApplicationsQueryHandler(
 
         var applications = await dbContext.DealApplications
             .AsNoTracking()
-            .Where(a => a.TenantUserId == request.UserId || a.LandlordUserId == request.UserId)
+            .Where(a => a.TenantUserId == request.UserId
+                        || a.LandlordUserId == request.UserId
+                        || a.HomeOwnerUserId == request.UserId)
             .OrderByDescending(a => a.SubmittedAt)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);

@@ -1,6 +1,10 @@
 namespace Lagedra.Infrastructure.External.Payments;
 
-public sealed record StripeSubscriptionResult(string SubscriptionId, string ClientSecret, DateTime CurrentPeriodEnd);
+public sealed record StripeSubscriptionResult(
+    string SubscriptionId,
+    string ClientSecret,
+    DateTime CurrentPeriodEnd,
+    Uri? HostedInvoiceUrl = null);
 public sealed record StripeInvoiceResult(string InvoiceId, long AmountDue, string Currency);
 public sealed record StripeConnectedAccountResult(string AccountId, Uri OnboardingUrl);
 public sealed record StripeAccountStatusResult(
@@ -16,7 +20,13 @@ public sealed record StripeAccountStatusResult(
     bool HasOutstandingBankRequirement,
     bool BankRequirementPastDue,
     IReadOnlyList<string> CurrentlyDue,
-    IReadOnlyList<string> PastDue);
+    IReadOnlyList<string> PastDue,
+    IReadOnlyList<string> PendingVerification,
+    string? DisabledReason)
+{
+    public bool HasActionableRequirements =>
+        CurrentlyDue.Count > 0 || PastDue.Count > 0;
+}
 public sealed record StripePaymentIntentResult(string PaymentIntentId, string ClientSecret, string Status, long Amount, string Currency);
 public sealed record StripeRefundResult(string RefundId, long AmountRefunded, string Status);
 
@@ -67,6 +77,14 @@ public interface IStripeService
     /// change bank, tax, or identity details on an existing Express account.
     /// </summary>
     Task<Uri> CreateAccountUpdateLinkAsync(string accountId, Uri? returnUrl = null, Uri? refreshUrl = null, CancellationToken ct = default);
+
+    /// <summary>
+    /// Picks the Account Link type that can actually collect outstanding
+    /// requirements. Express accounts that already submitted details bounce
+    /// immediately off <c>account_onboarding</c> (the return-URL loop); those
+    /// need <c>account_update</c>.
+    /// </summary>
+    Task<Uri> CreateConnectActionLinkAsync(string accountId, Uri? returnUrl = null, Uri? refreshUrl = null, CancellationToken ct = default);
 
     /// <summary>
     /// Creates a one-time Express Dashboard login URL for the connected account

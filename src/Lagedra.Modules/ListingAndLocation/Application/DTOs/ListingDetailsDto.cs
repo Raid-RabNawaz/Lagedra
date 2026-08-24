@@ -43,7 +43,16 @@ public sealed record ListingDetailsDto(
     string? RejectionReason = null,
     DateTime? SubmittedForReviewAt = null,
     DateTime? ReviewedAt = null,
-    LeaseTermsDto? LeaseTerms = null);
+    LeaseTermsDto? LeaseTerms = null,
+    ListingManagerRole ManagerRole = ListingManagerRole.Owner,
+    Guid? HomeOwnerUserId = null,
+    bool IncludeBrokerClause = false,
+    ListingHomeOwnerDto? HomeOwner = null);
+
+public sealed record ListingHomeOwnerDto(
+    Guid UserId,
+    string DisplayName,
+    string Email);
 
 public sealed record AddressDto(
     string Street,

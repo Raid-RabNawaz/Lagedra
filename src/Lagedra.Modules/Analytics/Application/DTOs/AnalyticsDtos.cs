@@ -22,4 +22,5 @@ public sealed record ListingAnalyticsItemDto(
     long MonthlyRentCents,
     int ApplicationCount,
     double ConversionPercent,
-    double QualityScore);
+    double QualityScore,
+    string AddedVia);

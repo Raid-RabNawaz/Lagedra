@@ -72,7 +72,9 @@ public sealed partial class ListingImporter(
                 bathrooms,
                 stayRange,
                 maxDepositCents,
-                request.SquareFootage);
+                request.SquareFootage,
+                ListingAddedVia.Channel,
+                request.ExternalSource);
 
             dbContext.Listings.Add(listing);
             dbContext.ListingPriceHistory.Add(ListingPriceHistory.Create(
@@ -93,6 +95,11 @@ public sealed partial class ListingImporter(
                 stayRange,
                 maxDepositCents,
                 request.SquareFootage);
+        }
+
+        if (!created)
+        {
+            listing.MarkAddedVia(ListingAddedVia.Channel, request.ExternalSource);
         }
 
         var editable = listing.Status is ListingStatus.Draft or ListingStatus.Denied;

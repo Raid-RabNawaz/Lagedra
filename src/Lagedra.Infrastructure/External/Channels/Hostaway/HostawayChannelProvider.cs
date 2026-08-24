@@ -405,7 +405,16 @@ public sealed partial class HostawayChannelProvider(
                 $"/v1/listings/{Uri.EscapeDataString(externalListingId)}/calendar" +
                 $"?startDate={windowStart:yyyy-MM-dd}&endDate={windowEnd:yyyy-MM-dd}";
             using var doc = await GetJsonAsync(credentials, path, ct).ConfigureAwait(false);
-            if (doc is null || !TryGetResultArray(doc.RootElement, out var days))
+            if (doc is null)
+            {
+                // Request-level failure (e.g. 403 on a listing we can no longer
+                // access). The remaining windows fail identically and each one
+                // costs a rate-limit delay, so stop instead of hammering the
+                // same forbidden calendar four more times per sync.
+                break;
+            }
+
+            if (!TryGetResultArray(doc.RootElement, out var days))
             {
                 continue;
             }

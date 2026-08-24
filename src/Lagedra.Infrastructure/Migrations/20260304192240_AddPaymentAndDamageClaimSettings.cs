@@ -1,10 +1,6 @@
-using System;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
-
-#pragma warning disable CA1814 // Prefer jagged arrays over multidimensional
-#pragma warning disable CA1861 // EF Core migration scaffolded code
 
 namespace Lagedra.Infrastructure.Migrations
 {
@@ -14,20 +10,21 @@ namespace Lagedra.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.InsertData(
-                schema: "platform",
-                table: "platform_settings",
-                columns: new[] { "Key", "Description", "UpdatedAt", "UpdatedByUserId", "Value" },
-                values: new object[,]
-                {
-                    { "cancellation.insurance_refund_deadline_days", "Days after cancellation within which insurance premium refund is eligible", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, "30" },
-                    { "damage_claim.filing_deadline_days", "Days after check-out within which a damage claim can be filed", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, "14" },
-                    { "host_platform_payment.reminder_interval_days", "Days between reminder emails to host for unpaid platform fees", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, "2" },
-                    { "host_platform_payment.suspend_after_days", "Days after host confirms tenant payment to suspend host if platform fee not paid", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, "14" },
-                    { "payment.auto_cancel_after_days", "Days after booking confirmation to auto-cancel if tenant has not paid", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, "7" },
-                    { "payment.grace_period_days", "Days after booking confirmation before payment is considered overdue", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, "3" },
-                    { "payment.reminder_after_days", "Days after booking confirmation to send payment reminder to tenant", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, "4" }
-                });
+            // ON CONFLICT DO NOTHING: rows may already exist (created at
+            // runtime via the admin settings UI before this migration ran).
+            migrationBuilder.Sql(
+                """
+                INSERT INTO platform.platform_settings ("Key", "Description", "UpdatedAt", "UpdatedByUserId", "Value")
+                VALUES
+                    ('cancellation.insurance_refund_deadline_days', 'Days after cancellation within which insurance premium refund is eligible', TIMESTAMPTZ '2026-01-01T00:00:00Z', NULL, '30'),
+                    ('damage_claim.filing_deadline_days', 'Days after check-out within which a damage claim can be filed', TIMESTAMPTZ '2026-01-01T00:00:00Z', NULL, '14'),
+                    ('host_platform_payment.reminder_interval_days', 'Days between reminder emails to host for unpaid platform fees', TIMESTAMPTZ '2026-01-01T00:00:00Z', NULL, '2'),
+                    ('host_platform_payment.suspend_after_days', 'Days after host confirms tenant payment to suspend host if platform fee not paid', TIMESTAMPTZ '2026-01-01T00:00:00Z', NULL, '14'),
+                    ('payment.auto_cancel_after_days', 'Days after booking confirmation to auto-cancel if tenant has not paid', TIMESTAMPTZ '2026-01-01T00:00:00Z', NULL, '7'),
+                    ('payment.grace_period_days', 'Days after booking confirmation before payment is considered overdue', TIMESTAMPTZ '2026-01-01T00:00:00Z', NULL, '3'),
+                    ('payment.reminder_after_days', 'Days after booking confirmation to send payment reminder to tenant', TIMESTAMPTZ '2026-01-01T00:00:00Z', NULL, '4')
+                ON CONFLICT ("Key") DO NOTHING;
+                """);
         }
 
         /// <inheritdoc />

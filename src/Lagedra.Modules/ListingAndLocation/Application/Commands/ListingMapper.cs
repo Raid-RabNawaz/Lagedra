@@ -11,7 +11,8 @@ internal static class ListingMapper
         Listing listing,
         ListingVerificationBadgesDto? hostVerificationBadges = null,
         HostProfileDto? hostProfile = null,
-        int qualityScore = 0)
+        int qualityScore = 0,
+        ListingHomeOwnerDto? homeOwner = null)
     {
         ArgumentNullException.ThrowIfNull(listing);
 
@@ -116,7 +117,11 @@ internal static class ListingMapper
                     lt.LeadPaintKnowledge,
                     lt.RentCapJustCauseExempt,
                     lt.PaymentMethods)
-                : null);
+                : null,
+            listing.ManagerRole,
+            listing.HomeOwnerUserId,
+            listing.IncludeBrokerClause,
+            homeOwner);
     }
 
     public static ListingSummaryDto ToSummary(

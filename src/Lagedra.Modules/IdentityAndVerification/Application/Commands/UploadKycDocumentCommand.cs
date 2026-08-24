@@ -62,13 +62,6 @@ public sealed partial class UploadKycDocumentCommandHandler(
                 new Error("Identity.Kyc.EmptyFile", "A non-empty file is required."));
         }
 
-        if (!AllowedMimeTypes.Contains(request.MimeType))
-        {
-            return Result<KycDocumentDto>.Failure(
-                new Error("Identity.Kyc.UnsupportedFileType",
-                    $"File type '{request.MimeType}' is not allowed. Allowed: JPEG, PNG, WebP, HEIC."));
-        }
-
         if (request.SizeBytes > MaxImageBytes)
         {
             return Result<KycDocumentDto>.Failure(
@@ -96,17 +89,24 @@ public sealed partial class UploadKycDocumentCommandHandler(
 
         var safeFileName = SanitizeFileName(request.OriginalFileName);
         var storageKey = $"kyc/{request.UserId}/{request.DocumentType}/{Guid.NewGuid()}/{safeFileName}";
+        var mimeType = ResolveMimeType(request.MimeType, safeFileName);
+
+        if (!AllowedMimeTypes.Contains(mimeType))
+        {
+            return Result<KycDocumentDto>.Failure(
+                new Error("Identity.Kyc.UnsupportedFileType",
+                    $"File type '{request.MimeType}' is not allowed. Allowed: JPEG, PNG, WebP, HEIC."));
+        }
 
         // Private bucket on purpose — KYC documents must never be publicly
         // readable. Admin review uses short-lived presigned URLs.
-        await storageService.EnsureBucketExistsAsync(_bucket, cancellationToken).ConfigureAwait(false);
-
-        var source = await request.OpenReadStream(cancellationToken).ConfigureAwait(false);
-        await using (source.ConfigureAwait(false))
+        var stored = await TryUploadToStorageAsync(storageKey, mimeType, request, cancellationToken)
+            .ConfigureAwait(false);
+        if (!stored)
         {
-            await storageService
-                .UploadObjectAsync(_bucket, storageKey, source, request.MimeType, cancellationToken)
-                .ConfigureAwait(false);
+            return Result<KycDocumentDto>.Failure(
+                new Error("Identity.Kyc.StorageFailed",
+                    "Could not store your document. Please try again in a moment."));
         }
 
         var previous = await dbContext.KycDocuments
@@ -118,7 +118,7 @@ public sealed partial class UploadKycDocumentCommandHandler(
 
         var document = KycDocument.Create(
             request.UserId, request.DocumentType, storageKey,
-            safeFileName, request.MimeType, request.SizeBytes);
+            safeFileName, mimeType, request.SizeBytes);
 
         dbContext.KycDocuments.Add(document);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
@@ -130,6 +130,58 @@ public sealed partial class UploadKycDocumentCommandHandler(
 
         return Result<KycDocumentDto>.Success(
             new KycDocumentDto(document.DocumentType, document.FileName, document.UploadedAt));
+    }
+
+    /// <summary>
+    /// Some mobile cameras send an empty or generic MIME type (e.g.
+    /// <c>application/octet-stream</c>). Infer from the extension when needed.
+    /// </summary>
+    private static string ResolveMimeType(string mimeType, string fileName)
+    {
+        if (!string.IsNullOrWhiteSpace(mimeType) &&
+            !string.Equals(mimeType, "application/octet-stream", StringComparison.OrdinalIgnoreCase))
+        {
+            return mimeType.Trim();
+        }
+
+        return Path.GetExtension(fileName).ToUpperInvariant() switch
+        {
+            ".JPG" or ".JPEG" => "image/jpeg",
+            ".PNG" => "image/png",
+            ".WEBP" => "image/webp",
+            ".HEIC" => "image/heic",
+            ".HEIF" => "image/heif",
+            _ => mimeType?.Trim() ?? string.Empty,
+        };
+    }
+
+    [SuppressMessage("Design", "CA1031:Do not catch general exception types",
+        Justification = "Storage outages must surface as a Result failure, not a 500 to the user.")]
+    private async Task<bool> TryUploadToStorageAsync(
+        string storageKey,
+        string mimeType,
+        UploadKycDocumentCommand request,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await storageService.EnsureBucketExistsAsync(_bucket, cancellationToken).ConfigureAwait(false);
+
+            var source = await request.OpenReadStream(cancellationToken).ConfigureAwait(false);
+            await using (source.ConfigureAwait(false))
+            {
+                await storageService
+                    .UploadObjectAsync(_bucket, storageKey, source, mimeType, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LogStorageFailed(_logger, ex, _bucket, storageKey);
+            return false;
+        }
     }
 
     [SuppressMessage("Design", "CA1031:Do not catch general exception types",
@@ -153,6 +205,10 @@ public sealed partial class UploadKycDocumentCommandHandler(
         var safe = new string(cleaned.Select(c => invalid.Contains(c) ? '_' : c).ToArray());
         return string.IsNullOrWhiteSpace(safe) ? "document" : safe;
     }
+
+    [LoggerMessage(Level = LogLevel.Error,
+        Message = "KYC document upload failed for {Bucket}/{Key}.")]
+    private static partial void LogStorageFailed(ILogger logger, Exception exception, string bucket, string key);
 
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "Failed to delete replaced KYC object {Bucket}/{Key}.")]

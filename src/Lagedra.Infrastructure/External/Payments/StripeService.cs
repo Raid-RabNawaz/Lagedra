@@ -85,21 +85,54 @@ public sealed partial class StripeService(
     {
         var opts = NewRequestOptions(idempotencyKey);
         var service = new SubscriptionService();
+        // Invoice-based collection: hosts have no saved card at activation, so
+        // an auto-collected subscription (the previous default_incomplete
+        // setup) sat in `incomplete` with a payment link nobody surfaced and
+        // silently voided after ~23 hours — the protocol fee never billed.
+        // With send_invoice Stripe opens an invoice due in 7 days that the
+        // host pays on Stripe's hosted page; the card used there is saved as
+        // the subscription default for later cycles, and Stripe's own
+        // reminder/dunning emails apply when enabled in the dashboard.
         var subscription = await service.CreateAsync(new SubscriptionCreateOptions
         {
             Customer = customerId,
             Items = [new SubscriptionItemOptions { Price = priceId }],
-            PaymentBehavior = "default_incomplete",
+            CollectionMethod = "send_invoice",
+            DaysUntilDue = 7,
             PaymentSettings = new SubscriptionPaymentSettingsOptions
             {
                 SaveDefaultPaymentMethod = "on_subscription"
             },
-            Expand = ["latest_invoice.payment_intent"]
+            Expand = ["latest_invoice"]
         }, opts, ct).ConfigureAwait(false);
 
-        var clientSecret = subscription.LatestInvoice?.PaymentIntent?.ClientSecret ?? string.Empty;
+        // send_invoice creates the first invoice as a draft (Stripe would
+        // auto-finalize it about an hour later). Finalize it now so the
+        // hosted payment URL exists immediately and the activation email can
+        // include it. Fresh request options: reusing the subscription's
+        // idempotency key here would collide with the create call above.
+        var invoice = subscription.LatestInvoice;
+        if (invoice is not null && invoice.Status == "draft")
+        {
+            var invoiceService = new InvoiceService();
+            invoice = await invoiceService
+                .FinalizeInvoiceAsync(invoice.Id, options: null, NewRequestOptions(), ct)
+                .ConfigureAwait(false);
+        }
+
         LogSubscriptionCreated(logger, customerId, subscription.Id);
-        return new StripeSubscriptionResult(subscription.Id, clientSecret, subscription.CurrentPeriodEnd);
+
+        Uri? hostedInvoiceUrl = null;
+        if (!string.IsNullOrEmpty(invoice?.HostedInvoiceUrl))
+        {
+            Uri.TryCreate(invoice.HostedInvoiceUrl, UriKind.Absolute, out hostedInvoiceUrl);
+        }
+
+        return new StripeSubscriptionResult(
+            subscription.Id,
+            invoice?.PaymentIntent?.ClientSecret ?? string.Empty,
+            subscription.CurrentPeriodEnd,
+            hostedInvoiceUrl);
     }
 
     public async Task CancelSubscriptionAsync(string subscriptionId, CancellationToken ct = default)
@@ -222,6 +255,23 @@ public sealed partial class StripeService(
         return new Uri(link.Url);
     }
 
+    public async Task<Uri> CreateConnectActionLinkAsync(
+        string accountId,
+        Uri? returnUrl = null,
+        Uri? refreshUrl = null,
+        CancellationToken ct = default)
+    {
+        var status = await GetAccountStatusAsync(accountId, ct).ConfigureAwait(false);
+        if (status.DetailsSubmitted)
+        {
+            return await CreateAccountUpdateLinkAsync(accountId, returnUrl, refreshUrl, ct)
+                .ConfigureAwait(false);
+        }
+
+        return await CreateAccountOnboardingLinkAsync(accountId, returnUrl, refreshUrl, ct)
+            .ConfigureAwait(false);
+    }
+
     public async Task<Uri> CreateExpressLoginLinkAsync(string accountId, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(accountId);
@@ -242,7 +292,11 @@ public sealed partial class StripeService(
         var opts = NewRequestOptions();
         var accountService = new AccountService();
 
-        var account = await accountService.GetAsync(accountId, null, opts, ct).ConfigureAwait(false);
+        var account = await accountService.GetAsync(
+            accountId,
+            new AccountGetOptions { Expand = ["external_accounts"] },
+            opts,
+            ct).ConfigureAwait(false);
 
         var requirements = account.Requirements;
         var currentlyDue = requirements?.CurrentlyDue ?? [];
@@ -272,7 +326,9 @@ public sealed partial class StripeService(
             hasOutstandingBankRequirement,
             bankRequirementPastDue,
             currentlyDue.ToList(),
-            pastDue.ToList());
+            pastDue.ToList(),
+            pendingVerification.ToList(),
+            requirements?.DisabledReason);
     }
 
     // Stripe expresses tax-form needs (W-9/W-8, EIN/SSN) as requirement keys such

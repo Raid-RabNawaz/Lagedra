@@ -70,6 +70,26 @@ public sealed class Listing : AggregateRoot<Guid>
     public Uri? VirtualTourUrl { get; private set; }
 
     /// <summary>
+    /// Whether the listing creator is the home owner or a property manager.
+    /// Property managers must name <see cref="HomeOwnerUserId"/> so the owner
+    /// can consent on the lease for stays longer than 30 days.
+    /// </summary>
+    public ListingManagerRole ManagerRole { get; private set; } = ListingManagerRole.Owner;
+
+    /// <summary>
+    /// Lagedra account of the home owner when <see cref="ManagerRole"/> is
+    /// <see cref="ListingManagerRole.PropertyManager"/>. Null when the creator
+    /// is the owner.
+    /// </summary>
+    public Guid? HomeOwnerUserId { get; private set; }
+
+    /// <summary>
+    /// When true, the generated lease includes the broker disclosure addendum
+    /// using the host profile's broker name and DRE license.
+    /// </summary>
+    public bool IncludeBrokerClause { get; private set; }
+
+    /// <summary>
     /// Reason supplied by an admin when denying a listing in review. Cleared
     /// when the listing is re-submitted or approved. Surfaced to the landlord
     /// so they know what to fix.
@@ -91,6 +111,18 @@ public sealed class Listing : AggregateRoot<Guid>
     /// listing transitions Draft/Denied → InReview).
     /// </summary>
     public DateTime? SubmittedForReviewAt { get; private set; }
+
+    /// <summary>
+    /// How this listing first entered Lagedra (manual form, URL import,
+    /// Excel/XML file, or a connected channel). Set at create time.
+    /// </summary>
+    public ListingAddedVia AddedVia { get; private set; } = ListingAddedVia.Manual;
+
+    /// <summary>
+    /// Extra attribution: channel provider key (e.g. "hostaway") or the
+    /// source host of a URL import (e.g. "airbnb.com").
+    /// </summary>
+    public string? AddedViaDetail { get; private set; }
 
     private readonly List<ListingAmenity> _amenities = [];
     private readonly List<ListingSafetyDevice> _safetyDevices = [];
@@ -116,7 +148,9 @@ public sealed class Listing : AggregateRoot<Guid>
         decimal bathrooms,
         StayRange stayRange,
         long maxDepositCents,
-        int? squareFootage = null)
+        int? squareFootage = null,
+        ListingAddedVia addedVia = ListingAddedVia.Manual,
+        string? addedViaDetail = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
         ArgumentException.ThrowIfNullOrWhiteSpace(description);
@@ -160,8 +194,37 @@ public sealed class Listing : AggregateRoot<Guid>
             Bathrooms = bathrooms,
             SquareFootage = squareFootage,
             StayRange = stayRange,
-            MaxDepositCents = maxDepositCents
+            MaxDepositCents = maxDepositCents,
+            AddedVia = addedVia,
+            AddedViaDetail = NormalizeAddedViaDetail(addedViaDetail)
         };
+    }
+
+    /// <summary>
+    /// Attributes an older listing that was created as
+    /// <see cref="ListingAddedVia.Manual"/> (e.g. a pre-column channel
+    /// import). Does not overwrite a more specific source.
+    /// </summary>
+    public void MarkAddedVia(ListingAddedVia addedVia, string? addedViaDetail = null)
+    {
+        if (AddedVia != ListingAddedVia.Manual)
+        {
+            return;
+        }
+
+        AddedVia = addedVia;
+        AddedViaDetail = NormalizeAddedViaDetail(addedViaDetail);
+    }
+
+    private static string? NormalizeAddedViaDetail(string? detail)
+    {
+        if (string.IsNullOrWhiteSpace(detail))
+        {
+            return null;
+        }
+
+        var trimmed = detail.Trim();
+        return trimmed.Length <= 200 ? trimmed : trimmed[..200];
     }
 
     public void Update(
@@ -374,6 +437,39 @@ public sealed class Listing : AggregateRoot<Guid>
         AcceptsPartnerDirectReservations = accepts;
     }
 
+    /// <summary>
+    /// Sets whether the creator is the owner or a property manager, an
+    /// optional home owner account (property managers can add this later;
+    /// it is required before submit-for-review), and whether this listing's
+    /// lease should include the broker disclosure addendum.
+    /// </summary>
+    public void SetManagement(
+        ListingManagerRole managerRole,
+        Guid? homeOwnerUserId,
+        bool includeBrokerClause)
+    {
+        EnsureEditable();
+
+        if (managerRole == ListingManagerRole.PropertyManager)
+        {
+            if (homeOwnerUserId == LandlordUserId)
+            {
+                throw new ArgumentException(
+                    "The home owner must be a different account than the property manager.",
+                    nameof(homeOwnerUserId));
+            }
+
+            HomeOwnerUserId = homeOwnerUserId is Guid id && id != Guid.Empty ? id : null;
+        }
+        else
+        {
+            HomeOwnerUserId = null;
+        }
+
+        ManagerRole = managerRole;
+        IncludeBrokerClause = includeBrokerClause;
+    }
+
     public void SetVirtualTourUrl(Uri? url)
     {
         EnsureEditable();
@@ -516,6 +612,12 @@ public sealed class Listing : AggregateRoot<Guid>
             throw new InvalidOperationException("A full property address must be set before submitting for review.");
         }
 
+        if (ManagerRole == ListingManagerRole.PropertyManager && HomeOwnerUserId is null)
+        {
+            throw new InvalidOperationException(
+                "A home owner with a Lagedra account must be selected before submitting a property-manager listing.");
+        }
+
         Status = ListingStatus.InReview;
         RejectionReason = null;
         SubmittedForReviewAt = DateTime.UtcNow;
@@ -611,10 +713,9 @@ public sealed class Listing : AggregateRoot<Guid>
     }
 
     /// <summary>
-    /// Updates the public map pin when locking a precise address. Unlike
-    /// <see cref="SetApproxLocation"/>, this is allowed for
-    /// <see cref="ListingStatus.Published"/> so hosts can correct the pin
-    /// without reopening the listing for full edits.
+    /// Updates the public map pin when locking a precise address. Same
+    /// statuses as <see cref="SetApproxLocation"/>; kept as a dedicated
+    /// path so address-lock can move the pin in one command.
     /// </summary>
     public void SyncApproxLocationForAddressLock(GeoPoint geoPoint)
     {
@@ -648,9 +749,17 @@ public sealed class Listing : AggregateRoot<Guid>
         AddDomainEvent(new PreciseAddressLockedEvent(Id, jurisdictionCode));
     }
 
+    /// <summary>
+    /// Hosts may change listing content while drafting, after a denial, or
+    /// once the listing is live. <see cref="ListingStatus.InReview"/> stays
+    /// frozen so the admin reviews a stable snapshot;
+    /// <see cref="ListingStatus.Closed"/> stays frozen.
+    /// Existing sealed bookings keep their Truth Surface terms.
+    /// </summary>
     private void EnsureEditable()
     {
-        if (Status is not (ListingStatus.Draft or ListingStatus.Denied))
+        if (Status is not (ListingStatus.Draft or ListingStatus.Denied
+            or ListingStatus.Published or ListingStatus.Activated))
         {
             throw new InvalidOperationException($"Listing cannot be edited in status '{Status}'.");
         }

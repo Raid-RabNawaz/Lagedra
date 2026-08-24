@@ -136,7 +136,10 @@ public sealed class ListingProvider(ListingsDbContext db) : IListingProvider
             listing.DepositUnverifiedCents,
             listing.DepositBackgroundVerifiedCents,
             listing.DepositPartnerGuaranteedCents,
-            leaseTerms);
+            leaseTerms,
+            listing.ManagerRole.ToString(),
+            listing.HomeOwnerUserId,
+            listing.IncludeBrokerClause);
     }
 
     public async Task<bool> IsAvailableAsync(

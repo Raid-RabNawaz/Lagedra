@@ -4,7 +4,7 @@ namespace Lagedra.Infrastructure.External.Channels;
 /// Provider-agnostic contract for an external property-management system (PMS)
 /// or distribution channel that Lagedra syncs listings from and pushes
 /// completed bookings to. One implementation exists per integrated platform
-/// (OwnerRez, Hostaway, Guesty, Lodgify, …), each identified by a stable
+/// (OwnerRez, Hostaway, Guesty, Hosthub, Lodgify, …), each identified by a stable
 /// <see cref="ProviderKey"/>.
 ///
 /// Nothing in this contract is OwnerRez-specific: it models the generic channel

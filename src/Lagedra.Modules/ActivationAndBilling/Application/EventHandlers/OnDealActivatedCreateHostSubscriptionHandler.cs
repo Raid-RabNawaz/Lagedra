@@ -1,9 +1,12 @@
 using Lagedra.Infrastructure.External.Payments;
 using Lagedra.SharedKernel.Integration.Events;
 using Lagedra.Modules.ActivationAndBilling.Infrastructure.Persistence;
+using Lagedra.Modules.Notifications.Application.Commands;
+using Lagedra.Modules.Notifications.Domain.Enums;
 using Lagedra.SharedKernel.Events;
 using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Settings;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 
@@ -14,6 +17,7 @@ public sealed partial class OnDealActivatedCreateHostSubscriptionHandler(
     IStripeService stripeService,
     IUserEmailResolver emailResolver,
     IPlatformSettingsService settings,
+    IMediator mediator,
     ILogger<OnDealActivatedCreateHostSubscriptionHandler> logger)
     : IDomainEventHandler<DealActivatedEvent>
 {
@@ -66,6 +70,52 @@ public sealed partial class OnDealActivatedCreateHostSubscriptionHandler(
         await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
 
         LogSubscriptionCreated(logger, domainEvent.DealId, subscription.SubscriptionId);
+
+        await NotifyHostOfFirstInvoiceAsync(domainEvent, subscription, ct).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Emails the host the Stripe hosted payment link for the first protocol
+    /// fee invoice. Without this nothing tells the host to pay: the
+    /// subscription is invoice-collected because no card is on file yet.
+    /// Best-effort — the subscription exists and Stripe's own reminders and
+    /// the enforcement job chase unpaid invoices, so a notification failure
+    /// must not fail (and re-run) the activation handler.
+    /// </summary>
+    private async Task NotifyHostOfFirstInvoiceAsync(
+        DealActivatedEvent domainEvent,
+        StripeSubscriptionResult subscription,
+        CancellationToken ct)
+    {
+        if (subscription.HostedInvoiceUrl is null)
+        {
+            LogMissingInvoiceUrl(logger, domainEvent.DealId);
+            return;
+        }
+
+        try
+        {
+            await mediator.Send(new NotifyUserCommand(
+                domainEvent.LandlordUserId,
+                "protocol_fee_invoice",
+                "Protocol Fee Invoice Ready",
+                "Your booking is active. Pay your first monthly protocol fee invoice to keep "
+                + "your account in good standing — the payment link is in your email.",
+                new()
+                {
+                    ["dealId"] = domainEvent.DealId.ToString(),
+                    ["invoiceUrl"] = subscription.HostedInvoiceUrl.ToString(),
+                },
+                [NotificationChannel.Email, NotificationChannel.InApp],
+                domainEvent.DealId,
+                "Deal"), ct).ConfigureAwait(false);
+        }
+#pragma warning disable CA1031 // best-effort: see remarks above
+        catch (Exception ex)
+#pragma warning restore CA1031
+        {
+            LogInvoiceNotificationFailed(logger, domainEvent.DealId, ex);
+        }
     }
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "StripePlatformFeePriceId not configured — skipping subscription for deal {DealId}")]
@@ -76,4 +126,10 @@ public sealed partial class OnDealActivatedCreateHostSubscriptionHandler(
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Created host platform fee subscription for deal {DealId}: {SubscriptionId}")]
     private static partial void LogSubscriptionCreated(ILogger logger, Guid dealId, string subscriptionId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "No hosted invoice URL for deal {DealId}'s protocol fee subscription — host was not emailed a payment link")]
+    private static partial void LogMissingInvoiceUrl(ILogger logger, Guid dealId);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Failed to notify host about the first protocol fee invoice for deal {DealId}")]
+    private static partial void LogInvoiceNotificationFailed(ILogger logger, Guid dealId, Exception ex);
 }

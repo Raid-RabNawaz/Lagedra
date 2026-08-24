@@ -5,6 +5,7 @@ import type {
   AttachApplicationPaymentRequest,
   BookingSetupIntentResult,
   DealApplicationDto,
+  OwnerTenancyConsentRequest,
   ReservationPreviewDto,
   SubmitApplicationRequest,
   SubmitApplicationResult,
@@ -13,6 +14,11 @@ import type {
 export const applicationApi = {
   async listMine(): Promise<DealApplicationDto[]> {
     const response = await http.get<DealApplicationDto[]>(endpoints.applications.mine);
+    return response.data;
+  },
+
+  async listOwnerPending(): Promise<DealApplicationDto[]> {
+    const response = await http.get<DealApplicationDto[]>(endpoints.applications.ownerPending);
     return response.data;
   },
 
@@ -62,6 +68,40 @@ export const applicationApi = {
     const response = await http.post<DealApplicationDto>(
       endpoints.applications.approve(id),
       payload,
+    );
+    return response.data;
+  },
+
+  async ownerConsent(
+    id: string,
+    payload: OwnerTenancyConsentRequest,
+  ): Promise<DealApplicationDto> {
+    const response = await http.post<DealApplicationDto>(
+      endpoints.applications.ownerConsent(id),
+      payload,
+    );
+    return response.data;
+  },
+
+  async ownerDecline(id: string): Promise<DealApplicationDto> {
+    const response = await http.post<DealApplicationDto>(
+      endpoints.applications.ownerDecline(id),
+    );
+    return response.data;
+  },
+
+  async consentOwnerTenancyByToken(token: string): Promise<DealApplicationDto> {
+    const response = await http.post<DealApplicationDto>(
+      endpoints.actions.consentOwnerTenancy,
+      { token },
+    );
+    return response.data;
+  },
+
+  async declineOwnerTenancyByToken(token: string): Promise<DealApplicationDto> {
+    const response = await http.post<DealApplicationDto>(
+      endpoints.actions.declineOwnerTenancy,
+      { token },
     );
     return response.data;
   },

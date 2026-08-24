@@ -33,8 +33,26 @@ public sealed class RefreshHostOnboardingLinkCommandHandler(
                 new Error("HostStripe.NotFound", "No Stripe account found. Please start onboarding first."));
         }
 
+        var status = await stripeService
+            .GetAccountStatusAsync(account.StripeAccountId, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (status.ChargesEnabled && status.PayoutsEnabled)
+        {
+            return Result<Uri>.Failure(
+                new Error("HostStripe.AlreadyEnabled",
+                    "Your Stripe account is already enabled. Open Stripe Express to view it."));
+        }
+
+        if (status.DetailsSubmitted && !status.HasActionableRequirements)
+        {
+            return Result<Uri>.Failure(
+                new Error("HostStripe.PendingReview",
+                    "Stripe is still reviewing your information. Nothing more can be submitted right now."));
+        }
+
         var url = await stripeService
-            .CreateAccountOnboardingLinkAsync(
+            .CreateConnectActionLinkAsync(
                 account.StripeAccountId,
                 request.ReturnUrl,
                 request.RefreshUrl,

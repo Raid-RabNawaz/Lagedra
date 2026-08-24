@@ -9,7 +9,7 @@ import {
   ImportFromUrlPanel,
   type ApplyImportPayload,
 } from "@/features/listings/components/ImportFromUrlPanel";
-import { ImportFromExcelDialog } from "@/features/listings/components/ImportFromExcelDialog";
+import { ImportListingsDialog } from "@/features/listings/components/ImportListingsDialog";
 import { useListingDefinitions } from "@/features/listings/hooks/useListingDefinitions";
 import {
   toCreateListingRequest,
@@ -61,6 +61,7 @@ export const CreateListingPage = () => {
   // Optional values pre-filled from an imported listing URL. Undefined means the
   // wizard keeps its normal defaults, so existing behaviour is untouched.
   const [importedDefaults, setImportedDefaults] = useState<Partial<ListingFormValues>>();
+  const [importSourceHost, setImportSourceHost] = useState<string | null>(null);
   const [pendingPhotos, setPendingPhotos] = useState<ImportedPhotoCandidateDto[]>([]);
   // Bumping this key remounts the wizard so react-hook-form picks up the new
   // default values when an import is applied.
@@ -85,7 +86,14 @@ export const CreateListingPage = () => {
   const createDraftMutation = useMutation({
     mutationFn: async (values: ListingFormValues) => {
       if (!user) throw new Error("You must be signed in.");
-      const created = await listingApi.create(toCreateListingRequest(values));
+      const created = await listingApi.create(
+        toCreateListingRequest(
+          values,
+          importedDefaults
+            ? { addedVia: "Url", addedViaDetail: importSourceHost }
+            : undefined,
+        ),
+      );
       // Re-upload any selected imported photos through the existing media
       // pipeline. No-op when nothing was selected.
       if (pendingPhotos.length > 0) {
@@ -134,15 +142,27 @@ export const CreateListingPage = () => {
   // create endpoint is unchanged — the listing is created in Draft status and
   // still requires an explicit publish, so nothing goes live unreviewed.
   const reviewMutation = useMutation({
-    mutationFn: async (input: { values: ListingFormValues; photos: ImportedPhotoCandidateDto[] }) => {
+    mutationFn: async (input: {
+      values: ListingFormValues;
+      photos: ImportedPhotoCandidateDto[];
+      sourceHost?: string | null;
+    }) => {
       if (!user) throw new Error("You must be signed in.");
-      const created = await listingApi.create(toCreateListingRequest(input.values));
+      const created = await listingApi.create(
+        toCreateListingRequest(input.values, {
+          addedVia: "Url",
+          addedViaDetail: input.sourceHost,
+        }),
+      );
       if (input.photos.length > 0) {
         await importListingPhotos(created.id, input.photos);
       }
-      return created;
+      // Re-fetch so the edit page has photos already in the cache (create
+      // response is photo-less until uploads finish).
+      return listingApi.getDetail(created.id);
     },
     onSuccess: (data) => {
+      queryClient.setQueryData(["listing", data.id], data);
       void queryClient.invalidateQueries({ queryKey: ["listings", "mine"] });
       void navigate(`/app/listings/${data.id}/edit`, { replace: true });
     },
@@ -151,6 +171,7 @@ export const CreateListingPage = () => {
   const handleApplyImport = (payload: ApplyImportPayload) => {
     setReviewNote(null);
     setImportedDefaults(payload.values);
+    setImportSourceHost(payload.sourceHost ?? null);
     setPendingPhotos(payload.photos);
     setWizardKey((k) => k + 1);
   };
@@ -160,7 +181,11 @@ export const CreateListingPage = () => {
     const parsed = listingFormSchema.safeParse(merged);
     if (parsed.success) {
       setReviewNote(null);
-      reviewMutation.mutate({ values: parsed.data, photos: payload.photos });
+      reviewMutation.mutate({
+        values: parsed.data,
+        photos: payload.photos,
+        sourceHost: payload.sourceHost,
+      });
       return;
     }
 
@@ -169,6 +194,7 @@ export const CreateListingPage = () => {
     // the wizard so the host can finish, and explain exactly what's needed
     // instead of failing silently.
     setImportedDefaults(payload.values);
+    setImportSourceHost(payload.sourceHost ?? null);
     setPendingPhotos(payload.photos);
     setWizardKey((k) => k + 1);
 
@@ -201,15 +227,17 @@ export const CreateListingPage = () => {
             Your draft is created after the first step and saved as you go.
           </p>
         </div>
-        <ImportFromExcelDialog amenities={defs.data.amenities} />
+        <div className="flex flex-wrap gap-2">
+          <ImportListingsDialog format="excel" amenities={defs.data.amenities} />
+          <ImportListingsDialog format="xml" amenities={defs.data.amenities} />
+          <ImportFromUrlPanel
+            amenities={defs.data.amenities}
+            onApply={handleApplyImport}
+            onImportToReview={handleImportToReview}
+            creating={reviewMutation.isPending}
+          />
+        </div>
       </div>
-
-      <ImportFromUrlPanel
-        amenities={defs.data.amenities}
-        onApply={handleApplyImport}
-        onImportToReview={handleImportToReview}
-        creating={reviewMutation.isPending}
-      />
 
       {(createDraftMutation.isError ||
         saveProgressMutation.isError ||

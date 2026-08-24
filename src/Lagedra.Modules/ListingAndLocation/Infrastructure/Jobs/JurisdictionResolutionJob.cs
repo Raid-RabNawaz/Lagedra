@@ -1,3 +1,4 @@
+using Lagedra.Modules.ListingAndLocation.Infrastructure.Persistence;
 using Lagedra.Modules.ListingAndLocation.Infrastructure.Repositories;
 using Microsoft.Extensions.Logging;
 using Quartz;
@@ -7,6 +8,7 @@ namespace Lagedra.Modules.ListingAndLocation.Infrastructure.Jobs;
 [DisallowConcurrentExecution]
 public sealed partial class JurisdictionResolutionJob(
     ListingRepository repository,
+    ListingsDbContext dbContext,
     ILogger<JurisdictionResolutionJob> logger) : IJob
 {
     public async Task Execute(IJobExecutionContext context)
@@ -40,6 +42,11 @@ public sealed partial class JurisdictionResolutionJob(
                 listing.LockPreciseAddress(listing.PreciseAddress, code);
                 resolved++;
             }
+        }
+
+        if (resolved > 0)
+        {
+            await dbContext.SaveChangesAsync(context.CancellationToken).ConfigureAwait(false);
         }
 
         LogSweepComplete(logger, listings.Count, resolved);

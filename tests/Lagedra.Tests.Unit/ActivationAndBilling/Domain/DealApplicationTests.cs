@@ -63,6 +63,85 @@ public class DealApplicationTests
     }
 
     [Fact]
+    public void Approve_requires_owner_consent_when_flagged_and_does_not_mutate()
+    {
+        var owner = Guid.NewGuid();
+        var app = SubmitWithSnapshot();
+        app.RequireOwnerConsent(owner);
+
+        var act = () => app.Approve(hostConsent: TenantConsent());
+
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*home owner must consent*");
+        app.Status.Should().Be(DealApplicationStatus.Pending);
+        app.DealId.Should().BeNull();
+        app.DomainEvents.OfType<ApplicationApprovedEvent>().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void RecordOwnerConsent_then_approve_succeeds()
+    {
+        var owner = Guid.NewGuid();
+        var app = SubmitWithSnapshot();
+        app.RequireOwnerConsent(owner);
+        app.RecordOwnerConsent(
+            owner,
+            new TruthSurfaceConsentInput(true, "owner-tenancy-consent-v1", "9.9.9.9", "owner-ua"));
+
+        app.OwnerTenancyConsentGiven.Should().BeTrue();
+        app.OwnerConsentVersion.Should().Be("owner-tenancy-consent-v1");
+        app.DomainEvents.OfType<OwnerTenancyConsentGivenEvent>().Should().ContainSingle();
+
+        var dealId = app.Approve(hostConsent: TenantConsent());
+
+        app.Status.Should().Be(DealApplicationStatus.Approved);
+        app.DealId.Should().Be(dealId);
+    }
+
+    [Fact]
+    public void RecordOwnerConsent_is_idempotent()
+    {
+        var owner = Guid.NewGuid();
+        var app = SubmitWithSnapshot();
+        app.RequireOwnerConsent(owner);
+        app.RecordOwnerConsent(owner, TenantConsent());
+        app.ClearDomainEvents();
+
+        app.RecordOwnerConsent(owner, TenantConsent());
+
+        app.OwnerTenancyConsentGiven.Should().BeTrue();
+        app.DomainEvents.OfType<OwnerTenancyConsentGivenEvent>().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void DeclineOwnerConsent_rejects_and_blocks_approve()
+    {
+        var owner = Guid.NewGuid();
+        var app = SubmitWithSnapshot();
+        app.RequireOwnerConsent(owner);
+        app.DeclineOwnerConsent(owner);
+
+        app.Status.Should().Be(DealApplicationStatus.Rejected);
+        app.OwnerTenancyConsentDeclined.Should().BeTrue();
+        app.DomainEvents.OfType<OwnerTenancyConsentDeclinedEvent>().Should().ContainSingle();
+        app.DomainEvents.OfType<ApplicationRejectedEvent>().Should().BeEmpty();
+
+        var act = () => app.Approve(hostConsent: TenantConsent());
+        act.Should().Throw<InvalidOperationException>();
+    }
+
+    [Fact]
+    public void RequireOwnerConsent_rejects_same_account_as_property_manager()
+    {
+        var app = SubmitWithSnapshot();
+
+        var act = () => app.RequireOwnerConsent(Landlord);
+
+        act.Should().Throw<ArgumentException>();
+        app.OwnerConsentRequired.Should().BeFalse();
+    }
+
+    [Fact]
     public void Approve_records_host_consent_and_raises_approved_event()
     {
         var app = SubmitWithSnapshot();

@@ -23,8 +23,11 @@ public static class ApplicationEndpoints
         group.MapPost("/setup-intent", CreateBookingSetupIntent);
         group.MapGet("/preview", GetReservationPreview);
         group.MapGet("/mine", ListMyApplications);
+        group.MapGet("/owner-pending", ListOwnerPending);
         group.MapPost("/{id:guid}/approve", ApproveApplication);
         group.MapPost("/{id:guid}/reject", RejectApplication);
+        group.MapPost("/{id:guid}/owner-consent", ConsentOwnerTenancy);
+        group.MapPost("/{id:guid}/owner-decline", DeclineOwnerTenancy);
         group.MapPost("/{id:guid}/attach-payment", AttachApplicationPayment);
         group.MapGet("/{id:guid}", GetApplication);
         group.MapGet("/listing/{listingId:guid}", ListApplicationsForListing);
@@ -124,6 +127,61 @@ public static class ApplicationEndpoints
             ? Results.Created(
                 $"/v1/applications/{result.Value.Application.ApplicationId}",
                 result.Value)
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> ListOwnerPending(
+        ClaimsPrincipal user,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var userId = GetUserId(user);
+        var result = await mediator.Send(new ListOwnerPendingApplicationsQuery(userId), ct)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> ConsentOwnerTenancy(
+        [FromRoute] Guid id,
+        [FromBody] OwnerTenancyConsentRequest request,
+        ClaimsPrincipal user,
+        HttpContext httpContext,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var userId = GetUserId(user);
+        var result = await mediator.Send(
+            new ConsentOwnerTenancyCommand(
+                id,
+                userId,
+                request.ConsentGiven,
+                request.ConsentVersion,
+                GetClientIp(httpContext),
+                GetUserAgent(httpContext)), ct)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> DeclineOwnerTenancy(
+        [FromRoute] Guid id,
+        ClaimsPrincipal user,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var userId = GetUserId(user);
+        var result = await mediator.Send(new DeclineOwnerTenancyCommand(id, userId), ct)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
             : ToErrorResult(result.Error);
     }
 
@@ -246,7 +304,8 @@ public static class ApplicationEndpoints
         var payload = new { error = error.Code, detail = error.Description };
         return error.Code switch
         {
-            "Application.Forbidden" or "Application.OwnListing" =>
+            "Application.Forbidden" or "Application.OwnListing"
+                or "Application.OwnerConsentForbidden" =>
                 Results.Json(payload, statusCode: StatusCodes.Status403Forbidden),
             "Application.NotFound" or "Listing.NotFound" => Results.NotFound(payload),
             _ => Results.BadRequest(payload),

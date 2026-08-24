@@ -32,6 +32,7 @@ import { Select } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { FormError } from "@/components/shared/FormError";
 import { DynamicIcon } from "./DynamicIcon";
+import { ListingOwnershipFields } from "./ListingOwnershipFields";
 import { cn } from "@/lib/utils";
 import {
   listingFormSchema,
@@ -82,8 +83,8 @@ const STEPS: Step[] = [
     label: "Basics",
     shortLabel: "Basics",
     icon: Home,
-    description: "Property type, title and a clear description. Your draft is created when you continue.",
-    fields: ["propertyType", "title", "description"],
+    description: "Property type, title, who lists it, and a clear description. Your draft is created when you continue.",
+    fields: ["propertyType", "title", "description", "managerRole"],
   },
   {
     id: "details",
@@ -159,7 +160,7 @@ const STEPS: Step[] = [
     shortLabel: "Review",
     icon: CheckCircle2,
     description: "Review everything and finish your listing.",
-    fields: ["instantBookingEnabled", "virtualTourUrl"],
+    fields: ["instantBookingEnabled", "virtualTourUrl", "includeBrokerClause"],
   },
 ];
 
@@ -481,6 +482,9 @@ function BasicsStep({ form }: StepFormProps) {
             At least 50 characters. Include layout, vibe, transit and any standout amenities.
           </p>
         </Field>
+      </div>
+      <div className="sm:col-span-2">
+        <ListingOwnershipFields form={form} />
       </div>
     </div>
   );
@@ -945,6 +949,20 @@ function ReviewStep({
             {...form.register("virtualTourUrl")}
           />
         </Field>
+        <label className="flex items-start gap-3 rounded-lg border p-3 cursor-pointer hover:bg-muted/30 transition-colors sm:col-span-2">
+          <input
+            type="checkbox"
+            {...form.register("includeBrokerClause")}
+            className="mt-1 rounded border-input"
+          />
+          <div>
+            <p className="text-sm font-medium">Include the broker clause on this listing&apos;s lease</p>
+            <p className="text-xs text-muted-foreground">
+              Adds the broker disclosure addendum using the broker name and DRE license from your
+              profile. Add those under Profile → Broker disclosure if they are not filled in yet.
+            </p>
+          </div>
+        </label>
       </div>
 
       <Separator />
@@ -954,10 +972,22 @@ function ReviewStep({
 
         <ReviewSection title="Basics" onEdit={() => onJump(0)}>
           <ReviewRow label="Property type" value={v.propertyType} />
-          <ReviewRow label="Title" value={v.title || "�"} />
+          <ReviewRow label="Title" value={v.title || "—"} />
+          <ReviewRow
+            label="Listed by"
+            value={
+              v.managerRole === "PropertyManager"
+                ? `Property manager — owner ${v.homeOwnerDisplayName || v.homeOwnerEmail || "not selected"}`
+                : "Home owner"
+            }
+          />
+          <ReviewRow
+            label="Broker clause"
+            value={v.includeBrokerClause ? "Included on the lease" : "Not included"}
+          />
           <ReviewRow
             label="Description"
-            value={v.description ? `${v.description.slice(0, 120)}${v.description.length > 120 ? "�" : ""}` : "�"}
+            value={v.description ? `${v.description.slice(0, 120)}${v.description.length > 120 ? "…" : ""}` : "—"}
           />
         </ReviewSection>
 

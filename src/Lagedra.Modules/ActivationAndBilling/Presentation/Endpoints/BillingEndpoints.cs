@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Lagedra.Modules.ActivationAndBilling.Application.Commands;
 using Lagedra.Modules.ActivationAndBilling.Application.Queries;
+using Lagedra.Modules.ActivationAndBilling.Presentation.Contracts;
 using Lagedra.SharedKernel.Results;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
@@ -21,6 +22,8 @@ public static class BillingEndpoints
         group.MapGet("/{dealId:guid}/billing", GetBillingStatus);
         group.MapGet("/{dealId:guid}/proration-quote", GetProrationQuote);
         group.MapPost("/{dealId:guid}/stop-billing", StopBilling);
+        group.MapGet("/{dealId:guid}/rent-checkins", GetRentCheckIns);
+        group.MapPost("/{dealId:guid}/rent-checkins/{checkInId:guid}/respond", RespondToRentCheckIn);
 
         var meGroup = app.MapGroup("/v1/me/billing")
             .WithTags("Billing")
@@ -107,6 +110,40 @@ public static class BillingEndpoints
         var userId = GetUserId(user);
         var isAdmin = user.IsInRole("PlatformAdmin");
         var result = await mediator.Send(new StopBillingCommand(dealId, userId, isAdmin), ct)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> GetRentCheckIns(
+        [FromRoute] Guid dealId,
+        ClaimsPrincipal user,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var userId = GetUserId(user);
+        var isAdmin = user.IsInRole("PlatformAdmin");
+        var result = await mediator.Send(new GetRentCheckInsQuery(dealId, userId, isAdmin), ct)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> RespondToRentCheckIn(
+        [FromRoute] Guid dealId,
+        [FromRoute] Guid checkInId,
+        [FromBody] RespondToRentCheckInRequest request,
+        ClaimsPrincipal user,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var userId = GetUserId(user);
+        var result = await mediator.Send(
+            new RespondToRentCheckInCommand(dealId, checkInId, userId, request.Received, request.Note), ct)
             .ConfigureAwait(true);
 
         return result.IsSuccess

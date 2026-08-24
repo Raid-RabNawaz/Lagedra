@@ -36,7 +36,8 @@ public sealed class GetApplicationStatusQueryHandler(
         }
 
         var isParty = application.TenantUserId == request.CallerUserId
-            || application.LandlordUserId == request.CallerUserId;
+            || application.LandlordUserId == request.CallerUserId
+            || application.HomeOwnerUserId == request.CallerUserId;
 
         var isPartnerOnApplication = false;
         if (!request.IsAdmin && !isParty && application.PartnerOrganizationId is { } partnerOrgId)

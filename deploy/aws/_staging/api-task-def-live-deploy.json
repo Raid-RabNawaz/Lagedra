@@ -11,7 +11,7 @@
   "containerDefinitions": [
     {
       "name": "api",
-      "image": "930218374225.dkr.ecr.us-west-1.amazonaws.com/lagedra/api@sha256:c7db854bf97903a59f45013ac47a2768150af2c8f32791440280156d3ee38edf",
+      "image": "930218374225.dkr.ecr.us-west-1.amazonaws.com/lagedra/api@sha256:1129f99390985b22302fb9264425a72651d678ac0a4c45f268de811bbb034977",
       "essential": true,
       "portMappings": [
         {
@@ -70,6 +70,10 @@
         },
         {
           "name": "MinIO__QuarantineBucket",
+          "value": "lagedra-private-prod"
+        },
+        {
+          "name": "MinIO__KycBucket",
           "value": "lagedra-private-prod"
         },
         {
@@ -147,6 +151,14 @@
         {
           "name": "Channels__Guesty__ReservationSource",
           "value": "manual"
+        },
+        {
+          "name": "Channels__Hosthub__BaseUrl",
+          "value": "https://app.hosthub.com"
+        },
+        {
+          "name": "Channels__Hosthub__UserAgent",
+          "value": "Lagedra/1.0 (+https://lagedra.com)"
         },
         {
           "name": "FeatureFlags__BookingFlow.V2",

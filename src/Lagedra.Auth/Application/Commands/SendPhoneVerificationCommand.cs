@@ -42,6 +42,14 @@ public sealed class SendPhoneVerificationCommandHandler(
             return AuthErrors.PhoneRequired;
         }
 
+        // Accounts created before E.164 normalization may hold numbers we
+        // can't route; surface a clean validation error instead of a 500
+        // from the SMS provider.
+        if (!PhoneNumberE164.TryNormalize(user.PhoneNumber, out var phoneE164))
+        {
+            return AuthErrors.PhoneInvalid;
+        }
+
         if (user.IsPhoneVerified)
         {
             return AuthErrors.PhoneAlreadyVerified;
@@ -83,7 +91,7 @@ public sealed class SendPhoneVerificationCommandHandler(
 
         await smsService.SendAsync(new SmsMessage
         {
-            ToE164 = user.PhoneNumber!,
+            ToE164 = phoneE164,
             Body = $"Your Lagedra verification code is {code}. It expires in 10 minutes."
         }, cancellationToken).ConfigureAwait(false);
 

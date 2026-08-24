@@ -35,4 +35,9 @@ public sealed record DealApplicationDetailsDto(
     long? ServiceFeeCents = null,
     long? TotalPayableSnapshotCents = null,
     TenantVerificationTier? TenantVerificationTier = null,
-    string? DepositReason = null);
+    string? DepositReason = null,
+    Guid? HomeOwnerUserId = null,
+    bool OwnerConsentRequired = false,
+    bool OwnerTenancyConsentGiven = false,
+    DateTime? OwnerTenancyConsentAt = null,
+    string? OwnerConsentVersion = null);

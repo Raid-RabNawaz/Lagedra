@@ -79,6 +79,10 @@ export const partnerApi = {
     return r.data;
   },
 
+  async removeMember(orgId: string, memberId: string): Promise<void> {
+    await http.delete(endpoints.partners.member(orgId, memberId));
+  },
+
   // ── Referral links ─────────────────────────────────────
   async listReferralLinks(orgId: string): Promise<ReferralLinkDto[]> {
     const r = await http.get<ReferralLinkDto[]>(endpoints.partners.referralLinks(orgId));

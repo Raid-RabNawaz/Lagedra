@@ -1,6 +1,8 @@
 using System;
 using System.Linq;
 using FluentAssertions;
+using Lagedra.Modules.LeaseAgreements.Application.Services;
+using Lagedra.Modules.LeaseAgreements.Application.Templates;
 using Lagedra.Modules.LeaseAgreements.Domain.Aggregates;
 using Lagedra.Modules.LeaseAgreements.Domain.Enums;
 using Lagedra.Modules.LeaseAgreements.Domain.Events;
@@ -52,7 +54,7 @@ public class LeaseAgreementTemplateSeedPublishTests
         var generator = new LeasePdfGenerator();
         var pdf = generator.Generate(
             "California Lease Agreement",
-            "<h1>Lease</h1><p>Landlord <strong>Jane Host</strong> leases to Tenant.</p>");
+            "<h1>California Lease Agreement</h1><p>This Lease will <strong>continue</strong> after Utilities are paid. The Tenant is entitled to Residential use.</p>");
 
         pdf.Should().NotBeNullOrEmpty();
         // PDF magic number
@@ -60,5 +62,27 @@ public class LeaseAgreementTemplateSeedPublishTests
         pdf[1].Should().Be(0x50); // P
         pdf[2].Should().Be(0x44); // D
         pdf[3].Should().Be(0x46); // F
+    }
+
+    [Fact]
+    public void California_seed_body_contains_full_docusign_sections()
+    {
+        var body = CaliforniaLeaseTemplateHtml.Body;
+
+        body.Should().Contain("California Lease Agreement");
+        body.Should().Contain("month-to-month");
+        body.Should().Contain("Civil Code § 1950.5");
+        body.Should().Contain("Information about Bed Bugs");
+        body.Should().Contain("Inspection Checklist");
+        body.Should().Contain("class=\"checklist\"");
+        body.Should().Contain("Lead-Based Paint");
+        body.Should().Contain("Mold Notification Addendum");
+        body.Should().Contain("Rent Cap and Just Cause");
+        body.Should().Contain("Broker Disclosure");
+        body.Should().Contain("OWNER CONSENT AND AUTHORIZATION");
+        body.Should().Contain("The Landlord (Owner)");
+        body.Should().Contain("The Property Manager / Agent");
+        body.Should().Contain("owner.consentDate");
+        body.Should().Contain("Megan's Law");
     }
 }

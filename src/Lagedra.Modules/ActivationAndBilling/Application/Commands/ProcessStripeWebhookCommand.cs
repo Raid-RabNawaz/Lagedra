@@ -28,9 +28,23 @@ public sealed partial class ProcessStripeWebhookCommandHandler(
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var stripeEvent = await stripeService
-            .VerifyWebhookAsync(request.Payload, request.Signature)
-            .ConfigureAwait(false);
+        Stripe.Event stripeEvent;
+        try
+        {
+            stripeEvent = await stripeService
+                .VerifyWebhookAsync(request.Payload, request.Signature)
+                .ConfigureAwait(false);
+        }
+        catch (Stripe.StripeException ex)
+        {
+            // A bad or forged signature is a client error (400 back to the
+            // caller), not an unhandled 500 — Stripe treats 500s as delivery
+            // failures and retries, spamming the error logs.
+            LogSignatureVerificationFailed(logger, ex);
+            return Result.Failure(new Error(
+                "StripeWebhook.InvalidSignature",
+                "Webhook signature verification failed."));
+        }
 
         switch (stripeEvent.Type)
         {
@@ -383,4 +397,7 @@ public sealed partial class ProcessStripeWebhookCommandHandler(
 
     [LoggerMessage(Level = LogLevel.Debug, Message = "Unhandled Stripe event type: {EventType}")]
     private static partial void LogUnhandledEvent(ILogger logger, string eventType);
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Stripe webhook signature verification failed — rejecting with 400")]
+    private static partial void LogSignatureVerificationFailed(ILogger logger, Exception ex);
 }

@@ -46,4 +46,9 @@ public sealed record DealApplicationDto(
     Guid? PayerUserId = null,
     bool HasPaymentMethod = false,
     bool IsPaymentReady = false,
-    string? PartnerOrganizationName = null);
+    string? PartnerOrganizationName = null,
+    Guid? HomeOwnerUserId = null,
+    bool OwnerConsentRequired = false,
+    bool OwnerConsentGiven = false,
+    bool OwnerConsentDeclined = false,
+    DateTime? OwnerConsentAt = null);

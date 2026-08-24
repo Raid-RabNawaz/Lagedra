@@ -11,6 +11,9 @@ export function useAllNotifications() {
     queryKey: [...ALL_NOTIFICATIONS_KEY],
     queryFn: () => notificationApi.getAll(),
     staleTime: 30_000,
+    // Poll as a safety net so the full notifications page stays fresh even
+    // if the SignalR push is missed; pushes update this cache instantly.
+    refetchInterval: 60_000,
   });
 }
 

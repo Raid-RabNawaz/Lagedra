@@ -1,12 +1,10 @@
 using Lagedra.Infrastructure.Eventing;
-using Lagedra.Modules.Notifications.Infrastructure.Jobs;
 using Lagedra.Modules.Notifications.Infrastructure.Persistence;
 using Lagedra.Modules.Notifications.Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
-using Quartz;
 
 namespace Lagedra.Modules.Notifications;
 
@@ -34,27 +32,6 @@ public static class NotificationsModuleRegistration
 
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(NotificationsModuleRegistration).Assembly));
-
-        services.AddQuartz(q =>
-        {
-            var retryKey = new JobKey("NotificationRetry");
-            q.AddJob<NotificationRetryJob>(opts => opts.WithIdentity(retryKey));
-            q.AddTrigger(opts => opts
-                .ForJob(retryKey)
-                .WithIdentity("NotificationRetry-trigger")
-                .WithSimpleSchedule(s => s
-                    .WithIntervalInMinutes(10)
-                    .RepeatForever()));
-
-            var processingKey = new JobKey("NotificationProcessing");
-            q.AddJob<NotificationProcessingJob>(opts => opts.WithIdentity(processingKey));
-            q.AddTrigger(opts => opts
-                .ForJob(processingKey)
-                .WithIdentity("NotificationProcessing-trigger")
-                .WithSimpleSchedule(s => s
-                    .WithIntervalInSeconds(30)
-                    .RepeatForever()));
-        });
 
         return services;
     }

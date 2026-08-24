@@ -25,7 +25,11 @@ public sealed record UpdateListingRequest(
     long? DepositUnverifiedCents = null,
     long? DepositBackgroundVerifiedCents = null,
     long? DepositPartnerGuaranteedCents = null,
-    LeaseTermsRequest? LeaseTerms = null);
+    LeaseTermsRequest? LeaseTerms = null,
+    ListingManagerRole ManagerRole = ListingManagerRole.Owner,
+    Guid? HomeOwnerUserId = null,
+    string? HomeOwnerEmail = null,
+    bool IncludeBrokerClause = false);
 
 public sealed record LeaseTermsRequest(
     int RentDueDayOfMonth = 1,

@@ -3,6 +3,7 @@ using Lagedra.Modules.IdentityAndVerification.Domain.Aggregates;
 using Lagedra.Modules.IdentityAndVerification.Domain.Enums;
 using Lagedra.Modules.IdentityAndVerification.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Results;
+using Lagedra.SharedKernel.Time;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
@@ -27,6 +28,14 @@ public sealed class SubmitManualKycCommandHandler(IdentityDbContext dbContext)
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        if (request.DateOfBirth is { } dob
+            && !MinimumAge.IsAtLeast(MinimumAge.AdultYears, dob, DateTime.UtcNow))
+        {
+            return Result<VerificationStatusDto>.Failure(new Error(
+                "Identity.Kyc.Underage",
+                "You must be at least 18 years old to complete identity verification."));
+        }
 
         var documentTypes = await dbContext.KycDocuments
             .AsNoTracking()

@@ -187,11 +187,17 @@ export const adminApi = {
     return r.data;
   },
   async approveListing(id: string): Promise<ListingDetailsDto> {
-    const r = await http.post<ListingDetailsDto>(endpoints.adminListingReview.approve(id));
+    const r = await http.post<ListingDetailsDto>(endpoints.adminListingReview.approve(id), null, {
+      timeout: 60_000,
+    });
     return r.data;
   },
   async denyListing(id: string, reason: string): Promise<ListingDetailsDto> {
-    const r = await http.post<ListingDetailsDto>(endpoints.adminListingReview.deny(id), { reason });
+    const r = await http.post<ListingDetailsDto>(
+      endpoints.adminListingReview.deny(id),
+      { reason },
+      { timeout: 60_000 },
+    );
     return r.data;
   },
 

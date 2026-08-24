@@ -179,7 +179,13 @@ export const AppShell = () => {
     .map((s) => s[0]?.toUpperCase())
     .join("");
 
-  const sidebarContent = (onNav?: () => void) => {
+  const sidebarContent = (opts?: { onNav?: () => void; forceExpanded?: boolean }) => {
+    // Mobile slide-out always shows labels. Desktop uses the pin/hover
+    // rail state. Without this split, an unpinned desktop rail makes the
+    // mobile menu render icon-only too.
+    const showCollapsed = opts?.forceExpanded ? false : collapsed;
+    const onNav = opts?.onNav;
+
     // First group whose label starts with "Admin ·" marks the
     // boundary between member-facing sections and admin-only
     // sections. We render a horizontal divider above it so the
@@ -202,7 +208,7 @@ export const AppShell = () => {
 
           return (
             <div key={group.label}>
-              {isFirstAdmin && !collapsed && (
+              {isFirstAdmin && !showCollapsed && (
                 <div className="-mt-2 mb-3 flex items-center gap-2 px-3">
                   <span className="text-[10px] font-bold uppercase tracking-[0.15em] text-primary">
                     Platform admin
@@ -210,10 +216,10 @@ export const AppShell = () => {
                   <div className="h-px flex-1 bg-border" />
                 </div>
               )}
-              {isFirstAdmin && collapsed && (
+              {isFirstAdmin && showCollapsed && (
                 <div className="mb-2 mx-2 h-px bg-border" />
               )}
-              {!collapsed && (
+              {!showCollapsed && (
                 <p className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   {displayLabel}
                 </p>
@@ -223,7 +229,7 @@ export const AppShell = () => {
                   <SidebarLink
                     key={item.to}
                     item={item}
-                    collapsed={collapsed}
+                    collapsed={showCollapsed}
                     onClick={onNav}
                   />
                 ))}
@@ -304,6 +310,7 @@ export const AppShell = () => {
               {sidebarContent()}
             </div>
 
+            {/* Pin is desktop-only — the mobile drawer is always expanded. */}
             <div className="border-t p-2">
               <button
                 onClick={togglePinned}
@@ -356,7 +363,10 @@ export const AppShell = () => {
                 </div>
               </div>
 
-              {sidebarContent(() => setMobileOpen(false))}
+              {sidebarContent({
+                onNav: () => setMobileOpen(false),
+                forceExpanded: true,
+              })}
 
               <div className="border-t p-3">
                 <button

@@ -69,6 +69,17 @@ namespace ListingAndLocation.Migrations
                         .HasColumnType("boolean")
                         .HasDefaultValue(true);
 
+                    b.Property<string>("AddedVia")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasDefaultValue("Manual");
+
+                    b.Property<string>("AddedViaDetail")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<decimal>("Bathrooms")
                         .HasColumnType("decimal(3,1)");
 
@@ -95,8 +106,15 @@ namespace ListingAndLocation.Migrations
 
                     b.Property<string>("Description")
                         .IsRequired()
-                        .HasMaxLength(5000)
-                        .HasColumnType("character varying(5000)");
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("HomeOwnerUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IncludeBrokerClause")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<bool>("InstantBookingEnabled")
                         .ValueGeneratedOnAdd()
@@ -112,6 +130,13 @@ namespace ListingAndLocation.Migrations
 
                     b.Property<Guid>("LandlordUserId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("ManagerRole")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasDefaultValue("Owner");
 
                     b.Property<long>("MaxDepositCents")
                         .HasColumnType("bigint");
@@ -164,6 +189,8 @@ namespace ListingAndLocation.Migrations
                         .HasColumnType("character varying(2000)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("HomeOwnerUserId");
 
                     b.HasIndex("LandlordUserId");
 

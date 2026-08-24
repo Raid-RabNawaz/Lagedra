@@ -25,11 +25,10 @@ public sealed class ApproveListingCommandHandler(ListingsDbContext dbContext)
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        // Status transition only — do not eager-load photos/amenities. Hostaway
+        // imports can have hundreds of photos; that graph routinely exceeds the
+        // SPA's default axios timeout and surfaces as a fake "network" error.
         var listing = await dbContext.Listings
-            .Include(l => l.Amenities).ThenInclude(a => a.AmenityDefinition)
-            .Include(l => l.SafetyDevices).ThenInclude(s => s.SafetyDeviceDefinition)
-            .Include(l => l.Considerations).ThenInclude(c => c.ConsiderationDefinition)
-            .Include(l => l.Photos)
             .FirstOrDefaultAsync(l => l.Id == request.ListingId, cancellationToken)
             .ConfigureAwait(false);
 

@@ -44,8 +44,19 @@ public sealed class CreateHostStripeAccountCommandHandler(
                     SyncHostStripeStatusCommandHandler.MapToDto(existing, null, stripeStatus));
             }
 
+            // Details already submitted but payouts flipped off (common when
+            // Stripe later asks for phone / identity). account_onboarding
+            // immediately returns them here; only account_update can collect
+            // the new fields. If nothing is currently due, Stripe is reviewing
+            // — sending any link just loops.
+            if (stripeStatus.DetailsSubmitted && !stripeStatus.HasActionableRequirements)
+            {
+                return Result<HostStripeStatusDto>.Success(
+                    SyncHostStripeStatusCommandHandler.MapToDto(existing, null, stripeStatus));
+            }
+
             var link = await stripeService
-                .CreateAccountOnboardingLinkAsync(
+                .CreateConnectActionLinkAsync(
                     existing.StripeAccountId,
                     request.ReturnUrl,
                     request.RefreshUrl,

@@ -5,7 +5,6 @@ import { useAuthStore } from "@/app/auth/authStore";
 import { useModeStore } from "@/app/auth/modeStore";
 import { supportsModeSwitching } from "@/app/auth/permissions";
 import { Loader } from "@/components/shared/Loader";
-import { ModeToggle } from "@/features/dashboard/components/DashboardKit";
 import { TravelingDashboard } from "@/features/dashboard/components/TravelingDashboard";
 import { HostingDashboard } from "@/features/dashboard/components/HostingDashboard";
 import { RoleDashboard } from "@/features/dashboard/components/RoleDashboard";
@@ -17,7 +16,6 @@ export const DashboardPage = () => {
   const [error, setError] = useState<string | null>(null);
 
   const mode = useModeStore((s) => s.mode);
-  const setMode = useModeStore((s) => s.setMode);
 
   useEffect(() => {
     if (user) return;
@@ -60,20 +58,17 @@ export const DashboardPage = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">
-            Welcome back, {displayName}
-          </h1>
-          <p className="mt-1 text-muted-foreground">
-            {canSwitch
-              ? mode === "host"
-                ? "Here's what's happening with your properties."
-                : "Here's everything for your trips and requests."
-              : "Here's an overview of your account."}
-          </p>
-        </div>
-        {canSwitch && <ModeToggle mode={mode} onChange={setMode} />}
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">
+          Welcome back, {displayName}
+        </h1>
+        <p className="mt-1 text-muted-foreground">
+          {canSwitch
+            ? mode === "host"
+              ? "Here's what's happening with your properties."
+              : "Here's everything for your trips and requests."
+            : "Here's an overview of your account."}
+        </p>
       </div>
 
       {canSwitch ? (

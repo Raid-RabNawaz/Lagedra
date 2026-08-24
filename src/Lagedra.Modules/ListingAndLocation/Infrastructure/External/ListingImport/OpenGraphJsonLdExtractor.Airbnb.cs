@@ -366,8 +366,20 @@ public sealed partial class OpenGraphJsonLdExtractor
         }
     }
 
+    /// <summary>
+    /// Cap how many Airbnb gallery photos we surface. Listings often expose
+    /// 40–80 CDN URLs; importing all of them makes create/edit timeouts and
+    /// saturates storage. Hosts can still upload more from the photo editor.
+    /// </summary>
+    private const int MaxImportedPhotos = 20;
+
     private static void TryAddAirbnbPhoto(string? value, string? listingId, AirbnbStateAccumulator acc)
     {
+        if (acc.Photos.Count >= MaxImportedPhotos)
+        {
+            return;
+        }
+
         if (string.IsNullOrEmpty(value) ||
             !value.Contains("/im/pictures/", StringComparison.OrdinalIgnoreCase))
         {

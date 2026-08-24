@@ -77,7 +77,7 @@ public static class PartnerEndpoints
             ISender sender) =>
         {
             var result = await sender.Send(new AddPartnerMemberCommand(
-                id, req.UserId, req.Role, GetUserId(user), IsPlatformAdmin(user)))
+                id, req.UserId, req.Email, req.Role, GetUserId(user), IsPlatformAdmin(user)))
                 .ConfigureAwait(false);
 
             return result.IsSuccess
@@ -92,6 +92,18 @@ public static class PartnerEndpoints
         {
             var result = await sender.Send(new ListPartnerMembersQuery(
                 id, GetUserId(user), IsPlatformAdmin(user)))
+                .ConfigureAwait(false);
+            return ToHttpResult(result);
+        });
+
+        group.MapDelete("/{id:guid}/members/{memberId:guid}", async (
+            Guid id,
+            Guid memberId,
+            ClaimsPrincipal user,
+            ISender sender) =>
+        {
+            var result = await sender.Send(new RemovePartnerMemberCommand(
+                id, memberId, GetUserId(user), IsPlatformAdmin(user)))
                 .ConfigureAwait(false);
             return ToHttpResult(result);
         });
@@ -435,6 +447,7 @@ public static class PartnerEndpoints
         {
             "Partner.NotFound" or
             "Partner.NoMembership" or
+            "Partner.MemberNotFound" or
             "Referral.NotFound" or
             "Endorsement.NotFound" => Results.NotFound(error),
 

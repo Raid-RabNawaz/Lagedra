@@ -186,6 +186,8 @@ public sealed partial class SubmitApplicationCommandHandler(
             depositSnapshot: pricing.ToSnapshot(),
             tenantConsent: tenantConsent);
 
+        OwnerTenancyConsent.ApplyIfRequired(application, listing);
+
         dbContext.DealApplications.Add(application);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
@@ -206,6 +208,7 @@ public sealed partial class SubmitApplicationCommandHandler(
         var instantBooked = false;
         DealApplicationDto applicationDto = DealApplicationDtoMapper.ToDto(application);
         if (listing.InstantBookingEnabled
+            && !OwnerTenancyConsent.IsRequired(listing)
             && featureFlags.BookingFlowV2Enabled
             && await HostHasPayoutsAsync(listing.LandlordUserId, cancellationToken).ConfigureAwait(false))
         {

@@ -14,7 +14,9 @@ namespace Lagedra.Modules.ActivationAndBilling.Application.Queries;
 /// deposit + fees — is charged through Stripe (destination charge to the host's
 /// connected account), so these instructions are <b>not</b> the deposit or
 /// first-payment channel. They tell the tenant how to pay the host directly for
-/// <b>months 2+ rent</b>, which never flows through the platform.
+/// <b>months 2+ rent</b>, which never flows through the platform — so they must
+/// stay visible for the whole life of an active (Confirmed) deal, not just
+/// while the first payment is Pending.
 /// </summary>
 public sealed record GetPaymentDetailsForTenantQuery(
     Guid DealId,
@@ -43,11 +45,14 @@ public sealed class GetPaymentDetailsForTenantQueryHandler(
                     "No payment confirmation record found for this deal."));
         }
 
-        if (confirmation.Status != PaymentConfirmationStatus.Pending)
+        // Pending: awaiting the first payment. Confirmed: active deal, where
+        // the tenant needs these details every month for direct rent. Only
+        // dead deals (rejected/cancelled) or disputed ones hide them.
+        if (confirmation.Status is not (PaymentConfirmationStatus.Pending or PaymentConfirmationStatus.Confirmed))
         {
             return Result<PaymentDetailsDto>.Failure(
                 new Error("PaymentConfirmation.InvalidState",
-                    "Payment details are only available while awaiting confirmation."));
+                    "Payment details are not available for this deal's current state."));
         }
 
         var application = await dbContext.DealApplications

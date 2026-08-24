@@ -31,6 +31,14 @@ public sealed class SubmitListingForReviewCommandHandler(
     /// </summary>
     public const int MinimumProfileCompletenessPercent = 75;
 
+    /// <summary>
+    /// When true, a host must have Stripe charges + payouts enabled before
+    /// submitting a listing for review. Temporarily off so drafts can go to
+    /// review during onboarding; flip back to <c>true</c> to restore the gate.
+    /// Accepting a booking still requires payouts.
+    /// </summary>
+    public const bool RequirePayoutSetupToSubmitForReview = false;
+
     private static readonly Error NotFound = new("Listing.NotFound", "Listing not found.");
     private static readonly Error Forbidden = new("Listing.Forbidden", "You do not own this listing.");
     private static readonly Error PayoutSetupRequired = new(
@@ -75,9 +83,11 @@ public sealed class SubmitListingForReviewCommandHandler(
 
         // A listing that passes review becomes publicly bookable, and every
         // booking charges the guest through the platform. Without a payout
-        // destination those funds would have nowhere to go, so require payout
-        // setup before the listing can leave Draft.
-        if (!await HostHasPayoutsAsync(listing.LandlordUserId, cancellationToken).ConfigureAwait(false))
+        // destination those funds would have nowhere to go. Temporarily
+        // skipped — set RequirePayoutSetupToSubmitForReview back to true
+        // to restore this gate. Accepting a booking still requires payouts.
+        if (RequirePayoutSetupToSubmitForReview
+            && !await HostHasPayoutsAsync(listing.LandlordUserId, cancellationToken).ConfigureAwait(false))
         {
             return Result<ListingDetailsDto>.Failure(PayoutSetupRequired);
         }
@@ -91,6 +101,12 @@ public sealed class SubmitListingForReviewCommandHandler(
         if (completeness.PercentComplete < MinimumProfileCompletenessPercent)
         {
             return Result<ListingDetailsDto>.Failure(ProfileIncomplete(completeness));
+        }
+
+        if (listing.ManagerRole == Domain.Enums.ListingManagerRole.PropertyManager
+            && listing.HomeOwnerUserId is null)
+        {
+            return Result<ListingDetailsDto>.Failure(ListingManagementGuard.HomeOwnerRequired);
         }
 
         try

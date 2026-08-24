@@ -12,4 +12,7 @@ public sealed record HostStripeStatusDto(
     HostAccountRequirementStatus TaxStatus,
     HostAccountRequirementStatus BankAccountStatus,
     Uri? OnboardingUrl,
-    IReadOnlyList<string>? OutstandingRequirements = null);
+    IReadOnlyList<string>? OutstandingRequirements = null,
+    IReadOnlyList<string>? PendingVerification = null,
+    bool DetailsSubmitted = false,
+    string? DisabledReason = null);

@@ -33,6 +33,11 @@ public sealed partial class ChannelAvailabilitySyncJob(
 
         foreach (var connection in connections)
         {
+            if (ct.IsCancellationRequested)
+            {
+                break;
+            }
+
             var provider = providers.Resolve(connection.ProviderKey);
             if (provider is null)
             {
@@ -40,26 +45,41 @@ public sealed partial class ChannelAvailabilitySyncJob(
                 continue;
             }
 
-            var credentials = connection.ToCredentials(encryption);
-
-            var maps = await dbContext.ListingMaps
-                .Where(m => m.ConnectionId == connection.Id)
-                .ToListAsync(ct)
-                .ConfigureAwait(false);
-
-            var totalBlocks = 0;
-            foreach (var map in maps)
+            // One broken connection (revoked credentials, provider outage)
+            // must not abort the sync for every other connection.
+            try
             {
-                var calendar = await provider
-                    .PullAvailabilityAsync(credentials, map.ProviderListingId, ct)
+                var credentials = connection.ToCredentials(encryption);
+
+                var maps = await dbContext.ListingMaps
+                    .Where(m => m.ConnectionId == connection.Id)
+                    .ToListAsync(ct)
                     .ConfigureAwait(false);
 
-                // TODO: project calendar.Blocks onto the mapped Lagedra listing's
-                // availability so the booking flow blocks the right dates.
-                totalBlocks += calendar.Blocks.Count;
-            }
+                var totalBlocks = 0;
+                foreach (var map in maps)
+                {
+                    var calendar = await provider
+                        .PullAvailabilityAsync(credentials, map.ProviderListingId, ct)
+                        .ConfigureAwait(false);
 
-            LogSynced(logger, connection.Id, maps.Count, totalBlocks);
+                    // TODO: project calendar.Blocks onto the mapped Lagedra listing's
+                    // availability so the booking flow blocks the right dates.
+                    totalBlocks += calendar.Blocks.Count;
+                }
+
+                LogSynced(logger, connection.Id, maps.Count, totalBlocks);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+#pragma warning disable CA1031 // isolate connections from each other
+            catch (Exception ex)
+#pragma warning restore CA1031
+            {
+                LogConnectionFailed(logger, connection.Id, connection.ProviderKey, ex);
+            }
         }
     }
 
@@ -72,4 +92,9 @@ public sealed partial class ChannelAvailabilitySyncJob(
         Level = LogLevel.Information,
         Message = "Availability-synced connection {ConnectionId}; {ListingCount} listing(s), {BlockCount} block(s)")]
     private static partial void LogSynced(ILogger logger, Guid connectionId, int listingCount, int blockCount);
+
+    [LoggerMessage(
+        Level = LogLevel.Error,
+        Message = "Availability sync failed for connection {ConnectionId} (provider '{ProviderKey}') — continuing with next connection")]
+    private static partial void LogConnectionFailed(ILogger logger, Guid connectionId, string providerKey, Exception ex);
 }

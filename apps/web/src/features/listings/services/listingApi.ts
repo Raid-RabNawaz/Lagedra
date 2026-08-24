@@ -9,8 +9,11 @@ import type {
   CreateConsiderationDefinitionRequest,
   CreateListingRequest,
   CreateSafetyDeviceDefinitionRequest,
+  ListingHomeOwnerDto,
   ImportedListingDraftDto,
   ImportListingFromUrlRequest,
+  ImportListingPhotosFromUrlsRequest,
+  ImportListingPhotosFromUrlsResult,
   ListingAvailabilityDto,
   ListingDetailsDto,
   ListingPhotoDto,
@@ -42,6 +45,9 @@ export const listingApi = {
     );
     const response = await http.get<SearchListingsResultDto>(endpoints.listings.search, {
       params: cleaned,
+      // Marketplace home fires several searches in parallel; cold RDS +
+      // Hostaway photo payloads can exceed the global 10s axios default.
+      timeout: 60_000,
       paramsSerializer: (p) => {
         const search = new URLSearchParams();
         for (const [key, value] of Object.entries(p)) {
@@ -66,7 +72,11 @@ export const listingApi = {
   },
 
   async getDetail(id: string): Promise<ListingDetailsDto> {
-    const response = await http.get<ListingDetailsDto>(endpoints.listings.detail(id));
+    // Imported drafts can include many photos; cold API + payload size can
+    // exceed the default 10s client timeout and abort the edit page load.
+    const response = await http.get<ListingDetailsDto>(endpoints.listings.detail(id), {
+      timeout: 60_000,
+    });
     return response.data;
   },
 
@@ -82,6 +92,13 @@ export const listingApi = {
 
       throw error;
     }
+  },
+
+  async lookupHomeOwner(email: string): Promise<ListingHomeOwnerDto> {
+    const response = await http.post<ListingHomeOwnerDto>(endpoints.listings.homeOwnerLookup, {
+      email,
+    });
+    return response.data;
   },
 
   async create(payload: CreateListingRequest): Promise<ListingDetailsDto> {
@@ -105,13 +122,16 @@ export const listingApi = {
   },
 
   async update(id: string, payload: UpdateListingRequest): Promise<ListingDetailsDto> {
-    const response = await http.put<ListingDetailsDto>(endpoints.listings.detail(id), payload);
+    const response = await http.put<ListingDetailsDto>(endpoints.listings.detail(id), payload, {
+      timeout: 60_000,
+    });
     return response.data;
   },
 
   async submitForReview(id: string): Promise<ListingDetailsDto> {
-    // Submit checks ownership, precise address, Stripe payout readiness, and
-    // host profile completeness — against a remote API this can exceed the
+    // Submit checks ownership, precise address, host profile completeness,
+    // and (when re-enabled) Stripe payout readiness — against a remote API
+    // this can exceed the
     // default 10s client timeout (especially on cold starts / slow DB).
     const response = await http.post<ListingDetailsDto>(
       endpoints.listings.submitForReview(id),
@@ -169,6 +189,23 @@ export const listingApi = {
     const response = await http.post(endpoints.listings.uploadMedia(listingId), form, {
       timeout: 180_000,
     });
+    return response.data;
+  },
+
+  /**
+   * Server-side fetch of public photo URLs into the listings bucket. Used by
+   * XML feed import because many source CDNs block browser CORS reads.
+   */
+  async importPhotosFromUrls(
+    listingId: string,
+    urls: readonly string[],
+  ): Promise<ImportListingPhotosFromUrlsResult> {
+    const payload: ImportListingPhotosFromUrlsRequest = { urls: [...urls] };
+    const response = await http.post<ImportListingPhotosFromUrlsResult>(
+      endpoints.listings.importPhotosFromUrls(listingId),
+      payload,
+      { timeout: 180_000 },
+    );
     return response.data;
   },
 

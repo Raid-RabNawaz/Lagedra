@@ -41,6 +41,7 @@ const memberBookingsGroup: NavGroup = {
   items: [
     { to: "/app/deals", label: "My reservations", icon: "CalendarCheck" },
     { to: "/app/my-applications", label: "My applications", icon: "FileText" },
+    { to: "/app/owner-consents", label: "Owner consent", icon: "ShieldCheck" },
     { to: "/app/my-inquiries", label: "My conversations", icon: "MessageCircle" },
     { to: "/app/arbitration", label: "My cases", icon: "Scale" },
   ],
@@ -54,6 +55,7 @@ const memberHostingGroup: NavGroup = {
     { to: "/app/channels", label: "Import (PMS)", icon: "Link2" },
     { to: "/app/inquiries", label: "Guest inquiries", icon: "MessageSquare" },
     { to: "/app/applications", label: "Booking requests", icon: "Inbox" },
+    { to: "/app/owner-consents", label: "Owner consent", icon: "ShieldCheck" },
     { to: "/app/deals", label: "Bookings", icon: "CalendarCheck" },
     { to: "/app/arbitration", label: "My cases", icon: "Scale" },
   ],

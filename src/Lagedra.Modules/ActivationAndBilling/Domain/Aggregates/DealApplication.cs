@@ -131,6 +131,28 @@ public sealed class DealApplication : AggregateRoot<Guid>
     public string? HostConsentUserAgent { get; private set; }
     public string? HostConsentVersion { get; private set; }
 
+    // --- Home-owner tenancy consent (PM listings, CA >30-day stays) ---
+
+    /// <summary>
+    /// Home owner named on the listing when this request was submitted.
+    /// Null when the listing creator is the owner.
+    /// </summary>
+    public Guid? HomeOwnerUserId { get; private set; }
+
+    /// <summary>
+    /// True when this stay needs the home owner's consent before the
+    /// property manager can accept (snapshotted at submit).
+    /// </summary>
+    public bool OwnerConsentRequired { get; private set; }
+
+    public bool OwnerTenancyConsentGiven { get; private set; }
+    public DateTime? OwnerTenancyConsentAt { get; private set; }
+    public string? OwnerConsentIpAddress { get; private set; }
+    public string? OwnerConsentUserAgent { get; private set; }
+    public string? OwnerConsentVersion { get; private set; }
+    public bool OwnerTenancyConsentDeclined { get; private set; }
+    public DateTime? OwnerTenancyConsentDeclinedAt { get; private set; }
+
     private DealApplication() { }
 
     public static DealApplication Submit(
@@ -323,6 +345,12 @@ public sealed class DealApplication : AggregateRoot<Guid>
                 "The reservation request must capture the predetermined deposit first.");
         }
 
+        if (OwnerConsentRequired && !OwnerTenancyConsentGiven)
+        {
+            throw new InvalidOperationException(
+                "The home owner must consent to this tenancy before the property manager can accept.");
+        }
+
         DealId = Guid.NewGuid();
         Status = DealApplicationStatus.Approved;
         DecidedAt = DateTime.UtcNow;
@@ -357,6 +385,118 @@ public sealed class DealApplication : AggregateRoot<Guid>
         HostConsentVersion = consent.ConsentVersion;
         HostConsentIpAddress = consent.IpAddress;
         HostConsentUserAgent = consent.UserAgent;
+    }
+
+    /// <summary>
+    /// Marks this request as requiring the named home owner's consent before
+    /// the property manager can accept. Called at submit for PM listings.
+    /// </summary>
+    public void RequireOwnerConsent(Guid homeOwnerUserId)
+    {
+        if (homeOwnerUserId == Guid.Empty)
+        {
+            throw new ArgumentException("Home owner user id is required.", nameof(homeOwnerUserId));
+        }
+
+        if (homeOwnerUserId == LandlordUserId)
+        {
+            throw new ArgumentException(
+                "The home owner must be a different account than the property manager.",
+                nameof(homeOwnerUserId));
+        }
+
+        if (Status != DealApplicationStatus.Pending)
+        {
+            throw new InvalidOperationException(
+                $"Cannot require owner consent in status '{Status}'.");
+        }
+
+        HomeOwnerUserId = homeOwnerUserId;
+        OwnerConsentRequired = true;
+    }
+
+    /// <summary>
+    /// Records the home owner's consent to this specific tenancy. Idempotent
+    /// when already given. Does not approve the booking — the property manager
+    /// still accepts after this.
+    /// </summary>
+    public void RecordOwnerConsent(Guid ownerUserId, TruthSurfaceConsentInput consent)
+    {
+        ArgumentNullException.ThrowIfNull(consent);
+
+        if (!OwnerConsentRequired || HomeOwnerUserId is null)
+        {
+            throw new InvalidOperationException("This request does not require owner consent.");
+        }
+
+        if (HomeOwnerUserId != ownerUserId)
+        {
+            throw new InvalidOperationException("Only the named home owner can consent to this tenancy.");
+        }
+
+        if (Status != DealApplicationStatus.Pending)
+        {
+            throw new InvalidOperationException($"Cannot record owner consent in status '{Status}'.");
+        }
+
+        if (OwnerTenancyConsentDeclined)
+        {
+            throw new InvalidOperationException("The owner already declined this tenancy.");
+        }
+
+        if (!consent.Given)
+        {
+            throw new InvalidOperationException("Owner tenancy consent was not given.");
+        }
+
+        if (OwnerTenancyConsentGiven)
+        {
+            return;
+        }
+
+        OwnerTenancyConsentGiven = true;
+        OwnerTenancyConsentAt = DateTime.UtcNow;
+        OwnerConsentVersion = consent.ConsentVersion;
+        OwnerConsentIpAddress = consent.IpAddress;
+        OwnerConsentUserAgent = consent.UserAgent;
+
+        AddDomainEvent(new OwnerTenancyConsentGivenEvent(
+            Id, ListingId, LandlordUserId, TenantUserId, ownerUserId));
+    }
+
+    /// <summary>
+    /// Home owner declines this tenancy. Rejects the pending request so the
+    /// property manager cannot accept it.
+    /// </summary>
+    public void DeclineOwnerConsent(Guid ownerUserId)
+    {
+        if (!OwnerConsentRequired || HomeOwnerUserId is null)
+        {
+            throw new InvalidOperationException("This request does not require owner consent.");
+        }
+
+        if (HomeOwnerUserId != ownerUserId)
+        {
+            throw new InvalidOperationException("Only the named home owner can decline this tenancy.");
+        }
+
+        if (Status != DealApplicationStatus.Pending)
+        {
+            throw new InvalidOperationException($"Cannot decline owner consent in status '{Status}'.");
+        }
+
+        if (OwnerTenancyConsentGiven)
+        {
+            throw new InvalidOperationException("The owner already consented to this tenancy.");
+        }
+
+        OwnerTenancyConsentDeclined = true;
+        OwnerTenancyConsentDeclinedAt = DateTime.UtcNow;
+        Status = DealApplicationStatus.Rejected;
+        DecidedAt = DateTime.UtcNow;
+
+        AddDomainEvent(new OwnerTenancyConsentDeclinedEvent(
+            Id, ListingId, LandlordUserId, TenantUserId, ownerUserId));
     }
 
     /// <summary>

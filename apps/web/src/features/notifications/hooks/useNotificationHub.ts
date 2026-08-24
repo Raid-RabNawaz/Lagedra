@@ -10,7 +10,11 @@ import {
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { appConfig } from "@/app/config";
 import { authStore } from "@/app/auth/authStore";
-import { NOTIFICATIONS_KEY, UNREAD_COUNT_KEY } from "./useNotifications";
+import {
+  ALL_NOTIFICATIONS_KEY,
+  NOTIFICATIONS_KEY,
+  UNREAD_COUNT_KEY,
+} from "./useNotifications";
 import type { InAppNotificationDto } from "@/api/types";
 
 let singletonConnection: HubConnection | null = null;
@@ -108,9 +112,17 @@ function getOrCreateConnection(): HubConnection {
 function bindQueryClient(connection: HubConnection, qc: QueryClient) {
   connection.off("ReceiveNotification");
   connection.on("ReceiveNotification", (notification: InAppNotificationDto) => {
+    // The push DTO omits isRead (a pushed notification is unread by
+    // definition); normalize so list consumers can rely on the field.
+    const unread: InAppNotificationDto = { ...notification, isRead: notification.isRead ?? false };
+
     qc.setQueryData<InAppNotificationDto[]>(
       [...NOTIFICATIONS_KEY],
-      (old) => (old ? [notification, ...old] : [notification]),
+      (old) => (old ? [unread, ...old] : [unread]),
+    );
+    qc.setQueryData<InAppNotificationDto[]>(
+      [...ALL_NOTIFICATIONS_KEY],
+      (old) => (old ? [unread, ...old] : [unread]),
     );
     qc.setQueryData<number>(
       [...UNREAD_COUNT_KEY],

@@ -3,7 +3,6 @@ using Lagedra.Modules.ListingAndLocation.Domain.Services;
 using Lagedra.Modules.ListingAndLocation.Infrastructure.External.ListingImport;
 using Lagedra.Modules.ListingAndLocation.Infrastructure.External.ListingImport.Ai;
 using Lagedra.Modules.ListingAndLocation.Infrastructure.External.ListingImport.ScrapingAnt;
-using Lagedra.Modules.ListingAndLocation.Infrastructure.Jobs;
 using Lagedra.Modules.ListingAndLocation.Infrastructure.Persistence;
 using Lagedra.Modules.ListingAndLocation.Infrastructure.Repositories;
 using Lagedra.Modules.ListingAndLocation.Infrastructure.Services;
@@ -12,7 +11,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Quartz;
 
 namespace Lagedra.Modules.ListingAndLocation;
 
@@ -36,6 +34,23 @@ public static class ListingAndLocationModuleRegistration
         // Cross-module importer used by ChannelIntegration to materialise
         // externally-sourced listings (e.g. OwnerRez) into Lagedra drafts.
         services.AddScoped<IListingImporter, ListingImporter>();
+
+        // Named client used by ImportListingPhotosFromUrlsCommand to fetch
+        // third-party listing images (XML feed import). Timeouts and size
+        // caps live in ListingMediaImportPolicy.
+        services.AddHttpClient(ListingMediaImportPolicy.HttpClientName, client =>
+        {
+            client.Timeout = ListingMediaImportPolicy.FetchTimeout;
+            client.MaxResponseContentBufferSize = ListingMediaImportPolicy.MaxImageBytes;
+            client.DefaultRequestHeaders.TryAddWithoutValidation(
+                "User-Agent", ListingImportPolicy.UserAgent);
+        })
+        .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+        {
+            AllowAutoRedirect = true,
+            MaxAutomaticRedirections = ListingMediaImportPolicy.MaxRedirects,
+            AutomaticDecompression = System.Net.DecompressionMethods.All,
+        });
 
         // "Import from URL" pre-fill: server-side fetcher + Open Graph/JSON-LD
         // extractor. Mirrors the typed-HttpClient pattern used for IGeocodingService.
@@ -124,16 +139,6 @@ public static class ListingAndLocationModuleRegistration
 
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(ListingAndLocationModuleRegistration).Assembly));
-
-        services.AddQuartz(q =>
-        {
-            var jobKey = new JobKey("JurisdictionResolution");
-            q.AddJob<JurisdictionResolutionJob>(opts => opts.WithIdentity(jobKey));
-            q.AddTrigger(opts => opts
-                .ForJob(jobKey)
-                .WithIdentity("JurisdictionResolution-trigger")
-                .WithCronSchedule("0 0 2 * * ?")); // Every night at 2 AM
-        });
 
         return services;
     }

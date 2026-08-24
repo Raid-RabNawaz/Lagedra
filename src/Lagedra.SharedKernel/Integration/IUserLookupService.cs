@@ -10,4 +10,8 @@ namespace Lagedra.SharedKernel.Integration;
 public interface IUserLookupService
 {
     Task<Guid?> FindUserIdByEmailAsync(string email, CancellationToken ct = default);
+
+    Task<UserAccountLookupDto?> FindAccountByEmailAsync(string email, CancellationToken ct = default);
+
+    Task<UserAccountLookupDto?> FindAccountByIdAsync(Guid userId, CancellationToken ct = default);
 }

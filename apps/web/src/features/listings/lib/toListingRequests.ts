@@ -1,4 +1,4 @@
-import type { CreateListingRequest, UpdateListingRequest } from "@/api/types";
+import type { CreateListingRequest, ListingAddedVia, UpdateListingRequest } from "@/api/types";
 import type { ListingFormValues } from "./listingFormSchema";
 import { timeToApi } from "./listingFormSchema";
 
@@ -74,6 +74,7 @@ function tierDepositsFromForm(v: ListingFormValues) {
 
 export function toCreateListingRequest(
   v: ListingFormValues,
+  source?: { addedVia?: ListingAddedVia; addedViaDetail?: string | null },
 ): CreateListingRequest {
   return {
     propertyType: v.propertyType,
@@ -98,6 +99,9 @@ export function toCreateListingRequest(
         ? null
         : Math.round(v.defaultDepositDollars * 100),
     ...tierDepositsFromForm(v),
+    ...managementFromForm(v),
+    addedVia: source?.addedVia ?? "Manual",
+    addedViaDetail: source?.addedViaDetail?.trim() || null,
   };
 }
 
@@ -127,5 +131,19 @@ export function toUpdateListingRequest(v: ListingFormValues): UpdateListingReque
     clearDefaultDeposit: v.defaultDepositDollars === undefined,
     ...tierDepositsFromForm(v),
     leaseTerms: leaseTermsFromForm(v),
+    ...managementFromForm(v),
+  };
+}
+
+function managementFromForm(v: ListingFormValues) {
+  const isManager = v.managerRole === "PropertyManager";
+  return {
+    managerRole: v.managerRole,
+    homeOwnerUserId: isManager && v.homeOwnerUserId ? v.homeOwnerUserId : null,
+    homeOwnerEmail:
+      isManager && v.homeOwnerUserId && v.homeOwnerEmail?.trim()
+        ? v.homeOwnerEmail.trim()
+        : null,
+    includeBrokerClause: v.includeBrokerClause,
   };
 }

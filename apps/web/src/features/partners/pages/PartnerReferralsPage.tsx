@@ -7,6 +7,7 @@ import type { ReferralLinkDto } from "@/api/types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -325,12 +326,12 @@ function NewLinkDialog({
         <form onSubmit={(e) => void handleSubmit(e)} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="link-expiry">Expires on (optional)</Label>
-            <Input
+            <DatePicker
               id="link-expiry"
-              type="date"
               min={minExpiry}
               value={expiresAt}
-              onChange={(e) => setExpiresAt(e.target.value)}
+              onChange={setExpiresAt}
+              placeholder="No expiry"
             />
           </div>
           <div className="space-y-2">

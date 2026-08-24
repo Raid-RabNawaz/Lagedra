@@ -5,6 +5,7 @@ import type { AuditSearchParams, AuditSearchResultDto } from "@/api/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -113,20 +114,20 @@ export const AuditSearchPage = () => {
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="startDate">Start Date</Label>
-              <Input
+              <DatePicker
                 id="startDate"
-                type="date"
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                onChange={setStartDate}
+                max={endDate || undefined}
               />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="endDate">End Date</Label>
-              <Input
+              <DatePicker
                 id="endDate"
-                type="date"
                 value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
+                onChange={setEndDate}
+                min={startDate || undefined}
               />
             </div>
             <div className="flex items-end">

@@ -3,7 +3,6 @@ using Lagedra.Modules.ActivationAndBilling.Application.Services;
 using Lagedra.Modules.ActivationAndBilling.Domain.Events;
 using Lagedra.SharedKernel.Integration.Events;
 using Lagedra.Modules.ActivationAndBilling.Domain.Interfaces;
-using Lagedra.Modules.ActivationAndBilling.Infrastructure.Jobs;
 using Lagedra.Modules.ActivationAndBilling.Infrastructure.Persistence;
 using Lagedra.Modules.ActivationAndBilling.Infrastructure.Repositories;
 using Lagedra.Modules.ActivationAndBilling.Infrastructure.Services;
@@ -12,7 +11,6 @@ using Lagedra.SharedKernel.Integration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Quartz;
 
 namespace Lagedra.Modules.ActivationAndBilling;
 
@@ -54,6 +52,10 @@ public static class ActivationAndBillingModuleRegistration
         // Notification handlers
         services.AddDomainEventHandler<ApplicationSubmittedEvent,
             OnApplicationSubmittedNotify>();
+        services.AddDomainEventHandler<OwnerTenancyConsentGivenEvent,
+            OnOwnerTenancyConsentGivenNotify>();
+        services.AddDomainEventHandler<OwnerTenancyConsentDeclinedEvent,
+            OnOwnerTenancyConsentDeclinedNotify>();
         services.AddDomainEventHandler<ApplicationApprovedEvent,
             OnApplicationApprovedNotify>();
         services.AddDomainEventHandler<ApplicationRejectedEvent,
@@ -72,6 +74,8 @@ public static class ActivationAndBillingModuleRegistration
             OnDealActivatedCreateHostSubscriptionHandler>();
         services.AddDomainEventHandler<DealActivatedEvent,
             OnDealActivatedNotify>();
+        services.AddDomainEventHandler<StayCompletedEvent,
+            OnStayCompletedStopBillingHandler>();
         services.AddDomainEventHandler<BookingCancelledEvent,
             OnBookingCancelledNotify>();
         services.AddDomainEventHandler<DamageClaimFiledEvent,
@@ -87,37 +91,6 @@ public static class ActivationAndBillingModuleRegistration
 
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(ActivationAndBillingModuleRegistration).Assembly));
-
-        services.AddQuartz(q =>
-        {
-            var reconciliationKey = new JobKey("BillingReconciliation");
-            q.AddJob<BillingReconciliationJob>(opts => opts.WithIdentity(reconciliationKey));
-            q.AddTrigger(opts => opts
-                .ForJob(reconciliationKey)
-                .WithIdentity("BillingReconciliation-trigger")
-                .WithCronSchedule("0 0 2 * * ?"));
-
-            var timeoutKey = new JobKey("PaymentConfirmationTimeout");
-            q.AddJob<PaymentConfirmationTimeoutJob>(opts => opts.WithIdentity(timeoutKey));
-            q.AddTrigger(opts => opts
-                .ForJob(timeoutKey)
-                .WithIdentity("PaymentConfirmationTimeout-trigger")
-                .WithCronSchedule("0 0 * * * ?"));
-
-            var hostEnforcementKey = new JobKey("HostPlatformPaymentEnforcement");
-            q.AddJob<HostPlatformPaymentEnforcementJob>(opts => opts.WithIdentity(hostEnforcementKey));
-            q.AddTrigger(opts => opts
-                .ForJob(hostEnforcementKey)
-                .WithIdentity("HostPlatformPaymentEnforcement-trigger")
-                .WithCronSchedule("0 0 8 * * ?"));
-
-            var depositReturnKey = new JobKey("DepositReturn");
-            q.AddJob<DepositReturnJob>(opts => opts.WithIdentity(depositReturnKey));
-            q.AddTrigger(opts => opts
-                .ForJob(depositReturnKey)
-                .WithIdentity("DepositReturn-trigger")
-                .WithCronSchedule("0 0 3 * * ?"));
-        });
 
         return services;
     }

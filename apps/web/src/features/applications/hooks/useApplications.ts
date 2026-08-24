@@ -10,6 +10,14 @@ export function useMyApplications() {
   });
 }
 
+export function useOwnerPendingApplications() {
+  return useQuery({
+    queryKey: ["applications", "owner-pending"],
+    queryFn: () => applicationApi.listOwnerPending(),
+    staleTime: 15_000,
+  });
+}
+
 export function useApplicationsForListing(listingId: string | undefined) {
   return useQuery({
     queryKey: ["applications", "listing", listingId],
@@ -92,8 +100,52 @@ export function useApproveApplication() {
       void queryClient.invalidateQueries({
         queryKey: ["applications", "mine"],
       });
+      void queryClient.invalidateQueries({
+        queryKey: ["applications", "owner-pending"],
+      });
       void queryClient.invalidateQueries({ queryKey: ["deals"] });
     },
+  });
+}
+
+function invalidateApplicationQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  data: { applicationId: string; listingId: string },
+) {
+  queryClient.setQueryData(["application", data.applicationId], data);
+  void queryClient.invalidateQueries({
+    queryKey: ["applications", "listing", data.listingId],
+  });
+  void queryClient.invalidateQueries({
+    queryKey: ["applications", "mine"],
+  });
+  void queryClient.invalidateQueries({
+    queryKey: ["applications", "owner-pending"],
+  });
+  void queryClient.invalidateQueries({ queryKey: ["deals"] });
+}
+
+export function useOwnerConsentApplication() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      id,
+      payload,
+    }: {
+      id: string;
+      payload: import("@/api/types").OwnerTenancyConsentRequest;
+    }) => applicationApi.ownerConsent(id, payload),
+    onSuccess: (data) => invalidateApplicationQueries(queryClient, data),
+  });
+}
+
+export function useOwnerDeclineApplication() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => applicationApi.ownerDecline(id),
+    onSuccess: (data) => invalidateApplicationQueries(queryClient, data),
   });
 }
 
@@ -109,6 +161,9 @@ export function useRejectApplication() {
       });
       void queryClient.invalidateQueries({
         queryKey: ["applications", "mine"],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["applications", "owner-pending"],
       });
       void queryClient.invalidateQueries({ queryKey: ["deals"] });
     },

@@ -22,6 +22,7 @@ public static class ListingEndpoints
             .WithTags("Listings");
 
         group.MapPost("/", CreateListing).RequireAuthorization("RequireMember");
+        group.MapPost("/home-owner-lookup", LookupHomeOwner).RequireAuthorization("RequireMember");
         group.MapGet("/mine", GetMyListings).RequireAuthorization("RequireMember");
         group.MapPut("/{listingId:guid}", UpdateListing).RequireAuthorization("RequireMember");
         group.MapDelete("/{listingId:guid}", DeleteListing).RequireAuthorization("RequireMember");
@@ -49,6 +50,12 @@ public static class ListingEndpoints
             .RequireAuthorization("RequireMember")
             .DisableAntiforgery()
             .WithMetadata(new RequestSizeLimitAttribute(105L * 1024 * 1024));
+
+        // Server-side fetch of third-party photo URLs (XML feed import). The
+        // browser cannot read many CDNs due to CORS, so we pull and re-store
+        // them through the listings bucket.
+        group.MapPost("/{listingId:guid}/media/import-from-urls", ImportPhotosFromUrls)
+            .RequireAuthorization("RequireMember");
 
         var savedGroup = app.MapGroup("/v1/saved-listings")
             .WithTags("Saved Listings")
@@ -117,7 +124,13 @@ public static class ListingEndpoints
                 DefaultDepositCents: request.DefaultDepositCents,
                 DepositUnverifiedCents: request.DepositUnverifiedCents,
                 DepositBackgroundVerifiedCents: request.DepositBackgroundVerifiedCents,
-                DepositPartnerGuaranteedCents: request.DepositPartnerGuaranteedCents),
+                DepositPartnerGuaranteedCents: request.DepositPartnerGuaranteedCents,
+                ManagerRole: request.ManagerRole,
+                HomeOwnerUserId: request.HomeOwnerUserId,
+                HomeOwnerEmail: request.HomeOwnerEmail,
+                IncludeBrokerClause: request.IncludeBrokerClause,
+                AddedVia: request.AddedVia,
+                AddedViaDetail: request.AddedViaDetail),
             cancellationToken).ConfigureAwait(true);
 
         return result.IsSuccess
@@ -160,7 +173,27 @@ public static class ListingEndpoints
                 DepositUnverifiedCents: request.DepositUnverifiedCents,
                 DepositBackgroundVerifiedCents: request.DepositBackgroundVerifiedCents,
                 DepositPartnerGuaranteedCents: request.DepositPartnerGuaranteedCents,
-                LeaseTerms: MapLeaseTerms(request.LeaseTerms)),
+                LeaseTerms: MapLeaseTerms(request.LeaseTerms),
+                ManagerRole: request.ManagerRole,
+                HomeOwnerUserId: request.HomeOwnerUserId,
+                HomeOwnerEmail: request.HomeOwnerEmail,
+                IncludeBrokerClause: request.IncludeBrokerClause),
+            cancellationToken).ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> LookupHomeOwner(
+        [FromBody] LookupHomeOwnerRequest request,
+        HttpContext httpContext,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetUserId(httpContext);
+        var result = await mediator.Send(
+            new LookupHomeOwnerQuery(request.Email, userId),
             cancellationToken).ConfigureAwait(true);
 
         return result.IsSuccess
@@ -472,6 +505,23 @@ public static class ListingEndpoints
             _ => Task.FromResult(file.OpenReadStream()));
 
         var result = await mediator.Send(command, cancellationToken).ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> ImportPhotosFromUrls(
+        [FromRoute] Guid listingId,
+        [FromBody] ImportListingPhotosFromUrlsRequest request,
+        HttpContext httpContext,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetUserId(httpContext);
+        var result = await mediator.Send(
+            new ImportListingPhotosFromUrlsCommand(listingId, userId, request.Urls),
+            cancellationToken).ConfigureAwait(true);
 
         return result.IsSuccess
             ? Results.Ok(result.Value)

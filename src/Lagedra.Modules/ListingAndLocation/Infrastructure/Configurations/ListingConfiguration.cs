@@ -1,5 +1,6 @@
 using Lagedra.Modules.ListingAndLocation.Domain.Aggregates;
 using Lagedra.Modules.ListingAndLocation.Domain.Entities;
+using Lagedra.Modules.ListingAndLocation.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -28,7 +29,11 @@ public sealed class ListingConfiguration : IEntityTypeConfiguration<Listing>
             .IsRequired();
 
         builder.Property(l => l.Title).HasMaxLength(500).IsRequired();
-        builder.Property(l => l.Description).HasMaxLength(5000).IsRequired();
+        // Unbounded text: channel imports (Hostaway/Guesty/OwnerRez) carry
+        // descriptions well past 5000 chars — the old varchar(5000) made the
+        // content sync fail twice a day for every affected listing (22001:
+        // value too long).
+        builder.Property(l => l.Description).IsRequired();
         builder.Property(l => l.MonthlyRentCents).IsRequired();
         builder.Property(l => l.Bedrooms).IsRequired();
         builder.Property(l => l.Bathrooms).HasColumnType("decimal(3,1)").IsRequired();
@@ -45,10 +50,25 @@ public sealed class ListingConfiguration : IEntityTypeConfiguration<Listing>
         builder.Property(l => l.AcceptsPartnerDirectReservations).HasDefaultValue(true);
         builder.Property(l => l.VirtualTourUrl).HasMaxLength(2000);
 
+        builder.Property(l => l.ManagerRole)
+            .HasConversion<string>()
+            .HasMaxLength(50)
+            .HasDefaultValue(ListingManagerRole.Owner)
+            .IsRequired();
+        builder.Property(l => l.HomeOwnerUserId);
+        builder.HasIndex(l => l.HomeOwnerUserId);
+        builder.Property(l => l.IncludeBrokerClause).HasDefaultValue(false);
+
         builder.Property(l => l.RejectionReason).HasMaxLength(2000);
         builder.Property(l => l.ReviewedAt);
         builder.Property(l => l.ReviewedByUserId);
         builder.Property(l => l.SubmittedForReviewAt);
+        builder.Property(l => l.AddedVia)
+            .HasConversion<string>()
+            .HasMaxLength(50)
+            .HasDefaultValue(ListingAddedVia.Manual)
+            .IsRequired();
+        builder.Property(l => l.AddedViaDetail).HasMaxLength(200);
 
         builder.OwnsOne(l => l.StayRange, stay =>
         {

@@ -83,7 +83,10 @@ public sealed record ListingDetailsDto(
     long? DepositUnverifiedCents = null,
     long? DepositBackgroundVerifiedCents = null,
     long? DepositPartnerGuaranteedCents = null,
-    ListingLeaseTermsDto? LeaseTerms = null);
+    ListingLeaseTermsDto? LeaseTerms = null,
+    string? ManagerRole = null,
+    Guid? HomeOwnerUserId = null,
+    bool IncludeBrokerClause = false);
 
 public sealed record ListingSummaryInfoDto(
     Guid Id,

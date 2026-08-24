@@ -40,6 +40,11 @@ public sealed partial class ChannelBookingUpdateJob(
 
         foreach (var connection in connections)
         {
+            if (ct.IsCancellationRequested)
+            {
+                break;
+            }
+
             var provider = providers.Resolve(connection.ProviderKey);
             if (provider is null)
             {
@@ -47,45 +52,60 @@ public sealed partial class ChannelBookingUpdateJob(
                 continue;
             }
 
-            var cursor = await dbContext.SyncCursors
-                .FirstOrDefaultAsync(
-                    c => c.ConnectionId == connection.Id && c.CursorKind == CursorKind, ct)
-                .ConfigureAwait(false);
-
-            var since = cursor?.LastChangedAtUtc ?? clock.UtcNow.AddDays(-7);
-
-            var updates = await provider
-                .PullBookingUpdatesAsync(connection.ToCredentials(encryption), since, ct)
-                .ConfigureAwait(false);
-
-            var highWater = since;
-            foreach (var update in updates)
+            // Isolate connections: one failing provider must not abort the
+            // sweep, and saving per connection keeps cursor progress for the
+            // connections that already succeeded this run.
+            try
             {
-                if (update.ChangedAtUtc > highWater)
+                var cursor = await dbContext.SyncCursors
+                    .FirstOrDefaultAsync(
+                        c => c.ConnectionId == connection.Id && c.CursorKind == CursorKind, ct)
+                    .ConfigureAwait(false);
+
+                var since = cursor?.LastChangedAtUtc ?? clock.UtcNow.AddDays(-7);
+
+                var updates = await provider
+                    .PullBookingUpdatesAsync(connection.ToCredentials(encryption), since, ct)
+                    .ConfigureAwait(false);
+
+                var highWater = since;
+                foreach (var update in updates)
                 {
-                    highWater = update.ChangedAtUtc;
+                    if (update.ChangedAtUtc > highWater)
+                    {
+                        highWater = update.ChangedAtUtc;
+                    }
                 }
+
+                await reconciler
+                    .ApplyAsync(connection.Id, connection.ProviderKey, updates, ct)
+                    .ConfigureAwait(false);
+
+                if (cursor is null)
+                {
+                    cursor = ChannelSyncCursor.Create(connection.Id, CursorKind, highWater, clock);
+                    dbContext.SyncCursors.Add(cursor);
+                }
+                else
+                {
+                    cursor.Advance(highWater, clock);
+                }
+
+                connection.RecordBookingSync(clock);
+                await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+                LogProcessed(logger, connection.Id, updates.Count);
             }
-
-            await reconciler
-                .ApplyAsync(connection.Id, connection.ProviderKey, updates, ct)
-                .ConfigureAwait(false);
-
-            if (cursor is null)
+            catch (OperationCanceledException)
             {
-                cursor = ChannelSyncCursor.Create(connection.Id, CursorKind, highWater, clock);
-                dbContext.SyncCursors.Add(cursor);
+                throw;
             }
-            else
+#pragma warning disable CA1031 // isolate connections from each other
+            catch (Exception ex)
+#pragma warning restore CA1031
             {
-                cursor.Advance(highWater, clock);
+                LogConnectionFailed(logger, connection.Id, connection.ProviderKey, ex);
             }
-
-            connection.RecordBookingSync(clock);
-            LogProcessed(logger, connection.Id, updates.Count);
         }
-
-        await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 
     [LoggerMessage(
@@ -97,4 +117,9 @@ public sealed partial class ChannelBookingUpdateJob(
         Level = LogLevel.Information,
         Message = "Processed {Count} booking update(s) for connection {ConnectionId}")]
     private static partial void LogProcessed(ILogger logger, Guid connectionId, int count);
+
+    [LoggerMessage(
+        Level = LogLevel.Error,
+        Message = "Booking update sync failed for connection {ConnectionId} (provider '{ProviderKey}') — continuing with next connection")]
+    private static partial void LogConnectionFailed(ILogger logger, Guid connectionId, string providerKey, Exception ex);
 }

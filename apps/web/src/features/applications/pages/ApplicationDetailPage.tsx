@@ -29,7 +29,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Badge } from "@/components/ui/badge";
-import { Checkbox } from "@/components/ui/checkbox";
+import { ConsentTickButton } from "@/features/applications/components/ConsentTickButton";
 import { Alert } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -42,8 +42,10 @@ import {
 import { Loader } from "@/components/shared/Loader";
 import {
   BOOKING_CONSENT_VERSION,
+  isAwaitingOwnerConsent,
   tierLabel,
 } from "@/features/applications/lib/bookingConsent";
+import { OwnerConsentPanel } from "@/features/applications/components/OwnerConsentPanel";
 import { formatDate, formatMoney } from "@/utils/format";
 import { cn } from "@/lib/utils";
 import {
@@ -116,10 +118,12 @@ export const ApplicationDetailPage = () => {
   // listing (or a platform admin) sees the approve/reject controls.
   const isApplicationLandlord = !!user && user.userId === application.landlordUserId;
   const isApplicationTenant = !!user && user.userId === application.tenantUserId;
+  const isApplicationOwner = !!user && user.userId === application.homeOwnerUserId;
   const isPlatformAdmin = !!user && isAdmin(user.role);
   const canDecide = isApplicationLandlord || isPlatformAdmin;
 
   const isPending = application.status === "Pending";
+  const awaitingOwnerConsent = isAwaitingOwnerConsent(application);
   const isPartnerDirect =
     application.source === "PartnerDirectReservation" || Boolean(application.partnerOrganizationId);
   const paymentReady = application.isPaymentReady === true;
@@ -183,21 +187,21 @@ export const ApplicationDetailPage = () => {
       <Card className="mb-6">
         <CardHeader className="pb-3">
           <CardTitle className="text-base">
-            {isApplicationLandlord || isPlatformAdmin ? "Guest" : "Host"}
+            {isApplicationLandlord || isApplicationOwner || isPlatformAdmin ? "Guest" : "Host"}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <ApplicationProfilePanel
             userId={
-              isApplicationLandlord || isPlatformAdmin
+              isApplicationLandlord || isApplicationOwner || isPlatformAdmin
                 ? application.tenantUserId
                 : application.landlordUserId
             }
             roleLabel={
-              isApplicationLandlord || isPlatformAdmin ? "Guest" : "Host"
+              isApplicationLandlord || isApplicationOwner || isPlatformAdmin ? "Guest" : "Host"
             }
             profileLink={`/app/users/${
-              isApplicationLandlord || isPlatformAdmin
+              isApplicationLandlord || isApplicationOwner || isPlatformAdmin
                 ? application.tenantUserId
                 : application.landlordUserId
             }`}
@@ -372,6 +376,39 @@ export const ApplicationDetailPage = () => {
         </>
       )}
 
+      {isPending && awaitingOwnerConsent && isApplicationTenant && (
+        <>
+          <Separator className="my-6" />
+          <Alert className="border-amber-300 bg-amber-50 text-amber-900">
+            <Clock className="h-4 w-4" />
+            <span className="ml-2">
+              Waiting for the home owner to consent before the property manager
+              can accept this request.
+            </span>
+          </Alert>
+        </>
+      )}
+
+      {isPending && awaitingOwnerConsent && isApplicationOwner && (
+        <>
+          <Separator className="my-6" />
+          <OwnerConsentPanel application={application} />
+        </>
+      )}
+
+      {isPending && canDecide && awaitingOwnerConsent && (
+        <>
+          <Separator className="my-6" />
+          <Alert className="border-amber-300 bg-amber-50 text-amber-900">
+            <Clock className="h-4 w-4" />
+            <span className="ml-2">
+              Awaiting home-owner consent. You can accept after the owner
+              approves this tenancy.
+            </span>
+          </Alert>
+        </>
+      )}
+
       {/* Host waiting for payment readiness */}
       {isPending && canDecide && isPartnerDirect && !paymentReady && (
         <>
@@ -396,7 +433,7 @@ export const ApplicationDetailPage = () => {
                 <Button
                   variant="accent"
                   className="gap-2"
-                  disabled={isPartnerDirect && !paymentReady}
+                  disabled={(isPartnerDirect && !paymentReady) || awaitingOwnerConsent}
                 >
                   <CheckCircle2 className="h-4 w-4" />
                   Approve
@@ -434,24 +471,21 @@ export const ApplicationDetailPage = () => {
 
                   <HostPayoutReadinessNotice />
 
-                  <label className="flex items-start gap-2 text-xs text-muted-foreground cursor-pointer">
-                    <Checkbox
-                      checked={consentChecked}
-                      onCheckedChange={setConsentChecked}
-                      className="mt-0.5"
-                    />
-                    <span>
-                      I agree to the Truth Surface agreement for this booking.
-                      Accepting seals an immutable signed record and automatically
-                      charges the guest's saved card (deposit + first month's rent
-                      + fees) and activates the booking. The rent and deposit are
-                      paid directly to my Stripe account; Lagedra only deducts its
-                      service fee and the insurance premium. I return the deposit to
-                      the guest directly after move-out, and the booking only
-                      completes once I confirm the return and the guest confirms
-                      receipt.
-                    </span>
-                  </label>
+                  <ConsentTickButton
+                    className="text-xs"
+                    checked={consentChecked}
+                    onCheckedChange={setConsentChecked}
+                  >
+                    I agree to the Truth Surface agreement for this booking.
+                    Accepting seals an immutable signed record and automatically
+                    charges the guest&apos;s saved card (deposit + first month&apos;s rent
+                    + fees) and activates the booking. The rent and deposit are
+                    paid directly to my Stripe account; Lagedra only deducts its
+                    service fee and the insurance premium. I return the deposit to
+                    the guest directly after move-out, and the booking only
+                    completes once I confirm the return and the guest confirms
+                    receipt.
+                  </ConsentTickButton>
 
                   {approveMutation.isError && (
                     <Alert variant="destructive">

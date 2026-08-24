@@ -118,6 +118,8 @@ public sealed class SubmitPartnerDirectApplicationCommandHandler(
             payerType: request.PayerType,
             payerUserId: request.PayerUserId);
 
+        OwnerTenancyConsent.ApplyIfRequired(application, listing);
+
         dbContext.DealApplications.Add(application);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 

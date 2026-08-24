@@ -51,13 +51,12 @@ public sealed class SearchListingsQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        // Filter without eager-loading collections — Includes before Count/page
+        // materialize every photo/amenity/block for every match and blow past the
+        // SPA's default 10s timeout on Hostaway-sized listings. Cover photos are
+        // loaded only for the final page (see below).
         var query = dbContext.Listings
             .AsNoTracking()
-            .Include(l => l.Photos)
-            .Include(l => l.Amenities)
-            .Include(l => l.SafetyDevices)
-            .Include(l => l.Considerations)
-            .Include(l => l.AvailabilityBlocks)
             .Where(l => l.Status == ListingStatus.Published || l.Status == ListingStatus.Activated);
 
         if (!string.IsNullOrWhiteSpace(request.Keyword))
@@ -172,11 +171,14 @@ public sealed class SearchListingsQueryHandler(
 
         var totalCount = await query.CountAsync(cancellationToken).ConfigureAwait(false);
 
+        // Cover URL is the only collection field ListingSummaryDto needs.
+        IQueryable<Listing> pageQuery = query.Include(l => l.Photos);
+
         IReadOnlyList<Listing> listings;
         if (request.SortBy == SearchListingsSortBy.Distance &&
             request.Latitude.HasValue && request.Longitude.HasValue)
         {
-            var allMatching = await query.ToListAsync(cancellationToken).ConfigureAwait(false);
+            var allMatching = await pageQuery.ToListAsync(cancellationToken).ConfigureAwait(false);
             var center = new GeoPoint(request.Latitude.Value, request.Longitude.Value);
             listings = allMatching
                 .Where(l => l.ApproxGeoPoint != null)
@@ -187,8 +189,8 @@ public sealed class SearchListingsQueryHandler(
         }
         else
         {
-            query = ApplySort(query, request);
-            listings = await query
+            pageQuery = ApplySort(pageQuery, request);
+            listings = await pageQuery
                 .Skip((request.Page - 1) * request.PageSize)
                 .Take(request.PageSize)
                 .ToListAsync(cancellationToken)

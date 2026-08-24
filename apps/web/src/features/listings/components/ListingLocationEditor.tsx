@@ -11,6 +11,7 @@ import {
   type ParsedAddress,
 } from "@/features/listings/lib/geocoding";
 import { listingApi } from "@/features/listings/services/listingApi";
+import { canEditListingDetails, canSubmitListingForReview } from "@/features/listings/lib/listingSubmitGates";
 import type { ListingDetailsDto } from "@/api/types";
 import { getApiErrorMessage } from "@/api/errors";
 import { Loader } from "@/components/shared/Loader";
@@ -383,14 +384,12 @@ export function ListingLocationEditor({
   }, [addressFieldsKey, jurisdictionCode, resetLockSuccess]);
 
   const hasLocation = listing.latitude != null && listing.longitude != null;
-  const isEditable = listing.status === "Draft" || listing.status === "Denied";
-  const canEditApproxLocation = !readOnly && isEditable;
-  const canLockPreciseAddress =
-    !readOnly && (isEditable || listing.status === "Published" || listing.status === "Activated");
+  const isPreLive = canSubmitListingForReview(listing.status);
+  const canEditDetails = canEditListingDetails(listing.status);
+  const canEditApproxLocation = !readOnly && canEditDetails;
+  const canLockPreciseAddress = !readOnly && canEditDetails;
   const showPreciseAddressCard =
-    isEditable
-    || listing.status === "Published"
-    || listing.status === "Activated"
+    canEditDetails
     || Boolean(listing.preciseAddress);
 
   return (
@@ -585,7 +584,7 @@ export function ListingLocationEditor({
                   Locked
                 </Badge>
               ) : (
-                isEditable && (
+                isPreLive && (
                   <Badge variant="destructive" className="ml-2">Required</Badge>
                 )
               )}

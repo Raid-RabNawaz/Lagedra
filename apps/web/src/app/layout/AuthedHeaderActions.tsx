@@ -199,13 +199,16 @@ function ModeSwitch({
   onToggle: () => void;
 }) {
   const isHost = mode === "host";
+  const label = isHost ? "Hosting" : "Travelling";
 
   return (
     <button
       type="button"
       onClick={onToggle}
-      className="group flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors hover:bg-secondary cursor-pointer"
-      title={isHost ? "Switch to guest mode" : "Switch to hosting"}
+      aria-label={isHost ? "Switch to Travelling" : "Switch to Hosting"}
+      aria-pressed={isHost}
+      className="group flex items-center gap-2 rounded-full border px-2.5 py-1.5 text-sm font-medium transition-colors hover:bg-secondary cursor-pointer sm:px-3"
+      title={isHost ? "Switch to Travelling" : "Switch to Hosting"}
     >
       <span
         className={cn(
@@ -220,9 +223,7 @@ function ModeSwitch({
           )}
         />
       </span>
-      <span className="hidden sm:inline whitespace-nowrap">
-        {isHost ? "Hosting" : "Travelling"}
-      </span>
+      <span className="whitespace-nowrap text-xs sm:text-sm">{label}</span>
       <ArrowLeftRight className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity hidden sm:block" />
     </button>
   );

@@ -222,6 +222,9 @@ namespace ActivationAndBilling.Migrations
                         .HasColumnType("integer")
                         .HasDefaultValue(1);
 
+                    b.Property<Guid?>("HomeOwnerUserId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("HostConsentIpAddress")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
@@ -264,6 +267,39 @@ namespace ActivationAndBilling.Migrations
                     b.Property<string>("Message")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
+
+                    b.Property<string>("OwnerConsentIpAddress")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<bool>("OwnerConsentRequired")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<string>("OwnerConsentUserAgent")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("OwnerConsentVersion")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime?>("OwnerTenancyConsentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("OwnerTenancyConsentDeclined")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<DateTime?>("OwnerTenancyConsentDeclinedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("OwnerTenancyConsentGiven")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
 
                     b.Property<Guid?>("PartnerOrganizationId")
                         .HasColumnType("uuid");
@@ -348,6 +384,8 @@ namespace ActivationAndBilling.Migrations
                     b.HasIndex("DealId")
                         .IsUnique()
                         .HasFilter("\"DealId\" IS NOT NULL");
+
+                    b.HasIndex("HomeOwnerUserId");
 
                     b.HasIndex("ListingId");
 
@@ -510,6 +548,58 @@ namespace ActivationAndBilling.Migrations
                     b.HasIndex("TruthSurfaceSnapshotId");
 
                     b.ToTable("deal_payment_confirmations", "activation_billing");
+                });
+
+            modelBuilder.Entity("Lagedra.Modules.ActivationAndBilling.Domain.Aggregates.RentCheckIn", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DealId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("LandlordUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateOnly>("PeriodEnd")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly>("PeriodStart")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime?>("RespondedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("DealId", "PeriodStart")
+                        .IsUnique();
+
+                    b.ToTable("rent_check_ins", "activation_billing");
                 });
 
             modelBuilder.Entity("Lagedra.Modules.ActivationAndBilling.Domain.Entities.Invoice", b =>

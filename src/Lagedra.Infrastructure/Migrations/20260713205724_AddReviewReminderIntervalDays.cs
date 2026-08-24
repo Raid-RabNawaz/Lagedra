@@ -1,5 +1,4 @@
-﻿using System;
-using Microsoft.EntityFrameworkCore.Migrations;
+﻿using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
@@ -11,11 +10,14 @@ namespace Lagedra.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.InsertData(
-                schema: "platform",
-                table: "platform_settings",
-                columns: new[] { "Key", "Description", "UpdatedAt", "UpdatedByUserId", "Value" },
-                values: new object[] { "review.reminder_interval_days", "Days between reminder notifications for parties who have not submitted a stay review", new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc), null, "3" });
+            // ON CONFLICT DO NOTHING: the row may already exist (created at
+            // runtime via the admin settings UI before this migration ran).
+            migrationBuilder.Sql(
+                """
+                INSERT INTO platform.platform_settings ("Key", "Description", "UpdatedAt", "UpdatedByUserId", "Value")
+                VALUES ('review.reminder_interval_days', 'Days between reminder notifications for parties who have not submitted a stay review', TIMESTAMPTZ '2026-01-01T00:00:00Z', NULL, '3')
+                ON CONFLICT ("Key") DO NOTHING;
+                """);
         }
 
         /// <inheritdoc />

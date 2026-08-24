@@ -135,6 +135,20 @@ describe("parseListingImportWorkbook", () => {
     expect(result.fileErrors[0]).toContain("doesn't match the Lagedra template");
   });
 
+  it("puts a filled-in sample on row 2 of the Example sheet", async () => {
+    const blob = await buildListingImportTemplate(amenities);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(await blob.arrayBuffer());
+    const example = workbook.getWorksheet("Example");
+    expect(example).toBeTruthy();
+
+    // Row 1 = headers, row 2 = sample listing (not buried after empty
+    // validation rows).
+    expect(String(example!.getRow(1).getCell(1).value)).toContain("Title");
+    expect(String(example!.getRow(2).getCell(1).value)).toContain("Sunny");
+    expect(example!.getRow(2).getCell(4).value).toBe(2400);
+  });
+
   it("round-trips the generated template's Example sheet headers", async () => {
     // The downloadable template itself must parse cleanly: fill its Listings
     // sheet with one row and re-upload.

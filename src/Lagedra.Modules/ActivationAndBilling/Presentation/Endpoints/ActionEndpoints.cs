@@ -1,4 +1,5 @@
 using Lagedra.Modules.ActivationAndBilling.Application.Commands;
+using Lagedra.Modules.ActivationAndBilling.Application.DTOs;
 using Lagedra.SharedKernel.Results;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
@@ -25,6 +26,8 @@ public static class ActionEndpoints
             .AllowAnonymous();
 
         group.MapPost("/approve-application", ApproveApplication);
+        group.MapPost("/consent-owner-tenancy", ConsentOwnerTenancy);
+        group.MapPost("/decline-owner-tenancy", DeclineOwnerTenancy);
 
         return app;
     }
@@ -60,10 +63,71 @@ public static class ActionEndpoints
             "OneTap.token.alreadyUsed" =>
                 Results.Json(payload, statusCode: StatusCodes.Status409Conflict),
             "Application.NotFound" => Results.NotFound(payload),
+            "Application.OwnerConsentForbidden" =>
+                Results.Json(payload, statusCode: StatusCodes.Status403Forbidden),
+            _ => Results.BadRequest(payload),
+        };
+    }
+
+    private static async Task<IResult> ConsentOwnerTenancy(
+        [FromBody] OwnerTenancyActionByTokenRequest request,
+        HttpContext httpContext,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(httpContext);
+
+        var result = await mediator.Send(
+            new ConsentOwnerTenancyByTokenCommand(
+                request.Token,
+                IpAddress: httpContext.Connection.RemoteIpAddress?.ToString(),
+                UserAgent: httpContext.Request.Headers.UserAgent.ToString() is { Length: > 0 } ua ? ua : null),
+            ct).ConfigureAwait(true);
+
+        return ToActionResult(result);
+    }
+
+    private static async Task<IResult> DeclineOwnerTenancy(
+        [FromBody] OwnerTenancyActionByTokenRequest request,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var result = await mediator.Send(
+            new DeclineOwnerTenancyByTokenCommand(request.Token),
+            ct).ConfigureAwait(true);
+
+        return ToActionResult(result);
+    }
+
+    private static IResult ToActionResult(Result<DealApplicationDto> result)
+    {
+        if (result.IsSuccess)
+        {
+            return Results.Ok(result.Value);
+        }
+
+        var payload = new { error = result.Error.Code, detail = result.Error.Description };
+        return result.Error.Code switch
+        {
+            "OneTap.token.expired" or "OneTap.token.invalid_signature"
+                or "OneTap.token.malformed" or "OneTap.token.wrong_action"
+                or "OneTap.token.missing" =>
+                Results.Json(payload, statusCode: StatusCodes.Status401Unauthorized),
+            "OneTap.token.alreadyUsed" =>
+                Results.Json(payload, statusCode: StatusCodes.Status409Conflict),
+            "Application.NotFound" => Results.NotFound(payload),
+            "Application.OwnerConsentForbidden" =>
+                Results.Json(payload, statusCode: StatusCodes.Status403Forbidden),
             _ => Results.BadRequest(payload),
         };
     }
 }
 
 public sealed record ApproveApplicationByTokenRequest(
+    string Token);
+
+public sealed record OwnerTenancyActionByTokenRequest(
     string Token);

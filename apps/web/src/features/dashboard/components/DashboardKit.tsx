@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import type { LucideIcon } from "lucide-react";
-import { Plane, Building2, ArrowRight } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -9,52 +9,7 @@ import {
   CardTitle,
   CardDescription,
 } from "@/components/ui/card";
-import type { AppMode } from "@/app/auth/modeStore";
 import { cn } from "@/lib/utils";
-
-// ── Mode toggle (Traveling ↔ Hosting) ───────────────────────
-
-export function ModeToggle({
-  mode,
-  onChange,
-}: {
-  mode: AppMode;
-  onChange: (mode: AppMode) => void;
-}) {
-  const options: { value: AppMode; label: string; icon: LucideIcon }[] = [
-    { value: "guest", label: "Traveling", icon: Plane },
-    { value: "host", label: "Hosting", icon: Building2 },
-  ];
-
-  return (
-    <div
-      role="tablist"
-      aria-label="Switch dashboard view"
-      className="inline-flex items-center rounded-full border bg-muted/40 p-1"
-    >
-      {options.map(({ value, label, icon: Icon }) => {
-        const active = mode === value;
-        return (
-          <button
-            key={value}
-            role="tab"
-            aria-selected={active}
-            onClick={() => onChange(value)}
-            className={cn(
-              "flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium transition-colors cursor-pointer",
-              active
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            <Icon className="h-4 w-4" />
-            {label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 // ── Stat card ────────────────────────────────────────────────
 

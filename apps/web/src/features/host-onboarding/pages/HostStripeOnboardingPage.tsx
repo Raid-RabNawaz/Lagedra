@@ -114,16 +114,28 @@ function StripeConnectSection({
     expressLogin.isPending ||
     accountUpdate.isPending;
 
+  const detailsSubmitted = status?.detailsSubmitted === true;
+  const hasActionableRequirements = (status?.outstandingRequirements?.length ?? 0) > 0;
+  const pendingReview =
+    hasAccount && !ready && detailsSubmitted && !hasActionableRequirements;
+  const pendingItems = status?.pendingVerification ?? [];
+
   const startOnboarding = async () => {
     setError(null);
     try {
+      // Accounts that already finished Express onboarding must use
+      // account_update. account_onboarding redirects straight back here.
+      if (hasAccount && detailsSubmitted) {
+        await updatePayoutDetails();
+        return;
+      }
       const result = await onboard.mutateAsync();
       if (result.onboardingUrl) {
         window.location.href = result.onboardingUrl;
         return;
       }
-      // No URL means the account is already fully enabled — the status query
-      // refresh from onSuccess will reflect the ready state.
+      // No URL means the account is already fully enabled or Stripe is
+      // reviewing — the status query refresh from onSuccess will reflect it.
     } catch (e) {
       setError(getApiErrorMessage(e, "Could not start Stripe onboarding."));
     }
@@ -237,7 +249,7 @@ function StripeConnectSection({
           </div>
         )}
 
-        {hasAccount && !ready && (status?.outstandingRequirements?.length ?? 0) > 0 && (
+        {hasAccount && !ready && hasActionableRequirements && (
           <Alert>
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
@@ -248,22 +260,50 @@ function StripeConnectSection({
                 ))}
               </ul>
               <p className="mt-2 text-sm text-muted-foreground">
-                Finish every step in Stripe (including bank details and Terms of
-                Service) before returning here — leaving early keeps payouts disabled.
+                Finish every step in Stripe (including any extra identity or
+                phone check) before returning here — leaving early keeps payouts
+                disabled.
               </p>
             </AlertDescription>
           </Alert>
         )}
 
-        {!ready && (
+        {pendingReview && (
+          <Alert>
+            <Clock className="h-4 w-4" />
+            <AlertDescription>
+              <p className="font-medium">Stripe is reviewing your account</p>
+              <p className="mt-1 text-sm">
+                Your payout details were already submitted. Stripe has temporarily
+                paused payouts while it reviews
+                {pendingItems.length > 0 ? ":" : " your information."}
+              </p>
+              {pendingItems.length > 0 && (
+                <ul className="mt-1 list-disc pl-4 text-sm">
+                  {pendingItems.map((req) => (
+                    <li key={req}>{formatStripeRequirement(req)}</li>
+                  ))}
+                </ul>
+              )}
+              <p className="mt-2 text-sm text-muted-foreground">
+                There is nothing more to resubmit from Lagedra. Open Stripe Express
+                to check progress, or wait for Stripe to finish the review.
+              </p>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {!ready && !pendingReview && (
           <div className="flex flex-col gap-2 sm:flex-row">
             <Button onClick={startOnboarding} disabled={busy} className="gap-2">
               <ExternalLink className="h-4 w-4" />
-              {busy && (onboard.isPending || refresh.isPending)
+              {busy && (onboard.isPending || refresh.isPending || accountUpdate.isPending)
                 ? "Opening Stripe..."
-                : hasAccount
-                  ? "Continue Stripe setup"
-                  : "Set up payouts with Stripe"}
+                : !hasAccount
+                  ? "Set up payouts with Stripe"
+                  : detailsSubmitted
+                    ? "Complete additional Stripe requirements"
+                    : "Continue Stripe setup"}
             </Button>
             {hasAccount && (
               <Button
@@ -314,7 +354,7 @@ function StripeConnectSection({
           </p>
         )}
 
-        {!ready && (
+        {!ready && !pendingReview && (
           <p className="text-xs text-muted-foreground">
             You'll be redirected to Stripe to enter your business/personal
             details, bank account, and tax forms. Stripe sends you back here
@@ -333,6 +373,12 @@ function formatStripeRequirement(requirement: string): string {
   }
   if (key.includes("tos_acceptance")) {
     return "Accept Stripe Terms of Service";
+  }
+  if (key.includes("phone")) {
+    return "Phone number verification";
+  }
+  if (key.includes("verification.document") || key.includes("verification.proof")) {
+    return "Identity document";
   }
   if (key.includes("tax_id") || key.includes("id_number") || key.includes("ssn")) {
     return "Tax information (W-9 / W-8)";

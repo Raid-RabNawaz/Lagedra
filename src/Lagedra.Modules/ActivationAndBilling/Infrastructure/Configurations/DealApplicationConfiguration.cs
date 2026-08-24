@@ -102,6 +102,23 @@ public sealed class DealApplicationConfiguration : IEntityTypeConfiguration<Deal
         builder.Property(a => a.HostConsentUserAgent).HasMaxLength(512);
         builder.Property(a => a.HostConsentVersion).HasMaxLength(50);
 
+        builder.Property(a => a.HomeOwnerUserId);
+        builder.HasIndex(a => a.HomeOwnerUserId);
+        builder.Property(a => a.OwnerConsentRequired)
+            .HasDefaultValue(false)
+            .IsRequired();
+        builder.Property(a => a.OwnerTenancyConsentGiven)
+            .HasDefaultValue(false)
+            .IsRequired();
+        builder.Property(a => a.OwnerTenancyConsentAt);
+        builder.Property(a => a.OwnerConsentIpAddress).HasMaxLength(64);
+        builder.Property(a => a.OwnerConsentUserAgent).HasMaxLength(512);
+        builder.Property(a => a.OwnerConsentVersion).HasMaxLength(50);
+        builder.Property(a => a.OwnerTenancyConsentDeclined)
+            .HasDefaultValue(false)
+            .IsRequired();
+        builder.Property(a => a.OwnerTenancyConsentDeclinedAt);
+
         builder.HasIndex(a => a.DealId)
             .HasFilter("\"DealId\" IS NOT NULL")
             .IsUnique();

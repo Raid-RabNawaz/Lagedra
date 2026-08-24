@@ -22,4 +22,18 @@ public sealed class DeliveryLog : Entity<Guid>
         DeliveredAt = deliveredAt;
         Error = error;
     }
+
+    /// <summary>Provider confirmed hand-off to the recipient.</summary>
+    public void MarkDelivered(DateTime deliveredAt)
+    {
+        DeliveredAt = deliveredAt;
+        Error = null;
+    }
+
+    /// <summary>Provider reported an asynchronous delivery failure.</summary>
+    public void RecordFailure(string error)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(error);
+        Error = error;
+    }
 }

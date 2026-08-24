@@ -25,15 +25,16 @@ public sealed class GenerateDealLeasePdfCommandHandler(
 
         var existing = await documentStore.GetByDealIdAsync(request.DealId, cancellationToken)
             .ConfigureAwait(false);
-        if (existing is not null)
-        {
-            return Result<DealLeaseDocument>.Success(existing);
-        }
 
         try
         {
             var filled = await filler.FillForDealAsync(request.DealId, cancellationToken)
                 .ConfigureAwait(false);
+
+            if (existing is not null && existing.TemplateVersionId == filled.TemplateVersionId)
+            {
+                return Result<DealLeaseDocument>.Success(existing);
+            }
 
             if (filled.MissingRequiredPlaceholders.Count > 0)
             {

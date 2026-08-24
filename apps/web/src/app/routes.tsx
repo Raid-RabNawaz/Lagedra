@@ -53,6 +53,8 @@ const ApplicationsPage = lazy(() => import("@/features/applications/pages/Applic
 const ApplicationDetailPage = lazy(() => import("@/features/applications/pages/ApplicationDetailPage").then((m) => ({ default: m.ApplicationDetailPage })));
 const MyApplicationsPage = lazy(() => import("@/features/applications/pages/MyApplicationsPage").then((m) => ({ default: m.MyApplicationsPage })));
 const HostApprovePage = lazy(() => import("@/features/applications/pages/HostApprovePage").then((m) => ({ default: m.HostApprovePage })));
+const OwnerConsentPage = lazy(() => import("@/features/applications/pages/OwnerConsentPage").then((m) => ({ default: m.OwnerConsentPage })));
+const OwnerConsentsPage = lazy(() => import("@/features/applications/pages/OwnerConsentsPage").then((m) => ({ default: m.OwnerConsentsPage })));
 const InquiryThreadPage = lazy(() => import("@/features/inquiry/pages/InquiryThreadPage").then((m) => ({ default: m.InquiryThreadPage })));
 const ListingInquiryPage = lazy(() => import("@/features/inquiry/pages/ListingInquiryPage").then((m) => ({ default: m.ListingInquiryPage })));
 const HostInquiriesPage = lazy(() => import("@/features/inquiry/pages/HostInquiriesPage").then((m) => ({ default: m.HostInquiriesPage })));
@@ -137,6 +139,11 @@ export const router = createBrowserRouter([
     element: <LazyPage><HostApprovePage /></LazyPage>,
     errorElement: <RouteErrorBoundary />,
   },
+  {
+    path: "/owner/consent",
+    element: <LazyPage><OwnerConsentPage /></LazyPage>,
+    errorElement: <RouteErrorBoundary />,
+  },
 
   // Legacy forgot-password emails used /reset-password (missing /auth prefix)
   {
@@ -186,6 +193,7 @@ export const router = createBrowserRouter([
           { path: "saved", element: <LazyPage><SavedListingsPage /></LazyPage> },
           { path: "applications/:id", element: <LazyPage><ApplicationDetailPage /></LazyPage> },
           { path: "my-applications", element: <LazyPage><MyApplicationsPage /></LazyPage> },
+          { path: "owner-consents", element: <LazyPage><OwnerConsentsPage /></LazyPage> },
           { path: "my-inquiries", element: <LazyPage><MyInquiriesPage /></LazyPage> },
           { path: "deals", element: <LazyPage><MyDealsPage /></LazyPage> },
           { path: "reservations", element: <Navigate to="/app/deals" replace /> },

@@ -22,15 +22,15 @@ public sealed partial class OutboxProcessor(
     ///
     /// Messages are claimed one at a time inside their own transaction whose
     /// SELECT takes a <c>FOR UPDATE SKIP LOCKED</c> row lock, then dispatched and
-    /// marked processed before the transaction commits. Several dispatchers poll
-    /// the same outbox concurrently — the API host's background dispatcher, the
-    /// worker's background dispatcher, and the worker's Quartz orchestrator all
-    /// funnel through here against the shared database. Without the lock they each
-    /// read the same unprocessed rows in the same window and re-handle them, which
-    /// is exactly what fired duplicate notifications (e.g. two identical "New
-    /// Booking Application" emails/bells for one request). The lock guarantees a
-    /// pending row is claimed by exactly one processor and skipped by the rest —
-    /// one event, one notification — no matter how many dispatchers or replicas run.
+    /// marked processed before the transaction commits. Multiple dispatchers poll
+    /// the same outbox concurrently — the API host's background dispatcher and the
+    /// worker's background dispatcher both funnel through here against the shared
+    /// database. Without the lock they each read the same unprocessed rows in the
+    /// same window and re-handle them, which is exactly what fired duplicate
+    /// notifications (e.g. two identical "New Booking Application" emails/bells
+    /// for one request). The lock guarantees a pending row is claimed by exactly
+    /// one processor and skipped by the rest — one event, one notification — no
+    /// matter how many dispatchers or replicas run.
     ///
     /// Claiming per-message (rather than a whole batch under one transaction)
     /// keeps the crash window to a single in-flight row: a process that dies mid

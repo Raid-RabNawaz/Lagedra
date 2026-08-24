@@ -18,6 +18,8 @@ import {
   useBillingStatus,
   usePaymentStatus,
   usePaymentDetails,
+  useRentCheckIns,
+  useRespondToRentCheckIn,
   useStopBilling,
   useConfirmPayment,
   useConfirmPlatformPayment,
@@ -78,13 +80,21 @@ export const BillingPage = () => {
     isLoading: paymentLoading,
     error: paymentError,
   } = usePaymentStatus(isPostActive ? dealId : undefined);
+  // Host payment instructions stay relevant for the life of an active deal:
+  // months 2+ rent is paid to the host directly (never through the platform).
   const { data: paymentDetailsData } = usePaymentDetails(
-    isTenant && payment?.status === "Pending" ? dealId : undefined,
+    isTenant && (payment?.status === "Pending" || payment?.status === "Confirmed")
+      ? dealId
+      : undefined,
+  );
+  const { data: rentCheckIns } = useRentCheckIns(
+    isPostActive && (isLandlord || isTenant) ? dealId : undefined,
   );
 
   const stopBilling = useStopBilling();
   const confirmPayment = useConfirmPayment();
   const confirmPlatformPayment = useConfirmPlatformPayment();
+  const respondToRentCheckIn = useRespondToRentCheckIn();
 
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
@@ -138,6 +148,23 @@ export const BillingPage = () => {
       setActionSuccess("Payment confirmed successfully.");
     } catch (e) {
       setActionError(getApiErrorMessage(e, "Failed to confirm payment."));
+    }
+  };
+
+  const handleRentCheckIn = async (checkInId: string, received: boolean) => {
+    if (!dealId) {
+      return;
+    }
+    setActionError(null);
+    try {
+      await respondToRentCheckIn.mutateAsync({ dealId, checkInId, received });
+      setActionSuccess(
+        received
+          ? "Thanks — rent recorded as received."
+          : "Recorded as not received. A compliance record has been opened for this deal.",
+      );
+    } catch (e) {
+      setActionError(getApiErrorMessage(e, "Failed to record your answer."));
     }
   };
 
@@ -409,7 +436,7 @@ export const BillingPage = () => {
 
             {isTenant &&
               paymentDetailsData?.paymentInfoPlain &&
-              payment.status === "Pending" && (
+              (payment.status === "Pending" || payment.status === "Confirmed") && (
                 <div className="rounded-md border p-3 bg-muted/30">
                   <p className="text-xs font-medium text-muted-foreground mb-1">
                     Host Payment Details
@@ -417,6 +444,11 @@ export const BillingPage = () => {
                   <p className="text-sm font-mono whitespace-pre-wrap">
                     {paymentDetailsData.paymentInfoPlain}
                   </p>
+                  {payment.status === "Confirmed" && (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Use these details to pay your monthly rent directly to your host.
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -494,6 +526,84 @@ export const BillingPage = () => {
                   File Damage Claim
                 </Button>
               )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {rentCheckIns && rentCheckIns.length > 0 && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Receipt className="h-5 w-5" />
+              Monthly Rent Check-ins
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              {isLandlord
+                ? "Rent for months 2+ is paid to you directly. Confirm each month whether it arrived — reporting a missed month opens a compliance record that supports you in a dispute."
+                : "Rent for months 2+ is paid to the host directly. This shows what the host has reported."}
+            </p>
+            <div className="space-y-2">
+              {rentCheckIns.map((checkIn) => (
+                <div
+                  key={checkIn.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3"
+                >
+                  <div>
+                    <p className="text-sm font-medium">
+                      {formatDate(checkIn.periodStart)} – {formatDate(checkIn.periodEnd)}
+                    </p>
+                    {checkIn.status !== "Pending" && checkIn.respondedAt && (
+                      <p className="text-xs text-muted-foreground">
+                        Answered {formatDate(checkIn.respondedAt)}
+                      </p>
+                    )}
+                  </div>
+
+                  {checkIn.status === "Received" && (
+                    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-green-700">
+                      <CheckCircle2 className="h-4 w-4" />
+                      Rent received
+                    </span>
+                  )}
+                  {checkIn.status === "Missed" && (
+                    <span className="inline-flex items-center gap-1.5 text-sm font-medium text-red-600">
+                      <AlertTriangle className="h-4 w-4" />
+                      Not received
+                    </span>
+                  )}
+                  {checkIn.status === "Pending" &&
+                    (isLandlord ? (
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          className="gap-1.5"
+                          onClick={() => void handleRentCheckIn(checkIn.id, true)}
+                          disabled={respondToRentCheckIn.isPending}
+                        >
+                          <CheckCircle2 className="h-4 w-4" />
+                          Rent received
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1.5 text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => void handleRentCheckIn(checkIn.id, false)}
+                          disabled={respondToRentCheckIn.isPending}
+                        >
+                          <AlertTriangle className="h-4 w-4" />
+                          Not received
+                        </Button>
+                      </div>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">
+                        Awaiting host confirmation
+                      </span>
+                    ))}
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>

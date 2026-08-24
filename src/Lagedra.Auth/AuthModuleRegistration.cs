@@ -2,7 +2,6 @@ using System.Text;
 using Lagedra.Auth.Application.Services;
 using Lagedra.Auth.Application.Settings;
 using Lagedra.Auth.Domain;
-using Lagedra.Auth.Infrastructure.Jobs;
 using Lagedra.Auth.Infrastructure.Persistence;
 using Lagedra.Auth.Infrastructure.Repositories;
 using Lagedra.Auth.Infrastructure.Seed;
@@ -15,7 +14,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
-using Quartz;
 
 namespace Lagedra.Auth;
 
@@ -125,16 +123,6 @@ public static class AuthModuleRegistration
 
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(AuthModuleRegistration).Assembly));
-
-        services.AddQuartz(q =>
-        {
-            var jobKey = new JobKey("RefreshTokenCleanup");
-            q.AddJob<RefreshTokenCleanupJob>(opts => opts.WithIdentity(jobKey));
-            q.AddTrigger(opts => opts
-                .ForJob(jobKey)
-                .WithIdentity("RefreshTokenCleanup-trigger")
-                .WithCronSchedule("0 0 2 * * ?"));
-        });
 
         return services;
     }

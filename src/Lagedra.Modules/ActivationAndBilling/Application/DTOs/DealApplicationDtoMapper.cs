@@ -34,6 +34,11 @@ internal static class DealApplicationDtoMapper
             a.PayerUserId,
             HasPaymentMethod: !string.IsNullOrWhiteSpace(a.StripePaymentMethodId),
             IsPaymentReady: a.IsPaymentReady,
-            PartnerOrganizationName: partnerOrganizationName);
+            PartnerOrganizationName: partnerOrganizationName,
+            a.HomeOwnerUserId,
+            a.OwnerConsentRequired,
+            a.OwnerTenancyConsentGiven,
+            a.OwnerTenancyConsentDeclined,
+            a.OwnerTenancyConsentAt);
     }
 }

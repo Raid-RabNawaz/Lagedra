@@ -3,6 +3,8 @@ using Lagedra.Auth.Application.Errors;
 using Lagedra.Auth.Application.Queries;
 using Lagedra.Auth.Domain;
 using Lagedra.SharedKernel.Results;
+using Lagedra.SharedKernel.Sms;
+using Lagedra.SharedKernel.Time;
 using MediatR;
 using Microsoft.AspNetCore.Identity;
 
@@ -58,9 +60,27 @@ public sealed class UpdateProfileCommandHandler(UserManager<ApplicationUser> use
         user.LastName = request.LastName;
         user.DisplayName = request.DisplayName;
 
-        var incomingPhone = string.IsNullOrWhiteSpace(request.PhoneNumber)
-            ? null
-            : request.PhoneNumber.Trim();
+        // Lease parties must be legal adults.
+        if (request.DateOfBirth is { } dob
+            && !MinimumAge.IsAtLeast(MinimumAge.AdultYears, dob, DateTime.UtcNow))
+        {
+            return AuthErrors.Underage;
+        }
+
+        // Store phones in E.164 so downstream senders (Twilio) always get a
+        // routable number; reject input that can't be normalized instead of
+        // letting it fail silently at delivery time.
+        string? incomingPhone = null;
+        if (!string.IsNullOrWhiteSpace(request.PhoneNumber))
+        {
+            if (!PhoneNumberE164.TryNormalize(request.PhoneNumber, out var normalizedPhone))
+            {
+                return AuthErrors.PhoneInvalid;
+            }
+
+            incomingPhone = normalizedPhone;
+        }
+
         var previousPhone = string.IsNullOrWhiteSpace(user.PhoneNumber)
             ? null
             : user.PhoneNumber.Trim();

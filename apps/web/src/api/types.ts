@@ -220,6 +220,14 @@ export type ListingStatus =
   | "Closed"
   | "Denied";
 
+export type ListingManagerRole = "Owner" | "PropertyManager";
+
+export type ListingHomeOwnerDto = {
+  userId: string;
+  displayName: string;
+  email: string;
+};
+
 export type AmenityCategory =
   | "Kitchen" | "Bathroom" | "Bedroom" | "LivingArea" | "Outdoor"
   | "Parking" | "Entertainment" | "WorkSpace" | "Accessibility"
@@ -370,6 +378,10 @@ export type ListingDetailsDto = {
   submittedForReviewAt?: string | null;
   reviewedAt?: string | null;
   leaseTerms?: LeaseTermsDto | null;
+  managerRole?: ListingManagerRole;
+  homeOwnerUserId?: string | null;
+  includeBrokerClause?: boolean;
+  homeOwner?: ListingHomeOwnerDto | null;
 };
 
 // Listing-level lease terms merged into the generated lease agreement PDF.
@@ -522,7 +534,15 @@ export type CreateListingRequest = {
   depositUnverifiedCents?: number | null;
   depositBackgroundVerifiedCents?: number | null;
   depositPartnerGuaranteedCents?: number | null;
+  managerRole?: ListingManagerRole;
+  homeOwnerUserId?: string | null;
+  homeOwnerEmail?: string | null;
+  includeBrokerClause?: boolean;
+  addedVia?: ListingAddedVia;
+  addedViaDetail?: string | null;
 };
+
+export type ListingAddedVia = "Manual" | "Url" | "Excel" | "Xml";
 
 // ── Import from URL (opt-in create-listing pre-fill) ───────────
 // Additive only. These mirror the backend ImportedListingDraftDto and are pure
@@ -591,6 +611,10 @@ export type UpdateListingRequest = {
   depositBackgroundVerifiedCents?: number | null;
   depositPartnerGuaranteedCents?: number | null;
   leaseTerms?: LeaseTermsRequest | null;
+  managerRole?: ListingManagerRole;
+  homeOwnerUserId?: string | null;
+  homeOwnerEmail?: string | null;
+  includeBrokerClause?: boolean;
 };
 
 export type SetApproxLocationRequest = {
@@ -605,6 +629,15 @@ export type LockPreciseAddressRequest = {
   zipCode: string;
   country: string;
   jurisdictionCode?: string | null;
+};
+
+export type ImportListingPhotosFromUrlsRequest = {
+  urls: string[];
+};
+
+export type ImportListingPhotosFromUrlsResult = {
+  uploaded: number;
+  failed: number;
 };
 
 export type AddListingPhotoRequest = {
@@ -913,6 +946,11 @@ export type DealApplicationDto = {
   hasPaymentMethod?: boolean;
   isPaymentReady?: boolean;
   partnerOrganizationName?: string | null;
+  homeOwnerUserId?: string | null;
+  ownerConsentRequired?: boolean;
+  ownerConsentGiven?: boolean;
+  ownerConsentDeclined?: boolean;
+  ownerConsentAt?: string | null;
 };
 
 export type DealApplicationSource = "TenantSelfApply" | "PartnerDirectReservation";
@@ -982,6 +1020,11 @@ export type SubmitApplicationRequest = {
   consentVersion?: string | null;
 };
 
+export type OwnerTenancyConsentRequest = {
+  consentGiven: boolean;
+  consentVersion?: string | null;
+};
+
 export type ApproveApplicationRequest = {
   /**
    * The host's Truth Surface consent. No deposit is entered here — it was
@@ -1028,6 +1071,10 @@ export type HostStripeStatusDto = {
   onboardingUrl: string | null;
   /** Stripe requirement keys still due (e.g. external_account, tos_acceptance.date). */
   outstandingRequirements?: string[] | null;
+  /** Fields Stripe has and is still reviewing — the host cannot resubmit these. */
+  pendingVerification?: string[] | null;
+  detailsSubmitted?: boolean;
+  disabledReason?: string | null;
 };
 
 // ── Host Payment Details ─────────────────────────────────────
@@ -1226,6 +1273,25 @@ export type PaymentConfirmationDto = {
 export type PaymentDetailsDto = {
   dealId: string;
   paymentInfoPlain: string;
+};
+
+export type RentCheckInStatus = "Pending" | "Received" | "Missed";
+
+export type RentCheckInDto = {
+  id: string;
+  dealId: string;
+  /** YYYY-MM-DD — first day of the rent period. */
+  periodStart: string;
+  /** YYYY-MM-DD — exclusive end of the rent period. */
+  periodEnd: string;
+  status: RentCheckInStatus;
+  respondedAt: string | null;
+  note: string | null;
+};
+
+export type RespondToRentCheckInRequest = {
+  received: boolean;
+  note?: string | null;
 };
 
 export type CancellationResultDto = {
@@ -1943,6 +2009,7 @@ export type ListingAnalyticsItemDto = {
   applicationCount: number;
   conversionPercent: number;
   qualityScore: number;
+  addedVia: string;
 };
 
 export type ListingAnalyticsFilters = {
@@ -2305,8 +2372,11 @@ export type RegisterPartnerRequest = {
 };
 
 export type AddPartnerMemberRequest = {
-  userId: string;
   role: PartnerMemberRole;
+  /** Preferred: the member's account email. */
+  email?: string;
+  /** Admin tooling only — members don't know their GUID. */
+  userId?: string;
 };
 
 export type GenerateReferralLinkRequest = {

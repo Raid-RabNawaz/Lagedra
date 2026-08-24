@@ -44,12 +44,6 @@ public sealed class OnApplicationSubmittedNotify(
         // page reads the token from the query string and POSTs it to
         // /v1/actions/approve-application — bypassing the in-app
         // approval flow when the host is already on email/mobile.
-        var approveToken = actionTokens.Issue(
-            ApproveApplicationByTokenCommandHandler.ActionLabel,
-            subjectId: e.ApplicationId,
-            principalUserId: app.LandlordUserId,
-            ttl: TimeSpan.FromHours(OneTapTtlHours));
-
         var frontendUrl = (configuration["App:FrontendUrl"] ?? "http://localhost:3000")
             .TrimEnd('/');
 
@@ -63,31 +57,112 @@ public sealed class OnApplicationSubmittedNotify(
             .ConfigureAwait(false);
 
         var listingTitle = listing?.Title ?? "your listing";
+        var ownerConsentRequired = app.OwnerConsentRequired && app.HomeOwnerUserId is { } ownerId
+            && ownerId != Guid.Empty;
 
-        var approveUrl = BuildApproveUrl(
-            frontendUrl,
-            approveToken,
-            e.ApplicationId,
-            listingTitle);
+        // When the home owner must consent first, the host cannot one-tap
+        // accept yet. Point them at the inbox; a fresh approve link is
+        // sent after the owner consents.
+        var approveToken = ownerConsentRequired
+            ? string.Empty
+            : actionTokens.Issue(
+                ApproveApplicationByTokenCommandHandler.ActionLabel,
+                subjectId: e.ApplicationId,
+                principalUserId: app.LandlordUserId,
+                ttl: TimeSpan.FromHours(OneTapTtlHours));
+        var approveUrl = ownerConsentRequired
+            ? $"{frontendUrl}/app/applications"
+            : BuildHostApproveUrl(frontendUrl, approveToken, e.ApplicationId, listingTitle);
 
         await m.Send(new NotifyUserCommand(
             app.LandlordUserId, "application_submitted",
             "New Booking Application",
-            "A tenant has submitted a booking application for your listing.",
+            ownerConsentRequired
+                ? "A tenant has submitted a booking application. The home owner must consent before you can accept."
+                : "A tenant has submitted a booking application for your listing.",
             new()
             {
                 ["applicationId"] = e.ApplicationId.ToString(),
                 ["listingId"] = e.ListingId.ToString(),
                 ["listingTitle"] = listingTitle,
-                ["approveToken"] = approveToken,
+                ["approveToken"] = ownerConsentRequired ? string.Empty : approveToken,
                 ["approveTokenTtlHours"] = OneTapTtlHours.ToString(CultureInfo.InvariantCulture),
                 ["approveUrl"] = approveUrl,
                 ["frontendUrl"] = frontendUrl,
             },
             Channels.EmailInAppAndSms, e.ListingId, "Listing"), ct).ConfigureAwait(false);
+
+        if (ownerConsentRequired)
+        {
+            await NotifyOwnerConsentRequested(
+                m,
+                actionTokens,
+                app.HomeOwnerUserId!.Value,
+                e.ApplicationId,
+                e.ListingId,
+                listingTitle,
+                frontendUrl,
+                ct).ConfigureAwait(false);
+        }
     }
 
-    private static string BuildApproveUrl(
+    internal static async Task NotifyOwnerConsentRequested(
+        IMediator m,
+        IActionTokenService actionTokens,
+        Guid homeOwnerUserId,
+        Guid applicationId,
+        Guid listingId,
+        string listingTitle,
+        string frontendUrl,
+        CancellationToken ct)
+    {
+        var consentToken = actionTokens.Issue(
+            ConsentOwnerTenancyByTokenCommandHandler.ActionLabel,
+            subjectId: applicationId,
+            principalUserId: homeOwnerUserId,
+            ttl: TimeSpan.FromHours(OneTapTtlHours));
+        var declineToken = actionTokens.Issue(
+            DeclineOwnerTenancyByTokenCommandHandler.ActionLabel,
+            subjectId: applicationId,
+            principalUserId: homeOwnerUserId,
+            ttl: TimeSpan.FromHours(OneTapTtlHours));
+
+        var consentUrl = BuildOwnerConsentUrl(
+            frontendUrl, consentToken, declineToken, applicationId, listingTitle);
+
+        await m.Send(new NotifyUserCommand(
+            homeOwnerUserId, "owner_consent_requested",
+            "Owner consent needed",
+            "A booking request on your property needs your consent before the property manager can accept.",
+            new()
+            {
+                ["applicationId"] = applicationId.ToString(),
+                ["listingId"] = listingId.ToString(),
+                ["listingTitle"] = listingTitle,
+                ["consentUrl"] = consentUrl,
+                ["frontendUrl"] = frontendUrl,
+                ["approveTokenTtlHours"] = OneTapTtlHours.ToString(CultureInfo.InvariantCulture),
+            },
+            Channels.EmailInAppAndSms, listingId, "Listing"), ct).ConfigureAwait(false);
+    }
+
+    private static string BuildOwnerConsentUrl(
+        string frontendUrl,
+        string consentToken,
+        string declineToken,
+        Guid applicationId,
+        string listingTitle)
+    {
+        var sb = new StringBuilder(frontendUrl.Length + 320);
+        sb.Append(frontendUrl).Append("/owner/consent");
+        sb.Append("?token=").Append(Uri.EscapeDataString(consentToken));
+        sb.Append("&declineToken=").Append(Uri.EscapeDataString(declineToken));
+        sb.Append("&applicationId=").Append(applicationId.ToString("D"));
+        sb.Append("&listingTitle=").Append(Uri.EscapeDataString(listingTitle));
+        return sb.ToString();
+    }
+
+    internal static string BuildHostApproveUrl(
         string frontendUrl,
         string token,
         Guid applicationId,
@@ -102,6 +177,89 @@ public sealed class OnApplicationSubmittedNotify(
         sb.Append("&applicationId=").Append(applicationId.ToString("D"));
         sb.Append("&listingTitle=").Append(Uri.EscapeDataString(listingTitle));
         return sb.ToString();
+    }
+}
+
+public sealed class OnOwnerTenancyConsentGivenNotify(
+    IMediator m,
+    IActionTokenService actionTokens,
+    IListingProvider listingProvider,
+    IConfiguration configuration)
+    : IDomainEventHandler<OwnerTenancyConsentGivenEvent>
+{
+    private const int OneTapTtlHours = 72;
+
+    public async Task Handle(OwnerTenancyConsentGivenEvent e, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+
+        var listing = await listingProvider
+            .GetListingDetailsAsync(e.ListingId, ct)
+            .ConfigureAwait(false);
+        var listingTitle = listing?.Title ?? "your listing";
+        var frontendUrl = (configuration["App:FrontendUrl"] ?? "http://localhost:3000")
+            .TrimEnd('/');
+
+        var approveToken = actionTokens.Issue(
+            ApproveApplicationByTokenCommandHandler.ActionLabel,
+            subjectId: e.ApplicationId,
+            principalUserId: e.LandlordUserId,
+            ttl: TimeSpan.FromHours(OneTapTtlHours));
+
+        var approveUrl = OnApplicationSubmittedNotify.BuildHostApproveUrl(
+            frontendUrl, approveToken, e.ApplicationId, listingTitle);
+
+        await m.Send(new NotifyUserCommand(
+            e.LandlordUserId, "owner_consent_given",
+            "Owner consented — you can accept",
+            "The home owner consented to this tenancy. You can now accept the booking request.",
+            new()
+            {
+                ["applicationId"] = e.ApplicationId.ToString(),
+                ["listingId"] = e.ListingId.ToString(),
+                ["listingTitle"] = listingTitle,
+                ["approveUrl"] = approveUrl,
+                ["frontendUrl"] = frontendUrl,
+                ["approveTokenTtlHours"] = OneTapTtlHours.ToString(CultureInfo.InvariantCulture),
+            },
+            Channels.EmailInAppAndSms, e.ListingId, "Listing"), ct).ConfigureAwait(false);
+    }
+}
+
+public sealed class OnOwnerTenancyConsentDeclinedNotify(
+    IMediator m,
+    IListingProvider listingProvider)
+    : IDomainEventHandler<OwnerTenancyConsentDeclinedEvent>
+{
+    public async Task Handle(OwnerTenancyConsentDeclinedEvent e, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(e);
+
+        var listing = await listingProvider
+            .GetListingDetailsAsync(e.ListingId, ct)
+            .ConfigureAwait(false);
+        var listingTitle = listing?.Title ?? "the listing";
+
+        var payload = new Dictionary<string, string>
+        {
+            ["applicationId"] = e.ApplicationId.ToString(),
+            ["listingId"] = e.ListingId.ToString(),
+            ["listingTitle"] = listingTitle,
+        };
+
+        await m.Send(new NotifyUserCommand(
+            e.TenantUserId, "owner_consent_declined",
+            "Owner declined this stay",
+            "The home owner did not consent to this tenancy, so the booking request was closed.",
+            payload,
+            Channels.EmailInAppAndSms, e.ListingId, "Listing"), ct).ConfigureAwait(false);
+
+        await m.Send(new NotifyUserCommand(
+            e.LandlordUserId, "owner_consent_declined",
+            "Owner declined this stay",
+            "The home owner declined this tenancy. The booking request has been closed.",
+            payload,
+            Channels.EmailInAppAndSms, e.ListingId, "Listing"), ct).ConfigureAwait(false);
     }
 }
 

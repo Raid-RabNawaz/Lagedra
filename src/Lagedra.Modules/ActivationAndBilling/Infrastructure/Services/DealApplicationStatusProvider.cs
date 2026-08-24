@@ -71,6 +71,11 @@ public sealed class DealApplicationStatusProvider(BillingDbContext dbContext) : 
             app.ServiceFeeCents,
             app.TotalPayableSnapshotCents,
             app.TenantVerificationTierAtRequest,
-            app.DepositReason);
+            app.DepositReason,
+            app.HomeOwnerUserId,
+            app.OwnerConsentRequired,
+            app.OwnerTenancyConsentGiven,
+            app.OwnerTenancyConsentAt,
+            app.OwnerConsentVersion);
     }
 }

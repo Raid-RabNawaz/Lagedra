@@ -34,11 +34,8 @@ public sealed class DenyListingCommandHandler(ListingsDbContext dbContext)
             return Result<ListingDetailsDto>.Failure(ReasonRequired);
         }
 
+        // Status transition only — skip photo/amenity graph (same timeout risk as approve).
         var listing = await dbContext.Listings
-            .Include(l => l.Amenities).ThenInclude(a => a.AmenityDefinition)
-            .Include(l => l.SafetyDevices).ThenInclude(s => s.SafetyDeviceDefinition)
-            .Include(l => l.Considerations).ThenInclude(c => c.ConsiderationDefinition)
-            .Include(l => l.Photos)
             .FirstOrDefaultAsync(l => l.Id == request.ListingId, cancellationToken)
             .ConfigureAwait(false);
 

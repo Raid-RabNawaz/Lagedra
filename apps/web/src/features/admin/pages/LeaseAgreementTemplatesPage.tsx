@@ -9,6 +9,7 @@ import type {
 } from "@/api/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Loader } from "@/components/shared/Loader";
@@ -349,11 +350,11 @@ export const LeaseAgreementTemplatesPage = () => {
                       <label className="mb-1 block text-xs text-muted-foreground">
                         Effective date
                       </label>
-                      <Input
-                        type="date"
+                      <DatePicker
                         value={effectiveDate}
                         disabled={!isDraft}
-                        onChange={(e) => setEffectiveDate(e.target.value)}
+                        onChange={setEffectiveDate}
+                        aria-label="Effective date"
                       />
                     </div>
                   </div>

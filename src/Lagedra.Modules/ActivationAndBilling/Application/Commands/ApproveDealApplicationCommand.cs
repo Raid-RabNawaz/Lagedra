@@ -58,6 +58,9 @@ public sealed partial class ApproveDealApplicationCommandHandler(
     private static readonly Error PreciseAddressRequired = new(
         "Application.PreciseAddressRequired",
         "Lock the full property address on this listing before accepting a request. The address is required for the lease agreement and stay details.");
+    private static readonly Error OwnerConsentRequired = new(
+        "Application.OwnerConsentRequired",
+        "The home owner must consent to this tenancy before you can accept. They have been notified.");
 
     public async Task<Result<DealApplicationDto>> Handle(
         ApproveDealApplicationCommand request,
@@ -119,6 +122,11 @@ public sealed partial class ApproveDealApplicationCommandHandler(
         if (listing is null)
         {
             return Result<DealApplicationDto>.Failure(ListingNotFound);
+        }
+
+        if (application.OwnerConsentRequired && !application.OwnerTenancyConsentGiven)
+        {
+            return Result<DealApplicationDto>.Failure(OwnerConsentRequired);
         }
 
         if (listing.PreciseAddress is null

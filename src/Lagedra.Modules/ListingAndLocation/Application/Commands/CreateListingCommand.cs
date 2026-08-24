@@ -8,6 +8,7 @@ using Lagedra.Modules.ListingAndLocation.Domain.Policies;
 using Lagedra.Modules.ListingAndLocation.Domain.ValueObjects;
 using CancellationPolicyType = Lagedra.SharedKernel.Integration.CancellationPolicyType;
 using IAuditTrailWriter = Lagedra.SharedKernel.Integration.IAuditTrailWriter;
+using IUserLookupService = Lagedra.SharedKernel.Integration.IUserLookupService;
 using Lagedra.Modules.ListingAndLocation.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Results;
 using MediatR;
@@ -38,7 +39,13 @@ public sealed record CreateListingCommand(
     long? DefaultDepositCents = null,
     long? DepositUnverifiedCents = null,
     long? DepositBackgroundVerifiedCents = null,
-    long? DepositPartnerGuaranteedCents = null) : IRequest<Result<ListingDetailsDto>>;
+    long? DepositPartnerGuaranteedCents = null,
+    ListingManagerRole ManagerRole = ListingManagerRole.Owner,
+    Guid? HomeOwnerUserId = null,
+    string? HomeOwnerEmail = null,
+    bool IncludeBrokerClause = false,
+    ListingAddedVia AddedVia = ListingAddedVia.Manual,
+    string? AddedViaDetail = null) : IRequest<Result<ListingDetailsDto>>;
 
 public sealed class CreateListingCommandValidator : AbstractValidator<CreateListingCommand>
 {
@@ -66,13 +73,19 @@ public sealed class CreateListingCommandValidator : AbstractValidator<CreateList
                 x.DepositBackgroundVerifiedCents,
                 x.DepositUnverifiedCents))
             .WithMessage("Deposits must satisfy partner-guaranteed \u2264 background-verified \u2264 unverified.");
+
+        RuleFor(x => x.AddedVia)
+            .Must(v => v is ListingAddedVia.Manual or ListingAddedVia.Url
+                or ListingAddedVia.Excel or ListingAddedVia.Xml)
+            .WithMessage("Listings can only be created as manual, URL, Excel, or XML.");
     }
 }
 
 public sealed class CreateListingCommandHandler(
     ListingsDbContext dbContext,
     IGeocodingService geocodingService,
-    IAuditTrailWriter auditTrail)
+    IAuditTrailWriter auditTrail,
+    IUserLookupService userLookup)
     : IRequestHandler<CreateListingCommand, Result<ListingDetailsDto>>
 {
     public async Task<Result<ListingDetailsDto>> Handle(
@@ -93,7 +106,9 @@ public sealed class CreateListingCommandHandler(
             request.Bathrooms,
             stayRange,
             request.MaxDepositCents,
-            request.SquareFootage);
+            request.SquareFootage,
+            request.AddedVia,
+            request.AddedViaDetail);
 
         if (!string.IsNullOrWhiteSpace(request.ApproxAddress))
         {
@@ -162,6 +177,23 @@ public sealed class CreateListingCommandHandler(
             request.DepositBackgroundVerifiedCents,
             request.DepositPartnerGuaranteedCents);
 
+        var management = await ListingManagementGuard.ResolveAsync(
+            userLookup,
+            request.ManagerRole,
+            request.HomeOwnerUserId,
+            request.HomeOwnerEmail,
+            request.LandlordUserId,
+            cancellationToken).ConfigureAwait(false);
+        if (management.IsFailure)
+        {
+            return Result<ListingDetailsDto>.Failure(management.Error);
+        }
+
+        listing.SetManagement(
+            management.Value.ManagerRole,
+            management.Value.HomeOwnerUserId,
+            request.IncludeBrokerClause);
+
         dbContext.Listings.Add(listing);
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -177,7 +209,8 @@ public sealed class CreateListingCommandHandler(
             FormatDepositDetails(listing),
             ct: cancellationToken).ConfigureAwait(false);
 
-        return Result<ListingDetailsDto>.Success(ListingMapper.ToDetails(listing));
+        return Result<ListingDetailsDto>.Success(
+            ListingMapper.ToDetails(listing, homeOwner: management.Value.HomeOwner));
     }
 
     internal static string FormatDepositDetails(Listing listing) =>
