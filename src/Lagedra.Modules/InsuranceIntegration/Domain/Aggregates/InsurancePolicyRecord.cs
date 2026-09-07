@@ -1,7 +1,8 @@
 using Lagedra.Modules.InsuranceIntegration.Domain.Entities;
+using Lagedra.SharedKernel.Domain;
+using Lagedra.SharedKernel.Insurance;
 using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Integration.Events;
-using Lagedra.SharedKernel.Domain;
 
 namespace Lagedra.Modules.InsuranceIntegration.Domain.Aggregates;
 
@@ -16,6 +17,18 @@ public sealed class InsurancePolicyRecord : AggregateRoot<Guid>
     public DateTime? ExpiresAt { get; private set; }
     public string? CoverageScope { get; private set; }
     public DateTime? UnknownSince { get; private set; }
+    public string? ExternalVerificationId { get; private set; }
+    public string? ScreeningStatus { get; private set; }
+    public string? FlaggedReason { get; private set; }
+
+    public bool HasExternalVerification => !string.IsNullOrWhiteSpace(ExternalVerificationId);
+
+    /// <summary>
+    /// Reservation id last sent to Truvi. Stored on <see cref="PolicyNumber"/>
+    /// so flagged re-screens can cancel/modify the replacement create.
+    /// </summary>
+    public string TruviReservationId =>
+        !string.IsNullOrWhiteSpace(PolicyNumber) ? PolicyNumber : DealId.ToString("D");
 
     private readonly List<InsuranceVerificationAttempt> _attempts = [];
     public IReadOnlyList<InsuranceVerificationAttempt> Attempts => _attempts.AsReadOnly();
@@ -120,9 +133,75 @@ public sealed class InsurancePolicyRecord : AggregateRoot<Guid>
         AddDomainEvent(new InsuranceStatusChangedEvent(DealId, oldState, InsuranceState.NotActive));
     }
 
+    public void RecordScreeningResult(
+        string verificationId,
+        string screeningStatus,
+        string? flaggedReason,
+        DateTime? expiresAt,
+        string? reservationId = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(verificationId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(screeningStatus);
+
+        var oldState = State;
+        ExternalVerificationId = verificationId;
+        ScreeningStatus = screeningStatus;
+        FlaggedReason = flaggedReason;
+        Provider = "Truvi";
+        if (!string.IsNullOrWhiteSpace(reservationId))
+        {
+            PolicyNumber = reservationId;
+        }
+
+        VerifiedAt = DateTime.UtcNow;
+        UnknownSince = null;
+
+        if (string.Equals(screeningStatus, TruviScreeningStatus.Rejected, StringComparison.OrdinalIgnoreCase))
+        {
+            State = InsuranceState.NotActive;
+            CoverageScope = "Truvi Rejected — unprotected";
+            ExpiresAt = expiresAt;
+            AddDomainEvent(new InsuranceStatusChangedEvent(DealId, oldState, InsuranceState.NotActive));
+            return;
+        }
+
+        State = InsuranceState.Active;
+        CoverageScope = string.Equals(screeningStatus, TruviScreeningStatus.Flagged, StringComparison.OrdinalIgnoreCase)
+            ? "Truvi Complete Protection (Flagged)"
+            : "Truvi Complete Protection";
+        ExpiresAt = expiresAt;
+        AddDomainEvent(new InsuranceStatusChangedEvent(DealId, oldState, InsuranceState.Active));
+    }
+
+    public void RecordScreeningFailed(string reason)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+
+        ScreeningStatus = TruviScreeningStatus.Failed;
+        CoverageScope = Truncate(reason, 500);
+        RecordUnknown();
+    }
+
+    public void MarkScreeningCancelled(string reason)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+
+        ScreeningStatus = TruviScreeningStatus.Cancelled;
+        if (State is InsuranceState.Active or InsuranceState.InstitutionBacked)
+        {
+            CancelPolicy(reason);
+            return;
+        }
+
+        CoverageScope = Truncate($"Cancelled: {reason}", 500);
+    }
+
     public void AddAttempt(InsuranceVerificationAttempt attempt)
     {
         ArgumentNullException.ThrowIfNull(attempt);
         _attempts.Add(attempt);
     }
+
+    private static string Truncate(string value, int maxLength)
+        => value.Length <= maxLength ? value : value[..maxLength];
 }

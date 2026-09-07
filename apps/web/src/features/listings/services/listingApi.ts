@@ -9,6 +9,7 @@ import type {
   CreateConsiderationDefinitionRequest,
   CreateListingRequest,
   CreateSafetyDeviceDefinitionRequest,
+  CustomLeaseDocumentDto,
   ListingHomeOwnerDto,
   ImportedListingDraftDto,
   ImportListingFromUrlRequest,
@@ -33,6 +34,16 @@ import type {
   SafetyDeviceDefinitionDto,
   ConsiderationDefinitionDto,
 } from "@/api/types";
+
+/**
+ * The lease preview is served as a file download, so the server picks the name
+ * (host uploads keep their original file name). Falls back when the header is
+ * absent or unparseable.
+ */
+function fileNameFromContentDisposition(header: string | undefined): string {
+  const match = header?.match(/filename\*?=(?:UTF-8'')?"?([^";]+)"?/i);
+  return match ? decodeURIComponent(match[1]) : "lease-agreement.pdf";
+}
 
 export const listingApi = {
   async search(params: SearchListingsParams = {}): Promise<SearchListingsResultDto> {
@@ -190,6 +201,44 @@ export const listingApi = {
       timeout: 180_000,
     });
     return response.data;
+  },
+
+  /**
+   * Uploads the host's own lease agreement and switches the listing onto it.
+   * The file lands in a private bucket, so it is only readable through the
+   * authorized preview endpoint.
+   */
+  async uploadLeaseDocument(listingId: string, file: File): Promise<CustomLeaseDocumentDto> {
+    const form = new FormData();
+    form.append("file", file, file.name);
+    const response = await http.post<CustomLeaseDocumentDto>(
+      endpoints.listings.leaseDocument(listingId),
+      form,
+      { timeout: 120_000 },
+    );
+    return response.data;
+  },
+
+  /** Removes the uploaded lease, returning the listing to Lagedra's standard lease. */
+  async removeLeaseDocument(listingId: string): Promise<void> {
+    await http.delete(endpoints.listings.leaseDocument(listingId));
+  },
+
+  /**
+   * Downloads the lease a prospective tenant can read before booking: the
+   * host's own document, or a blank specimen of Lagedra's template.
+   */
+  async downloadLeasePreview(listingId: string): Promise<{ blob: Blob; fileName: string }> {
+    const response = await http.get(endpoints.leaseAgreements.listingPreview(listingId), {
+      responseType: "blob",
+      timeout: 60_000,
+    });
+    return {
+      blob: response.data as Blob,
+      fileName: fileNameFromContentDisposition(
+        response.headers?.["content-disposition"] as string | undefined,
+      ),
+    };
   },
 
   /**

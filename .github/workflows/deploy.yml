@@ -14,8 +14,35 @@ permissions:
 
 jobs:
 
+  # ── Tests: gate every deploy ────────────────────────────────────────────────
+  # The integration suite needs Docker for Testcontainers, which ubuntu-latest
+  # runners provide. It covers defects that only appear against a real
+  # relational provider, such as the lease template seed silently failing and
+  # leaving production on a superseded template.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore Lagedra.sln
+
+      - name: Build
+        run: dotnet build Lagedra.sln -c Release --no-restore
+
+      - name: Unit tests
+        run: dotnet test tests/Lagedra.Tests.Unit/Lagedra.Tests.Unit.csproj -c Release --no-build
+
+      - name: Integration tests
+        run: dotnet test tests/Lagedra.Tests.Integration/Lagedra.Tests.Integration.csproj -c Release --no-build
+
   # ── Backend: build, push, and deploy ────────────────────────────────────────
   deploy-backend:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -79,6 +106,7 @@ jobs:
 
   # ── Frontend: build and deploy to S3 + CloudFront ──────────────────────────
   deploy-frontend:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

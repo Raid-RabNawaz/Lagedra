@@ -45,6 +45,19 @@ public sealed record ListingLeaseTermsDto(
     bool RentCapJustCauseExempt,
     string? PaymentMethods);
 
+/// <summary>
+/// Pointer to a lease agreement the host uploaded for their listing. Carries
+/// the storage key because the consumer (lease generation) reads the object
+/// server-side; it is never surfaced to a client.
+/// </summary>
+public sealed record ListingCustomLeaseDocumentDto(
+    string StorageKey,
+    string FileName,
+    string ContentType,
+    long SizeBytes,
+    string ContentHash,
+    DateTime UploadedAtUtc);
+
 public sealed record ListingAddressDto(
     string Street,
     string City,
@@ -86,7 +99,11 @@ public sealed record ListingDetailsDto(
     ListingLeaseTermsDto? LeaseTerms = null,
     string? ManagerRole = null,
     Guid? HomeOwnerUserId = null,
-    bool IncludeBrokerClause = false);
+    bool IncludeBrokerClause = false,
+    // "LagedraTemplate" or "HostProvided" — decides whether the deal's lease is
+    // generated from the jurisdiction template or is the host's own upload.
+    string? LeaseAgreementSource = null,
+    ListingCustomLeaseDocumentDto? CustomLeaseDocument = null);
 
 public sealed record ListingSummaryInfoDto(
     Guid Id,

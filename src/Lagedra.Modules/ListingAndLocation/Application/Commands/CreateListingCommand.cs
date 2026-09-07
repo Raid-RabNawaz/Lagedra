@@ -44,6 +44,7 @@ public sealed record CreateListingCommand(
     Guid? HomeOwnerUserId = null,
     string? HomeOwnerEmail = null,
     bool IncludeBrokerClause = false,
+    LeaseAgreementSource LeaseAgreementSource = LeaseAgreementSource.LagedraTemplate,
     ListingAddedVia AddedVia = ListingAddedVia.Manual,
     string? AddedViaDetail = null) : IRequest<Result<ListingDetailsDto>>;
 
@@ -121,6 +122,8 @@ public sealed class CreateListingCommandHandler(
                 listing.SetApproxLocation(new GeoPoint(geocoded.Latitude, geocoded.Longitude));
             }
         }
+
+        listing.SetLeaseAgreementSource(request.LeaseAgreementSource);
 
         if (request.HouseRules is { } hr)
         {

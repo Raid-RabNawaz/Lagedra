@@ -21,6 +21,11 @@ public static class LeaseAgreementEndpoints
 
         group.MapGet("/placeholders", GetPlaceholders).RequireAuthorization("RequirePackApprover");
         group.MapGet("/deals/{dealId:guid}/pdf", DownloadDealPdf);
+
+        // Group-level auth only: any signed-in user may read a listing's lease
+        // before requesting a booking, unlike the deal PDF which is restricted
+        // to the parties on that deal.
+        group.MapGet("/listings/{listingId:guid}/preview", DownloadListingLeasePreview);
         group.MapPost("/", CreateTemplate).RequireAuthorization("RequirePlatformAdmin");
         group.MapPost("/{id:guid}/versions", AddVersion).RequireAuthorization("RequirePlatformAdmin");
         group.MapPut("/{id:guid}/versions/{versionId:guid}", UpdateDraft).RequireAuthorization("RequirePlatformAdmin");
@@ -204,32 +209,60 @@ public static class LeaseAgreementEndpoints
             }
         }
 
+        // Always go through the generator rather than serving the stored blob
+        // directly. It returns the stored PDF untouched while the deal's
+        // template version (or the host's uploaded file) is unchanged, and
+        // re-renders when a newer lease template has been published — otherwise
+        // deals sealed under an older template stay pinned to it forever.
+        var result = await mediator.Send(new GenerateDealLeasePdfCommand(dealId), ct)
+            .ConfigureAwait(true);
+
+        if (result.IsSuccess)
+        {
+            var doc = result.Value;
+            return Results.File(doc.Content, doc.ContentType, doc.FileName);
+        }
+
+        // Re-rendering can fail on data a previously generated lease no longer
+        // has (an unlocked listing address, say). That earlier PDF is still a
+        // valid agreement, so serve it instead of failing the download.
         var existing = await store.GetByDealIdAsync(dealId, ct).ConfigureAwait(true);
         if (existing is not null)
         {
             return Results.File(existing.Content, existing.ContentType, existing.FileName);
         }
 
-        // Generate on demand when the async Truth Surface handler hasn't
-        // produced a PDF yet (or previously failed). Matches the deal_activated
-        // email path so download never permanently 404s after seal.
-        var result = await mediator.Send(new GenerateDealLeasePdfCommand(dealId), ct)
+        return Results.Problem(
+            detail: result.Error.Description,
+            statusCode: StatusCodes.Status422UnprocessableEntity,
+            title: result.Error.Code,
+            extensions: new Dictionary<string, object?>
+            {
+                ["error"] = result.Error.Code,
+            });
+    }
+
+    private static async Task<IResult> DownloadListingLeasePreview(
+        [FromRoute] Guid listingId,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetListingLeasePreviewQuery(listingId), ct)
             .ConfigureAwait(true);
 
         if (result.IsFailure)
         {
-            return Results.Problem(
-                detail: result.Error.Description,
-                statusCode: StatusCodes.Status422UnprocessableEntity,
-                title: result.Error.Code,
-                extensions: new Dictionary<string, object?>
-                {
-                    ["error"] = result.Error.Code,
-                });
+            var payload = new { error = result.Error.Code, detail = result.Error.Description };
+            return result.Error.Code == "Listing.NotFound"
+                ? Results.NotFound(payload)
+                : Results.Problem(
+                    detail: result.Error.Description,
+                    statusCode: StatusCodes.Status422UnprocessableEntity,
+                    title: result.Error.Code);
         }
 
-        var doc = result.Value;
-        return Results.File(doc.Content, doc.ContentType, doc.FileName);
+        var preview = result.Value;
+        return Results.File(preview.Content, preview.ContentType, preview.FileName);
     }
 
     private static Guid GetUserId(HttpContext httpContext)

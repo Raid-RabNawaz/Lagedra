@@ -17,6 +17,8 @@ public sealed class JurisdictionPackRepository(JurisdictionDbContext dbContext)
                 .ThenInclude(v => v.FieldGatingRules)
             .Include(p => p.Versions)
                 .ThenInclude(v => v.EvidenceSchedules)
+            .Include(p => p.Versions)
+                .ThenInclude(v => v.DepositCapRules)
             .FirstOrDefaultAsync(p => p.Id == id, cancellationToken)
             .ConfigureAwait(false);
 
@@ -31,4 +33,15 @@ public sealed class JurisdictionPackRepository(JurisdictionDbContext dbContext)
 
     public void Update(JurisdictionPack pack) =>
         dbContext.JurisdictionPacks.Update(pack);
+
+    /// <summary>
+    /// Registers a rule newly appended to an already-loaded pack version.
+    /// EF infers the state of an entity it finds inside a tracked parent's
+    /// collection from whether its key is set, and rule Ids are assigned by the
+    /// domain — so without this the save emits an UPDATE against a row that
+    /// does not exist and the whole transaction rolls back.
+    /// </summary>
+    public void RegisterNewRule<TRule>(TRule rule)
+        where TRule : class =>
+        dbContext.Set<TRule>().Add(rule);
 }

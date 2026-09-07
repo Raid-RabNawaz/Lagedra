@@ -1,6 +1,6 @@
 import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import type { AmenityDefinitionDto, AmenityCategory } from "@/api/types";
+import type { AmenityDefinitionDto, AmenityCategory, ListingDetailsDto } from "@/api/types";
 import type { SafetyDeviceDefinitionDto, ConsiderationDefinitionDto } from "@/api/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Select } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { FormError } from "@/components/shared/FormError";
 import { DynamicIcon } from "./DynamicIcon";
+import { ListingLeaseAgreementEditor } from "./ListingLeaseAgreementEditor";
 import { ListingOwnershipFields } from "./ListingOwnershipFields";
 import { cn } from "@/lib/utils";
 import {
@@ -51,6 +52,8 @@ type ListingFormProps = {
   defaultValues?: Partial<ListingFormValues>;
   onSubmit: (data: ListingFormValues) => Promise<void>;
   submitLabel: string;
+  /** The listing being edited; the lease agreement card uploads against it. */
+  listing: ListingDetailsDto;
   /** When true, fields and submit are disabled (e.g. InReview / Closed). */
   readOnly?: boolean;
   definitions: {
@@ -64,6 +67,7 @@ export function ListingForm({
   defaultValues,
   onSubmit,
   submitLabel,
+  listing,
   definitions,
   readOnly = false,
 }: ListingFormProps) {
@@ -82,6 +86,8 @@ export function ListingForm({
   const amenityIds = useWatch({ control: form.control, name: "amenityIds" }) ?? [];
   const safetyDeviceIds = useWatch({ control: form.control, name: "safetyDeviceIds" }) ?? [];
   const considerationIds = useWatch({ control: form.control, name: "considerationIds" }) ?? [];
+  const usesOwnLease =
+    useWatch({ control: form.control, name: "leaseAgreementSource" }) === "HostProvided";
 
   const toggleId = (field: "amenityIds" | "safetyDeviceIds" | "considerationIds", id: string) => {
     const current = form.getValues(field);
@@ -356,13 +362,33 @@ export function ListingForm({
 
       <Card>
         <CardHeader>
+          <CardTitle className="text-lg">Lease agreement</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ListingLeaseAgreementEditor form={form} listing={listing} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle className="text-lg">Lease terms</CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
           <p className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
-            These terms are merged into the lease agreement generated when a
-            deal is confirmed. Sensible defaults are pre-filled — review them
-            so your lease matches how you actually run the property.
+            {usesOwnLease ? (
+              <>
+                You&apos;re using your own lease agreement, so these terms are
+                not merged into it. They still drive the lease preview
+                fallback and stay saved if you switch back to Lagedra&apos;s
+                standard lease.
+              </>
+            ) : (
+              <>
+                These terms are merged into the lease agreement generated when a
+                deal is confirmed. Sensible defaults are pre-filled — review them
+                so your lease matches how you actually run the property.
+              </>
+            )}
           </p>
 
           <div className="grid gap-4 sm:grid-cols-2">

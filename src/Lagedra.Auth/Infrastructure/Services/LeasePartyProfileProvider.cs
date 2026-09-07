@@ -33,7 +33,10 @@ public sealed class LeasePartyProfileProvider(AuthDbContext dbContext) : ILeaseP
                     user.NoticeStreet, user.NoticeCity, user.NoticeState, user.NoticeZip, user.NoticeCountry),
             user.BrokerName,
             user.BrokerDreLicense,
-            user.BrokerScopeNotes);
+            user.BrokerScopeNotes,
+            user.FirstName,
+            user.LastName,
+            user.CompanyName);
     }
 
     private static string ResolveFullName(ApplicationUser user)

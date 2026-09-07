@@ -41,6 +41,7 @@ export const endpoints = {
     approxLocation: (id: string) => `/v1/listings/${id}/approx-location`,
     lockAddress: (id: string) => `/v1/listings/${id}/lock-address`,
     addPhoto: (id: string) => `/v1/listings/${id}/photos`,
+    leaseDocument: (id: string) => `/v1/listings/${id}/lease-document`,
     uploadMedia: (id: string) => `/v1/listings/${id}/media/upload`,
     importPhotosFromUrls: (id: string) => `/v1/listings/${id}/media/import-from-urls`,
     photo: (listingId: string, photoId: string) => `/v1/listings/${listingId}/photos/${photoId}`,
@@ -126,6 +127,9 @@ export const endpoints = {
   deals: {
     mine: "/v1/deals/mine",
     stayAccess: (dealId: string) => `/v1/deals/${dealId}/stay-access`,
+    insurance: (dealId: string) => `/v1/deals/${dealId}/insurance`,
+    insuranceRescreen: (dealId: string) => `/v1/deals/${dealId}/insurance/rescreen`,
+    insuranceReservation: (dealId: string) => `/v1/deals/${dealId}/insurance/reservation`,
   },
   checkout: {
     create: (dealId: string) => `/v1/deals/${dealId}/checkout`,
@@ -230,6 +234,7 @@ export const endpoints = {
     preferences: (userId: string) =>
       `/v1/notifications/preferences/${userId}`,
     history: (userId: string) => `/v1/notifications/history/${userId}`,
+    smsConsent: "/v1/sms/consent",
   },
   privacy: {
     recordConsent: "/v1/privacy/consent",
@@ -329,6 +334,8 @@ export const endpoints = {
   },
   adminListingReview: {
     pending: "/v1/admin/listings/pending-review",
+    approveBulk: "/v1/admin/listings/approve-bulk",
+    denyBulk: "/v1/admin/listings/deny-bulk",
     approve: (id: string) => `/v1/admin/listings/${id}/approve`,
     deny: (id: string) => `/v1/admin/listings/${id}/deny`,
   },
@@ -394,6 +401,8 @@ export const endpoints = {
       `/v1/lease-agreements/${id}/versions/${versionId}/deprecate`,
     getByCode: (code: string) => `/v1/lease-agreements/${code}`,
     dealPdf: (dealId: string) => `/v1/lease-agreements/deals/${dealId}/pdf`,
+    listingPreview: (listingId: string) =>
+      `/v1/lease-agreements/listings/${listingId}/preview`,
   },
   jurisdictionPacks: {
     create: "/v1/jurisdiction-packs",

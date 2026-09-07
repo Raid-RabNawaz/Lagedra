@@ -27,6 +27,7 @@ public sealed partial class ConsentMiddleware(
         "/v1/identity/kyc",
         "/v1/verification/background-check/consent",
         "/v1/privacy/consent", "/v1/privacy/consents",
+        "/v1/sms",
     ];
 
     public async Task InvokeAsync(HttpContext context)

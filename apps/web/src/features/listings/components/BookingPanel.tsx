@@ -20,6 +20,8 @@ import {
 import { formatMoney } from "@/utils/format";
 import { getApiErrorMessage } from "@/api/errors";
 import type { ListingDetailsDto } from "@/api/types";
+import { STAY_PROTECTION_LABEL } from "@/features/listings/lib/stayProtection";
+import { StayProtectionGuestAgreementNote } from "@/features/listings/components/StayProtectionGuestAgreementNote";
 
 type Props = {
   listing: ListingDetailsDto;
@@ -231,7 +233,7 @@ export const BookingPanel = ({ listing, isProspectiveGuest }: Props) => {
           </div>
           {quote.data.insuranceFeeCents > 0 && (
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Insurance</span>
+              <span className="text-muted-foreground">{STAY_PROTECTION_LABEL}</span>
               <span>{formatMoney(quote.data.insuranceFeeCents)}</span>
             </div>
           )}
@@ -246,6 +248,9 @@ export const BookingPanel = ({ listing, isProspectiveGuest }: Props) => {
             <span>Due at booking</span>
             <span>{formatMoney(quote.data.totalCents)}</span>
           </div>
+          {quote.data.insuranceFeeCents > 0 && (
+            <StayProtectionGuestAgreementNote className="mt-2" />
+          )}
           {quote.data.protocolFeeCents > 0 && (
             <p className="mt-1 text-[11px] text-muted-foreground">
               Hosts pay a separate {formatMoney(quote.data.protocolFeeCents)}/mo

@@ -43,7 +43,8 @@ public sealed record UpdateListingCommand(
     ListingManagerRole ManagerRole = ListingManagerRole.Owner,
     Guid? HomeOwnerUserId = null,
     string? HomeOwnerEmail = null,
-    bool IncludeBrokerClause = false) : IRequest<Result<ListingDetailsDto>>;
+    bool IncludeBrokerClause = false,
+    LeaseAgreementSource? LeaseAgreementSource = null) : IRequest<Result<ListingDetailsDto>>;
 
 public sealed class UpdateListingCommandValidator : AbstractValidator<UpdateListingCommand>
 {
@@ -246,6 +247,11 @@ public sealed class UpdateListingCommandHandler(
                 management.Value.ManagerRole,
                 management.Value.HomeOwnerUserId,
                 request.IncludeBrokerClause);
+
+            if (request.LeaseAgreementSource is { } leaseSource)
+            {
+                listing.SetLeaseAgreementSource(leaseSource);
+            }
 
             if (rentChanged)
             {

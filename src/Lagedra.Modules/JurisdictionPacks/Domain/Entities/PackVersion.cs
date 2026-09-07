@@ -42,25 +42,35 @@ public sealed class PackVersion : Entity<Guid>
         EffectiveDate = effectiveDate;
     }
 
-    public void AddEffectiveDateRule(string fieldName, DateTime effectiveDate)
+    // These return the created rule so callers persisting an already-tracked
+    // version can register it for insert. The rule Ids are assigned here, and a
+    // persistence layer that infers state from the key would otherwise treat
+    // each new rule as an existing row.
+    public EffectiveDateRule AddEffectiveDateRule(string fieldName, DateTime effectiveDate)
     {
         EnsureDraft();
-        _effectiveDateRules.Add(EffectiveDateRule.Create(Id, fieldName, effectiveDate));
+        var rule = EffectiveDateRule.Create(Id, fieldName, effectiveDate);
+        _effectiveDateRules.Add(rule);
+        return rule;
     }
 
-    public void AddFieldGatingRule(string fieldName, GatingType gatingType, string value, string? condition)
+    public FieldGatingRule AddFieldGatingRule(string fieldName, GatingType gatingType, string value, string? condition)
     {
         EnsureDraft();
-        _fieldGatingRules.Add(FieldGatingRule.Create(Id, fieldName, gatingType, value, condition));
+        var rule = FieldGatingRule.Create(Id, fieldName, gatingType, value, condition);
+        _fieldGatingRules.Add(rule);
+        return rule;
     }
 
-    public void AddEvidenceSchedule(string category, string minimumRequirements)
+    public EvidenceSchedule AddEvidenceSchedule(string category, string minimumRequirements)
     {
         EnsureDraft();
-        _evidenceSchedules.Add(EvidenceSchedule.Create(Id, category, minimumRequirements));
+        var schedule = EvidenceSchedule.Create(Id, category, minimumRequirements);
+        _evidenceSchedules.Add(schedule);
+        return schedule;
     }
 
-    public void AddDepositCapRule(
+    public DepositCapRule AddDepositCapRule(
         string jurisdictionCode,
         decimal maxMultiplier,
         string legalReference,
@@ -68,9 +78,11 @@ public sealed class PackVersion : Entity<Guid>
         decimal? exceptionMultiplier = null)
     {
         EnsureDraft();
-        _depositCapRules.Add(DepositCapRule.Create(
+        var rule = DepositCapRule.Create(
             Id, jurisdictionCode, maxMultiplier, legalReference,
-            exceptionCondition, exceptionMultiplier));
+            exceptionCondition, exceptionMultiplier);
+        _depositCapRules.Add(rule);
+        return rule;
     }
 
     public void RequestApproval()

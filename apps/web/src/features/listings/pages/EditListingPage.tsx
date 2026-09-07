@@ -448,6 +448,7 @@ export const EditListingPage = () => {
 
         <ListingForm
           key={listing.id}
+          listing={listing}
           definitions={defs.data}
           defaultValues={defaultValues}
           submitLabel="Save changes"

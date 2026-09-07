@@ -16,7 +16,9 @@ const KNOWN_SLUGS = [
   "contact",
   "faq",
   "terms",
+  "tc",
   "privacy",
+  "sms",
 ] as const;
 
 type PageState = UpsertSeoPageRequest & { saving: boolean; saved: boolean };

@@ -14,7 +14,9 @@ import {
 import {
   useApplicationDetail,
   useApproveApplication,
+  useDealInsurance,
   useRejectApplication,
+  useRescreenDealInsurance,
 } from "@/features/applications/hooks/useApplications";
 import { useListingDetail } from "@/features/listings/hooks/useListings";
 import { ApplicationStatusBadge } from "@/features/applications/components/ApplicationStatusBadge";
@@ -47,6 +49,7 @@ import {
 } from "@/features/applications/lib/bookingConsent";
 import { OwnerConsentPanel } from "@/features/applications/components/OwnerConsentPanel";
 import { formatDate, formatMoney } from "@/utils/format";
+import { STAY_PROTECTION_LABEL } from "@/features/listings/lib/stayProtection";
 import { cn } from "@/lib/utils";
 import {
   getApiErrorMessage,
@@ -63,6 +66,8 @@ export const ApplicationDetailPage = () => {
     error,
   } = useApplicationDetail(id);
   const { data: listing } = useListingDetail(application?.listingId);
+  const { data: stayProtection } = useDealInsurance(application?.dealId);
+  const rescreenProtection = useRescreenDealInsurance(application?.dealId);
   const approveMutation = useApproveApplication();
   const rejectMutation = useRejectApplication();
   const user = useAuthStore((s) => s.user);
@@ -121,6 +126,10 @@ export const ApplicationDetailPage = () => {
   const isApplicationOwner = !!user && user.userId === application.homeOwnerUserId;
   const isPlatformAdmin = !!user && isAdmin(user.role);
   const canDecide = isApplicationLandlord || isPlatformAdmin;
+  const canRescreenFlagged =
+    (isApplicationLandlord || isApplicationOwner || isPlatformAdmin)
+    && stayProtection?.screeningStatus === "Flagged"
+    && Boolean(application.dealId);
 
   const isPending = application.status === "Pending";
   const awaitingOwnerConsent = isAwaitingOwnerConsent(application);
@@ -270,8 +279,46 @@ export const ApplicationDetailPage = () => {
             {application.insuranceFeeCents != null && (
               <div className="flex items-center gap-2 text-sm">
                 <Shield className="h-4 w-4 text-muted-foreground" />
-                <span className="font-medium">Insurance fee:</span>
+                <span className="font-medium">{STAY_PROTECTION_LABEL}:</span>
                 {formatMoney(application.insuranceFeeCents)}
+              </div>
+            )}
+            {stayProtection?.screeningStatus && (
+              <div className="space-y-0.5 pl-6 text-xs text-muted-foreground">
+                <p>
+                  Screening: {stayProtection.screeningStatus}
+                  {stayProtection.verificationId
+                    ? ` · ${stayProtection.verificationId}`
+                    : ""}
+                </p>
+                {stayProtection.flaggedReason && (
+                  <p>{stayProtection.flaggedReason}</p>
+                )}
+                {canRescreenFlagged && (
+                  <div className="space-y-1.5 pt-1">
+                    <p>
+                      Modify cannot change guest email or phone. After the guest
+                      updates contact details, send a new screening.
+                    </p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={rescreenProtection.isPending}
+                      onClick={() => rescreenProtection.mutate()}
+                    >
+                      {rescreenProtection.isPending ? "Rescreening…" : "Rescreen guest"}
+                    </Button>
+                    {rescreenProtection.isError && (
+                      <p className="text-destructive">
+                        {getApiErrorMessage(
+                          rescreenProtection.error,
+                          "Could not rescreen this guest.",
+                        )}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
             {listing && (
@@ -481,7 +528,7 @@ export const ApplicationDetailPage = () => {
                     charges the guest&apos;s saved card (deposit + first month&apos;s rent
                     + fees) and activates the booking. The rent and deposit are
                     paid directly to my Stripe account; Lagedra only deducts its
-                    service fee and the insurance premium. I return the deposit to
+                    service fee and stay protection. I return the deposit to
                     the guest directly after move-out, and the booking only
                     completes once I confirm the return and the guest confirms
                     receipt.

@@ -26,7 +26,8 @@ public sealed class DealLeaseDocumentStore(LeaseAgreementDbContext db) : IDealLe
                 document.ContentType,
                 document.Content,
                 document.ContentHash,
-                document.GeneratedAtUtc));
+                document.GeneratedAtUtc,
+                document.Source));
         }
         else
         {
@@ -38,7 +39,8 @@ public sealed class DealLeaseDocumentStore(LeaseAgreementDbContext db) : IDealLe
                 document.ContentType,
                 document.Content,
                 document.ContentHash,
-                document.GeneratedAtUtc);
+                document.GeneratedAtUtc,
+                document.Source);
         }
 
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
@@ -64,6 +66,7 @@ public sealed class DealLeaseDocumentStore(LeaseAgreementDbContext db) : IDealLe
             entity.ContentType,
             entity.Content,
             entity.ContentHash,
-            entity.GeneratedAtUtc);
+            entity.GeneratedAtUtc,
+            entity.Source);
     }
 }

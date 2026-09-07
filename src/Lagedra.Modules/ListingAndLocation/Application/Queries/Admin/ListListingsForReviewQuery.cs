@@ -33,7 +33,15 @@ public sealed record ListingReviewItemDto(
     bool HostIsPhoneVerified,
     int? HostResponseRatePercent,
     DateTime? HostMemberSince,
-    int HostProfileCompletenessPercent);
+    int HostProfileCompletenessPercent,
+    string? City = null,
+    string? State = null,
+    string? Country = null,
+    bool InstantBookingEnabled = false,
+    // Surfaced so a reviewer knows to read the host's own lease before
+    // approving. Does not block approval.
+    bool UsesCustomLeaseAgreement = false,
+    string? CustomLeaseFileName = null);
 
 public sealed class ListListingsForReviewQueryHandler(
     ListingsDbContext dbContext,
@@ -46,33 +54,14 @@ public sealed class ListListingsForReviewQueryHandler(
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        var listings = await dbContext.Listings
+        // Project cover URL + count only. Including the full photo graph for
+        // Hostaway imports (hundreds of images) timed the admin SPA out and
+        // made the review page look broken.
+        var rows = await dbContext.Listings
             .AsNoTracking()
-            .Include(l => l.Photos)
             .Where(l => l.Status == ListingStatus.InReview)
             .OrderBy(l => l.SubmittedForReviewAt ?? l.UpdatedAt)
-            .ToListAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-        // Pull each distinct host's profile + completeness once, so listings
-        // from the same landlord don't trigger duplicate cross-module lookups.
-        var hostIds = listings.Select(l => l.LandlordUserId).Distinct();
-        var hosts = new Dictionary<Guid, (HostProfileDto? Profile, HostProfileCompletenessDto? Completeness)>();
-        foreach (var hostId in hostIds)
-        {
-            var profile = await hostProfileProvider
-                .GetProfileAsync(hostId, cancellationToken)
-                .ConfigureAwait(false);
-            var completeness = await hostProfileProvider
-                .GetProfileCompletenessAsync(hostId, cancellationToken)
-                .ConfigureAwait(false);
-            hosts[hostId] = (profile, completeness);
-        }
-
-        var items = listings.Select(l =>
-        {
-            var host = hosts.GetValueOrDefault(l.LandlordUserId);
-            return new ListingReviewItemDto(
+            .Select(l => new ReviewRow(
                 l.Id,
                 l.LandlordUserId,
                 l.Title,
@@ -80,20 +69,74 @@ public sealed class ListListingsForReviewQueryHandler(
                 l.Bedrooms,
                 l.Bathrooms,
                 l.MonthlyRentCents,
-                l.Photos.FirstOrDefault(p => p.IsCover)?.Url
-                    ?? l.Photos.OrderBy(p => p.SortOrder).FirstOrDefault()?.Url,
+                l.Photos.Where(p => p.IsCover).Select(p => p.Url).FirstOrDefault()
+                    ?? l.Photos.OrderBy(p => p.SortOrder).Select(p => p.Url).FirstOrDefault(),
                 l.Photos.Count,
                 l.SubmittedForReviewAt,
                 l.CreatedAt,
-                host.Profile?.DisplayName,
-                host.Profile?.ProfilePhotoUrl,
-                host.Profile?.IsGovernmentIdVerified ?? false,
-                host.Profile?.IsPhoneVerified ?? false,
-                host.Profile?.ResponseRatePercent,
-                host.Profile?.MemberSince,
-                host.Completeness?.PercentComplete ?? 0);
+                l.PreciseAddress != null ? l.PreciseAddress.City : null,
+                l.PreciseAddress != null ? l.PreciseAddress.State : null,
+                l.PreciseAddress != null ? l.PreciseAddress.Country : null,
+                l.InstantBookingEnabled,
+                l.LeaseAgreementSource == LeaseAgreementSource.HostProvided,
+                l.CustomLeaseDocument != null ? l.CustomLeaseDocument.FileName : null))
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var hostIds = rows.Select(r => r.LandlordUserId).Distinct().ToList();
+        var hosts = await hostProfileProvider
+            .GetReviewSnapshotsAsync(hostIds, cancellationToken)
+            .ConfigureAwait(false);
+
+        var items = rows.Select(r =>
+        {
+            hosts.TryGetValue(r.LandlordUserId, out var host);
+            return new ListingReviewItemDto(
+                r.Id,
+                r.LandlordUserId,
+                r.Title,
+                r.PropertyType,
+                r.Bedrooms,
+                r.Bathrooms,
+                r.MonthlyRentCents,
+                r.CoverPhotoUrl,
+                r.PhotoCount,
+                r.SubmittedForReviewAt,
+                r.CreatedAt,
+                host?.Profile?.DisplayName,
+                host?.Profile?.ProfilePhotoUrl,
+                host?.Profile?.IsGovernmentIdVerified ?? false,
+                host?.Profile?.IsPhoneVerified ?? false,
+                host?.Profile?.ResponseRatePercent,
+                host?.Profile?.MemberSince,
+                host?.Completeness.PercentComplete ?? 0,
+                r.City,
+                r.State,
+                r.Country,
+                r.InstantBookingEnabled,
+                r.UsesCustomLeaseAgreement,
+                r.CustomLeaseFileName);
         }).ToList();
 
         return Result<IReadOnlyList<ListingReviewItemDto>>.Success(items);
     }
+
+    private sealed record ReviewRow(
+        Guid Id,
+        Guid LandlordUserId,
+        string Title,
+        PropertyType PropertyType,
+        int Bedrooms,
+        decimal Bathrooms,
+        long MonthlyRentCents,
+        Uri? CoverPhotoUrl,
+        int PhotoCount,
+        DateTime? SubmittedForReviewAt,
+        DateTime CreatedAt,
+        string? City,
+        string? State,
+        string? Country,
+        bool InstantBookingEnabled,
+        bool UsesCustomLeaseAgreement,
+        string? CustomLeaseFileName);
 }

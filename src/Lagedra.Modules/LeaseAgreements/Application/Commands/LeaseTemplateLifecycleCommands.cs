@@ -139,6 +139,12 @@ public sealed class AddLeaseTemplateVersionCommandHandler(LeaseAgreementDbContex
 
         var previous = template.Versions.OrderByDescending(v => v.VersionNumber).FirstOrDefault();
         var version = template.AddVersion(previous?.BodyHtml);
+
+        // Registered explicitly because the domain assigns the version Id: EF
+        // reads a set key on an entity found in a tracked parent's collection
+        // as an existing row and would emit an UPDATE instead of an INSERT.
+        db.Versions.Add(version);
+
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
         return Result<Guid>.Success(version.Id);
     }

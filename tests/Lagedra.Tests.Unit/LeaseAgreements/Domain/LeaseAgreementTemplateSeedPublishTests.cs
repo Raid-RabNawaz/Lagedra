@@ -1,5 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
 using FluentAssertions;
 using Lagedra.Modules.LeaseAgreements.Application.Services;
 using Lagedra.Modules.LeaseAgreements.Application.Templates;
@@ -62,6 +65,25 @@ public class LeaseAgreementTemplateSeedPublishTests
         pdf[1].Should().Be(0x50); // P
         pdf[2].Should().Be(0x44); // D
         pdf[3].Should().Be(0x46); // F
+    }
+
+    [Fact]
+    public void California_seed_body_renders_the_full_multi_page_packet()
+    {
+        // The pre-August template was a one-clause-per-heading summary that
+        // rendered to three pages. Guard the rendered length, not just the HTML,
+        // so a parser change that silently drops blocks is caught too.
+        var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["broker.name"] = "Test Broker",
+            ["owner.fullName"] = "Test Owner",
+        };
+
+        var html = LeaseTemplateConditionals.Apply(CaliforniaLeaseTemplateHtml.Body, values);
+        var pdf = new LeasePdfGenerator().Generate(CaliforniaLeaseTemplateHtml.Title, html);
+        var pageCount = Regex.Matches(Encoding.Latin1.GetString(pdf), @"/Type\s*/Page[^s]").Count;
+
+        pageCount.Should().BeGreaterThanOrEqualTo(12);
     }
 
     [Fact]

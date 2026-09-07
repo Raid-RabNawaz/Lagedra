@@ -80,6 +80,14 @@ namespace InsuranceIntegration.Migrations
                     b.Property<DateTime?>("ExpiresAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("ExternalVerificationId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("FlaggedReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<bool>("IsDeleted")
                         .HasColumnType("boolean");
 
@@ -90,6 +98,10 @@ namespace InsuranceIntegration.Migrations
                     b.Property<string>("Provider")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
+
+                    b.Property<string>("ScreeningStatus")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
 
                     b.Property<string>("State")
                         .IsRequired()

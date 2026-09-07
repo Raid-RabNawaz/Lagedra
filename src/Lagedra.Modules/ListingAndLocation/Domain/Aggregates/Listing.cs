@@ -90,6 +90,19 @@ public sealed class Listing : AggregateRoot<Guid>
     public bool IncludeBrokerClause { get; private set; }
 
     /// <summary>
+    /// Whether bookings on this listing are bound by Lagedra's template for the
+    /// listing's jurisdiction or by a document the host uploaded themselves.
+    /// </summary>
+    public LeaseAgreementSource LeaseAgreementSource { get; private set; } = LeaseAgreementSource.LagedraTemplate;
+
+    /// <summary>
+    /// The host's uploaded lease. Retained when the host switches back to the
+    /// Lagedra template so toggling the choice is not destructive; only
+    /// <see cref="LeaseAgreementSource"/> decides which one is actually used.
+    /// </summary>
+    public CustomLeaseDocument? CustomLeaseDocument { get; private set; }
+
+    /// <summary>
     /// Reason supplied by an admin when denying a listing in review. Cleared
     /// when the listing is re-submitted or approved. Surfaced to the landlord
     /// so they know what to fix.
@@ -315,6 +328,36 @@ public sealed class Listing : AggregateRoot<Guid>
         EnsureEditable();
         ArgumentNullException.ThrowIfNull(leaseTerms);
         LeaseTerms = leaseTerms;
+    }
+
+    /// <summary>
+    /// Chooses which lease binds bookings on this listing. Switching to
+    /// <see cref="LeaseAgreementSource.HostProvided"/> is allowed before a
+    /// document exists so the host can make the choice and upload in either
+    /// order; <see cref="SubmitForReview"/> is where the pairing is enforced.
+    /// </summary>
+    public void SetLeaseAgreementSource(LeaseAgreementSource source)
+    {
+        EnsureEditable();
+        LeaseAgreementSource = source;
+    }
+
+    public void AttachCustomLeaseDocument(CustomLeaseDocument document)
+    {
+        EnsureEditable();
+        ArgumentNullException.ThrowIfNull(document);
+        CustomLeaseDocument = document;
+    }
+
+    /// <summary>
+    /// Drops the uploaded lease. Falls the listing back to the Lagedra template
+    /// rather than leaving it pointing at a document that no longer exists.
+    /// </summary>
+    public void RemoveCustomLeaseDocument()
+    {
+        EnsureEditable();
+        CustomLeaseDocument = null;
+        LeaseAgreementSource = LeaseAgreementSource.LagedraTemplate;
     }
 
     public void SetCancellationPolicy(CancellationPolicy policy)
@@ -616,6 +659,12 @@ public sealed class Listing : AggregateRoot<Guid>
         {
             throw new InvalidOperationException(
                 "A home owner with a Lagedra account must be selected before submitting a property-manager listing.");
+        }
+
+        if (LeaseAgreementSource == LeaseAgreementSource.HostProvided && CustomLeaseDocument is null)
+        {
+            throw new InvalidOperationException(
+                "Upload your lease agreement, or switch to Lagedra's standard lease, before submitting for review.");
         }
 
         Status = ListingStatus.InReview;

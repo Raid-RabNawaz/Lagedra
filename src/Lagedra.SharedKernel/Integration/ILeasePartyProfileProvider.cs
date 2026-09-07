@@ -12,7 +12,10 @@ public sealed record LeasePartyProfileDto(
     string? NoticeAddress,
     string? BrokerName,
     string? BrokerDreLicense,
-    string? BrokerScopeNotes);
+    string? BrokerScopeNotes,
+    string? FirstName = null,
+    string? LastName = null,
+    string? CompanyName = null);
 
 public interface ILeasePartyProfileProvider
 {

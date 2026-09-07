@@ -1,3 +1,5 @@
+using Lagedra.SharedKernel.Insurance;
+
 namespace Lagedra.Modules.ActivationAndBilling.Domain.Policies;
 
 public sealed record RefundBreakdown(
@@ -14,7 +16,8 @@ public static class CancellationRefundCalculator
         long insuranceFeeCents,
         int freeCancellationDays,
         int? partialRefundPercent,
-        int? partialRefundDays)
+        int? partialRefundDays,
+        long insuranceRetainCents = StayProtectionFee.ScreeningFeeCents)
     {
         var daysUntilCheckIn = checkIn.DayNumber - today.DayNumber;
 
@@ -22,7 +25,10 @@ public static class CancellationRefundCalculator
         {
             return new RefundBreakdown(
                 totalTenantPaymentCents,
-                insuranceFeeCents,
+                StayProtectionFee.RefundableProtectionCents(
+                    insuranceFeeCents,
+                    insuranceFeeCents,
+                    insuranceRetainCents),
                 $"Full refund (cancelled {daysUntilCheckIn} days before check-in, free cancellation within {freeCancellationDays} days)");
         }
 
@@ -30,7 +36,10 @@ public static class CancellationRefundCalculator
             && daysUntilCheckIn >= partialRefundDays.Value)
         {
             var refund = totalTenantPaymentCents * partialRefundPercent.Value / 100;
-            var insRefund = insuranceFeeCents * partialRefundPercent.Value / 100;
+            var insRefund = StayProtectionFee.RefundableProtectionCents(
+                insuranceFeeCents,
+                insuranceFeeCents * partialRefundPercent.Value / 100,
+                insuranceRetainCents);
             return new RefundBreakdown(
                 refund,
                 insRefund,

@@ -53,6 +53,7 @@ import {
 import { BackLink } from "@/components/shared/BackLink";
 import { Loader } from "@/components/shared/Loader";
 import { formatDate, formatMoney } from "@/utils/format";
+import { STAY_PROTECTION_LABEL } from "@/features/listings/lib/stayProtection";
 
 export const BillingPage = () => {
   const { dealId } = useParams<{ dealId: string }>();
@@ -366,12 +367,14 @@ export const BillingPage = () => {
                   {formatMoney(payment.depositAmountCents)}
                 </span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Insurance premium</span>
-                <span className="font-medium">
-                  {formatMoney(payment.insuranceFeeCents)}
-                </span>
-              </div>
+              {payment.insuranceFeeCents > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">{STAY_PROTECTION_LABEL}</span>
+                  <span className="font-medium">
+                    {formatMoney(payment.insuranceFeeCents)}
+                  </span>
+                </div>
+              )}
               <Separator />
               <div className="flex justify-between text-sm font-semibold">
                 <span>Total</span>

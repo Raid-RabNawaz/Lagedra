@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { isNotFoundError } from "@/api/errors";
 import { applicationApi } from "@/features/applications/services/applicationApi";
 import type { ApproveApplicationRequest, SubmitApplicationRequest } from "@/api/types";
 
@@ -24,6 +25,27 @@ export function useApplicationsForListing(listingId: string | undefined) {
     queryFn: () => applicationApi.listForListing(listingId!),
     enabled: Boolean(listingId),
     staleTime: 30_000,
+  });
+}
+
+export function useDealInsurance(dealId: string | null | undefined) {
+  return useQuery({
+    queryKey: ["deal", "insurance", dealId],
+    queryFn: () => applicationApi.getInsurance(dealId!),
+    enabled: Boolean(dealId),
+    staleTime: 15_000,
+    retry: (count, error) => !isNotFoundError(error) && count < 2,
+  });
+}
+
+export function useRescreenDealInsurance(dealId: string | null | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => applicationApi.rescreenInsurance(dealId!),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["deal", "insurance", dealId] });
+    },
   });
 }
 

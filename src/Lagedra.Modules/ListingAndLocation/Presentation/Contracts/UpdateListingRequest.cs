@@ -29,7 +29,8 @@ public sealed record UpdateListingRequest(
     ListingManagerRole ManagerRole = ListingManagerRole.Owner,
     Guid? HomeOwnerUserId = null,
     string? HomeOwnerEmail = null,
-    bool IncludeBrokerClause = false);
+    bool IncludeBrokerClause = false,
+    LeaseAgreementSource? LeaseAgreementSource = null);
 
 public sealed record LeaseTermsRequest(
     int RentDueDayOfMonth = 1,

@@ -44,7 +44,7 @@ public static class NotificationPreferencesEndpoints
         CancellationToken ct)
     {
         var result = await mediator.Send(
-            new UpdateUserPreferencesCommand(userId, request.EventOptIns), ct)
+            new UpdateUserPreferencesCommand(userId, request.EventOptIns, request.SmsCampaignsOptedIn), ct)
             .ConfigureAwait(true);
 
         return result.IsSuccess

@@ -138,7 +138,7 @@ export const HostApprovePage = () => {
               Surface (your click here is your recorded consent), charges the
               guest's saved card off-session, and activates the booking. The rent
               and deposit are paid directly to your Stripe account; Lagedra only
-              deducts its service fee and the insurance premium. You return the
+              deducts its service fee and stay protection. You return the
               deposit to the guest directly after move-out, and the booking only
               completes once you confirm the return and the guest confirms receipt.
             </span>

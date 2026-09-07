@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { ArrowLeft, ArrowRight } from "lucide-react";
@@ -246,7 +246,17 @@ export const SignupForm = ({ variant, preLaunch, onBack, onSuccess }: SignupForm
           )}
         </button>
 
-        <p className="text-center text-xs text-[#ABABBE]">{content.consent}</p>
+        <p className="text-center text-xs text-[#ABABBE]">
+          {content.consent} You also agree to our{" "}
+          <Link to="/tc" className="font-medium text-[#3D3D4E] underline underline-offset-2">
+            Terms
+          </Link>{" "}
+          and{" "}
+          <Link to="/privacy" className="font-medium text-[#3D3D4E] underline underline-offset-2">
+            Privacy Policy
+          </Link>
+          .
+        </p>
       </form>
     </div>
   );

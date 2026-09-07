@@ -83,5 +83,7 @@ export function listingDetailsToFormValues(listing: ListingDetailsDto): ListingF
     builtBefore1978: lt?.builtBefore1978 ?? false,
     leadPaintKnowledge: lt?.leadPaintKnowledge ?? "",
     rentCapJustCauseExempt: lt?.rentCapJustCauseExempt ?? false,
+    leaseAgreementSource: listing.leaseAgreementSource ?? "LagedraTemplate",
+    hasCustomLeaseDocument: listing.customLeaseDocument != null,
   };
 }

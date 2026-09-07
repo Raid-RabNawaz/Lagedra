@@ -44,6 +44,27 @@ export const AuthLayout = () => {
         <div className="flex flex-col items-center gap-2 text-xs text-muted-foreground sm:flex-row sm:justify-between">
           <p>&copy; {new Date().getFullYear()} Lagedra. Mid-term rental trust protocol.</p>
           <div className="flex gap-4">
+            <Link to="/about" className="hover:text-foreground transition-colors">
+              About
+            </Link>
+            <Link to="/how-it-works" className="hover:text-foreground transition-colors">
+              How it works
+            </Link>
+            <Link to="/faq" className="hover:text-foreground transition-colors">
+              FAQ
+            </Link>
+            <Link to="/contact" className="hover:text-foreground transition-colors">
+              Contact
+            </Link>
+            <Link to="/tc" className="hover:text-foreground transition-colors">
+              Terms
+            </Link>
+            <Link to="/privacy" className="hover:text-foreground transition-colors">
+              Privacy
+            </Link>
+            <Link to="/sms" className="hover:text-foreground transition-colors">
+              Text messages
+            </Link>
             <Link to="/auth/forgot-password" className="hover:text-foreground transition-colors">
               Forgot password?
             </Link>

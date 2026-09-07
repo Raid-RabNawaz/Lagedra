@@ -215,7 +215,7 @@ export const AgreementDocument = ({ canonicalContent, compact = false }: Props) 
   const financialRows: { label: string; value: string | undefined }[] = [
     { label: "First month's rent", value: money("firstMonthRentCents") },
     { label: "Security deposit", value: money("depositAmountCents") },
-    { label: "Insurance fee", value: money("insuranceFeeCents") },
+    { label: "Stay protection", value: money("insuranceFeeCents") },
     { label: "Service fee", value: money("serviceFeeCents") },
     { label: "Protocol fee (monthly)", value: money("monthlyProtocolFeeCents") },
   ].filter((r) => r.value !== undefined);

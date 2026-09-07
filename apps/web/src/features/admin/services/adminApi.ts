@@ -21,6 +21,8 @@ import type {
   ListingAnalyticsFilters,
   ListingDetailsDto,
   ListingReviewItemDto,
+  BulkApproveListingsResultDto,
+  BulkDenyListingsResultDto,
   BlogPostSummaryDto,
   BlogPostDetailDto,
   CreateBlogPostRequest,
@@ -183,14 +185,28 @@ export const adminApi = {
 
   // Listing Review Queue
   async getPendingListingReviews(): Promise<ListingReviewItemDto[]> {
-    const r = await http.get<ListingReviewItemDto[]>(endpoints.adminListingReview.pending);
-    return r.data;
+    const r = await http.get<ListingReviewItemDto[]>(endpoints.adminListingReview.pending, {
+      timeout: 60_000,
+    });
+    return Array.isArray(r.data) ? r.data : [];
   },
   async approveListing(id: string): Promise<ListingDetailsDto> {
     const r = await http.post<ListingDetailsDto>(endpoints.adminListingReview.approve(id), null, {
       timeout: 60_000,
     });
     return r.data;
+  },
+  async approveListingsBulk(listingIds: string[]): Promise<BulkApproveListingsResultDto> {
+    const r = await http.post<BulkApproveListingsResultDto>(
+      endpoints.adminListingReview.approveBulk,
+      { listingIds },
+      { timeout: 120_000 },
+    );
+    return {
+      requested: r.data?.requested ?? listingIds.length,
+      approved: r.data?.approved ?? 0,
+      failures: r.data?.failures ?? [],
+    };
   },
   async denyListing(id: string, reason: string): Promise<ListingDetailsDto> {
     const r = await http.post<ListingDetailsDto>(
@@ -199,6 +215,18 @@ export const adminApi = {
       { timeout: 60_000 },
     );
     return r.data;
+  },
+  async denyListingsBulk(listingIds: string[], reason: string): Promise<BulkDenyListingsResultDto> {
+    const r = await http.post<BulkDenyListingsResultDto>(
+      endpoints.adminListingReview.denyBulk,
+      { listingIds, reason },
+      { timeout: 120_000 },
+    );
+    return {
+      requested: r.data?.requested ?? listingIds.length,
+      denied: r.data?.denied ?? 0,
+      failures: r.data?.failures ?? [],
+    };
   },
 
   // Lease Agreement Templates

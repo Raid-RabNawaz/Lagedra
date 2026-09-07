@@ -139,7 +139,17 @@ public sealed class ListingProvider(ListingsDbContext db) : IListingProvider
             leaseTerms,
             listing.ManagerRole.ToString(),
             listing.HomeOwnerUserId,
-            listing.IncludeBrokerClause);
+            listing.IncludeBrokerClause,
+            listing.LeaseAgreementSource.ToString(),
+            listing.CustomLeaseDocument is { } customLease
+                ? new ListingCustomLeaseDocumentDto(
+                    customLease.StorageKey,
+                    customLease.FileName,
+                    customLease.ContentType,
+                    customLease.SizeBytes,
+                    customLease.ContentHash,
+                    customLease.UploadedAtUtc)
+                : null);
     }
 
     public async Task<bool> IsAvailableAsync(

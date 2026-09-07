@@ -115,7 +115,18 @@ export const listingFormSchema = z
     builtBefore1978: z.boolean(),
     leadPaintKnowledge: z.string().optional().nullable(),
     rentCapJustCauseExempt: z.boolean(),
+    // Which lease binds bookings. The document itself is uploaded separately
+    // (it needs a listing id), so the form only tracks whether one is attached.
+    leaseAgreementSource: z.enum(["LagedraTemplate", "HostProvided"]),
+    hasCustomLeaseDocument: z.boolean(),
   })
+  .refine(
+    (d) => d.leaseAgreementSource === "LagedraTemplate" || d.hasCustomLeaseDocument,
+    {
+      message: "Upload your lease agreement, or use Lagedra's standard lease",
+      path: ["hasCustomLeaseDocument"],
+    },
+  )
   .refine((d) => d.minStayDays <= d.maxStayDays, {
     message: "Min stay cannot exceed max stay",
     path: ["maxStayDays"],
@@ -253,6 +264,8 @@ export const defaultListingFormValues: ListingFormValues = {
   builtBefore1978: false,
   leadPaintKnowledge: "",
   rentCapJustCauseExempt: false,
+  leaseAgreementSource: "LagedraTemplate",
+  hasCustomLeaseDocument: false,
 };
 
 export function timeToApi(t: string): string {

@@ -38,6 +38,13 @@ public sealed class UploadManualProofCommandHandler(
 
         record.AddAttempt(attempt);
 
+        // Attempts carry a domain-assigned Id, and EF infers the state of an
+        // entity it discovers inside a tracked parent's collection from whether
+        // the key is set — a set key means "assume the row exists", so without
+        // this the save would emit an UPDATE against a row that isn't there and
+        // roll back the whole operation.
+        dbContext.VerificationAttempts.Add(attempt);
+
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return Result.Success();

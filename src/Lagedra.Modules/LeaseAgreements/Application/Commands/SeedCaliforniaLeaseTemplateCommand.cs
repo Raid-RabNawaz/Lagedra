@@ -58,6 +58,14 @@ public sealed class SeedCaliforniaLeaseTemplateCommandHandler(LeaseAgreementDbCo
         // publish a new seed version so generated PDFs pick up the full
         // California lease without a manual dual-approve ceremony.
         var next = template.AddVersion(body);
+
+        // The version must be registered with the DbSet explicitly. Versions
+        // carry a domain-assigned Id, and EF infers the state of an entity it
+        // discovers inside a tracked parent's collection from whether the key
+        // is set — a set key means "assume the row exists", so it would emit an
+        // UPDATE against a row that isn't there and fail the whole save.
+        db.Versions.Add(next);
+
         next.SetEffectiveDate(DateTime.UtcNow.Date);
         template.PublishSeedVersion(next.Id);
         await db.SaveChangesAsync(cancellationToken).ConfigureAwait(false);

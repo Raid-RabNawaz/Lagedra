@@ -9,7 +9,7 @@ namespace Lagedra.Modules.InsuranceIntegration.Application.Services;
 ///
 /// This is the default registration when <c>Insurance:FeeCalculationMode</c>
 /// is unset or explicitly set to "None" — operators must opt in to a real
-/// calculator (Configurable / Api) before quotes start charging.
+/// calculator (Truvi / Configurable / Api) before quotes start charging.
 /// </summary>
 public sealed class NullInsuranceFeeCalculator : IInsuranceFeeCalculator
 {

@@ -51,6 +51,13 @@ public static class ListingEndpoints
             .DisableAntiforgery()
             .WithMetadata(new RequestSizeLimitAttribute(105L * 1024 * 1024));
 
+        group.MapPost("/{listingId:guid}/lease-document", UploadLeaseDocument)
+            .RequireAuthorization("RequireMember")
+            .DisableAntiforgery()
+            .WithMetadata(new RequestSizeLimitAttribute(11L * 1024 * 1024));
+        group.MapDelete("/{listingId:guid}/lease-document", RemoveLeaseDocument)
+            .RequireAuthorization("RequireMember");
+
         // Server-side fetch of third-party photo URLs (XML feed import). The
         // browser cannot read many CDNs due to CORS, so we pull and re-store
         // them through the listings bucket.
@@ -129,6 +136,7 @@ public static class ListingEndpoints
                 HomeOwnerUserId: request.HomeOwnerUserId,
                 HomeOwnerEmail: request.HomeOwnerEmail,
                 IncludeBrokerClause: request.IncludeBrokerClause,
+                LeaseAgreementSource: request.LeaseAgreementSource,
                 AddedVia: request.AddedVia,
                 AddedViaDetail: request.AddedViaDetail),
             cancellationToken).ConfigureAwait(true);
@@ -177,7 +185,8 @@ public static class ListingEndpoints
                 ManagerRole: request.ManagerRole,
                 HomeOwnerUserId: request.HomeOwnerUserId,
                 HomeOwnerEmail: request.HomeOwnerEmail,
-                IncludeBrokerClause: request.IncludeBrokerClause),
+                IncludeBrokerClause: request.IncludeBrokerClause,
+                LeaseAgreementSource: request.LeaseAgreementSource),
             cancellationToken).ConfigureAwait(true);
 
         return result.IsSuccess
@@ -508,6 +517,54 @@ public static class ListingEndpoints
 
         return result.IsSuccess
             ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> UploadLeaseDocument(
+        [FromRoute] Guid listingId,
+        IFormFile file,
+        HttpContext httpContext,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        if (file is null || file.Length == 0)
+        {
+            return Results.BadRequest(new
+            {
+                error = "Listing.LeaseDocument.EmptyFile",
+                detail = "No file was uploaded.",
+            });
+        }
+
+        var userId = GetUserId(httpContext);
+        var command = new UploadListingLeaseDocumentCommand(
+            listingId,
+            userId,
+            file.FileName,
+            file.ContentType,
+            file.Length,
+            _ => Task.FromResult(file.OpenReadStream()));
+
+        var result = await mediator.Send(command, cancellationToken).ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> RemoveLeaseDocument(
+        [FromRoute] Guid listingId,
+        HttpContext httpContext,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetUserId(httpContext);
+        var result = await mediator.Send(
+            new RemoveListingLeaseDocumentCommand(listingId, userId), cancellationToken)
+            .ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.NoContent()
             : ToErrorResult(result.Error);
     }
 

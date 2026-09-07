@@ -54,13 +54,6 @@ const categories: Category[] = [
 
 const HERO_IMG =
   "https://images.unsplash.com/photo-1600566753190-17f0baa2a6c3?auto=format&fit=crop&w=1280&q=70";
-const PROMO_IMG =
-  "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1100&q=70";
-const SAVE_CARD_IMAGES = [
-  "https://images.unsplash.com/photo-1505691938895-1758d7feb511?auto=format&fit=crop&w=600&q=70",
-  "https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=600&q=70",
-  "https://images.unsplash.com/photo-1493809842364-78817add7ffb?auto=format&fit=crop&w=600&q=70",
-];
 
 export const MarketplaceHomePage = () => {
   const [activeCategory, setActiveCategory] = useState<Category["id"]>("All");
@@ -242,43 +235,6 @@ export const MarketplaceHomePage = () => {
         )}
       </section>
 
-      {/* ─── Promo banner: Early booking deals ─────────────── */}
-      <section className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <div className="relative overflow-hidden rounded-3xl bg-[#3a8ddc]">
-          <img
-            src={PROMO_IMG}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            className="absolute inset-0 h-full w-full object-cover opacity-80"
-          />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#1f4d7a]/80 via-[#1f4d7a]/40 to-transparent" />
-          <div className="relative max-w-md p-8 text-white sm:p-12">
-            <span className="inline-flex rounded-full bg-white/20 px-3 py-1 text-xs font-semibold uppercase tracking-wider">
-              Limited time
-            </span>
-            <h3 className="mt-4 text-3xl font-bold leading-tight sm:text-4xl">
-              Early booking deals:
-              <br />
-              Save over $120
-            </h3>
-            <p className="mt-3 text-sm text-white/85 sm:text-base">
-              Lock in your next mid-term stay before the season ends. Verified hosts,
-              flexible cancellations, and trust built in.
-            </p>
-            <Link
-              to="/listings/search"
-              className={cn(
-                "mt-6 inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-foreground transition-transform hover:scale-[1.02]",
-              )}
-            >
-              Browse deals
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
-        </div>
-      </section>
-
       {/* ─── Most famous (carousel) ────────────────────────── */}
       <Carousel
         title="Most famous"
@@ -312,15 +268,6 @@ export const MarketplaceHomePage = () => {
               Join now
             </Link>
           </div>
-        </div>
-      </section>
-
-      {/* ─── 3 promo cards ──────────────────────────────────── */}
-      <section className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
-          {SAVE_CARD_IMAGES.map((img, i) => (
-            <PromoCard key={i} image={img} />
-          ))}
         </div>
       </section>
 
@@ -414,36 +361,6 @@ function Carousel({
         )}
       </div>
     </section>
-  );
-}
-
-function PromoCard({ image }: { image: string }) {
-  return (
-    <div className="relative h-[260px] overflow-hidden rounded-2xl">
-      <img
-        src={image}
-        alt=""
-        loading="lazy"
-        decoding="async"
-        className="absolute inset-0 h-full w-full object-cover"
-      />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent" />
-      <div className="absolute inset-x-4 bottom-4 rounded-2xl bg-background p-4 shadow-[var(--shadow-soft)]">
-        <p className="text-base font-bold text-foreground">Save over $120</p>
-        <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-          Verified hosts, flexible cancellation, and protected payments — every stay.
-        </p>
-        <Link
-          to="/listings/search"
-          className={cn(
-            "mt-3 inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-1.5 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary/90",
-          )}
-        >
-          Book now
-          <ArrowRight className="h-3 w-3" />
-        </Link>
-      </div>
-    </div>
   );
 }
 

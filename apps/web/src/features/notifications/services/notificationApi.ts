@@ -3,6 +3,8 @@ import { http } from "@/api/http";
 import type {
   InAppNotificationDto,
   NotificationPreferencesDto,
+  RecordSmsConsentRequest,
+  SmsConsentDto,
   UpdatePreferencesRequest,
 } from "@/api/types";
 
@@ -50,5 +52,13 @@ export const notificationApi = {
     payload: UpdatePreferencesRequest,
   ): Promise<void> {
     await http.put(endpoints.notifications.preferences(userId), payload);
+  },
+
+  async recordSmsConsent(payload: RecordSmsConsentRequest): Promise<SmsConsentDto> {
+    const response = await http.post<SmsConsentDto>(
+      endpoints.notifications.smsConsent,
+      payload,
+    );
+    return response.data;
   },
 };

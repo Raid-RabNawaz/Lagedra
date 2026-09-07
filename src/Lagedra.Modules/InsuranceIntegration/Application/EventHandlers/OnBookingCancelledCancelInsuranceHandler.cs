@@ -1,42 +1,19 @@
-using Lagedra.SharedKernel.Integration.Events;
-using Lagedra.Modules.InsuranceIntegration.Infrastructure.Persistence;
+using Lagedra.Modules.InsuranceIntegration.Application.Services;
 using Lagedra.SharedKernel.Events;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;
+using Lagedra.SharedKernel.Integration.Events;
 
 namespace Lagedra.Modules.InsuranceIntegration.Application.EventHandlers;
 
-public sealed partial class OnBookingCancelledCancelInsuranceHandler(
-    InsuranceDbContext dbContext,
-    ILogger<OnBookingCancelledCancelInsuranceHandler> logger)
+public sealed class OnBookingCancelledCancelInsuranceHandler(
+    TruviScreeningService screening)
     : IDomainEventHandler<BookingCancelledEvent>
 {
-    public async Task Handle(BookingCancelledEvent domainEvent, CancellationToken ct = default)
+    public Task Handle(BookingCancelledEvent domainEvent, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(domainEvent);
-
-        var record = await dbContext.PolicyRecords
-            .FirstOrDefaultAsync(r => r.DealId == domainEvent.DealId, ct)
-            .ConfigureAwait(false);
-
-        if (record is null)
-        {
-            LogNoPolicyFound(logger, domainEvent.DealId);
-            return;
-        }
-
-        LogCancellingInsurance(logger, domainEvent.DealId, domainEvent.Reason);
-
-        record.CancelPolicy($"Booking cancelled: {domainEvent.Reason}");
-
-        await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+        return screening.CancelForDealAsync(
+            domainEvent.DealId,
+            $"Booking cancelled: {domainEvent.Reason}",
+            ct);
     }
-
-    [LoggerMessage(Level = LogLevel.Information,
-        Message = "Cancelling insurance for deal {DealId}: {Reason}")]
-    private static partial void LogCancellingInsurance(ILogger logger, Guid dealId, string reason);
-
-    [LoggerMessage(Level = LogLevel.Debug,
-        Message = "No insurance policy record found for deal {DealId} — nothing to cancel")]
-    private static partial void LogNoPolicyFound(ILogger logger, Guid dealId);
 }

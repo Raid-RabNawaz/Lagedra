@@ -18,6 +18,7 @@ public sealed class NotificationDbContext(
     public DbSet<DeliveryLog> DeliveryLogs => Set<DeliveryLog>();
     public DbSet<UserNotificationPreferences> UserPreferences => Set<UserNotificationPreferences>();
     public DbSet<InAppNotification> InAppNotifications => Set<InAppNotification>();
+    public DbSet<SmsConsent> SmsConsents => Set<SmsConsent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

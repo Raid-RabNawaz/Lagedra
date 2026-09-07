@@ -16,6 +16,12 @@ import { RouteErrorBoundary } from "@/app/layout/RouteErrorBoundary";
 const LoginPage = lazy(() => import("@/features/auth/pages/LoginPage").then((m) => ({ default: m.LoginPage })));
 const JoinPage = lazy(() => import("@/features/join/pages/JoinPage").then((m) => ({ default: m.JoinPage })));
 const HowItWorksPage = lazy(() => import("@/features/join/pages/HowItWorksPage").then((m) => ({ default: m.HowItWorksPage })));
+const TermsPage = lazy(() => import("@/features/legal/pages/TermsPage").then((m) => ({ default: m.TermsPage })));
+const PrivacyPage = lazy(() => import("@/features/legal/pages/PrivacyPage").then((m) => ({ default: m.PrivacyPage })));
+const SmsOptInPage = lazy(() => import("@/features/legal/pages/SmsOptInPage").then((m) => ({ default: m.SmsOptInPage })));
+const FaqPage = lazy(() => import("@/features/legal/pages/FaqPage").then((m) => ({ default: m.FaqPage })));
+const AboutPage = lazy(() => import("@/features/legal/pages/AboutPage").then((m) => ({ default: m.AboutPage })));
+const ContactPage = lazy(() => import("@/features/legal/pages/ContactPage").then((m) => ({ default: m.ContactPage })));
 const VerifyEmailPage = lazy(() => import("@/features/auth/pages/VerifyEmailPage").then((m) => ({ default: m.VerifyEmailPage })));
 const ForgotPasswordPage = lazy(() => import("@/features/auth/pages/ForgotPasswordPage").then((m) => ({ default: m.ForgotPasswordPage })));
 const ResetPasswordPage = lazy(() => import("@/features/auth/pages/ResetPasswordPage").then((m) => ({ default: m.ResetPasswordPage })));
@@ -130,6 +136,46 @@ export const router = createBrowserRouter([
   {
     path: "/how-it-works",
     element: <LazyPage><HowItWorksPage /></LazyPage>,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
+    path: "/about",
+    element: <LazyPage><AboutPage /></LazyPage>,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
+    path: "/faq",
+    element: <LazyPage><FaqPage /></LazyPage>,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
+    path: "/pricing",
+    element: <Navigate to="/faq" replace />,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
+    path: "/contact",
+    element: <LazyPage><ContactPage /></LazyPage>,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
+    path: "/tc",
+    element: <LazyPage><TermsPage /></LazyPage>,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
+    path: "/terms",
+    element: <Navigate to="/tc" replace />,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
+    path: "/privacy",
+    element: <LazyPage><PrivacyPage /></LazyPage>,
+    errorElement: <RouteErrorBoundary />,
+  },
+  {
+    path: "/sms",
+    element: <LazyPage><SmsOptInPage /></LazyPage>,
     errorElement: <RouteErrorBoundary />,
   },
 

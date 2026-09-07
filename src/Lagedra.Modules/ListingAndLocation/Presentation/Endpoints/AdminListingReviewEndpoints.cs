@@ -19,6 +19,8 @@ public static class AdminListingReviewEndpoints
             .RequireAuthorization("RequirePlatformAdmin");
 
         group.MapGet("/pending-review", GetPendingReview);
+        group.MapPost("/approve-bulk", BulkApproveListings);
+        group.MapPost("/deny-bulk", BulkDenyListings);
         group.MapPost("/{listingId:guid}/approve", ApproveListing);
         group.MapPost("/{listingId:guid}/deny", DenyListing);
 
@@ -34,6 +36,40 @@ public static class AdminListingReviewEndpoints
         return result.IsSuccess
             ? Results.Ok(result.Value)
             : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+    }
+
+    private static async Task<IResult> BulkApproveListings(
+        [FromBody] BulkApproveListingsRequest request,
+        HttpContext httpContext,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var adminUserId = GetUserId(httpContext);
+        var result = await mediator.Send(
+            new BulkApproveListingsCommand(request.ListingIds ?? [], adminUserId),
+            cancellationToken).ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
+    }
+
+    private static async Task<IResult> BulkDenyListings(
+        [FromBody] BulkDenyListingsRequest request,
+        HttpContext httpContext,
+        IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var adminUserId = GetUserId(httpContext);
+        var result = await mediator.Send(
+            new BulkDenyListingsCommand(request.ListingIds ?? [], adminUserId, request.Reason ?? string.Empty),
+            cancellationToken).ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : ToErrorResult(result.Error);
     }
 
     private static async Task<IResult> ApproveListing(
@@ -88,3 +124,7 @@ public static class AdminListingReviewEndpoints
 }
 
 public sealed record DenyListingRequest(string Reason);
+
+public sealed record BulkApproveListingsRequest(IReadOnlyList<Guid>? ListingIds);
+
+public sealed record BulkDenyListingsRequest(IReadOnlyList<Guid>? ListingIds, string Reason);

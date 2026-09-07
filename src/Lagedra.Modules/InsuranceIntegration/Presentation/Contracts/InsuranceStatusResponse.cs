@@ -8,4 +8,7 @@ public sealed record InsuranceStatusResponse(
     string? PolicyNumber,
     DateTime? VerifiedAt,
     DateTime? ExpiresAt,
-    string? CoverageScope);
+    string? CoverageScope,
+    string? VerificationId = null,
+    string? ScreeningStatus = null,
+    string? FlaggedReason = null);

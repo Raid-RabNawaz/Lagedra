@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Home,
   Check,
+  FileSignature,
   ImagePlus,
   Loader2,
   MapPin,
@@ -21,6 +22,7 @@ import type {
   ListingDetailsDto,
   SafetyDeviceDefinitionDto,
 } from "@/api/types";
+import { ListingLeaseAgreementEditor } from "./ListingLeaseAgreementEditor";
 import { ListingLocationEditor } from "./ListingLocationEditor";
 import { ListingPhotosEditor } from "./ListingPhotosEditor";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -153,6 +155,14 @@ const STEPS: Step[] = [
       "partialRefundDays",
       "customTerms",
     ],
+  },
+  {
+    id: "lease",
+    label: "Lease agreement",
+    shortLabel: "Lease",
+    icon: FileSignature,
+    description: "Use Lagedra's standard lease, or upload your own for this property.",
+    fields: ["leaseAgreementSource", "hasCustomLeaseDocument"],
   },
   {
     id: "review",
@@ -318,6 +328,9 @@ export function ListingWizard({
                 <Separator />
                 <CancellationStep form={form} />
               </>
+            )}
+            {step.id === "lease" && (
+              <ListingLeaseAgreementEditor form={form} listing={listing} />
             )}
             {step.id === "review" && (
               <ReviewStep
@@ -1097,6 +1110,23 @@ function ReviewStep({
             label="Free cancellation"
             value={`${v.freeCancellationDays} days before stay`}
           />
+        </ReviewSection>
+
+        <ReviewSection title="Lease agreement" onEdit={() => onJump(6)}>
+          <ReviewRow
+            label="Lease"
+            value={
+              v.leaseAgreementSource === "HostProvided"
+                ? "Your own lease agreement"
+                : "Lagedra standard lease"
+            }
+          />
+          {v.leaseAgreementSource === "HostProvided" && (
+            <ReviewRow
+              label="Document"
+              value={listing?.customLeaseDocument?.fileName ?? "Not uploaded yet"}
+            />
+          )}
         </ReviewSection>
       </div>
 

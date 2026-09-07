@@ -261,6 +261,7 @@ export type ListingSummaryDto = {
   /** Published guest→host stay-review average for this listing's host. */
   hostAverageRating?: number | null;
   hostReviewCount?: number;
+  rejectionReason?: string | null;
 };
 
 export type ListingPhotoDto = {
@@ -382,6 +383,19 @@ export type ListingDetailsDto = {
   homeOwnerUserId?: string | null;
   includeBrokerClause?: boolean;
   homeOwner?: ListingHomeOwnerDto | null;
+  leaseAgreementSource?: LeaseAgreementSource;
+  customLeaseDocument?: CustomLeaseDocumentDto | null;
+};
+
+// Whether bookings on a listing are bound by Lagedra's jurisdiction template or
+// by a lease agreement the host uploaded themselves.
+export type LeaseAgreementSource = "LagedraTemplate" | "HostProvided";
+
+export type CustomLeaseDocumentDto = {
+  fileName: string;
+  contentType: string;
+  sizeBytes: number;
+  uploadedAtUtc: string;
 };
 
 // Listing-level lease terms merged into the generated lease agreement PDF.
@@ -433,10 +447,49 @@ export type ListingReviewItemDto = {
   hostResponseRatePercent?: number | null;
   hostMemberSince?: string | null;
   hostProfileCompletenessPercent: number;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  instantBookingEnabled?: boolean;
+  usesCustomLeaseAgreement?: boolean;
+  customLeaseFileName?: string | null;
 };
 
 export type DenyListingRequest = {
   reason: string;
+};
+
+export type BulkApproveListingsRequest = {
+  listingIds: string[];
+};
+
+export type BulkApproveListingFailureDto = {
+  listingId: string;
+  errorCode: string;
+  detail: string;
+};
+
+export type BulkApproveListingsResultDto = {
+  requested: number;
+  approved: number;
+  failures: BulkApproveListingFailureDto[];
+};
+
+export type BulkDenyListingsRequest = {
+  listingIds: string[];
+  reason: string;
+};
+
+export type BulkDenyListingFailureDto = {
+  listingId: string;
+  errorCode: string;
+  detail: string;
+};
+
+export type BulkDenyListingsResultDto = {
+  requested: number;
+  denied: number;
+  failures: BulkDenyListingFailureDto[];
 };
 
 export type SearchListingsResultDto = {
@@ -538,6 +591,7 @@ export type CreateListingRequest = {
   homeOwnerUserId?: string | null;
   homeOwnerEmail?: string | null;
   includeBrokerClause?: boolean;
+  leaseAgreementSource?: LeaseAgreementSource;
   addedVia?: ListingAddedVia;
   addedViaDetail?: string | null;
 };
@@ -615,6 +669,7 @@ export type UpdateListingRequest = {
   homeOwnerUserId?: string | null;
   homeOwnerEmail?: string | null;
   includeBrokerClause?: boolean;
+  leaseAgreementSource?: LeaseAgreementSource;
 };
 
 export type SetApproxLocationRequest = {
@@ -1616,10 +1671,27 @@ export type NotificationPreferencesDto = {
   userId: string;
   eventOptIns: Record<string, boolean>;
   transactionalAlwaysSent: boolean;
+  smsCampaignsOptedIn?: boolean;
+  smsPhoneE164?: string | null;
 };
 
 export type UpdatePreferencesRequest = {
   eventOptIns: Record<string, boolean>;
+  smsCampaignsOptedIn?: boolean;
+};
+
+export type SmsConsentDto = {
+  phoneE164: string;
+  optedIn: boolean;
+  optedInAt: string | null;
+  optedOutAt: string | null;
+};
+
+export type RecordSmsConsentRequest = {
+  phoneNumber: string;
+  consent: boolean;
+  optedIn?: boolean;
+  source?: string;
 };
 
 // ── Compliance Monitoring ───────────────────────────────────
@@ -1872,6 +1944,20 @@ export type ArbitratorCaseloadDto = {
   activeCaseCount: number;
   isOverSoftCap: boolean;
   isAtHardCap: boolean;
+};
+
+export type InsuranceStatusDto = {
+  policyRecordId: string;
+  dealId: string;
+  state: string;
+  provider: string | null;
+  policyNumber: string | null;
+  verifiedAt: string | null;
+  expiresAt: string | null;
+  coverageScope: string | null;
+  verificationId: string | null;
+  screeningStatus: string | null;
+  flaggedReason: string | null;
 };
 
 // ── Admin: Insurance Unknown Queue ─────────────────────────

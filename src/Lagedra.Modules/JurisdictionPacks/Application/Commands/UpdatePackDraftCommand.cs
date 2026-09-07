@@ -64,7 +64,8 @@ public sealed class UpdatePackDraftCommandHandler(JurisdictionPackRepository rep
         {
             foreach (var rule in request.EffectiveDateRules)
             {
-                version.AddEffectiveDateRule(rule.FieldName, rule.EffectiveDate);
+                repository.RegisterNewRule(
+                    version.AddEffectiveDateRule(rule.FieldName, rule.EffectiveDate));
             }
         }
 
@@ -72,7 +73,8 @@ public sealed class UpdatePackDraftCommandHandler(JurisdictionPackRepository rep
         {
             foreach (var rule in request.FieldGatingRules)
             {
-                version.AddFieldGatingRule(rule.FieldName, rule.GatingType, rule.Value, rule.Condition);
+                repository.RegisterNewRule(
+                    version.AddFieldGatingRule(rule.FieldName, rule.GatingType, rule.Value, rule.Condition));
             }
         }
 
@@ -80,7 +82,8 @@ public sealed class UpdatePackDraftCommandHandler(JurisdictionPackRepository rep
         {
             foreach (var schedule in request.EvidenceSchedules)
             {
-                version.AddEvidenceSchedule(schedule.Category, schedule.MinimumRequirements);
+                repository.RegisterNewRule(
+                    version.AddEvidenceSchedule(schedule.Category, schedule.MinimumRequirements));
             }
         }
 
@@ -88,9 +91,10 @@ public sealed class UpdatePackDraftCommandHandler(JurisdictionPackRepository rep
         {
             foreach (var rule in request.DepositCapRules)
             {
-                version.AddDepositCapRule(
-                    rule.JurisdictionCode, rule.MaxMultiplier, rule.LegalReference,
-                    rule.ExceptionCondition, rule.ExceptionMultiplier);
+                repository.RegisterNewRule(
+                    version.AddDepositCapRule(
+                        rule.JurisdictionCode, rule.MaxMultiplier, rule.LegalReference,
+                        rule.ExceptionCondition, rule.ExceptionMultiplier));
             }
         }
 

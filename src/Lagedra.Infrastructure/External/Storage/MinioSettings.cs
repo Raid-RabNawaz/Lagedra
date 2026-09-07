@@ -15,8 +15,8 @@ public sealed class MinioSettings
     // real security boundary) rather than by feature. Defaults collapse the
     // four logical pools onto two physical buckets:
     //
-    //   lagedra-private  ← evidence/, exports/, quarantine/   (no public ACL,
-    //                                                          presigned URLs)
+    //   lagedra-private  ← evidence/, exports/, quarantine/,  (no public ACL,
+    //                      lease-documents/                    presigned URLs)
     //   lagedra-public   ← listings/, avatars/                (public-read,
     //                                                          CDN-friendly)
     //
@@ -28,6 +28,11 @@ public sealed class MinioSettings
     public string ExportsBucket { get; init; } = "lagedra-private";
     public string QuarantineBucket { get; init; } = "lagedra-private";
     public string KycBucket { get; init; } = "lagedra-private";
+
+    // Host-uploaded lease agreements. Deliberately private rather than sharing
+    // ListingsBucket: that bucket carries a public-read policy for photos, and
+    // a lease is only for signed-in tenants via presigned or proxied reads.
+    public string LeaseDocumentsBucket { get; init; } = "lagedra-private";
     public string ListingsBucket { get; init; } = "lagedra-public";
     public string UsersBucket { get; init; } = "lagedra-public";
     public bool UseHttps { get; init; }

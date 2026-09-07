@@ -44,6 +44,11 @@ public sealed class HandleInsurancePurchaseWebhookCommandHandler(
             VerificationSource.API);
         record.AddAttempt(attempt);
 
+        // Registered explicitly because the attempt Id is domain-assigned: EF
+        // reads a set key on an entity found in a tracked parent's collection
+        // as an existing row and would emit an UPDATE instead of an INSERT.
+        dbContext.VerificationAttempts.Add(attempt);
+
         record.RecordActive(
             request.Provider,
             request.PolicyNumber,
@@ -58,5 +63,6 @@ public sealed class HandleInsurancePurchaseWebhookCommandHandler(
     private static InsuranceStatusDto MapToDto(InsurancePolicyRecord r) =>
         new(r.Id, r.DealId, r.TenantUserId, r.State,
             r.Provider, r.PolicyNumber, r.VerifiedAt,
-            r.ExpiresAt, r.CoverageScope);
+            r.ExpiresAt, r.CoverageScope,
+            r.ExternalVerificationId, r.ScreeningStatus, r.FlaggedReason);
 }

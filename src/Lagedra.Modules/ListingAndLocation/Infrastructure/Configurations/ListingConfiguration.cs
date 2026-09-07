@@ -70,6 +70,12 @@ public sealed class ListingConfiguration : IEntityTypeConfiguration<Listing>
             .IsRequired();
         builder.Property(l => l.AddedViaDetail).HasMaxLength(200);
 
+        builder.Property(l => l.LeaseAgreementSource)
+            .HasConversion<string>()
+            .HasMaxLength(50)
+            .HasDefaultValue(LeaseAgreementSource.LagedraTemplate)
+            .IsRequired();
+
         builder.OwnsOne(l => l.StayRange, stay =>
         {
             stay.Property(s => s.MinDays).HasColumnName("stay_min_days");
@@ -131,6 +137,16 @@ public sealed class ListingConfiguration : IEntityTypeConfiguration<Listing>
             lt.Property(t => t.LeadPaintKnowledge).HasColumnName("lease_lead_paint_knowledge").HasMaxLength(1000);
             lt.Property(t => t.RentCapJustCauseExempt).HasColumnName("lease_rent_cap_just_cause_exempt");
             lt.Property(t => t.PaymentMethods).HasColumnName("lease_payment_methods").HasMaxLength(500);
+        });
+
+        builder.OwnsOne(l => l.CustomLeaseDocument, cld =>
+        {
+            cld.Property(d => d.StorageKey).HasColumnName("custom_lease_storage_key").HasMaxLength(1000);
+            cld.Property(d => d.FileName).HasColumnName("custom_lease_file_name").HasMaxLength(300);
+            cld.Property(d => d.ContentType).HasColumnName("custom_lease_content_type").HasMaxLength(200);
+            cld.Property(d => d.SizeBytes).HasColumnName("custom_lease_size_bytes");
+            cld.Property(d => d.ContentHash).HasColumnName("custom_lease_content_hash").HasMaxLength(128);
+            cld.Property(d => d.UploadedAtUtc).HasColumnName("custom_lease_uploaded_at");
         });
 
         builder.OwnsOne(l => l.CancellationPolicy, cp =>

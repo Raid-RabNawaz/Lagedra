@@ -5,7 +5,11 @@ import {
   AlertTriangle,
   Save,
   Info,
+  MessageSquare,
 } from "lucide-react";
+import { Link } from "react-router-dom";
+import { SmsProgramDisclosures } from "@/features/legal/SmsProgramDisclosures";
+import { SMS_PROGRAM } from "@/features/legal/smsProgram";
 import { useAuthStore } from "@/app/auth/authStore";
 import {
   useNotificationPreferences,
@@ -106,6 +110,7 @@ export const NotificationPreferencesPage = () => {
   const update = useUpdateNotificationPreferences();
 
   const [optIns, setOptIns] = useState<Record<string, boolean>>({});
+  const [smsOptedIn, setSmsOptedIn] = useState<boolean>(SMS_PROGRAM.defaultConsent);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Seed the form state from the loaded preferences exactly once. Updating
@@ -115,6 +120,7 @@ export const NotificationPreferencesPage = () => {
   if (!seeded && preferences) {
     setSeeded(true);
     setOptIns(preferences.eventOptIns);
+    setSmsOptedIn(preferences.smsCampaignsOptedIn === true);
   }
 
   if (isLoading || !preferences) {
@@ -125,8 +131,10 @@ export const NotificationPreferencesPage = () => {
     setOptIns((prev) => ({ ...prev, [eventKey]: checked }));
   };
 
+  const savedSms = preferences.smsCampaignsOptedIn === true;
   const isDirty =
-    JSON.stringify(optIns) !== JSON.stringify(preferences.eventOptIns);
+    JSON.stringify(optIns) !== JSON.stringify(preferences.eventOptIns) ||
+    smsOptedIn !== savedSms;
 
   const handleSave = async () => {
     if (!userId) return;
@@ -135,7 +143,7 @@ export const NotificationPreferencesPage = () => {
     try {
       await update.mutateAsync({
         userId,
-        payload: { eventOptIns: optIns },
+        payload: { eventOptIns: optIns, smsCampaignsOptedIn: smsOptedIn },
       });
       setMessage("Notification preferences saved.");
     } catch (e) {
@@ -168,8 +176,8 @@ export const NotificationPreferencesPage = () => {
           Notification Preferences
         </h1>
         <p className="mt-1 text-muted-foreground">
-          Choose which notifications you'd like to receive by email and
-          in-app.
+          Choose which notifications you&apos;d like to receive by email and
+          in-app, and whether you want optional automated texts.
         </p>
       </div>
 
@@ -235,6 +243,61 @@ export const NotificationPreferencesPage = () => {
               </label>
             );
           })}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <MessageSquare className="h-5 w-5" />
+            Text messages
+          </CardTitle>
+          <CardDescription>
+            Optional automated SMS about bookings, payments, account updates,
+            and occasional offers. The box below is never pre-selected.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {preferences.smsPhoneE164 ? (
+            <p className="text-sm text-muted-foreground">
+              Messages go to{" "}
+              <span className="font-medium text-foreground">{preferences.smsPhoneE164}</span>
+              . Change the number in your{" "}
+              <Link to="/app/profile" className="underline underline-offset-2">
+                profile
+              </Link>
+              .
+            </p>
+          ) : (
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertDescription>
+                Add a mobile number in your{" "}
+                <Link to="/app/profile" className="font-medium underline underline-offset-2">
+                  profile
+                </Link>{" "}
+                before opting in. You can also subscribe at{" "}
+                <Link to="/sms" className="font-medium underline underline-offset-2">
+                  lagedra.com/sms
+                </Link>
+                .
+              </AlertDescription>
+            </Alert>
+          )}
+
+          <label className="flex items-start gap-3 cursor-pointer">
+            <Checkbox
+              checked={smsOptedIn}
+              disabled={!preferences.smsPhoneE164 && !smsOptedIn}
+              onCheckedChange={(checked) => setSmsOptedIn(checked === true)}
+              className="mt-0.5"
+            />
+            <span className="text-sm leading-6 text-muted-foreground">
+              {SMS_PROGRAM.checkboxLabel}
+            </span>
+          </label>
+
+          <SmsProgramDisclosures />
         </CardContent>
       </Card>
 

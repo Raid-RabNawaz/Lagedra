@@ -28,8 +28,10 @@
     <ProjectReference Include="..\..\src\Lagedra.Modules\Reviews\Reviews.csproj" />
     <ProjectReference Include="..\..\src\Lagedra.Modules\VerificationAndRisk\VerificationAndRisk.csproj" />
     <ProjectReference Include="..\..\src\Lagedra.Modules\LeaseAgreements\LeaseAgreements.csproj" />
+    <ProjectReference Include="..\..\src\Lagedra.Modules\Notifications\Notifications.csproj" />
     <ProjectReference Include="..\..\src\Lagedra.Modules\ChannelIntegration\ChannelIntegration.csproj" />
     <ProjectReference Include="..\..\src\Lagedra.Modules\Analytics\Analytics.csproj" />
+    <ProjectReference Include="..\..\src\Lagedra.Modules\InsuranceIntegration\InsuranceIntegration.csproj" />
   </ItemGroup>
 
   <ItemGroup>

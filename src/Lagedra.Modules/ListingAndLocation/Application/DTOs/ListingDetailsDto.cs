@@ -47,7 +47,9 @@ public sealed record ListingDetailsDto(
     ListingManagerRole ManagerRole = ListingManagerRole.Owner,
     Guid? HomeOwnerUserId = null,
     bool IncludeBrokerClause = false,
-    ListingHomeOwnerDto? HomeOwner = null);
+    ListingHomeOwnerDto? HomeOwner = null,
+    LeaseAgreementSource LeaseAgreementSource = LeaseAgreementSource.LagedraTemplate,
+    CustomLeaseDocumentDto? CustomLeaseDocument = null);
 
 public sealed record ListingHomeOwnerDto(
     Guid UserId,

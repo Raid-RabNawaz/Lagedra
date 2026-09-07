@@ -6,7 +6,7 @@ export const PaymentSecurityNotice = () => (
     <ShieldCheck className="h-4 w-4" />
     <span className="ml-2 text-sm">
       All payments are securely processed through Stripe. Lagedra collects the
-      activation payment, deducts the platform fee and insurance premium, and
+      activation payment, deducts the platform fee and stay protection, and
       transfers the remainder to the host.
     </span>
   </Alert>

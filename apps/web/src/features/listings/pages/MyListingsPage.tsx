@@ -574,6 +574,11 @@ function ListingRowCard({
               {formatDate(listing.createdAt)}
             </span>
           </div>
+          {listing.status === "Denied" && listing.rejectionReason && (
+            <p className="mt-2 line-clamp-3 text-xs text-destructive">
+              <span className="font-medium">Admin feedback:</span> {listing.rejectionReason}
+            </p>
+          )}
         </div>
 
         <div className="space-y-2">

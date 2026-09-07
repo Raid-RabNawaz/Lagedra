@@ -1,15 +1,20 @@
-import { useState } from "react";
+import { useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Check, Plus, ShieldCheck } from "lucide-react";
+import { Check, ShieldCheck } from "lucide-react";
 import { BackLink } from "@/components/shared/BackLink";
 import { usePublicConfigStore } from "@/app/config/publicConfigStore";
 import { JoinLogo } from "../components/JoinLogo";
+import { FaqAccordion } from "../components/FaqAccordion";
 import { howItWorksContent } from "../joinContent";
-import { cn } from "@/lib/utils";
 
 export const HowItWorksPage = () => {
   const preLaunchEnabled = usePublicConfigStore((s) => s.preLaunchEnabled);
-  const [openFaq, setOpenFaq] = useState(0);
+
+  useEffect(() => {
+    const hash = window.location.hash.replace("#", "");
+    if (!hash) return;
+    window.document.getElementById(hash)?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
 
   return (
     <div className="min-h-screen bg-white">
@@ -79,35 +84,11 @@ export const HowItWorksPage = () => {
         </section>
 
         {/* FAQ */}
-        <section className="mt-20">
+        <section id="faq" className="mt-20 scroll-mt-24">
           <h2 className="text-center text-3xl font-extrabold tracking-tight text-[#1A1A2E]">
             {howItWorksContent.faqHeading}
           </h2>
-          <div className="mx-auto mt-8 max-w-2xl divide-y divide-[#E5E5EE] rounded-2xl border border-[#E5E5EE]">
-            {howItWorksContent.faq.map((item, index) => {
-              const open = openFaq === index;
-              return (
-                <div key={item.q}>
-                  <button
-                    type="button"
-                    onClick={() => setOpenFaq(open ? -1 : index)}
-                    className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
-                  >
-                    <span className="font-semibold text-[#1A1A2E]">{item.q}</span>
-                    <Plus
-                      className={cn(
-                        "h-5 w-5 shrink-0 text-[#5B3FE0] transition-transform",
-                        open && "rotate-45",
-                      )}
-                    />
-                  </button>
-                  {open && (
-                    <p className="px-5 pb-5 text-sm leading-relaxed text-[#3D3D4E]">{item.a}</p>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          <FaqAccordion className="mx-auto mt-8 max-w-2xl" />
         </section>
 
         {/* CTA */}

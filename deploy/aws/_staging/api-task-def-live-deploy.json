@@ -11,7 +11,7 @@
   "containerDefinitions": [
     {
       "name": "api",
-      "image": "930218374225.dkr.ecr.us-west-1.amazonaws.com/lagedra/api@sha256:1129f99390985b22302fb9264425a72651d678ac0a4c45f268de811bbb034977",
+      "image": "930218374225.dkr.ecr.us-west-1.amazonaws.com/lagedra/api@sha256:672b4f07bf125989be42be8ff661f0934cc8d94d213d6109d6ae4440acab9588",
       "essential": true,
       "portMappings": [
         {
@@ -167,6 +167,46 @@
         {
           "name": "FeatureFlags__ListingImport.AiExtraction",
           "value": "false"
+        },
+        {
+          "name": "Insurance__FeeCalculationMode",
+          "value": "Truvi"
+        },
+        {
+          "name": "Insurance__Truvi__BaseUrl",
+          "value": "https://developer.api.truvi.com/screen-and-protect-sandbox"
+        },
+        {
+          "name": "Insurance__Truvi__CompanyName",
+          "value": "Lagedra"
+        },
+        {
+          "name": "Insurance__Truvi__CompanyEmail",
+          "value": "raid@lagedra.com"
+        },
+        {
+          "name": "Insurance__Truvi__ExtendedAmount",
+          "value": "50000"
+        },
+        {
+          "name": "Insurance__Truvi__ScreeningEnabled",
+          "value": "true"
+        },
+        {
+          "name": "Insurance__Truvi__FirstNights",
+          "value": "30"
+        },
+        {
+          "name": "Insurance__Truvi__FirstNightsFeeCents",
+          "value": "600"
+        },
+        {
+          "name": "Insurance__Truvi__AdditionalNightFeeCents",
+          "value": "400"
+        },
+        {
+          "name": "Insurance__Truvi__ScreeningFeeCents",
+          "value": "100"
         }
       ],
       "secrets": [
@@ -205,6 +245,10 @@
         {
           "name": "Twilio__SendGridApiKey",
           "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/twilio-sendgrid-api-key"
+        },
+        {
+          "name": "Insurance__Truvi__SubscriptionKey",
+          "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/truvi-subscription-key"
         }
       ],
       "logConfiguration": {

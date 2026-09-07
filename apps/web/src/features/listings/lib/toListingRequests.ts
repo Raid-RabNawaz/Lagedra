@@ -145,5 +145,6 @@ function managementFromForm(v: ListingFormValues) {
         ? v.homeOwnerEmail.trim()
         : null,
     includeBrokerClause: v.includeBrokerClause,
+    leaseAgreementSource: v.leaseAgreementSource,
   };
 }

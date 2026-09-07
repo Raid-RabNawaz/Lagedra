@@ -19,16 +19,7 @@ public sealed class HostProfileProvider(AuthDbContext dbContext) : IHostProfileP
             return null;
         }
 
-        var displayName = ResolveDisplayName(user);
-
-        return new HostProfileDto(
-            displayName,
-            user.ProfilePhotoUrl,
-            user.IsGovernmentIdVerified,
-            user.IsPhoneVerified,
-            user.ResponseRatePercent,
-            user.ResponseTimeMinutes,
-            user.CreatedAt);
+        return ToProfile(user);
     }
 
     public async Task<HostProfileCompletenessDto> GetProfileCompletenessAsync(
@@ -42,6 +33,47 @@ public sealed class HostProfileProvider(AuthDbContext dbContext) : IHostProfileP
 
         return ComputeCompleteness(user);
     }
+
+    public async Task<IReadOnlyDictionary<Guid, HostReviewSnapshot>> GetReviewSnapshotsAsync(
+        IReadOnlyCollection<Guid> userIds,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(userIds);
+
+        var ids = userIds.Where(id => id != Guid.Empty).Distinct().ToList();
+        if (ids.Count == 0)
+        {
+            return new Dictionary<Guid, HostReviewSnapshot>();
+        }
+
+        var users = await dbContext.Users
+            .AsNoTracking()
+            .Where(u => ids.Contains(u.Id))
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        var byId = users.ToDictionary(u => u.Id);
+        var snapshots = new Dictionary<Guid, HostReviewSnapshot>(ids.Count);
+        foreach (var id in ids)
+        {
+            byId.TryGetValue(id, out var user);
+            snapshots[id] = new HostReviewSnapshot(
+                user is null ? null : ToProfile(user),
+                ComputeCompleteness(user));
+        }
+
+        return snapshots;
+    }
+
+    private static HostProfileDto ToProfile(ApplicationUser user) =>
+        new(
+            ResolveDisplayName(user),
+            user.ProfilePhotoUrl,
+            user.IsGovernmentIdVerified,
+            user.IsPhoneVerified,
+            user.ResponseRatePercent,
+            user.ResponseTimeMinutes,
+            user.CreatedAt);
 
     private static string? ResolveDisplayName(ApplicationUser user)
     {

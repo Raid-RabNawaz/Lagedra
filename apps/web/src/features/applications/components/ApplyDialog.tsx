@@ -48,6 +48,8 @@ import { formatMoney } from "@/utils/format";
 import { cn } from "@/lib/utils";
 import type { ListingDetailsDto, ReservationPreviewDto } from "@/api/types";
 import { getApiErrorMessage } from "@/api/errors";
+import { STAY_PROTECTION_LABEL } from "@/features/listings/lib/stayProtection";
+import { StayProtectionGuestAgreementNote } from "@/features/listings/components/StayProtectionGuestAgreementNote";
 
 /** Server-side hard cap on the cover note. Mirrors `DealApplication.MessageMaxLength`. */
 const MESSAGE_MAX_LENGTH = 1000;
@@ -486,7 +488,7 @@ function PriceBreakdown({
         </div>
         {preview.insuranceFeeCents > 0 && (
           <div className="flex justify-between">
-            <span className="text-muted-foreground">Insurance premium</span>
+            <span className="text-muted-foreground">{STAY_PROTECTION_LABEL}</span>
             <span>{formatMoney(preview.insuranceFeeCents)}</span>
           </div>
         )}
@@ -512,10 +514,13 @@ function PriceBreakdown({
           {preview.depositReason}
         </p>
       ) : null}
+      {preview.insuranceFeeCents > 0 && (
+        <StayProtectionGuestAgreementNote />
+      )}
       <p className="flex items-start gap-1.5 border-t pt-2 text-[11px] text-muted-foreground">
         <Lock className="h-3.5 w-3.5 mt-0.5 shrink-0" />
         Your first month's rent and deposit are paid directly to the host through
-        Stripe. Lagedra only collects its service fee and the insurance premium —
+        Stripe. Lagedra only collects its service fee and stay protection —
         we never hold your funds. The host returns your deposit directly after
         move-out.
       </p>

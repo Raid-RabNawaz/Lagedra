@@ -3,6 +3,7 @@ using Lagedra.Modules.ActivationAndBilling.Application.DTOs;
 using Lagedra.Modules.ActivationAndBilling.Domain.Enums;
 using Lagedra.Modules.ActivationAndBilling.Domain.Policies;
 using Lagedra.Modules.ActivationAndBilling.Infrastructure.Persistence;
+using Lagedra.SharedKernel.Insurance;
 using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Results;
 using Lagedra.SharedKernel.Time;
@@ -79,7 +80,8 @@ public sealed partial class CancelBookingCommandHandler(
             application.InsuranceFeeCents ?? 0,
             freeCancellationDays,
             partialRefundPercent,
-            partialRefundDays);
+            partialRefundDays,
+            StayProtectionFee.ScreeningFeeCents);
 
         application.Cancel(
             request.CancelledByUserId,
@@ -103,8 +105,9 @@ public sealed partial class CancelBookingCommandHandler(
                 // Non-custodial (Option A): the refundable rent + deposit was
                 // transferred to the host's connected account at booking, so reverse
                 // the transfer to claw it back before refunding the tenant. The
-                // platform retains its service/insurance fee (insurance is refunded
-                // separately per policy), so the application fee is not refunded here.
+                // platform retains its service fee. Stay protection is refunded
+                // separately per policy (minus the $1 screening remainder), so
+                // the application fee is not refunded here.
                 await stripeService.RefundPaymentIntentAsync(
                     paymentConfirmation.StripePaymentIntentId,
                     refund.TenantRefundCents,

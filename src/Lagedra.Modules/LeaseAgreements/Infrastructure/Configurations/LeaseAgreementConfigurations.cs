@@ -1,5 +1,6 @@
 using Lagedra.Modules.LeaseAgreements.Domain.Aggregates;
 using Lagedra.Modules.LeaseAgreements.Domain.Entities;
+using Lagedra.SharedKernel.Integration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -66,5 +67,10 @@ public sealed class DealLeaseDocumentEntityConfiguration : IEntityTypeConfigurat
         builder.Property(d => d.ContentType).HasMaxLength(100).IsRequired();
         builder.Property(d => d.Content).HasColumnType("bytea").IsRequired();
         builder.Property(d => d.ContentHash).HasMaxLength(64).IsRequired();
+        builder.Property(d => d.Source)
+            .HasConversion<string>()
+            .HasMaxLength(50)
+            .HasDefaultValue(DealLeaseDocumentSource.LagedraTemplate)
+            .IsRequired();
     }
 }

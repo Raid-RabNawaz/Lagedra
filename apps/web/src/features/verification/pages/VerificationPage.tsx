@@ -758,9 +758,12 @@ export const VerificationPage = () => {
       <div className="rounded-lg bg-muted/50 p-4 text-xs text-muted-foreground flex items-start gap-2">
         <Shield className="h-4 w-4 shrink-0 mt-0.5" />
         <p>
-          Your verification data is encrypted and handled in accordance with our privacy policy. Once a real
-          verification partner is integrated, these steps will connect to their secure infrastructure.
-          Currently running in development mode with auto-approval.
+          Your verification data is encrypted and handled in accordance with our{" "}
+          <Link to="/privacy" className="font-medium text-foreground underline underline-offset-2">
+            Privacy Policy
+          </Link>
+          . Once a real verification partner is integrated, these steps will connect to their
+          secure infrastructure. Currently running in development mode with auto-approval.
         </p>
       </div>
     </div>

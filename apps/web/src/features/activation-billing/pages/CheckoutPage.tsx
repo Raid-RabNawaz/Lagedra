@@ -23,6 +23,8 @@ import { InlineTruthSurfaceConfirm } from "@/features/activation-billing/compone
 import { useSnapshotByDealId } from "@/features/truth-surface/hooks/useTruthSurface";
 import type { CheckoutDto } from "@/api/types";
 import { formatMoney } from "@/utils/format";
+import { STAY_PROTECTION_LABEL } from "@/features/listings/lib/stayProtection";
+import { StayProtectionGuestAgreementNote } from "@/features/listings/components/StayProtectionGuestAgreementNote";
 import {
   getApiErrorMessage,
   isForbiddenError,
@@ -45,10 +47,12 @@ function PaymentBreakdown({ checkout }: { checkout: CheckoutDto }) {
           <span className="text-muted-foreground">Security deposit</span>
           <span>{formatMoney(checkout.depositAmountCents)}</span>
         </div>
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">Insurance premium</span>
-          <span>{formatMoney(checkout.insuranceFeeCents)}</span>
-        </div>
+        {checkout.insuranceFeeCents > 0 && (
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">{STAY_PROTECTION_LABEL}</span>
+            <span>{formatMoney(checkout.insuranceFeeCents)}</span>
+          </div>
+        )}
         {checkout.serviceFeeCents > 0 && (
           <div className="flex justify-between">
             <span className="text-muted-foreground">Service fee</span>
@@ -65,6 +69,7 @@ function PaymentBreakdown({ checkout }: { checkout: CheckoutDto }) {
           Platform fee ({formatMoney(checkout.applicationFeeCents)}) is deducted
           from the total. The host receives {formatMoney(hostReceives)}.
         </p>
+        {checkout.insuranceFeeCents > 0 && <StayProtectionGuestAgreementNote />}
       </div>
     </div>
   );
@@ -440,8 +445,8 @@ export default function CheckoutPage() {
         <p>
           Your payment is securely processed by Stripe. The host is paid
           directly through Stripe — your rent and deposit go straight to their
-          account, while Lagedra only collects its service fee and the insurance
-          premium.
+          account, while Lagedra only collects its service fee and stay
+          protection.
         </p>
       </div>
     </div>

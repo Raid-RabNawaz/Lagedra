@@ -19,4 +19,5 @@ public sealed record ListingSummaryDto(
     DateTime CreatedAt,
     long? DefaultDepositCents = null,
     double? HostAverageRating = null,
-    int HostReviewCount = 0);
+    int HostReviewCount = 0,
+    string? RejectionReason = null);

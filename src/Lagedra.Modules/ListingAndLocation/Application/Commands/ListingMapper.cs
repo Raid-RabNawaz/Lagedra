@@ -121,7 +121,12 @@ internal static class ListingMapper
             listing.ManagerRole,
             listing.HomeOwnerUserId,
             listing.IncludeBrokerClause,
-            homeOwner);
+            homeOwner,
+            listing.LeaseAgreementSource,
+            listing.CustomLeaseDocument is { } cld
+                ? new CustomLeaseDocumentDto(
+                    cld.FileName, cld.ContentType, cld.SizeBytes, cld.UploadedAtUtc)
+                : null);
     }
 
     public static ListingSummaryDto ToSummary(
@@ -150,6 +155,7 @@ internal static class ListingMapper
             listing.CreatedAt,
             listing.DefaultDepositCents,
             hostAverageRating,
-            hostReviewCount);
+            hostReviewCount,
+            listing.RejectionReason);
     }
 }

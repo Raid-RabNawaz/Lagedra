@@ -40,5 +40,6 @@ public sealed class RecordInsuranceNotActiveCommandHandler(
     private static InsuranceStatusDto MapToDto(InsurancePolicyRecord r) =>
         new(r.Id, r.DealId, r.TenantUserId, r.State,
             r.Provider, r.PolicyNumber, r.VerifiedAt,
-            r.ExpiresAt, r.CoverageScope);
+            r.ExpiresAt, r.CoverageScope,
+            r.ExternalVerificationId, r.ScreeningStatus, r.FlaggedReason);
 }

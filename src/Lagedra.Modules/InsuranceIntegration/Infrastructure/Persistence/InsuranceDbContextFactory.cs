@@ -9,8 +9,15 @@ public sealed class InsuranceDbContextFactory : IDesignTimeDbContextFactory<Insu
 {
     public InsuranceDbContext CreateDbContext(string[] args)
     {
+        var cwd = Directory.GetCurrentDirectory();
+        var apiGateway = Path.GetFullPath(Path.Combine(cwd, "..", "Lagedra.ApiGateway"));
+        if (!Directory.Exists(apiGateway))
+        {
+            apiGateway = Path.GetFullPath(Path.Combine(cwd, "..", "..", "Lagedra.ApiGateway"));
+        }
+
         var configuration = new ConfigurationBuilder()
-            .SetBasePath(Directory.GetCurrentDirectory())
+            .SetBasePath(Directory.Exists(apiGateway) ? apiGateway : cwd)
             .AddJsonFile("appsettings.json", optional: true)
             .AddJsonFile("appsettings.Development.json", optional: true)
             .AddEnvironmentVariables()

@@ -5,6 +5,7 @@ import type {
   AttachApplicationPaymentRequest,
   BookingSetupIntentResult,
   DealApplicationDto,
+  InsuranceStatusDto,
   OwnerTenancyConsentRequest,
   ReservationPreviewDto,
   SubmitApplicationRequest,
@@ -111,6 +112,15 @@ export const applicationApi = {
       endpoints.applications.reject(id),
     );
     return response.data;
+  },
+
+  async getInsurance(dealId: string): Promise<InsuranceStatusDto> {
+    const response = await http.get<InsuranceStatusDto>(endpoints.deals.insurance(dealId));
+    return response.data;
+  },
+
+  async rescreenInsurance(dealId: string): Promise<void> {
+    await http.post(endpoints.deals.insuranceRescreen(dealId));
   },
 
   async attachPayment(

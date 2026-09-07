@@ -35,9 +35,12 @@ COPY src/Lagedra.Modules/AuditLog/AuditLog.csproj                               
 COPY src/Lagedra.Modules/Analytics/Analytics.csproj                             src/Lagedra.Modules/Analytics/
 COPY src/Lagedra.Modules/ChannelIntegration/ChannelIntegration.csproj           src/Lagedra.Modules/ChannelIntegration/
 COPY src/Lagedra.Modules/Reviews/Reviews.csproj                                 src/Lagedra.Modules/Reviews/
+COPY src/Lagedra.Modules/JurisdictionPacks/JurisdictionPacks.csproj             src/Lagedra.Modules/JurisdictionPacks/
 
-# Test projects
+# Test projects — every project in the solution must be present here, or
+# `dotnet restore Lagedra.sln` below fails on the missing csproj.
 COPY tests/Lagedra.Tests.Unit/Lagedra.Tests.Unit.csproj                       tests/Lagedra.Tests.Unit/
+COPY tests/Lagedra.Tests.Integration/Lagedra.Tests.Integration.csproj         tests/Lagedra.Tests.Integration/
 
 RUN dotnet restore Lagedra.sln
 

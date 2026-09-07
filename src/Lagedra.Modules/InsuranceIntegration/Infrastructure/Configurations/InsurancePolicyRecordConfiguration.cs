@@ -26,6 +26,9 @@ public sealed class InsurancePolicyRecordConfiguration : IEntityTypeConfiguratio
         builder.Property(r => r.Provider).HasMaxLength(200);
         builder.Property(r => r.PolicyNumber).HasMaxLength(100);
         builder.Property(r => r.CoverageScope).HasMaxLength(500);
+        builder.Property(r => r.ExternalVerificationId).HasMaxLength(100);
+        builder.Property(r => r.ScreeningStatus).HasMaxLength(30);
+        builder.Property(r => r.FlaggedReason).HasMaxLength(500);
 
         builder.HasMany(r => r.Attempts)
             .WithOne()

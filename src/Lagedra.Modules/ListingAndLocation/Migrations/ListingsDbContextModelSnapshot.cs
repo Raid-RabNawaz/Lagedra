@@ -131,6 +131,13 @@ namespace ListingAndLocation.Migrations
                     b.Property<Guid>("LandlordUserId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("LeaseAgreementSource")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasDefaultValue("LagedraTemplate");
+
                     b.Property<string>("ManagerRole")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -652,6 +659,51 @@ namespace ListingAndLocation.Migrations
                                 .HasForeignKey("ListingId");
                         });
 
+                    b.OwnsOne("Lagedra.Modules.ListingAndLocation.Domain.ValueObjects.CustomLeaseDocument", "CustomLeaseDocument", b1 =>
+                        {
+                            b1.Property<Guid>("ListingId")
+                                .HasColumnType("uuid");
+
+                            b1.Property<string>("ContentHash")
+                                .IsRequired()
+                                .HasMaxLength(128)
+                                .HasColumnType("character varying(128)")
+                                .HasColumnName("custom_lease_content_hash");
+
+                            b1.Property<string>("ContentType")
+                                .IsRequired()
+                                .HasMaxLength(200)
+                                .HasColumnType("character varying(200)")
+                                .HasColumnName("custom_lease_content_type");
+
+                            b1.Property<string>("FileName")
+                                .IsRequired()
+                                .HasMaxLength(300)
+                                .HasColumnType("character varying(300)")
+                                .HasColumnName("custom_lease_file_name");
+
+                            b1.Property<long>("SizeBytes")
+                                .HasColumnType("bigint")
+                                .HasColumnName("custom_lease_size_bytes");
+
+                            b1.Property<string>("StorageKey")
+                                .IsRequired()
+                                .HasMaxLength(1000)
+                                .HasColumnType("character varying(1000)")
+                                .HasColumnName("custom_lease_storage_key");
+
+                            b1.Property<DateTime>("UploadedAtUtc")
+                                .HasColumnType("timestamp with time zone")
+                                .HasColumnName("custom_lease_uploaded_at");
+
+                            b1.HasKey("ListingId");
+
+                            b1.ToTable("listings", "listings");
+
+                            b1.WithOwner()
+                                .HasForeignKey("ListingId");
+                        });
+
                     b.OwnsOne("Lagedra.Modules.ListingAndLocation.Domain.ValueObjects.GeoPoint", "ApproxGeoPoint", b1 =>
                         {
                             b1.Property<Guid>("ListingId")
@@ -868,6 +920,8 @@ namespace ListingAndLocation.Migrations
                     b.Navigation("ApproxGeoPoint");
 
                     b.Navigation("CancellationPolicy");
+
+                    b.Navigation("CustomLeaseDocument");
 
                     b.Navigation("HouseRules");
 

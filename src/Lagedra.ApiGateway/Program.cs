@@ -247,13 +247,18 @@ try
             new Lagedra.Modules.LeaseAgreements.Application.Commands.SeedCaliforniaLeaseTemplateCommand())
             .ConfigureAwait(false);
     }
+    // Logged at Error, not Warning: a skipped seed means every lease generated
+    // from here on uses whatever template was already published, which is a
+    // legal-document defect rather than a cosmetic one.
     catch (DbUpdateException ex)
     {
-        Log.Warning(ex, "Lease agreement template seed skipped (DB error): {Message}", ex.Message);
+        Log.Error(ex, "Lease agreement template seed FAILED (DB error) — leases will keep using the "
+            + "previously published template: {Message}", ex.Message);
     }
     catch (InvalidOperationException ex)
     {
-        Log.Warning(ex, "Lease agreement template seed skipped (invalid state): {Message}", ex.Message);
+        Log.Error(ex, "Lease agreement template seed FAILED (invalid state) — leases will keep using the "
+            + "previously published template: {Message}", ex.Message);
     }
 
     await using var settingsScope = app.Services.CreateAsyncScope();
@@ -367,6 +372,7 @@ try
     app.MapUploadEndpoints();
     app.MapLeaseAgreementEndpoints();
     app.MapNotificationEndpoints();
+    app.MapSmsConsentEndpoints();
     app.MapInAppNotificationEndpoints();
     app.MapPrivacyEndpoints();
     app.MapIntegrityEndpoints();

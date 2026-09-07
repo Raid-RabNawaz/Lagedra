@@ -262,6 +262,56 @@ namespace Notifications.Migrations
                     b.ToTable("notification_templates", "notifications");
                 });
 
+            modelBuilder.Entity("Lagedra.Modules.Notifications.Domain.Entities.SmsConsent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("OptedIn")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("OptedInAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("OptedOutAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PhoneE164")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PhoneE164")
+                        .IsUnique();
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("sms_consents", "notifications");
+                });
+
             modelBuilder.Entity("Lagedra.Modules.Notifications.Domain.Entities.UserNotificationPreferences", b =>
                 {
                     b.Property<Guid>("Id")

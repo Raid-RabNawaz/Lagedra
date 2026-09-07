@@ -16,7 +16,19 @@ public interface IHostProfileProvider
     /// filled in (name, photo, bio, location, etc.).
     /// </summary>
     Task<HostProfileCompletenessDto> GetProfileCompletenessAsync(Guid userId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Profile + completeness for many hosts in one read. Used by the admin
+    /// review queue so a large pending set does not fan out into 2N lookups.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, HostReviewSnapshot>> GetReviewSnapshotsAsync(
+        IReadOnlyCollection<Guid> userIds,
+        CancellationToken ct = default);
 }
+
+public sealed record HostReviewSnapshot(
+    HostProfileDto? Profile,
+    HostProfileCompletenessDto Completeness);
 
 public sealed record HostProfileDto(
     string? DisplayName,

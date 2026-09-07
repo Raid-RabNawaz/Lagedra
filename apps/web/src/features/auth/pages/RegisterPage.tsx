@@ -239,7 +239,15 @@ export const RegisterPage = () => {
         </Button>
 
         <p className="text-center text-xs text-muted-foreground">
-          By signing up, you agree to our Terms of Service and Privacy Policy.
+          By signing up, you agree to our{" "}
+          <Link to="/tc" className="font-medium text-foreground hover:underline">
+            Terms and Conditions
+          </Link>{" "}
+          and{" "}
+          <Link to="/privacy" className="font-medium text-foreground hover:underline">
+            Privacy Policy
+          </Link>
+          .
         </p>
       </form>
 

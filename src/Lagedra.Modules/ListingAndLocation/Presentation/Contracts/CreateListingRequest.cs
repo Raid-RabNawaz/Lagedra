@@ -29,6 +29,7 @@ public sealed record CreateListingRequest(
     Guid? HomeOwnerUserId = null,
     string? HomeOwnerEmail = null,
     bool IncludeBrokerClause = false,
+    LeaseAgreementSource LeaseAgreementSource = LeaseAgreementSource.LagedraTemplate,
     ListingAddedVia AddedVia = ListingAddedVia.Manual,
     string? AddedViaDetail = null);
 

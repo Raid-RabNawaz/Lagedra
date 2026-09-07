@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Alert } from "@/components/ui/alert";
 import { useCancelBooking } from "@/features/activation-billing/hooks/useBilling";
 import { formatMoney } from "@/utils/format";
+import { STAY_PROTECTION_LABEL } from "@/features/listings/lib/stayProtection";
 import { getApiErrorMessage } from "@/api/errors";
 import type { CancellationResultDto } from "@/api/types";
 
@@ -77,7 +78,7 @@ export const CancelBookingDialog = ({ dealId, open, onOpenChange }: Props) => {
                 </span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Insurance refund</span>
+                <span className="text-muted-foreground">{STAY_PROTECTION_LABEL} refund</span>
                 <span className="font-medium">
                   {formatMoney(result.insuranceRefundCents)}
                 </span>

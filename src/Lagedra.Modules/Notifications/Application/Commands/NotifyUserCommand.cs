@@ -1,4 +1,6 @@
+using Lagedra.Modules.Notifications.Application;
 using Lagedra.Modules.Notifications.Domain.Enums;
+using Lagedra.Modules.Notifications.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Results;
 using MediatR;
@@ -20,6 +22,7 @@ public sealed partial class NotifyUserCommandHandler(
     IMediator mediator,
     IUserEmailResolver emailResolver,
     IUserPhoneResolver phoneResolver,
+    NotificationDbContext dbContext,
     ILogger<NotifyUserCommandHandler> logger)
     : IRequestHandler<NotifyUserCommand, Result>
 {
@@ -64,6 +67,15 @@ public sealed partial class NotifyUserCommandHandler(
                         break;
                     }
 
+                    var campaignOptIn = await SmsConsentStore
+                        .IsOptedInAsync(dbContext, phone, cancellationToken)
+                        .ConfigureAwait(false);
+                    if (!campaignOptIn)
+                    {
+                        LogSmsCampaignOptOut(logger, request.RecipientUserId);
+                        break;
+                    }
+
                     await mediator.Send(new QueueNotificationCommand(
                         request.RecipientUserId,
                         phone,
@@ -94,4 +106,8 @@ public sealed partial class NotifyUserCommandHandler(
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "No verified phone for user {UserId}, skipping SMS notification")]
     private static partial void LogPhoneNotEligible(ILogger logger, Guid userId);
+
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "User {UserId} has not opted in to SMS campaigns, skipping SMS notification")]
+    private static partial void LogSmsCampaignOptOut(ILogger logger, Guid userId);
 }

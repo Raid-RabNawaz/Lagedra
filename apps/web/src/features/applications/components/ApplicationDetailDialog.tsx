@@ -27,6 +27,7 @@ import { ApplicationProfilePanel } from "./ApplicationProfilePanel";
 import { TrustLevelBadge } from "./TrustLevelBadge";
 import { useHostBillingStatement } from "@/features/activation-billing/hooks/useBilling";
 import { formatDate, formatMoney } from "@/utils/format";
+import { STAY_PROTECTION_LABEL } from "@/features/listings/lib/stayProtection";
 import type { DealApplicationDto } from "@/api/types";
 
 export type ApplicationPerspective = "host" | "tenant" | "owner";
@@ -191,7 +192,7 @@ export const ApplicationDetailDialog = ({
                   application.insuranceFeeCents > 0 && (
                     <li className="flex items-center gap-2">
                       <Shield className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium">Insurance:</span>
+                      <span className="font-medium">{STAY_PROTECTION_LABEL}:</span>
                       {formatMoney(application.insuranceFeeCents)}
                     </li>
                   )}

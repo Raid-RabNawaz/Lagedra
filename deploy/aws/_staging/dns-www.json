@@ -1,0 +1,29 @@
+{
+  "Changes": [
+    {
+      "ResourceRecordSet": {
+        "AliasTarget": {
+          "EvaluateTargetHealth": false,
+          "DNSName": "d1ygv5g8h2016m.cloudfront.net.",
+          "HostedZoneId": "Z2FDTNDATAQYW2"
+        },
+        "Name": "www.lagedra.com.",
+        "Type": "A"
+      },
+      "Action": "UPSERT"
+    },
+    {
+      "ResourceRecordSet": {
+        "AliasTarget": {
+          "EvaluateTargetHealth": false,
+          "DNSName": "d1ygv5g8h2016m.cloudfront.net.",
+          "HostedZoneId": "Z2FDTNDATAQYW2"
+        },
+        "Name": "www.lagedra.com.",
+        "Type": "AAAA"
+      },
+      "Action": "UPSERT"
+    }
+  ],
+  "Comment": "www.lagedra.com -> CloudFront"
+}

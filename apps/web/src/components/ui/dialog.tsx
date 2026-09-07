@@ -109,11 +109,12 @@ const DialogContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTML
       <DialogPortal>
         <div
           ref={ref}
-          className={cn("rounded-xl border bg-background p-6 shadow-lg", className)}
+          className={cn("relative rounded-xl border bg-background p-6 shadow-lg", className)}
           {...props}
         >
           {children}
           <button
+            type="button"
             onClick={() => onOpenChange(false)}
             className="absolute right-4 top-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 cursor-pointer"
             aria-label="Close"

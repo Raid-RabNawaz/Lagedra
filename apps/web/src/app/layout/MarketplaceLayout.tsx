@@ -154,22 +154,20 @@ export const MarketplaceLayout = () => {
             <FooterColumn
               title="Support"
               links={[
-                { label: "Help center", to: "#" },
-                { label: "Trust & safety", to: "#" },
-                { label: "Cancellation options", to: "#" },
-                { label: "Report a concern", to: "#" },
-                { label: "Contact", to: "#" },
+                { label: "How it works", to: "/how-it-works" },
+                { label: "FAQ", to: "/faq" },
+                { label: "Text messages", to: "/sms" },
+                { label: "Contact", to: "/contact" },
               ]}
             />
 
             <FooterColumn
-              title="Lagedra Cares"
+              title="Lagedra"
               links={[
-                { label: "About us", to: "#" },
-                { label: "Careers", to: "#" },
-                { label: "Lagedra Trust Protocol", to: "#" },
-                { label: "Press", to: "#" },
-                { label: "Investors", to: "#" },
+                { label: "About us", to: "/about" },
+                { label: "Join", to: "/join" },
+                { label: "Terms", to: "/tc" },
+                { label: "Privacy", to: "/privacy" },
               ]}
             />
           </div>
@@ -179,9 +177,14 @@ export const MarketplaceLayout = () => {
               &copy; {new Date().getFullYear()} Lagedra &middot; Mid-term rental trust protocol
             </p>
             <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-              <a href="#" className="hover:text-foreground">Privacy</a>
-              <a href="#" className="hover:text-foreground">Terms</a>
-              <a href="#" className="hover:text-foreground">Cookies</a>
+              <Link to="/about" className="hover:text-foreground">About</Link>
+              <Link to="/how-it-works" className="hover:text-foreground">How it works</Link>
+              <Link to="/faq" className="hover:text-foreground">FAQ</Link>
+              <Link to="/contact" className="hover:text-foreground">Contact</Link>
+              <Link to="/privacy" className="hover:text-foreground">Privacy</Link>
+              <Link to="/tc" className="hover:text-foreground">Terms</Link>
+              <Link to="/sms" className="hover:text-foreground">Text messages</Link>
+              <Link to="/privacy#cookies" className="hover:text-foreground">Cookies</Link>
             </div>
           </div>
         </div>

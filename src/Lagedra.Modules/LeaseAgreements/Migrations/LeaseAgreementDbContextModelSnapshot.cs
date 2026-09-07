@@ -132,10 +132,17 @@ namespace LeaseAgreements.Migrations
                     b.Property<Guid?>("SnapshotId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("TemplateId")
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasDefaultValue("LagedraTemplate");
+
+                    b.Property<Guid?>("TemplateId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("TemplateVersionId")
+                    b.Property<Guid?>("TemplateVersionId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("UpdatedAt")

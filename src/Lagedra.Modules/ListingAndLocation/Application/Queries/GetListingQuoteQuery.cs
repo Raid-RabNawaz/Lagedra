@@ -17,9 +17,9 @@ namespace Lagedra.Modules.ListingAndLocation.Application.Queries;
 ///   <item><description>First-month rent (from <c>Listing.MonthlyRentCents</c>).</description></item>
 ///   <item><description>Security deposit — falls back in this order: explicit
 ///     <c>DefaultDepositCents</c>, midpoint of the suggested band,
-///     <c>MaxDepositCents</c>.</description></item>
-///   <item><description>Insurance fee for the requested stay length, computed
-///     by <see cref="IInsuranceFeeCalculator"/>.</description></item>
+    ///     <c>MaxDepositCents</c>.</description></item>
+///   <item><description>Stay-protection fee for the requested stay length, computed
+///     by <see cref="IInsuranceFeeCalculator"/> (Truvi nightly recovery).</description></item>
 ///   <item><description>Monthly protocol fee, charged separately to the host —
 ///     surfaced for transparency only.</description></item>
 /// </list>
@@ -114,11 +114,10 @@ public sealed class GetListingQuoteQueryHandler(
             listing.SuggestedDepositHighCents,
             listing.MaxDepositCents);
 
-        // Every booking is covered by a third-party policy quoted at
-        // booking time — there is no longer a host opt-in. The fee
-        // calculator decides the actual premium based on rent + stay
-        // length; the listing flag that used to gate this call has been
-        // removed alongside its UI checkbox.
+        // Stay protection is included on eligible bookings. The fee
+        // calculator (Truvi nightly recovery, or another registered
+        // mode) decides the tenant line from stay length. There is no
+        // host opt-in flag.
         var insuranceQuote = await insuranceFeeCalculator
             .CalculateFeeAsync(listing.MonthlyRentCents, stayDays, cancellationToken)
             .ConfigureAwait(false);

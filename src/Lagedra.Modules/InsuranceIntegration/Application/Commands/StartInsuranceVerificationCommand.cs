@@ -37,6 +37,12 @@ public sealed class StartInsuranceVerificationCommandHandler(
             record.Id, "Verification initiated", VerificationSource.API);
         record.AddAttempt(attempt);
 
+        // Required whenever the record already existed: EF reads the attempt's
+        // domain-assigned key as an existing row and would emit an UPDATE that
+        // matches nothing. Harmless on the branch above, where the record is
+        // new and Add already propagates Added across the graph.
+        dbContext.VerificationAttempts.Add(attempt);
+
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return Result<InsuranceStatusDto>.Success(MapToDto(record));
@@ -45,5 +51,6 @@ public sealed class StartInsuranceVerificationCommandHandler(
     private static InsuranceStatusDto MapToDto(InsurancePolicyRecord r) =>
         new(r.Id, r.DealId, r.TenantUserId, r.State,
             r.Provider, r.PolicyNumber, r.VerifiedAt,
-            r.ExpiresAt, r.CoverageScope);
+            r.ExpiresAt, r.CoverageScope,
+            r.ExternalVerificationId, r.ScreeningStatus, r.FlaggedReason);
 }
