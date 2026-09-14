@@ -1,8 +1,10 @@
+import { useEffect } from "react";
 import { isRouteErrorResponse, useNavigate, useRouteError } from "react-router-dom";
 import { Home, RotateCcw } from "lucide-react";
 import { ErrorState } from "@/components/shared/ErrorState";
 import { Button } from "@/components/ui/button";
 import { toFriendlyError } from "@/lib/errors";
+import { reloadOnceOnStaleChunk } from "@/lib/staleChunk";
 
 /**
  * React Router `errorElement`. Renders inside the surrounding route layout
@@ -16,6 +18,10 @@ import { toFriendlyError } from "@/lib/errors";
 export function RouteErrorBoundary() {
   const error = useRouteError();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    reloadOnceOnStaleChunk(error);
+  }, [error]);
 
   let title: string | undefined;
   let message: string | undefined;

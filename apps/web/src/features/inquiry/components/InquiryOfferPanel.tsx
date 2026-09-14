@@ -4,7 +4,7 @@ import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { getApiErrorMessage } from "@/api/errors";
@@ -289,21 +289,23 @@ export const InquiryOfferPanel = ({
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="offer-rent">Monthly rent (USD)</Label>
-                <Input
+                <NumberInput
                   id="offer-rent"
-                  inputMode="decimal"
-                  value={rentInput}
-                  onChange={(e) => setRentInput(e.target.value)}
+                  min={0}
+                  decimalPlaces={2}
+                  value={rentInput === "" ? null : Number(rentInput)}
+                  onValueChange={(n) => setRentInput(n == null ? "" : String(n))}
                   placeholder="2000"
                 />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="offer-deposit">Deposit (USD)</Label>
-                <Input
+                <NumberInput
                   id="offer-deposit"
-                  inputMode="decimal"
-                  value={depositInput}
-                  onChange={(e) => setDepositInput(e.target.value)}
+                  min={0}
+                  decimalPlaces={2}
+                  value={depositInput === "" ? null : Number(depositInput)}
+                  onValueChange={(n) => setDepositInput(n == null ? "" : String(n))}
                   placeholder="4000"
                 />
               </div>

@@ -1,4 +1,5 @@
 import { isAxiosError } from "axios";
+import { isStaleChunkError } from "@/lib/staleChunk";
 
 export type FriendlyError = {
   title: string;
@@ -48,6 +49,11 @@ const UNKNOWN_ERROR: FriendlyError = {
   message: "An unexpected error occurred. Please try again.",
 };
 
+const STALE_CHUNK_ERROR: FriendlyError = {
+  title: "This page was updated",
+  message: "A new version of the site is available. Refresh to load it.",
+};
+
 /**
  * Converts any error (axios, native Error, unknown) into a user-friendly
  * { title, message, status?, code? } shape. Never throws.
@@ -91,6 +97,10 @@ export function toFriendlyError(error: unknown): FriendlyError {
       status,
       code,
     };
+  }
+
+  if (isStaleChunkError(error)) {
+    return STALE_CHUNK_ERROR;
   }
 
   if (error instanceof Error) {

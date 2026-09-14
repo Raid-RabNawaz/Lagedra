@@ -3,18 +3,23 @@ using Lagedra.SharedKernel.Integration;
 namespace Lagedra.Modules.ActivationAndBilling.Domain.Services;
 
 /// <summary>
-/// Pure mapping from a tenant's verification tier + a listing's predetermined
-/// deposit amounts to the concrete deposit charged for a reservation, plus a
-/// human-readable reason for the UI. When a tier-specific amount has not been
-/// configured on the listing the maximum deposit is used as a safe fallback so
-/// older listings (created before per-tier deposits existed) keep working.
+/// Pure mapping from a tenant's trust tier + a listing's predetermined
+/// deposit amounts to the concrete deposit charged for a reservation.
+/// Unverified and Verified share the standard band; Trusted uses the
+/// former background-verified column; Elite uses the former partner column.
 /// </summary>
 public static class DepositSelectionService
 {
-    public const string PartnerReason = "Partner guarantee applied";
-    public const string BackgroundVerifiedReason = "Verified tenant discount applied";
-    public const string UnverifiedReason = "Standard deposit (unverified tenant)";
+    public const string EliteReason = "Elite tenant discount applied";
+    public const string TrustedReason = "Trusted tenant discount applied";
+    public const string UnverifiedReason = "Standard deposit";
     public const string FallbackReason = "Standard deposit (maximum)";
+
+    /// <summary>Legacy alias kept so older snapshots still match in tests.</summary>
+    public const string PartnerReason = EliteReason;
+
+    /// <summary>Legacy alias kept so older snapshots still match in tests.</summary>
+    public const string BackgroundVerifiedReason = TrustedReason;
 
     public static DepositSelection Select(
         TenantVerificationTier tier,
@@ -25,16 +30,19 @@ public static class DepositSelectionService
     {
         return tier switch
         {
-            TenantVerificationTier.PartnerGuaranteed => partnerGuaranteedCents is { } partner
-                ? new DepositSelection(partner, tier, PartnerReason)
+            TenantVerificationTier.Elite => partnerGuaranteedCents is { } elite
+                ? new DepositSelection(elite, tier, EliteReason)
                 : new DepositSelection(maxDepositCents, tier, FallbackReason),
 
-            TenantVerificationTier.BackgroundVerified => backgroundVerifiedCents is { } verified
-                ? new DepositSelection(verified, tier, BackgroundVerifiedReason)
+            TenantVerificationTier.Trusted => backgroundVerifiedCents is { } trusted
+                ? new DepositSelection(trusted, tier, TrustedReason)
                 : new DepositSelection(maxDepositCents, tier, FallbackReason),
 
-            _ => unverifiedCents is { } unverified
-                ? new DepositSelection(unverified, tier, UnverifiedReason)
+            TenantVerificationTier.Blocklisted =>
+                new DepositSelection(maxDepositCents, tier, FallbackReason),
+
+            _ => unverifiedCents is { } standard
+                ? new DepositSelection(standard, tier, UnverifiedReason)
                 : new DepositSelection(maxDepositCents, tier, FallbackReason),
         };
     }

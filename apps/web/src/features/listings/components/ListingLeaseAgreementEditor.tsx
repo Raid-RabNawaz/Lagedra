@@ -5,6 +5,7 @@ import { FileText, Loader2, ShieldCheck, Trash2, Upload } from "lucide-react";
 import type { ListingDetailsDto } from "@/api/types";
 import { listingApi } from "@/features/listings/services/listingApi";
 import type { ListingFormValues } from "@/features/listings/lib/listingFormSchema";
+import { ListingLeaseSpecimenPreview } from "@/features/listings/components/ListingLeaseSpecimenPreview";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { FormError } from "@/components/shared/FormError";
@@ -102,10 +103,34 @@ export function ListingLeaseAgreementEditor({
           <p className="text-xs text-muted-foreground">
             Our counsel-vetted lease for your property&apos;s jurisdiction. Tenant and
             landlord names, dates, rent and your lease terms are filled in
-            automatically when a booking is confirmed.
+            automatically when a booking is confirmed. Download the blank
+            copy before you decide.
           </p>
         </div>
       </label>
+
+      {!usesOwnLease && (
+        <div className="space-y-2 rounded-lg border p-4">
+          <p className="text-sm font-medium">Lagedra&apos;s standard lease</p>
+          <p className="text-xs text-muted-foreground">
+            A blank specimen with this listing&apos;s saved rent, deposit and
+            lease terms filled in. Names, dates and the exact address stay
+            blank until a booking is confirmed.
+          </p>
+          {listing ? (
+            <ListingLeaseSpecimenPreview
+              listingId={listing.id}
+              specimenOnly
+              downloadLabel="Download the blank lease"
+            />
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Continue past the first step to create your draft, then come
+              back to download the blank lease.
+            </p>
+          )}
+        </div>
+      )}
 
       {usesOwnLease && (
         <div className="space-y-3 rounded-lg border p-4">

@@ -22,6 +22,7 @@ import { ListRowsSkeleton } from "@/components/shared/ListSkeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { ErrorState } from "@/components/shared/ErrorState";
 import { cn } from "@/lib/utils";
+import { formatDateTime } from "@/utils/format";
 import type { DealApplicationDto, DealApplicationStatus } from "@/api/types";
 
 type StatusFilter = DealApplicationStatus | "All";
@@ -226,6 +227,7 @@ export const MyApplicationsPage = () => {
                                 {group.applications.length}{" "}
                                 {group.applications.length === 1 ? "request" : "requests"}
                               </span>
+                              <span>Latest {formatDateTime(group.latestSubmission)}</span>
                             </span>
                           </span>
                         </button>

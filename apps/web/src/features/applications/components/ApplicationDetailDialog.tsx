@@ -25,8 +25,10 @@ import { Alert } from "@/components/ui/alert";
 import { ApplicationStatusBadge } from "./ApplicationStatusBadge";
 import { ApplicationProfilePanel } from "./ApplicationProfilePanel";
 import { TrustLevelBadge } from "./TrustLevelBadge";
+import { ApplicationScreeningPanel } from "./ApplicationScreeningPanel";
+import { useApplicationScreening } from "@/features/applications/hooks/useApplications";
 import { useHostBillingStatement } from "@/features/activation-billing/hooks/useBilling";
-import { formatDate, formatMoney } from "@/utils/format";
+import { formatDateTime, formatMoney } from "@/utils/format";
 import { STAY_PROTECTION_LABEL } from "@/features/listings/lib/stayProtection";
 import type { DealApplicationDto } from "@/api/types";
 
@@ -48,6 +50,9 @@ export const ApplicationDetailDialog = ({
 }: Props) => {
   const isHostView = perspective === "host" || perspective === "owner";
   const { data: statement } = useHostBillingStatement(isHostView && open);
+  const { data: screening } = useApplicationScreening(
+    isHostView && open ? application.applicationId : undefined,
+  );
   const profileUserId = isHostView
     ? application.tenantUserId
     : application.landlordUserId;
@@ -77,7 +82,17 @@ export const ApplicationDetailDialog = ({
             tier={application.tenantVerificationTier}
             detailed
             depositReason={application.depositReason}
+            lastScreenedAt={screening?.lastScreenedAt ?? application.lastScreenedAt}
           />
+
+          {open && (
+            <ApplicationScreeningPanel
+              applicationId={application.applicationId}
+              tenantTier={application.tenantVerificationTier}
+              viewer={isHostView ? "host" : "guest"}
+              embedded
+            />
+          )}
 
           {/* Listing context — especially useful on the tenant side */}
           <section className="rounded-lg border bg-muted/20 p-4">
@@ -286,21 +301,31 @@ export const ApplicationDetailDialog = ({
 
           <section className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
             <div className="space-y-0.5">
-              <p>Submitted {formatDate(application.submittedAt)}</p>
+              <p>Requested {formatDateTime(application.submittedAt)}</p>
               {application.decidedAt && (
-                <p>Decided {formatDate(application.decidedAt)}</p>
+                <p>Decided {formatDateTime(application.decidedAt)}</p>
               )}
             </div>
-            {application.dealId && application.status === "Approved" && (
+            <div className="flex flex-wrap items-center gap-3">
               <Link
-                to={`/app/deals/${application.dealId}`}
+                to={`/app/applications/${application.applicationId}`}
                 className="inline-flex items-center gap-1 text-primary hover:underline"
                 onClick={() => onOpenChange(false)}
               >
-                View booking
+                View full request
                 <ExternalLink className="h-3 w-3" />
               </Link>
-            )}
+              {application.dealId && application.status === "Approved" && (
+                <Link
+                  to={`/app/deals/${application.dealId}`}
+                  className="inline-flex items-center gap-1 text-primary hover:underline"
+                  onClick={() => onOpenChange(false)}
+                >
+                  View booking
+                  <ExternalLink className="h-3 w-3" />
+                </Link>
+              )}
+            </div>
           </section>
         </div>
       </DialogContent>

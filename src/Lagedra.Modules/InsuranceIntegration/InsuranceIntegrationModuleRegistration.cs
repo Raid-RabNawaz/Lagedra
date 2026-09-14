@@ -52,6 +52,7 @@ public static class InsuranceIntegrationModuleRegistration
         // any insurance line appears on bookings.
         //
         //   Insurance:FeeCalculationMode = "Truvi"        → nightly stay-protection recovery
+        //     (still $0 until Insurance:Truvi:SubscriptionKey is set)
         //   Insurance:FeeCalculationMode = "Api"          → live third-party /v1/quotes connector
         //   Insurance:FeeCalculationMode = "Configurable" → built-in % of rent (dev/QA)
         //   anything else (incl. unset)                   → NullInsuranceFeeCalculator (FeeCents = 0)

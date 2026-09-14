@@ -42,16 +42,9 @@ public sealed partial class TruviScreenAndProtectClient(
             throw ToException(response, body);
         }
 
-        var parsed = JsonSerializer.Deserialize<CreateResponse>(body, JsonOptions)
-            ?? throw new TruviScreenAndProtectException("Truvi create returned an empty body.");
-
-        if (string.IsNullOrWhiteSpace(parsed.VerificationId) || string.IsNullOrWhiteSpace(parsed.Status))
-        {
-            throw new TruviScreenAndProtectException("Truvi create response was missing verificationId or status.");
-        }
-
+        var parsed = ParseCreateResult(body);
         LogCreated(logger, parsed.VerificationId, parsed.Status);
-        return new TruviVerificationResult(parsed.VerificationId, parsed.Status, parsed.FlaggedReason);
+        return parsed;
     }
 
     public async Task ModifyAsync(
@@ -110,6 +103,67 @@ public sealed partial class TruviScreenAndProtectClient(
         message.Headers.TryAddWithoutValidation("Ocp-Apim-Subscription-Key", _settings.SubscriptionKey);
     }
 
+    /// <summary>
+    /// Official create success is nested:
+    /// <c>{ "metadata": {...}, "verification": { "verificationId", "status", "flaggedReason?" } }</c>.
+    /// Flat top-level fields are accepted as a fallback.
+    /// </summary>
+    private static TruviVerificationResult ParseCreateResult(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            throw new TruviScreenAndProtectException("Truvi create returned an empty body.");
+        }
+
+        JsonDocument document;
+        try
+        {
+            document = JsonDocument.Parse(body);
+        }
+        catch (JsonException ex)
+        {
+            throw new TruviScreenAndProtectException(
+                $"Truvi create response was not JSON: {Truncate(body)}",
+                ex);
+        }
+
+        using (document)
+        {
+            var root = document.RootElement;
+            var verification = root.TryGetProperty("verification", out var nested)
+                ? nested
+                : root;
+            var verificationId = ReadString(verification, "verificationId")
+                ?? ReadString(root, "verificationId");
+            var status = ReadString(verification, "status")
+                ?? ReadString(root, "status");
+            var flaggedReason = ReadString(verification, "flaggedReason")
+                ?? ReadString(root, "flaggedReason");
+
+            if (string.IsNullOrWhiteSpace(verificationId) || string.IsNullOrWhiteSpace(status))
+            {
+                throw new TruviScreenAndProtectException(
+                    $"Truvi create response was missing verificationId or status. Body: {Truncate(body)}");
+            }
+
+            return new TruviVerificationResult(verificationId, status, flaggedReason);
+        }
+    }
+
+    private static string? ReadString(JsonElement element, string name)
+    {
+        if (element.ValueKind != JsonValueKind.Object
+            || !element.TryGetProperty(name, out var property))
+        {
+            return null;
+        }
+
+        return property.ValueKind == JsonValueKind.String ? property.GetString() : null;
+    }
+
+    private static string Truncate(string value)
+        => value.Length <= 400 ? value : value[..400];
+
     private static TruviScreenAndProtectException ToException(HttpResponseMessage response, string body)
     {
         ProblemDetails? problem = null;
@@ -145,18 +199,6 @@ public sealed partial class TruviScreenAndProtectClient(
     private static partial void LogCancelled(ILogger logger, string verificationId);
 
 #pragma warning disable CA1812
-    private sealed class CreateResponse
-    {
-        [JsonPropertyName("verificationId")]
-        public string VerificationId { get; init; } = string.Empty;
-
-        [JsonPropertyName("status")]
-        public string Status { get; init; } = string.Empty;
-
-        [JsonPropertyName("flaggedReason")]
-        public string? FlaggedReason { get; init; }
-    }
-
     private sealed class ProblemDetails
     {
         [JsonPropertyName("title")]

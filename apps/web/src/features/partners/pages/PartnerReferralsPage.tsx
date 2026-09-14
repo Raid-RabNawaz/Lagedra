@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
-import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
@@ -336,12 +336,12 @@ function NewLinkDialog({
           </div>
           <div className="space-y-2">
             <Label htmlFor="link-max-uses">Max uses (optional)</Label>
-            <Input
+            <NumberInput
               id="link-max-uses"
-              type="number"
-              min="1"
-              value={maxUses}
-              onChange={(e) => setMaxUses(e.target.value)}
+              min={1}
+              decimalPlaces={0}
+              value={maxUses === "" ? null : Number(maxUses)}
+              onValueChange={(n) => setMaxUses(n == null ? "" : String(n))}
               placeholder="e.g. 100"
             />
           </div>

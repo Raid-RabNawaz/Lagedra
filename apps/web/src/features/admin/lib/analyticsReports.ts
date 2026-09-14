@@ -1,4 +1,5 @@
 import type { ListingAnalyticsItemDto, PlatformSummaryDto } from "@/api/types";
+import { listingReviewLocationLabel } from "@/features/admin/lib/listingReviewFilters";
 import { centsToUsd, downloadCsv, isoDate, toCsv } from "./csv";
 
 export function buildPlatformAnalyticsCsv(summary: PlatformSummaryDto): string {
@@ -41,6 +42,10 @@ export function buildListingAnalyticsCsv(items: readonly ListingAnalyticsItemDto
     [
       "listingId",
       "title",
+      "location",
+      "city",
+      "state",
+      "country",
       "landlordUserId",
       "landlordName",
       "landlordEmail",
@@ -56,6 +61,10 @@ export function buildListingAnalyticsCsv(items: readonly ListingAnalyticsItemDto
     items.map((item) => [
       item.listingId,
       item.title,
+      listingReviewLocationLabel(item),
+      item.city,
+      item.state,
+      item.country,
       item.landlordUserId,
       item.landlordName,
       item.landlordEmail,

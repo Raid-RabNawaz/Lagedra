@@ -5,5 +5,6 @@ public enum FraudFlagType
     SyntheticId,
     ContactInfoBypass,
     TrustLedgerGaming,
-    BadFaithReporting
+    BadFaithReporting,
+    InquiryAbuse
 }

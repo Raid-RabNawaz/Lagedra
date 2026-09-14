@@ -51,6 +51,29 @@ public sealed class HostStripeAccount : Entity<Guid>
     }
 
     /// <summary>
+    /// Points this host at a new Connect account (platform key rotation or a
+    /// deleted Express account). Reuses the same row so the unique HostUserId
+    /// index is not violated — <c>Remove</c> is a soft-delete and would leave
+    /// the old row occupying that index.
+    /// </summary>
+    public void ReplaceConnectedAccount(string stripeAccountId, IClock clock)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(stripeAccountId);
+        ArgumentNullException.ThrowIfNull(clock);
+
+        var now = clock.UtcNow;
+        StripeAccountId = stripeAccountId;
+        OnboardingStatus = StripeOnboardingStatus.Pending;
+        ChargesEnabled = false;
+        PayoutsEnabled = false;
+        TaxStatus = HostAccountRequirementStatus.Unknown;
+        BankAccountStatus = HostAccountRequirementStatus.Unknown;
+        IsDeleted = false;
+        DeletedAt = null;
+        UpdatedAt = now;
+    }
+
+    /// <summary>
     /// Syncs capability flags and requirement-derived states from the connected
     /// account. The tax/bank inputs are neutral booleans extracted from Stripe's
     /// <c>requirements</c> collections so this domain method owns the mapping to

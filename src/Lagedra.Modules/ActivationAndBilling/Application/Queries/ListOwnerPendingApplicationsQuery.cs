@@ -13,7 +13,8 @@ public sealed record ListOwnerPendingApplicationsQuery(Guid OwnerUserId)
 
 public sealed class ListOwnerPendingApplicationsQueryHandler(
     BillingDbContext dbContext,
-    IListingProvider listingProvider)
+    IListingProvider listingProvider,
+    IVerificationSignalProvider verificationSignals)
     : IRequestHandler<ListOwnerPendingApplicationsQuery, Result<IReadOnlyList<DealApplicationDto>>>
 {
     public async Task<Result<IReadOnlyList<DealApplicationDto>>> Handle(
@@ -55,6 +56,10 @@ public sealed class ListOwnerPendingApplicationsQueryHandler(
                     : dto;
             })
             .ToList();
+
+        dtos = await DealApplicationScreeningDates
+            .AttachAsync(dtos, verificationSignals, cancellationToken)
+            .ConfigureAwait(false);
 
         return Result<IReadOnlyList<DealApplicationDto>>.Success(dtos);
     }

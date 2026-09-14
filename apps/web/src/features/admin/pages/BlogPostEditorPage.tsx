@@ -5,6 +5,7 @@ import type { CreateBlogPostRequest } from "@/api/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Loader } from "@/components/shared/Loader";
@@ -169,12 +170,12 @@ export const BlogPostEditorPage = () => {
             </div>
             <div className="space-y-2">
               <Label htmlFor="readingTime">Reading Time (minutes)</Label>
-              <Input
+              <NumberInput
                 id="readingTime"
-                type="number"
                 min={1}
+                decimalPlaces={0}
                 value={form.readingTimeMinutes}
-                onChange={(e) => update("readingTimeMinutes", Number(e.target.value))}
+                onValueChange={(n) => update("readingTimeMinutes", n ?? 1)}
               />
             </div>
           </div>

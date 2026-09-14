@@ -84,6 +84,29 @@ public sealed class Notification : AggregateRoot<Guid>
         AddDomainEvent(new NotificationFailedEvent(Id, error));
     }
 
+    /// <summary>
+    /// Puts a template-not-found failure back in the queue after the missing
+    /// template has been seeded. Resets attempt count so delivery is not
+    /// immediately poisoned by the previous failures.
+    /// </summary>
+    public void RequeueAfterMissingTemplate()
+    {
+        if (Status != NotificationStatus.Failed)
+        {
+            throw new InvalidOperationException($"Cannot requeue notification in status '{Status}'.");
+        }
+
+        if (LastError is null
+            || LastError.IndexOf("not found", StringComparison.OrdinalIgnoreCase) < 0)
+        {
+            throw new InvalidOperationException("Cannot requeue a failure that is not a missing template.");
+        }
+
+        Status = NotificationStatus.Queued;
+        AttemptCount = 0;
+        LastError = null;
+    }
+
     public void MarkDelivered(DateTime deliveredAt)
     {
         if (Status != NotificationStatus.Sent)

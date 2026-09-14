@@ -424,24 +424,34 @@ public sealed class OnPaymentDisputeResolvedNotify(BillingDbContext db, IMediato
     }
 }
 
-public sealed class OnDealActivatedNotify(IMediator m)
+public sealed class OnDealActivatedNotify(IMediator m, IConfiguration configuration)
     : IDomainEventHandler<DealActivatedEvent>
 {
     public async Task Handle(DealActivatedEvent e, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(e);
+        var frontendUrl = (configuration["App:FrontendUrl"] ?? "http://localhost:3000")
+            .TrimEnd('/');
+        var dealUrl = $"{frontendUrl}/app/deals/{e.DealId}";
+        var payload = new Dictionary<string, string>
+        {
+            ["dealId"] = e.DealId.ToString(),
+            ["frontendUrl"] = frontendUrl,
+            ["dealUrl"] = dealUrl,
+        };
+
         await m.Send(new NotifyUserCommand(
             e.TenantUserId, "deal_activated",
             "Booking Active",
             "Your booking is now active and insurance is confirmed.",
-            new() { ["dealId"] = e.DealId.ToString() },
+            payload,
             Channels.EmailInAppAndSms, e.DealId, "Deal"), ct).ConfigureAwait(false);
 
         await m.Send(new NotifyUserCommand(
             e.LandlordUserId, "deal_activated",
             "Deal Complete",
             "Deal complete. Your booking is active and insurance is in place.",
-            new() { ["dealId"] = e.DealId.ToString() },
+            new Dictionary<string, string>(payload),
             Channels.EmailInAppAndSms, e.DealId, "Deal"), ct).ConfigureAwait(false);
     }
 }

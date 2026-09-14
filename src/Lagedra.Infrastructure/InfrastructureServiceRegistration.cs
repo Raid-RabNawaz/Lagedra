@@ -12,8 +12,10 @@ using Lagedra.Infrastructure.External.Email;
 using Lagedra.Infrastructure.External.Geocoding;
 using Lagedra.Infrastructure.External.Insurance;
 using Lagedra.Infrastructure.External.Payments;
+using Lagedra.Infrastructure.External.Checkr;
 using Lagedra.Infrastructure.External.Kyc;
 using Lagedra.Infrastructure.External.Persona;
+using Lagedra.SharedKernel.Integration.Screening;
 using Lagedra.Infrastructure.External.Sms;
 using Lagedra.Infrastructure.External.Storage;
 using Lagedra.SharedKernel.Integration;
@@ -112,6 +114,26 @@ public static class InfrastructureServiceRegistration
         else
         {
             services.AddScoped<IKycProvider, NoOpKycProvider>();
+        }
+
+        services.Configure<ScreeningOptions>(configuration.GetSection(ScreeningOptions.SectionName));
+        services.Configure<CheckrSettings>(configuration.GetSection(CheckrSettings.SectionName));
+        var screeningProvider = configuration.GetValue<string>($"{ScreeningOptions.SectionName}:Provider");
+        var checkrSettings = configuration.GetSection(CheckrSettings.SectionName).Get<CheckrSettings>()
+            ?? new CheckrSettings();
+        if (string.Equals(screeningProvider, "Checkr", StringComparison.OrdinalIgnoreCase)
+            && checkrSettings.IsConfigured)
+        {
+            services.AddHttpClient<ITenantScreeningProvider, CheckrTenantScreeningProvider>(client =>
+            {
+                client.BaseAddress = checkrSettings.BaseUrl;
+                // Checkr PDF render is synchronous and can exceed 60s on a cold report.
+                client.Timeout = TimeSpan.FromSeconds(90);
+            });
+        }
+        else
+        {
+            services.AddScoped<ITenantScreeningProvider, NoOpTenantScreeningProvider>();
         }
 
         // MinIO (Object Storage)

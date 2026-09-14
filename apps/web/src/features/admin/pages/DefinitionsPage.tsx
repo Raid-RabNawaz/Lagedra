@@ -24,6 +24,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -340,11 +341,12 @@ function AmenityFormDialog({
         </div>
         <div className="space-y-2">
           <Label htmlFor="amenity-sort">Sort order</Label>
-          <Input
+          <NumberInput
             id="amenity-sort"
-            type="number"
+            min={0}
+            decimalPlaces={0}
             value={sortOrder}
-            onChange={(e) => setSortOrder(Number(e.target.value))}
+            onValueChange={(n) => setSortOrder(n ?? 0)}
           />
         </div>
         {isEdit && (
@@ -725,11 +727,12 @@ function SimpleDefinitionFormDialog<
         </div>
         <div className="space-y-2">
           <Label htmlFor="def-sort">Sort order</Label>
-          <Input
+          <NumberInput
             id="def-sort"
-            type="number"
+            min={0}
+            decimalPlaces={0}
             value={sortOrder}
-            onChange={(e) => setSortOrder(Number(e.target.value))}
+            onValueChange={(n) => setSortOrder(n ?? 0)}
           />
         </div>
         {isEdit && (

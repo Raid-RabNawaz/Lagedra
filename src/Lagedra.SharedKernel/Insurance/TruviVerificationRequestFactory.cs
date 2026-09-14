@@ -90,6 +90,19 @@ public static partial class TruviVerificationRequestFactory
         return true;
     }
 
+    public static string? ResolveListingName(string? title, string? street, string? city)
+    {
+        if (!string.IsNullOrWhiteSpace(title))
+        {
+            return title.Trim();
+        }
+
+        var fallback = string.Join(
+            ", ",
+            new[] { street, city }.Where(static part => !string.IsNullOrWhiteSpace(part)));
+        return string.IsNullOrWhiteSpace(fallback) ? null : fallback;
+    }
+
     public static bool IsExcludedListingType(string? propertyType)
     {
         if (string.IsNullOrWhiteSpace(propertyType))
@@ -158,7 +171,9 @@ public static partial class TruviVerificationRequestFactory
         string? email,
         string? phone,
         out TruviCreateVerificationRequest? request,
-        out string? error)
+        out string? error,
+        Guid? listingId = null,
+        string? listingName = null)
         => TryCreate(
             dealId,
             utcNow,
@@ -182,6 +197,8 @@ public static partial class TruviVerificationRequestFactory
             phone,
             depositAmountCents: null,
             reservationId: null,
+            listingId,
+            listingName,
             out request,
             out error);
 
@@ -208,11 +225,25 @@ public static partial class TruviVerificationRequestFactory
         string? phone,
         long? depositAmountCents,
         string? reservationId,
+        Guid? listingId,
+        string? listingName,
         out TruviCreateVerificationRequest? request,
         out string? error)
     {
         request = null;
         error = null;
+
+        if (listingId is null || listingId == Guid.Empty)
+        {
+            error = "Listing id is required.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(listingName))
+        {
+            error = "Listing name is required.";
+            return false;
+        }
 
         if (string.IsNullOrWhiteSpace(street) || string.IsNullOrWhiteSpace(city)
             || string.IsNullOrWhiteSpace(postcode) || string.IsNullOrWhiteSpace(country))
@@ -249,6 +280,8 @@ public static partial class TruviVerificationRequestFactory
             metadata,
             new TruviCompany(companyName, companyEmail),
             new TruviListing(
+                listingId.Value.ToString("D"),
+                listingName.Trim(),
                 new TruviListingAddress(street.Trim(), city.Trim(), countryIso, postcode.Trim()),
                 petsAllowed,
                 guestCount > 0 ? guestCount : null,

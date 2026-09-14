@@ -25,7 +25,17 @@ pnpm build
 echo "✓ Frontend built"
 
 # ── Upload to S3 ─────────────────────────────────────────────────────────────
-aws s3 sync dist/ "s3://${S3_WEB_BUCKET}" --delete --region "${AWS_REGION}"
+# Upload hashed assets first so a cached index.html cannot point at a
+# deleted chunk. Then replace index.html with a no-cache copy.
+aws s3 sync dist/ "s3://${S3_WEB_BUCKET}" \
+  --delete \
+  --exclude "index.html" \
+  --cache-control "public, max-age=31536000, immutable" \
+  --region "${AWS_REGION}"
+aws s3 cp dist/index.html "s3://${S3_WEB_BUCKET}/index.html" \
+  --cache-control "public, max-age=0, must-revalidate" \
+  --content-type "text/html" \
+  --region "${AWS_REGION}"
 echo "✓ Uploaded to s3://${S3_WEB_BUCKET}"
 
 # ── Create CloudFront OAC + Distribution ─────────────────────────────────────

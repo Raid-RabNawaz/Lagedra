@@ -1,3 +1,4 @@
+using Lagedra.Modules.AntiAbuseAndIntegrity.Application.Services;
 using Lagedra.Modules.AntiAbuseAndIntegrity.Domain.Aggregates;
 using Lagedra.Modules.AntiAbuseAndIntegrity.Domain.Enums;
 using Lagedra.Modules.AntiAbuseAndIntegrity.Infrastructure.Persistence;
@@ -18,6 +19,14 @@ public sealed class DetectInquiryAbuseCommandHandler(
 
         var abuseCase = AbuseCase.Open(request.SubjectUserId, AbuseType.InquiryAbuse);
         dbContext.AbuseCases.Add(abuseCase);
+        await FraudFlagWriter
+            .RaiseIfMissingAsync(
+                dbContext,
+                request.SubjectUserId,
+                FraudFlagType.InquiryAbuse,
+                Severity.Medium,
+                cancellationToken)
+            .ConfigureAwait(false);
 
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 

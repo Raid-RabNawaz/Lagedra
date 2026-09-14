@@ -1,0 +1,1 @@
+import{r as n}from"./index-lsd6rsb8.js";import{u as o}from"./TileLayer-zSVx1OMg.js";function r(){return o().map}function p(e){const t=r();return n.useEffect(function(){return t.on(e),function(){t.off(e)}},[t,e]),t}export{r as a,p as u};

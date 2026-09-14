@@ -16,6 +16,20 @@ public sealed partial class LeaseAgreementFiller(
     /// <summary>Fill-in rule shown where a preview cannot know the real value.</summary>
     private const string BlankRule = "__________";
 
+    /// <summary>
+    /// Party contact fields that are marked required on the catalog but are
+    /// often blank on new accounts. Blocking the PDF on these is what caused
+    /// booking-active emails to go out with no lease attached.
+    /// </summary>
+    private static readonly string[] ContactBlankIfMissing =
+    [
+        "host.phone",
+        "host.mailingAddress",
+        "host.noticeAddress",
+        "tenant.phone",
+        "tenant.mailingAddress",
+    ];
+
     public async Task<FilledLeaseAgreement> FillForDealAsync(Guid dealId, CancellationToken ct = default)
     {
         var deal = await dealProvider.GetDealDetailsAsync(dealId, ct).ConfigureAwait(false)
@@ -124,6 +138,8 @@ public sealed partial class LeaseAgreementFiller(
             ["deal.securityDeposit"] = FormatMoney(deal.DepositAmountCents ?? 0),
             ["deal.guestCount"] = deal.GuestCount.ToString(CultureInfo.InvariantCulture),
         };
+
+        ApplyContactFallbacks(values);
 
         var usedKeys = ExtractPlaceholders(template.BodyHtml).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var missingRequired = LeasePlaceholderCatalog.RequiredKeys
@@ -276,6 +292,17 @@ public sealed partial class LeaseAgreementFiller(
         }
 
         return $"{BlankRule}, {address.City.Trim()}, {address.State.Trim()} {BlankRule}";
+    }
+
+    private static void ApplyContactFallbacks(Dictionary<string, string> values)
+    {
+        foreach (var key in ContactBlankIfMissing)
+        {
+            if (string.IsNullOrWhiteSpace(values.GetValueOrDefault(key)))
+            {
+                values[key] = BlankRule;
+            }
+        }
     }
 
     private static IEnumerable<string> ExtractPlaceholders(string bodyHtml) =>

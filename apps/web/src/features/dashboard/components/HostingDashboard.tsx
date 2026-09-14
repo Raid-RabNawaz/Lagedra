@@ -47,7 +47,7 @@ import {
   sortDealsByAttention,
 } from "@/features/deals/utils/bookingAttention";
 import { cn } from "@/lib/utils";
-import { formatMoney } from "@/utils/format";
+import { formatDateTime, formatMoney } from "@/utils/format";
 
 const LIVE_STATUSES = new Set<ListingStatus>(["Published", "Activated"]);
 const ONGOING_PHASES = new Set([
@@ -298,6 +298,7 @@ export function HostingDashboard({ user }: { user: UserProfileDto }) {
                       <p className="text-xs text-muted-foreground">
                         {formatDayRange(a.requestedCheckIn, a.requestedCheckOut)}
                         {a.guestCount ? ` · ${a.guestCount} guest${a.guestCount === 1 ? "" : "s"}` : ""}
+                        {` · Requested ${formatDateTime(a.submittedAt)}`}
                       </p>
                     </div>
                     {a.totalPayableSnapshotCents != null && (
@@ -468,6 +469,7 @@ export function HostingDashboard({ user }: { user: UserProfileDto }) {
                         <p className="truncate text-sm font-medium">{d.listingTitle}</p>
                         <p className="text-xs text-muted-foreground">
                           {formatDayRange(d.requestedCheckIn, d.requestedCheckOut)}
+                          {` · Requested ${formatDateTime(d.createdAt)}`}
                         </p>
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-1">

@@ -25,13 +25,21 @@ import { DealTimeline } from "@/features/deals/components/DealTimeline";
 import { DealPhaseBadge } from "@/features/deals/components/DealPhaseBadge";
 import { DepositReturnPanel } from "@/features/deals/components/DepositReturnPanel";
 import { DealStayAccessCard } from "@/features/deals/components/DealStayAccessCard";
+import { DealStayProtectionCard } from "@/features/deals/components/DealStayProtectionCard";
 import { EndingSoonBadge } from "@/features/deals/components/BookingAttentionBanner";
 import { LeaveStayReviewPanel } from "@/features/reviews/components/LeaveStayReviewPanel";
 import { useMyDeals } from "@/features/deals/hooks/useDeals";
 import { useSnapshotByDealId } from "@/features/truth-surface/hooks/useTruthSurface";
 import { LeaseAgreementDownloadButton } from "@/features/truth-surface/components/LeaseAgreementDownloadButton";
 import { useAuthStore } from "@/app/auth/authStore";
+import { isAdmin } from "@/app/auth/permissions";
+import { isNotFoundError } from "@/api/errors";
+import { useDealInsurance } from "@/features/applications/hooks/useApplications";
 import { tierLabel } from "@/features/applications/lib/bookingConsent";
+import {
+  STAY_PROTECTION_LABEL,
+  stayProtectionStatus,
+} from "@/features/listings/lib/stayProtection";
 import { getEndingSoon } from "@/features/deals/utils/bookingAttention";
 import { formatDate, formatMoney } from "@/utils/format";
 import type { DealSummaryDto, TruthSurfaceDto } from "@/api/types";
@@ -272,6 +280,7 @@ export function DealDetailPage() {
   // legacy create page. The hook 404s gracefully when no snapshot exists,
   // so `data` is null for pre-V2 deals and the legacy path still applies.
   const { data: truthSurface } = useSnapshotByDealId(dealId);
+  const insuranceQuery = useDealInsurance(dealId);
 
   const deal = deals?.find((d) => d.dealId === dealId);
   // Tenant/Landlord were merged into a single "Member" role; gate per-deal
@@ -279,6 +288,10 @@ export function DealDetailPage() {
   // non-participants will see neither tenant nor landlord actions.
   const isLandlord = !!user && !!deal && user.userId === deal.landlordUserId;
   const isTenant = !!user && !!deal && user.userId === deal.tenantUserId;
+  const isPlatformAdmin = !!user && isAdmin(user.role);
+  const stayProtection = stayProtectionStatus(
+    isNotFoundError(insuranceQuery.error) ? null : insuranceQuery.data,
+  );
 
   if (isLoading) {
     return <Loader label="Loading deal..." />;
@@ -385,6 +398,11 @@ export function DealDetailPage() {
                 Payment: {deal.paymentStatus}
               </Badge>
             )}
+            {!insuranceQuery.isLoading && (insuranceQuery.data || isNotFoundError(insuranceQuery.error)) && (
+              <Badge variant={stayProtection.badgeVariant} className="text-[10px]">
+                {STAY_PROTECTION_LABEL}: {stayProtection.headline}
+              </Badge>
+            )}
           </div>
         </div>
       </div>
@@ -394,6 +412,17 @@ export function DealDetailPage() {
         isLandlord={isLandlord}
         isTenant={isTenant}
         truthSurface={truthSurface ?? null}
+      />
+
+      <DealStayProtectionCard
+        dealId={deal.dealId}
+        canRescreen={isLandlord || isPlatformAdmin}
+        perspective={isLandlord ? "host" : isTenant ? "guest" : "other"}
+        canFileDamageClaim={
+          isLandlord
+          && deal.paymentStatus === "Confirmed"
+          && showBilling
+        }
       />
 
       <DealStayAccessCard

@@ -12,4 +12,10 @@ public sealed record ViolationDto(
     string Description,
     string? EvidenceReference,
     DateTime DetectedAt,
-    DateTime? ResolvedAt);
+    DateTime? ResolvedAt,
+    string? TargetEmail = null,
+    string? TargetName = null,
+    string? ReportedByEmail = null,
+    string? ReportedByName = null,
+    Guid? ListingId = null,
+    string? ListingTitle = null);

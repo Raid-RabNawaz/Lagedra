@@ -28,6 +28,7 @@ import { ListingPhotosEditor } from "./ListingPhotosEditor";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FormNumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
@@ -507,31 +508,25 @@ function PropertyStep({ form }: StepFormProps) {
   return (
     <div className="grid gap-4 sm:grid-cols-3">
       <Field label="Bedrooms" error={form.formState.errors.bedrooms?.message}>
-        <Input type="number" min={0} {...form.register("bedrooms", { valueAsNumber: true })} />
+        <FormNumberInput control={form.control} name="bedrooms" min={0} decimalPlaces={0} />
       </Field>
       <Field label="Bathrooms" error={form.formState.errors.bathrooms?.message}>
-        <Input
-          type="number"
-          step="0.5"
-          min={0.5}
-          {...form.register("bathrooms", { valueAsNumber: true })}
-        />
+        <FormNumberInput control={form.control} name="bathrooms" min={0.5} decimalPlaces={1} />
       </Field>
       <Field label="Sq ft (optional)" error={form.formState.errors.squareFootage?.message}>
-        <Input
-          type="number"
+        <FormNumberInput
+          control={form.control}
+          name="squareFootage"
           min={0}
-          placeholder="�"
-          {...form.register("squareFootage", {
-            setValueAs: (v) => (v === "" || v === undefined ? undefined : Number(v)),
-          })}
+          decimalPlaces={0}
+          placeholder="—"
         />
       </Field>
       <Field label="Min stay (days)" error={form.formState.errors.minStayDays?.message}>
-        <Input type="number" min={30} max={180} {...form.register("minStayDays", { valueAsNumber: true })} />
+        <FormNumberInput control={form.control} name="minStayDays" min={30} max={180} decimalPlaces={0} />
       </Field>
       <Field label="Max stay (days)" error={form.formState.errors.maxStayDays?.message}>
-        <Input type="number" min={30} max={180} {...form.register("maxStayDays", { valueAsNumber: true })} />
+        <FormNumberInput control={form.control} name="maxStayDays" min={30} max={180} decimalPlaces={0} />
       </Field>
       <div className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground self-end">
         Stay length must be between 30 and 180 days for mid-term rentals.
@@ -544,19 +539,19 @@ function PricingStep({ form }: StepFormProps) {
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       <Field label="Monthly rent (USD)" error={form.formState.errors.monthlyRentDollars?.message}>
-        <Input
-          type="number"
-          step="0.01"
+        <FormNumberInput
+          control={form.control}
+          name="monthlyRentDollars"
           min={0}
-          {...form.register("monthlyRentDollars", { valueAsNumber: true })}
+          decimalPlaces={2}
         />
       </Field>
       <Field label="Maximum deposit (USD)" error={form.formState.errors.maxDepositDollars?.message}>
-        <Input
-          type="number"
-          step="0.01"
+        <FormNumberInput
+          control={form.control}
+          name="maxDepositDollars"
           min={0}
-          {...form.register("maxDepositDollars", { valueAsNumber: true })}
+          decimalPlaces={2}
         />
         <p className="text-[11px] text-muted-foreground">
           The upper limit. Tenants never pay more than this.
@@ -572,42 +567,42 @@ function PricingStep({ form }: StepFormProps) {
         label="Deposit — unverified tenant (USD)"
         error={form.formState.errors.depositUnverifiedDollars?.message}
       >
-        <Input
-          type="number"
-          step="0.01"
+        <FormNumberInput
+          control={form.control}
+          name="depositUnverifiedDollars"
           min={0}
-          {...form.register("depositUnverifiedDollars", { valueAsNumber: true })}
+          decimalPlaces={2}
         />
         <p className="text-[11px] text-muted-foreground">
           Typically the full maximum deposit.
         </p>
       </Field>
       <Field
-        label="Deposit — background-verified tenant (USD)"
+        label="Deposit — Trusted tenant (USD)"
         error={form.formState.errors.depositBackgroundVerifiedDollars?.message}
       >
-        <Input
-          type="number"
-          step="0.01"
+        <FormNumberInput
+          control={form.control}
+          name="depositBackgroundVerifiedDollars"
           min={0}
-          {...form.register("depositBackgroundVerifiedDollars", { valueAsNumber: true })}
+          decimalPlaces={2}
         />
         <p className="text-[11px] text-muted-foreground">
-          A reduced deposit (e.g. 10–20% less) rewards verified tenants.
+          A reduced deposit (e.g. 10–20% less) for Trusted guests.
         </p>
       </Field>
       <Field
-        label="Deposit — partner-guaranteed tenant (USD)"
+        label="Deposit — Elite tenant (USD)"
         error={form.formState.errors.depositPartnerGuaranteedDollars?.message}
       >
-        <Input
-          type="number"
-          step="0.01"
+        <FormNumberInput
+          control={form.control}
+          name="depositPartnerGuaranteedDollars"
           min={0}
-          {...form.register("depositPartnerGuaranteedDollars", { valueAsNumber: true })}
+          decimalPlaces={2}
         />
         <p className="text-[11px] text-muted-foreground">
-          Much lower (e.g. under 50% of max) since a partner backs the tenant.
+          Lowest band for Elite guests (strong history plus a partner endorsement).
         </p>
       </Field>
     </div>
@@ -777,7 +772,7 @@ function RulesStep({ form }: StepFormProps) {
         <Input type="time" {...form.register("checkOutTime")} />
       </Field>
       <Field label="Max guests" error={form.formState.errors.maxGuests?.message}>
-        <Input type="number" min={1} {...form.register("maxGuests", { valueAsNumber: true })} />
+        <FormNumberInput control={form.control} name="maxGuests" min={1} decimalPlaces={0} />
       </Field>
       <Field label="Quiet hours start (optional)">
         <Input type="time" {...form.register("quietHoursStart")} />
@@ -863,35 +858,34 @@ function CancellationStep({ form }: StepFormProps) {
         label="Free cancellation (days before)"
         error={form.formState.errors.freeCancellationDays?.message}
       >
-        <Input
-          type="number"
+        <FormNumberInput
+          control={form.control}
+          name="freeCancellationDays"
           min={0}
-          {...form.register("freeCancellationDays", { valueAsNumber: true })}
+          decimalPlaces={0}
         />
       </Field>
       <Field
         label="Partial refund % (optional)"
         error={form.formState.errors.partialRefundPercent?.message}
       >
-        <Input
-          type="number"
+        <FormNumberInput
+          control={form.control}
+          name="partialRefundPercent"
           min={0}
           max={100}
-          {...form.register("partialRefundPercent", {
-            setValueAs: (v) => (v === "" || v === undefined ? undefined : Number(v)),
-          })}
+          decimalPlaces={0}
         />
       </Field>
       <Field
         label="Partial refund window (days)"
         error={form.formState.errors.partialRefundDays?.message}
       >
-        <Input
-          type="number"
+        <FormNumberInput
+          control={form.control}
+          name="partialRefundDays"
           min={0}
-          {...form.register("partialRefundDays", {
-            setValueAs: (v) => (v === "" || v === undefined ? undefined : Number(v)),
-          })}
+          decimalPlaces={0}
         />
       </Field>
       {cancellationType === "Custom" && (
@@ -1051,7 +1045,7 @@ function ReviewStep({
             }
           />
           <ReviewRow
-            label="Deposit — verified"
+            label="Deposit — Trusted"
             value={
               v.depositBackgroundVerifiedDollars != null
                 ? `$${v.depositBackgroundVerifiedDollars.toLocaleString()}`
@@ -1059,7 +1053,7 @@ function ReviewStep({
             }
           />
           <ReviewRow
-            label="Deposit — partner-guaranteed"
+            label="Deposit — Elite"
             value={
               v.depositPartnerGuaranteedDollars != null
                 ? `$${v.depositPartnerGuaranteedDollars.toLocaleString()}`

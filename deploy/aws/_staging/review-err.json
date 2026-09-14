@@ -1,0 +1,27 @@
+{
+    "events": [
+        {
+            "logStreamName": "api/api/e89d5dcecf684453869d2efb47d0ace3",
+            "timestamp": 1788463171338,
+            "message": "[19:19:31 ERR] Unhandled exception in handler for ListListingsForReviewQuery",
+            "ingestionTime": 1788463174204,
+            "eventId": "39884061480964754683582422442227765326394273733006917696"
+        },
+        {
+            "logStreamName": "api/api/e89d5dcecf684453869d2efb47d0ace3",
+            "timestamp": 1788463174155,
+            "message": "[19:19:34 ERR] Unhandled exception in handler for ListListingsForReviewQuery",
+            "ingestionTime": 1788463174204,
+            "eventId": "39884061543785953907843187831933883700444708095353749736"
+        },
+        {
+            "logStreamName": "api/api/e89d5dcecf684453869d2efb47d0ace3",
+            "timestamp": 1788463178608,
+            "message": "[19:19:38 ERR] Unhandled exception in handler for ListListingsForReviewQuery",
+            "ingestionTime": 1788463179204,
+            "eventId": "39884061643091172276900052687237242517849652516886282317"
+        }
+    ],
+    "searchedLogStreams": [],
+    "nextToken": "Bxkq6kVGFtq2y_MoigeqscPOdhXVbhiVtLoAmXb5jCocHxKYFYcIz1B4goJ6a9UsyM8MxAMlqgq4VqNqkJjngPTSCuTMuTBKbvUpakFrj4JemifYnVkc_NvNksM4fgIo8kqDQ8jkxh0Tph42dUZLUqhF8ggrLoaQRwY0t2lUlvSgOiffV-ngSweG1ggDHXOdOwJXLbJdXtDJYuH3sJ8JCBmp1CJu4H1NIrfkvZhddL82cQQvO0H9FXJRmr8Gc-Fctabpj5So34sDgFFYm2m1RStxHlJWpt-c0E9pieaafdiMwnj5CXAXFX75yBO67t58AgSWtWmk5Je93qepb-7dQp2aAoqgmAdxAJcYXQRlEFM"
+}

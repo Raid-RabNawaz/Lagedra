@@ -5,6 +5,9 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using Lagedra.Modules.ActivationAndBilling.Infrastructure.Services;
 using Lagedra.SharedKernel.Integration;
+using Lagedra.SharedKernel.Settings;
+using Lagedra.SharedKernel.Time;
+using Microsoft.Extensions.Options;
 using NSubstitute;
 using Xunit;
 
@@ -14,109 +17,140 @@ public class TenantVerificationTierResolverTests
 {
     private readonly IPartnerEndorsementProvider _partners = Substitute.For<IPartnerEndorsementProvider>();
     private readonly IVerificationSignalProvider _signals = Substitute.For<IVerificationSignalProvider>();
+    private readonly ICompletedStayCountProvider _stays = Substitute.For<ICompletedStayCountProvider>();
+    private readonly IHostToGuestReputationProvider _reviews = Substitute.For<IHostToGuestReputationProvider>();
+    private readonly IUserViolationCountProvider _violations = Substitute.For<IUserViolationCountProvider>();
+    private readonly IArbitrationStandingProvider _arbitration = Substitute.For<IArbitrationStandingProvider>();
+    private readonly IBookingRestrictionProvider _restrictions = Substitute.For<IBookingRestrictionProvider>();
+    private readonly IClock _clock = Substitute.For<IClock>();
+    private static readonly DateTime Now = new(2026, 9, 9, 0, 0, 0, DateTimeKind.Utc);
 
-    private TenantVerificationTierResolver CreateSut() => new(_partners, _signals);
-
-    private void NoEndorsements() =>
-        _partners
-            .GetActiveEndorsementsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+    public TenantVerificationTierResolverTests()
+    {
+        _clock.UtcNow.Returns(Now);
+        _partners.GetActiveEndorsementsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(Array.Empty<ActiveEndorsementInfo>());
+        _stays.GetClosedStayCountAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(0);
+        _reviews.GetAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns(new HostToGuestReputationDto(0, 0));
+        _violations.GetActiveViolationCountAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(0);
+        _arbitration.HasUnresolvedCaseAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(false);
+        _arbitration.HasPlatformBanAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(false);
+        _restrictions.IsBlockedFromBookingAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(false);
+    }
 
-    private void Signals(VerificationSignalDto? dto) =>
-        _signals
-            .GetSignalsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
-            .Returns(dto);
+    private TenantVerificationTierResolver CreateSut() =>
+        new(
+            _partners,
+            _signals,
+            _stays,
+            _reviews,
+            _violations,
+            _arbitration,
+            _restrictions,
+            Options.Create(new TrustTiersOptions()),
+            _clock);
 
-    private static VerificationSignalDto Verified() =>
-        new(IsIdentityVerified: true,
-            IsIdentityPending: false,
-            IsIdentityFailed: false,
-            IsBackgroundCheckPassed: true,
-            IsBackgroundCheckFailed: false,
-            IsBackgroundCheckUnderReview: false);
+    private static VerificationSignalDto IdentityOnly() =>
+        new(true, false, false, false, false, false, null);
 
     [Fact]
-    public async Task Partner_endorsement_wins_over_background_check()
+    public async Task Identity_only_resolves_Verified()
     {
-        var tenant = Guid.NewGuid();
-        var lowOrg = new Guid("11111111-1111-1111-1111-111111111111");
-        var highOrg = new Guid("22222222-2222-2222-2222-222222222222");
+        _signals.GetSignalsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(IdentityOnly());
 
-        _partners
-            .GetActiveEndorsementsAsync(tenant, Arg.Any<CancellationToken>())
+        var result = await CreateSut().ResolveAsync(Guid.NewGuid());
+
+        result.Tier.Should().Be(TenantVerificationTier.Verified);
+        result.PartnerOrganizationId.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Screening_pass_alone_stays_Verified()
+    {
+        _signals.GetSignalsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns(new VerificationSignalDto(true, false, false, true, false, false, Now));
+
+        var result = await CreateSut().ResolveAsync(Guid.NewGuid());
+
+        result.Tier.Should().Be(TenantVerificationTier.Verified);
+    }
+
+    [Fact]
+    public async Task Stays_and_reviews_resolve_Trusted()
+    {
+        _signals.GetSignalsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(IdentityOnly());
+        _stays.GetClosedStayCountAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(2);
+        _reviews.GetAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns(new HostToGuestReputationDto(2, 4.2));
+
+        var result = await CreateSut().ResolveAsync(Guid.NewGuid());
+
+        result.Tier.Should().Be(TenantVerificationTier.Trusted);
+    }
+
+    [Fact]
+    public async Task Expired_screening_pass_does_not_count()
+    {
+        _signals.GetSignalsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns(new VerificationSignalDto(
+                true, false, false, true, false, false,
+                Now.AddDays(-400)));
+        _stays.GetClosedStayCountAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(2);
+
+        var result = await CreateSut().ResolveAsync(Guid.NewGuid());
+
+        result.Tier.Should().Be(TenantVerificationTier.Verified);
+    }
+
+    [Fact]
+    public async Task Restriction_resolves_Blocklisted()
+    {
+        _restrictions.IsBlockedFromBookingAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(true);
+        _signals.GetSignalsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(IdentityOnly());
+
+        var result = await CreateSut().ResolveAsync(Guid.NewGuid());
+
+        result.Tier.Should().Be(TenantVerificationTier.Blocklisted);
+    }
+
+    [Fact]
+    public async Task Arbitration_platform_ban_resolves_Blocklisted()
+    {
+        _arbitration.HasPlatformBanAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(true);
+        _signals.GetSignalsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(IdentityOnly());
+
+        var result = await CreateSut().ResolveAsync(Guid.NewGuid());
+
+        result.Tier.Should().Be(TenantVerificationTier.Blocklisted);
+    }
+
+    [Fact]
+    public async Task Elite_history_and_partner_resolves_Elite()
+    {
+        var org = Guid.NewGuid();
+        _partners.GetActiveEndorsementsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(new List<ActiveEndorsementInfo>
             {
-                new(Guid.NewGuid(), highOrg, "High", DateTime.UtcNow, DateTime.UtcNow.AddDays(30)),
-                new(Guid.NewGuid(), lowOrg, "Low", DateTime.UtcNow, DateTime.UtcNow.AddDays(30)),
+                new(Guid.NewGuid(), org, "Org", DateTime.UtcNow, DateTime.UtcNow.AddDays(30))
             });
-        // Even though identity + background pass, partner is the higher tier.
-        Signals(Verified());
+        _signals.GetSignalsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(IdentityOnly());
+        _stays.GetClosedStayCountAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(5);
+        _reviews.GetAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns(new HostToGuestReputationDto(4, 4.7));
 
-        var result = await CreateSut().ResolveAsync(tenant);
+        var result = await CreateSut().ResolveAsync(Guid.NewGuid());
 
-        result.Tier.Should().Be(TenantVerificationTier.PartnerGuaranteed);
-        // Deterministic pick = lowest org id so it matches the Truth Surface ordering.
-        result.PartnerOrganizationId.Should().Be(lowOrg);
+        result.Tier.Should().Be(TenantVerificationTier.Elite);
+        result.PartnerOrganizationId.Should().Be(org);
     }
 
     [Fact]
-    public async Task Identity_verified_and_background_pass_resolves_BackgroundVerified()
+    public async Task No_signals_resolves_Unverified()
     {
-        var tenant = Guid.NewGuid();
-        NoEndorsements();
-        Signals(Verified());
+        _signals.GetSignalsAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((VerificationSignalDto?)null);
 
-        var result = await CreateSut().ResolveAsync(tenant);
-
-        result.Tier.Should().Be(TenantVerificationTier.BackgroundVerified);
-        result.PartnerOrganizationId.Should().BeNull();
-    }
-
-    [Fact]
-    public async Task Background_under_review_does_not_count_as_verified()
-    {
-        var tenant = Guid.NewGuid();
-        NoEndorsements();
-        Signals(new VerificationSignalDto(
-            IsIdentityVerified: true,
-            IsIdentityPending: false,
-            IsIdentityFailed: false,
-            IsBackgroundCheckPassed: false,
-            IsBackgroundCheckFailed: false,
-            IsBackgroundCheckUnderReview: true));
-
-        var result = await CreateSut().ResolveAsync(tenant);
-
-        result.Tier.Should().Be(TenantVerificationTier.Unverified);
-        result.PartnerOrganizationId.Should().BeNull();
-    }
-
-    [Fact]
-    public async Task Identity_verified_but_no_background_resolves_Unverified()
-    {
-        var tenant = Guid.NewGuid();
-        NoEndorsements();
-        Signals(new VerificationSignalDto(
-            IsIdentityVerified: true,
-            IsIdentityPending: false,
-            IsIdentityFailed: false,
-            IsBackgroundCheckPassed: false,
-            IsBackgroundCheckFailed: false,
-            IsBackgroundCheckUnderReview: false));
-
-        var result = await CreateSut().ResolveAsync(tenant);
-
-        result.Tier.Should().Be(TenantVerificationTier.Unverified);
-    }
-
-    [Fact]
-    public async Task No_signals_at_all_resolves_Unverified()
-    {
-        var tenant = Guid.NewGuid();
-        NoEndorsements();
-        Signals(null);
-
-        var result = await CreateSut().ResolveAsync(tenant);
+        var result = await CreateSut().ResolveAsync(Guid.NewGuid());
 
         result.Tier.Should().Be(TenantVerificationTier.Unverified);
     }

@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Lagedra.Infrastructure.External.Payments;
+using Lagedra.Modules.IdentityAndVerification.Application;
 using Lagedra.Modules.IdentityAndVerification.Application.Commands;
 using Lagedra.Modules.IdentityAndVerification.Application.DTOs;
 using MediatR;
@@ -50,8 +51,15 @@ public static class HostStripeEndpoints
         CancellationToken ct)
     {
         var userId = GetUserId(user);
-        var email = user.FindFirstValue(ClaimTypes.Email)
-            ?? throw new InvalidOperationException("Email claim not found.");
+        var email = HostStripeClaimReader.Email(user);
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            return Results.BadRequest(new
+            {
+                error = "HostStripe.EmailRequired",
+                detail = "Your account is missing an email address. Add one on your profile and try again.",
+            });
+        }
 
         var returnUrl = ResolveConnectUrl(body?.ReturnUrl, stripeSettings.Value.ConnectReturnUrl, configuration);
         if (returnUrl.IsFailure)
@@ -180,9 +188,17 @@ public static class HostStripeEndpoints
             .Send(new SyncHostStripeStatusByUserCommand(userId), ct)
             .ConfigureAwait(false);
 
-        return result.IsSuccess
-            ? Results.Ok(result.Value)
-            : Results.NotFound(new { error = result.Error.Code, detail = result.Error.Description });
+        if (result.IsSuccess)
+        {
+            return Results.Ok(result.Value);
+        }
+
+        if (result.Error.Code == "HostStripe.NotFound")
+        {
+            return Results.NotFound(new { error = result.Error.Code, detail = result.Error.Description });
+        }
+
+        return Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
     }
 
     private static Lagedra.SharedKernel.Results.Result<Uri> ResolveConnectUrl(

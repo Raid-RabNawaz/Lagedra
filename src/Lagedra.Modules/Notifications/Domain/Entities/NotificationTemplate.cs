@@ -32,6 +32,15 @@ public sealed class NotificationTemplate : Entity<Guid>
         PlainTextBody = plainTextBody;
     }
 
+    public void ReplaceContent(string subject, string htmlBody, string? plainTextBody)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(subject);
+        ArgumentException.ThrowIfNullOrWhiteSpace(htmlBody);
+        Subject = subject;
+        HtmlBody = htmlBody;
+        PlainTextBody = plainTextBody;
+    }
+
     public string RenderSubject(Dictionary<string, string> payload)
     {
         ArgumentNullException.ThrowIfNull(payload);

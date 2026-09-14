@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Alert } from "@/components/ui/alert";
 import { useFileDamageClaim } from "@/features/activation-billing/hooks/useBilling";
 import { getApiErrorMessage } from "@/api/errors";
@@ -116,13 +116,12 @@ export const FileDamageClaimDialog = ({
                 <label className="text-sm font-medium mb-1.5 block">
                   Claimed amount (USD)
                 </label>
-                <Input
-                  type="number"
-                  min="0.01"
-                  step="0.01"
+                <NumberInput
+                  min={0}
+                  decimalPlaces={2}
                   placeholder="0.00"
-                  value={amountEur}
-                  onChange={(e) => setAmountEur(e.target.value)}
+                  value={amountEur === "" ? null : Number(amountEur)}
+                  onValueChange={(n) => setAmountEur(n == null ? "" : String(n))}
                 />
               </div>
             </div>

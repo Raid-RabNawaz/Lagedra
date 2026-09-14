@@ -9,47 +9,57 @@ public class DepositSelectionServiceTests
 {
     private const long Max = 500_000;
     private const long Unverified = 300_000;
-    private const long Background = 200_000;
-    private const long Partner = 100_000;
+    private const long Trusted = 200_000;
+    private const long Elite = 100_000;
 
     [Fact]
-    public void Partner_tier_selects_partner_deposit_with_reason()
+    public void Elite_tier_selects_partner_deposit_column()
     {
         var result = DepositSelectionService.Select(
-            TenantVerificationTier.PartnerGuaranteed, Max, Unverified, Background, Partner);
+            TenantVerificationTier.Elite, Max, Unverified, Trusted, Elite);
 
-        result.AmountCents.Should().Be(Partner);
-        result.Tier.Should().Be(TenantVerificationTier.PartnerGuaranteed);
-        result.Reason.Should().Be(DepositSelectionService.PartnerReason);
+        result.AmountCents.Should().Be(Elite);
+        result.Tier.Should().Be(TenantVerificationTier.Elite);
+        result.Reason.Should().Be(DepositSelectionService.EliteReason);
     }
 
     [Fact]
-    public void Background_tier_selects_background_deposit_with_reason()
+    public void Trusted_tier_selects_background_verified_deposit_column()
     {
         var result = DepositSelectionService.Select(
-            TenantVerificationTier.BackgroundVerified, Max, Unverified, Background, Partner);
+            TenantVerificationTier.Trusted, Max, Unverified, Trusted, Elite);
 
-        result.AmountCents.Should().Be(Background);
-        result.Reason.Should().Be(DepositSelectionService.BackgroundVerifiedReason);
+        result.AmountCents.Should().Be(Trusted);
+        result.Reason.Should().Be(DepositSelectionService.TrustedReason);
+    }
+
+    [Fact]
+    public void Verified_uses_standard_deposit()
+    {
+        var result = DepositSelectionService.Select(
+            TenantVerificationTier.Verified, Max, Unverified, Trusted, Elite);
+
+        result.AmountCents.Should().Be(Unverified);
+        result.Reason.Should().Be(DepositSelectionService.UnverifiedReason);
     }
 
     [Fact]
     public void Unverified_tier_selects_unverified_deposit_with_reason()
     {
         var result = DepositSelectionService.Select(
-            TenantVerificationTier.Unverified, Max, Unverified, Background, Partner);
+            TenantVerificationTier.Unverified, Max, Unverified, Trusted, Elite);
 
         result.AmountCents.Should().Be(Unverified);
         result.Reason.Should().Be(DepositSelectionService.UnverifiedReason);
     }
 
     [Theory]
-    [InlineData(TenantVerificationTier.PartnerGuaranteed)]
-    [InlineData(TenantVerificationTier.BackgroundVerified)]
+    [InlineData(TenantVerificationTier.Elite)]
+    [InlineData(TenantVerificationTier.Trusted)]
     [InlineData(TenantVerificationTier.Unverified)]
+    [InlineData(TenantVerificationTier.Verified)]
     public void Missing_tier_amount_falls_back_to_max_deposit(TenantVerificationTier tier)
     {
-        // No per-tier amounts configured (legacy listing) -> safe fallback to max.
         var result = DepositSelectionService.Select(tier, Max, null, null, null);
 
         result.AmountCents.Should().Be(Max);
@@ -60,11 +70,10 @@ public class DepositSelectionServiceTests
     [Fact]
     public void Zero_tier_amount_is_honoured_not_treated_as_missing()
     {
-        // A configured 0 deposit is a real value (free deposit), not a fallback.
         var result = DepositSelectionService.Select(
-            TenantVerificationTier.PartnerGuaranteed, Max, Unverified, Background, partnerGuaranteedCents: 0);
+            TenantVerificationTier.Elite, Max, Unverified, Trusted, partnerGuaranteedCents: 0);
 
         result.AmountCents.Should().Be(0);
-        result.Reason.Should().Be(DepositSelectionService.PartnerReason);
+        result.Reason.Should().Be(DepositSelectionService.EliteReason);
     }
 }

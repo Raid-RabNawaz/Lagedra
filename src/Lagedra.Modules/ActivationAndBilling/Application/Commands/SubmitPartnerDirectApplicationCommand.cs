@@ -92,14 +92,14 @@ public sealed class SubmitPartnerDirectApplicationCommandHandler(
             return Result<DealApplicationDto>.Failure(DatesUnavailable);
         }
 
-        // Partner direct reservations always price at the partner-guaranteed
-        // tier (the partner is vouching for the guest), snapshotted up-front.
+        // Partner direct reservations always price at Elite (the partner is
+        // vouching for the guest), snapshotted up-front.
         var pricing = await reservationPricingService
             .ComputeAsync(
                 listing,
                 request.TenantUserId,
                 duration,
-                forcedTier: TenantVerificationTier.PartnerGuaranteed,
+                forcedTier: TenantVerificationTier.Elite,
                 forcedPartnerOrganizationId: request.PartnerOrganizationId,
                 cancellationToken: cancellationToken)
             .ConfigureAwait(false);

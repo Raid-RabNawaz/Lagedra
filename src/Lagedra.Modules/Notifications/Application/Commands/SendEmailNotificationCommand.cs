@@ -50,21 +50,24 @@ public sealed partial class SendEmailNotificationCommandHandler(
         {
             IReadOnlyList<EmailAttachment>? attachments = null;
             if (string.Equals(notification.TemplateId, "deal_activated", StringComparison.Ordinal)
-                && notification.Payload.TryGetValue("dealId", out var dealIdRaw)
-                && Guid.TryParse(dealIdRaw, out var dealId))
+                && TryGetDealId(notification.Payload, out var dealId))
             {
                 // The email copy promises the lease PDF, so generate it on
                 // demand if the event-driven generation didn't produce one.
                 var leasePdf = await leasePdfService.GetOrGenerateAsync(dealId, cancellationToken)
                     .ConfigureAwait(false);
-                if (leasePdf is not null)
+                if (leasePdf is not null && leasePdf.Content is { Length: > 0 })
                 {
                     attachments =
                     [
                         new EmailAttachment
                         {
-                            FileName = leasePdf.FileName,
-                            ContentType = leasePdf.ContentType,
+                            FileName = string.IsNullOrWhiteSpace(leasePdf.FileName)
+                                ? $"lease-deal-{dealId:N}.pdf"
+                                : leasePdf.FileName,
+                            ContentType = string.IsNullOrWhiteSpace(leasePdf.ContentType)
+                                ? "application/pdf"
+                                : leasePdf.ContentType,
                             Content = leasePdf.Content
                         }
                     ];
@@ -110,6 +113,31 @@ public sealed partial class SendEmailNotificationCommandHandler(
         return notification.Status == NotificationStatus.Sent
             ? Result.Success()
             : Result.Failure(new Error("Notification.SendFailed", notification.LastError ?? "Send failed."));
+    }
+
+    internal static bool TryGetDealId(Dictionary<string, string> payload, out Guid dealId)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+
+        foreach (var key in new[] { "dealId", "DealId", "relatedEntityId" })
+        {
+            if (payload.TryGetValue(key, out var raw) && Guid.TryParse(raw, out dealId))
+            {
+                return true;
+            }
+        }
+
+        foreach (var kvp in payload)
+        {
+            if (kvp.Key.Equals("dealId", StringComparison.OrdinalIgnoreCase)
+                && Guid.TryParse(kvp.Value, out dealId))
+            {
+                return true;
+            }
+        }
+
+        dealId = default;
+        return false;
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Email sent for notification {NotificationId} to {RecipientAddress}")]

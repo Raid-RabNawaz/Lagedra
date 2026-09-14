@@ -10,6 +10,7 @@ namespace Lagedra.Tests.Unit.SharedKernel;
 public class TruviVerificationRequestFactoryTests
 {
     private static readonly Guid DealId = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+    private static readonly Guid ListingId = Guid.Parse("99999999-8888-7777-6666-555555555555");
     private static readonly DateTime UtcNow = new(2026, 9, 4, 12, 30, 45, 120, DateTimeKind.Utc);
 
     [Theory]
@@ -72,6 +73,15 @@ public class TruviVerificationRequestFactoryTests
     }
 
     [Fact]
+    public void Listing_name_falls_back_to_street_and_city()
+    {
+        TruviVerificationRequestFactory.ResolveListingName(null, "12 Main St", "Los Angeles")
+            .Should().Be("12 Main St, Los Angeles");
+        TruviVerificationRequestFactory.ResolveListingName("  Sunset Loft  ", "12 Main St", "Los Angeles")
+            .Should().Be("Sunset Loft");
+    }
+
+    [Fact]
     public void Create_omits_startingLevel_without_deposit_and_isPerStay()
     {
         TruviVerificationRequestFactory.TryCreate(
@@ -96,7 +106,9 @@ public class TruviVerificationRequestFactoryTests
             email: "ada@example.com",
             phone: "+15555550100",
             out var request,
-            out var error).Should().BeTrue();
+            out var error,
+            listingId: ListingId,
+            listingName: "Sunset Loft").Should().BeTrue();
 
         error.Should().BeNull();
         request.Should().NotBeNull();
@@ -105,6 +117,8 @@ public class TruviVerificationRequestFactoryTests
         request.Protection.HasPetProtection.Should().BeFalse();
         request.Reservation.Channel.Should().Be(TruviVerificationRequestFactory.DirectWebChannel);
         request.Listing.Address.CountryIso.Should().Be("USA");
+        request.Listing.ListingId.Should().Be(ListingId.ToString("D"));
+        request.Listing.ListingName.Should().Be("Sunset Loft");
 
         var json = JsonSerializer.Serialize(request, new JsonSerializerOptions
         {
@@ -113,6 +127,10 @@ public class TruviVerificationRequestFactoryTests
         json.Should().NotContain("startingLevel");
         json.Should().NotContain("isPerStay");
         json.Should().Contain("\"hasPetProtection\":false");
+        json.Should().Contain("\"listingId\":");
+        json.Should().Contain("\"listingName\":\"Sunset Loft\"");
+        json.Should().Contain("\"telephoneNumber\":");
+        json.Should().NotContain("\"phone\":");
     }
 
     [Fact]
@@ -141,6 +159,8 @@ public class TruviVerificationRequestFactoryTests
             "+15555550100",
             200_000,
             null,
+            ListingId,
+            "Sunset Loft",
             out var request,
             out var error).Should().BeTrue();
 
@@ -173,7 +193,9 @@ public class TruviVerificationRequestFactoryTests
             email: null,
             phone: null,
             out var request,
-            out var error).Should().BeFalse();
+            out var error,
+            listingId: ListingId,
+            listingName: "Sunset Loft").Should().BeFalse();
 
         request.Should().BeNull();
         error.Should().Contain("email");

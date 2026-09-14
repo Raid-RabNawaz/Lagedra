@@ -227,12 +227,20 @@ export const listingApi = {
   /**
    * Downloads the lease a prospective tenant can read before booking: the
    * host's own document, or a blank specimen of Lagedra's template.
+   * Pass `specimen: true` to always generate the template, even if the
+   * listing currently stores a host-uploaded file.
    */
-  async downloadLeasePreview(listingId: string): Promise<{ blob: Blob; fileName: string }> {
-    const response = await http.get(endpoints.leaseAgreements.listingPreview(listingId), {
-      responseType: "blob",
-      timeout: 60_000,
-    });
+  async downloadLeasePreview(
+    listingId: string,
+    options?: { specimen?: boolean },
+  ): Promise<{ blob: Blob; fileName: string }> {
+    const response = await http.get(
+      endpoints.leaseAgreements.listingPreview(listingId, options?.specimen),
+      {
+        responseType: "blob",
+        timeout: 60_000,
+      },
+    );
     return {
       blob: response.data as Blob,
       fileName: fileNameFromContentDisposition(

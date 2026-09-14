@@ -25,7 +25,11 @@ export const emptyListingReviewFilters = (): ListingReviewFilters => ({
   hostProfile: "any",
 });
 
-export function listingReviewLocationLabel(item: Pick<ListingReviewItemDto, "city" | "state" | "country">): string {
+export function listingReviewLocationLabel(item: {
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+}): string {
   const parts = [item.city, item.state].map((p) => p?.trim()).filter(Boolean);
   if (parts.length === 0) {
     return item.country?.trim() || "";

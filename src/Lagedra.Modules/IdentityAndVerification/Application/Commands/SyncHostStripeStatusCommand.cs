@@ -7,6 +7,7 @@ using Lagedra.SharedKernel.Results;
 using Lagedra.SharedKernel.Time;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Stripe;
 
 namespace Lagedra.Modules.IdentityAndVerification.Application.Commands;
 
@@ -53,10 +54,30 @@ public sealed class SyncHostStripeStatusCommandHandler(
                 new Error("HostStripe.NotFound", "No Stripe account found for this host."));
         }
 
-        var stripeStatus = await SyncFromStripe(account, cancellationToken).ConfigureAwait(false);
-        await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            var stripeStatus = await SyncFromStripe(account, cancellationToken).ConfigureAwait(false);
+            await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        return Result<HostStripeStatusDto>.Success(MapToDto(account, null, stripeStatus));
+            return Result<HostStripeStatusDto>.Success(MapToDto(account, null, stripeStatus));
+        }
+        catch (StripeException ex) when (StripeConnectErrors.IsMissingAccount(ex))
+        {
+            // Leave the row. Soft-deleting it occupies the unique HostUserId
+            // index and the next onboard insert 500s. Onboard replaces the
+            // stored Connect id on this same row.
+            return Result<HostStripeStatusDto>.Failure(
+                new Error("HostStripe.NotFound", "No Stripe account found for this host."));
+        }
+        catch (StripeException ex)
+        {
+            return Result<HostStripeStatusDto>.Failure(
+                new Error(
+                    "HostStripe.ProviderError",
+                    string.IsNullOrWhiteSpace(ex.StripeError?.Message)
+                        ? "Could not load Stripe payout status. Please try again."
+                        : ex.StripeError.Message));
+        }
     }
 
     private async Task<StripeAccountStatusResult> SyncFromStripe(

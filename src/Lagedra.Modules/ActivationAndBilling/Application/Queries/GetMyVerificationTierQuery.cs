@@ -15,10 +15,12 @@ public sealed record GetMyVerificationTierQuery(Guid UserId)
 
 public sealed record MyVerificationTierDto(
     TenantVerificationTier Tier,
-    Guid? PartnerOrganizationId);
+    Guid? PartnerOrganizationId,
+    DateTime? LastScreenedAt = null);
 
 public sealed class GetMyVerificationTierQueryHandler(
-    ITenantVerificationTierResolver tierResolver)
+    ITenantVerificationTierResolver tierResolver,
+    IVerificationSignalProvider verificationSignalProvider)
     : IRequestHandler<GetMyVerificationTierQuery, Result<MyVerificationTierDto>>
 {
     public async Task<Result<MyVerificationTierDto>> Handle(
@@ -31,7 +33,11 @@ public sealed class GetMyVerificationTierQueryHandler(
             .ResolveAsync(request.UserId, cancellationToken)
             .ConfigureAwait(false);
 
+        var signals = await verificationSignalProvider
+            .GetSignalsAsync(request.UserId, cancellationToken)
+            .ConfigureAwait(false);
+
         return Result<MyVerificationTierDto>.Success(
-            new MyVerificationTierDto(result.Tier, result.PartnerOrganizationId));
+            new MyVerificationTierDto(result.Tier, result.PartnerOrganizationId, signals?.LastScreeningAt));
     }
 }

@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { isNotFoundError } from "@/api/errors";
 import { applicationApi } from "@/features/applications/services/applicationApi";
+import { isScreeningInFlight } from "@/features/applications/lib/screeningStatus";
 import type { ApproveApplicationRequest, SubmitApplicationRequest } from "@/api/types";
 
 export function useMyApplications() {
@@ -189,6 +190,45 @@ export function useRejectApplication() {
       });
       void queryClient.invalidateQueries({ queryKey: ["deals"] });
     },
+  });
+}
+
+export function useApplicationScreening(applicationId: string | undefined) {
+  return useQuery({
+    queryKey: ["application", applicationId, "screening"],
+    queryFn: () => applicationApi.getScreening(applicationId!),
+    enabled: Boolean(applicationId),
+    staleTime: 10_000,
+    refetchInterval: (query) =>
+      isScreeningInFlight(query.state.data?.status) ? 10_000 : false,
+  });
+}
+
+export function useCreateScreeningCheckout(applicationId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => applicationApi.createScreeningCheckout(applicationId!),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["application", applicationId, "screening"],
+      });
+      void queryClient.invalidateQueries({ queryKey: ["applications"] });
+    },
+    onError: () => {
+      void queryClient.invalidateQueries({
+        queryKey: ["application", applicationId, "screening"],
+      });
+    },
+  });
+}
+
+export function useScreeningReport(applicationId: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: ["application", applicationId, "screening", "report"],
+    queryFn: () => applicationApi.getScreeningReport(applicationId!),
+    enabled: Boolean(applicationId) && enabled,
+    staleTime: 15_000,
   });
 }
 

@@ -16,4 +16,9 @@
     <PackageReference Include="FluentValidation" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Lagedra.Tests.Unit" />
+    <EmbeddedResource Include="Email\Assets\lagedra-logo.png" LogicalName="Lagedra.SharedKernel.Email.Assets.lagedra-logo.png" />
+  </ItemGroup>
+
 </Project>

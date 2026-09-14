@@ -1,3 +1,4 @@
+import { isAxiosError } from "axios";
 import { endpoints } from "@/api/endpoints";
 import { http } from "@/api/http";
 import { stripeConnectReturnUrls } from "@/features/host-onboarding/lib/stripeConnectUrls";
@@ -12,6 +13,7 @@ export const hostStripeApi = {
     const response = await http.post<HostStripeStatusDto>(
       endpoints.hostPayouts.start,
       stripeConnectReturnUrls(),
+      { timeout: 30_000 },
     );
     return response.data;
   },
@@ -39,11 +41,18 @@ export const hostStripeApi = {
     return response.data;
   },
 
-  async getStatus(): Promise<HostStripeStatusDto> {
-    const response = await http.get<HostStripeStatusDto>(
-      endpoints.hostPayouts.status,
-    );
-    return response.data;
+  async getStatus(): Promise<HostStripeStatusDto | null> {
+    try {
+      const response = await http.get<HostStripeStatusDto>(
+        endpoints.hostPayouts.status,
+      );
+      return response.data;
+    } catch (error) {
+      if (isAxiosError(error) && error.response?.status === 404) {
+        return null;
+      }
+      throw error;
+    }
   },
 
   async getPaymentDetails(): Promise<HostPaymentDetailsDto> {

@@ -225,7 +225,13 @@ export function UserTrustLedgerPage() {
         </div>
       </div>
 
-      {tier && <TrustLevelBadge tier={tier.tier} detailed />}
+      {tier && (
+        <TrustLevelBadge
+          tier={tier.tier}
+          detailed
+          lastScreenedAt={tier.lastScreenedAt}
+        />
+      )}
 
       <Card>
         <CardHeader className="pb-3">

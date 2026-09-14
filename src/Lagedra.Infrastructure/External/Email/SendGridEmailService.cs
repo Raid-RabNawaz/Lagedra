@@ -56,7 +56,7 @@ public sealed partial class SendGridEmailService(
             ReplyTo = string.IsNullOrWhiteSpace(message.ReplyTo)
                 ? null
                 : new SendGridEmailAddress { Email = message.ReplyTo },
-            Attachments = BuildAttachments(message.Attachments)
+            Attachments = BuildAttachments(EmailLayout.WithBrandLogo(message.Attachments))
         };
 
         using var request = new HttpRequestMessage(HttpMethod.Post, "mail/send")
@@ -88,7 +88,7 @@ public sealed partial class SendGridEmailService(
     private static List<SendGridContent> BuildContent(EmailMessage message)
     {
         var content = new List<SendGridContent>();
-        var plain = EmailFooter.AppendPlainText(message.PlainTextBody);
+        var plain = EmailLayout.WrapPlainText(message.PlainTextBody);
         if (!string.IsNullOrWhiteSpace(plain))
         {
             content.Add(new SendGridContent { Type = "text/plain", Value = plain });
@@ -97,7 +97,7 @@ public sealed partial class SendGridEmailService(
         content.Add(new SendGridContent
         {
             Type = "text/html",
-            Value = EmailFooter.AppendHtml(message.HtmlBody)
+            Value = EmailLayout.WrapHtml(message.HtmlBody)
         });
 
         return content;
@@ -111,14 +111,19 @@ public sealed partial class SendGridEmailService(
             return null;
         }
 
-        return attachments
+        var built = attachments
+            .Where(a => a.Content is { Length: > 0 } && !string.IsNullOrWhiteSpace(a.FileName))
             .Select(a => new SendGridAttachment
             {
                 Content = Convert.ToBase64String(a.Content),
-                Type = a.ContentType,
-                Filename = a.FileName
+                Type = string.IsNullOrWhiteSpace(a.ContentType) ? "application/pdf" : a.ContentType,
+                Filename = a.FileName,
+                Disposition = string.IsNullOrWhiteSpace(a.Disposition) ? "attachment" : a.Disposition,
+                ContentId = a.ContentId
             })
             .ToList();
+
+        return built.Count == 0 ? null : built;
     }
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Email sent to {Recipient} | Subject: {Subject}")]
@@ -185,5 +190,12 @@ public sealed partial class SendGridEmailService(
 
         [JsonPropertyName("filename")]
         public required string Filename { get; init; }
+
+        [JsonPropertyName("disposition")]
+        public string Disposition { get; init; } = "attachment";
+
+        [JsonPropertyName("content_id")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? ContentId { get; init; }
     }
 }

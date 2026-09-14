@@ -1,4 +1,5 @@
 using Lagedra.Infrastructure.Eventing;
+using Lagedra.Modules.Notifications.Infrastructure.Dispatch;
 using Lagedra.Modules.Notifications.Infrastructure.Persistence;
 using Lagedra.Modules.Notifications.Infrastructure.Repositories;
 using Microsoft.EntityFrameworkCore;
@@ -29,6 +30,15 @@ public static class NotificationsModuleRegistration
 
         services.AddScoped<NotificationRepository>();
         services.AddScoped<TemplateRepository>();
+        services.AddScoped<NotificationDispatchService>();
+
+        // Staging has no Fargate worker. Enable the in-process poller there
+        // only — live already runs NotificationProcessingJob on lagedra-worker.
+        if (bool.TryParse(configuration["Notifications:ProcessInProcess"], out var processInProcess)
+            && processInProcess)
+        {
+            services.AddHostedService<NotificationDispatchHostedService>();
+        }
 
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(NotificationsModuleRegistration).Assembly));

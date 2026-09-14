@@ -1,27 +1,33 @@
 namespace Lagedra.SharedKernel.Integration;
 
 /// <summary>
-/// The tenant's verification standing at the moment a reservation request is
-/// submitted. Drives which predetermined deposit amount a listing charges.
-/// Higher tiers represent more trust and therefore a lower deposit.
+/// The tenant's Lagedra trust standing. Drives the predetermined deposit
+/// charged on a reservation request. Higher tiers represent more platform
+/// history (and optionally a recent screening Pass as one factor) and
+/// therefore a lower deposit.
 /// </summary>
 public enum TenantVerificationTier
 {
-    /// <summary>
-    /// No completed background check and no active partner endorsement.
-    /// Pays the full (unverified) deposit.
-    /// </summary>
+    /// <summary>Identity verification is not complete.</summary>
     Unverified = 0,
 
-    /// <summary>
-    /// Identity verified AND background check passed. Pays the reduced
-    /// background-verified deposit.
-    /// </summary>
-    BackgroundVerified = 1,
+    /// <summary>Government ID complete. Screening is not required.</summary>
+    Verified = 1,
 
     /// <summary>
-    /// Connected with an approved/registered partner via an active
-    /// endorsement. Pays the lowest, partner-guaranteed deposit.
+    /// Identity complete, clean compliance gates, and at least two
+    /// qualifying factors (stays, host reviews, and/or a recent screening Pass).
     /// </summary>
-    PartnerGuaranteed = 2
+    Trusted = 2,
+
+    /// <summary>
+    /// Trusted-level history plus an active partner endorsement.
+    /// Screening never grants this tier by itself.
+    /// </summary>
+    Elite = 3,
+
+    /// <summary>
+    /// Suspended/banned or platform-ban. Cannot apply. Screening never sets this.
+    /// </summary>
+    Blocklisted = 4
 }

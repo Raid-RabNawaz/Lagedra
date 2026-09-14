@@ -170,7 +170,7 @@ export const BookingPanel = ({ listing, isProspectiveGuest }: Props) => {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <DateRangeField
         value={{ checkIn, checkOut }}
         onChange={(next) => {

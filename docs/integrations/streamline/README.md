@@ -36,6 +36,12 @@ The five Partner OLB methods are the complete list:
 | `GetDistributionChannelReservationList` | List our reservations in a PM's system | [get-distribution-channel-reservation-list.md](./reference/get-distribution-channel-reservation-list.md) |
 | `GetTokenExpiration` · `RenewExpiredToken` | Token lifecycle | [get-token-expiration.md](./reference/get-token-expiration.md) · [renew-expired-token.md](./reference/renew-expired-token.md) |
 
+Streamline confirmed on 2026-09-10 that **`CancelReservation` and `ModifyReservation` also exist**,
+but they are not in our Partner X entitlement and are undocumented for us. We have asked for both to
+be enabled. Streamline's guidance is that cancellations and modifications are "normally good to have
+on the PM side to recalculate everything visually", so expect PM-side handling to be the default and
+API-side to be the exception.
+
 ---
 
 ## Endpoints and authentication
@@ -106,6 +112,12 @@ against our last-synced timestamp rather than re-fetching content. Streamline re
 the feeds **at least once a day** and notes that content whose `lastUpdatedDate` falls within the
 last three days should be retrieved and processed.
 
+Streamline confirmed the feeds are near real-time: a PM-side change updates the modification
+timestamp in their database immediately, the index feeds render dynamically or cache on short
+intervals, and changes typically surface in `<lastUpdatedDate>` **within minutes**. Daily sync is
+therefore a floor, not a ceiling — we can poll more aggressively for availability if the 100
+requests/minute budget allows.
+
 Only units the PM explicitly opted into the integration appear in the feed. A PM missing from the
 feed has most likely not selected any units yet — that is the first thing to check before assuming
 a bug.
@@ -129,6 +141,12 @@ Streamline fits our existing `IChannelProvider` contract, but two members need c
 and those filter on **stay dates, not modification dates**. There is no "changed since" parameter and
 no webhooks anywhere in this integration. Detecting host-side cancellations means periodically
 re-listing a rolling stay window and diffing `status_id` against what we hold.
+
+Streamline confirmed this on 2026-09-10: polling is the only mechanism, "as the core Streamline
+Connect API was built in that way", and they have **no recommended polling pattern** to offer yet.
+The reservation list is explicitly intended as the full audit/sync surface — a PM editing dates,
+unit assignment, or rates in the Streamline admin UI moves the reservation to status `7` (Modified),
+and a cancellation from either the API or the admin UI moves it to `8` (Cancelled).
 
 Relevant `status_id` values: `4` Booked, `5` Closed, `6` Deleted, `7` Modified, `8` Cancelled,
 `9` Non-Blocked Request, `10` Blocked Request, `12` No-Show, `13` Quote Sent.
@@ -187,6 +205,11 @@ advertiser/assigned ID, and the UI needs a "request access" path rather than a k
   as "comma-separated" but the examples are not — trust the examples. Each position maps to a day in
   `<dateRange>`, up to 1096 days, with defaults applying outside the range.
 - **`listingExternalId` and `unitExternalId` are the same value** in the availability feed.
+- **Strip the advertiser suffix.** `advertiserAssignedId` appears as `3b3ghi_VRBO` while content URLs
+  use `advertiser_id=3b3ghi`. Streamline confirmed the **6-character base code is the stable
+  identifier** for the property management company across their platform, database, and feed query
+  parameters. The `_VRBO` suffix scopes the entry to a distribution channel (Vrbo/HomeAway) and is
+  omitted or stripped for generic Partner OLB feeds. Key our `ChannelListingMap` on the base code.
 - **`stayIncrement` is documented but explicitly not supported.**
 - **Response shapes vary between single item and list**, a well-known quirk of this API; parse
   defensively.
@@ -194,54 +217,114 @@ advertiser/assigned ID, and the UI needs a "request access" path rather than a k
   the JSON tab is a dead link with no pane in the DOM; only `GetTokenExpiration` actually ships JSON
   samples. The XML examples are authoritative for field names, and the JSON envelope is the
   mechanical `methodName` + `params` translation shown above.
-- **`VerifyPropertyAvailability` returns `<id>` and `<message>`,** not a boolean. Semantics of `id`
-  are undocumented; confirm with Streamline support before relying on it.
+- **`VerifyPropertyAvailability` returns `<id>` and `<message>`,** not a boolean. Streamline
+  clarified that `<id>` echoes back the `unit_id` when the unit **is** available, and `<message>`
+  carries non-blocking informational notices and is usually empty. They did **not** describe the
+  unavailable response, so treat "`id` equals the requested `unit_id`" as the availability signal
+  and log anything else until we have observed a real negative response.
 - **The "FEEDs Documentation" tree in Partner X is deprecated** and its pages are now empty stubs.
   The live reference is the General → Listings tree, which is what `reference/` mirrors.
 
 ---
 
-## Still needed from Streamline
+## Provisioning status
 
-Blocking — nothing can be built or tested without these:
+We hold a Partner X **documentation** account (M10947) only. The account is **not yet connected to
+the Streamline integration itself** — Streamline creates that once we answer their commercial
+classification questions, and only then do the feed credentials and partner slug exist.
 
-1. **Feed Basic-auth username and password** for the Listings feeds, from our Engagement Manager.
-2. **Our partner slug** for the feed root. The Advertisers Content Index lives at
-   `https://web.streamlinevrs.com/partner/{partnerName}/4.2.1/getAdvertisersContentIndex`; portal
-   examples use `streampal`, and we have not been told ours.
-3. **A test property manager**: token set, `distributor_code`, `advertiser_id`, and opted-in units.
-4. **Sandbox or test environment confirmation.** Portal examples reference a "Gueststream Sandbox"
-   advertiser; we do not know whether we get one or must test against a live PM.
+### Blocked on us
 
-Design-blocking — answers change the implementation:
+1. **Commercial classification.** Streamline must decide whether we operate as a *Wholesale Agent* or
+   a *Post-Deduct Wholesale Agent*. They asked four questions to determine it: whether we take a
+   commission and how it is collected, how we settle with the PM, whether we share guest payment
+   methods with the PM, and whether we need to cancel reservations. See
+   [Our commercial model](#our-commercial-model) for the facts to give them.
+2. ~~**A static egress IP.**~~ **Done for staging: `13.52.31.177`.** Send this to Streamline to seed
+   the allow list. `deploy/aws/11-egress-nat.sh` provisioned private subnets behind a NAT Gateway
+   holding one Elastic IP, and moved `lagedra-api-staging` into them. Production still runs with
+   `assignPublicIp=ENABLED` and ephemeral IPs — see [Egress](#egress) below.
 
-5. **How do we cancel or modify a reservation we created?** There is no cancel or modify method in
-   our entitlement, only `MakeReservationDistributionChannel`. The reservation list reports
-   `Cancelled` and `Modified` statuses, so those transitions must be possible somehow.
-6. **Is polling the only change-detection mechanism?** No webhooks are documented and
-   `GetDistributionChannelReservationList` filters on stay dates, not modification dates.
-7. **`GetPaymentTypes` access.** `GetPreReservationPrice` documents `payment_type_id` as coming from
-   `GetPaymentTypes`, which is not in our entitlement or documentation.
-8. **Confirm the "total" logic contract** — `force_adjustment`, `rate_only`, and `final_price`. The
-   docs say `rate_only` "will be discussed in the development process", which suggests per-PM setup.
-9. **`VerifyPropertyAvailability` response semantics.** It returns `<id>` and `<message>` rather than
-   a boolean, and `id` is undocumented.
+### Blocked on Streamline
 
-Nice to have:
+3. **Feed Basic-auth username and password** — pending account creation.
+4. **Our partner slug** for `https://web.streamlinevrs.com/partner/{partnerName}/4.2.1/…` — not yet
+   created.
+5. **A test property manager**: token set, `distributor_code`, `advertiser_id`, opted-in units, and
+   configured taxes and fees. Confirmed we will get one.
+6. **Sandbox endpoint.** Confirmed one exists; the URL has not been supplied yet.
+7. **`CancelReservation` and `ModifyReservation`** enabled on our account, with documentation. Both
+   methods exist but are outside our current entitlement.
+8. **`GetPaymentTypes` access** — escalated to a superior, no answer yet.
+9. **The "total" logic contract** — `force_adjustment`, `rate_only`, `final_price` — escalated, no
+   answer yet.
+10. **The 4.2.1 XSD files** — escalated, no answer yet.
+11. **A recommended polling pattern** — Streamline has none to offer today and will consult
+    internally after our integration is working.
+12. **The unavailable-case response** for `VerifyPropertyAvailability` — only the available case was
+    explained.
 
-10. **The 4.2.1 XSD files.** Every feed cites a "Listing XSD version" but the schemas are not in the
-    portal. They would let us generate parsers instead of hand-rolling them.
-11. **Feed regeneration cadence** — how quickly a PM-side change is reflected in `lastUpdatedDate`.
-12. **Identifier clarification.** `advertiserAssignedId` appears as `3b3ghi_VRBO` while the feed URLs
-    use `advertiser_id=3b3ghi`. Confirm which is the stable key and what the suffix means.
+**Not an ask:** our Partner X user already has admin rights over the
+[IP allow list](https://partner.streamlinevrs.com/admin_pages/allowed_ips), which accepts individual
+addresses or CIDR ranges. Streamline only needs to seed the first entry.
 
-**Not an ask:** the IP allow list is self-service under
-[Administration → Allowed IPs](https://partner.streamlinevrs.com/admin_pages/allowed_ips) for admin
-users, and accepts individual addresses or CIDR ranges. We add our own egress IPs; we only need to
-confirm our portal user has admin rights.
+### Egress
+
+Streamline refuses calls from non-allow-listed IPs, and Fargate tasks otherwise get a fresh public IP
+on every deploy. `deploy/aws/11-egress-nat.sh` fixes this by routing tasks through a NAT Gateway that
+holds a single Elastic IP.
+
+| | Egress IP | Status |
+|---|---|---|
+| Staging (`lagedra-api-staging`) | **13.52.31.177** | Done — private subnets, `assignPublicIp=DISABLED`, verified healthy |
+| Production (`lagedra-api`, `lagedra-worker`) | ephemeral | **Not migrated.** Run `bash deploy/aws/11-egress-nat.sh` to move them onto the same NAT and IP |
+
+Both environments share one NAT Gateway (`nat-061756117396e24e5`) and therefore one egress IP, so
+allow-listing `13.52.31.177` covers production too once it is migrated. Supporting resources:
+private subnets `subnet-062b0fc5604a47394` (us-west-1a) and `subnet-088509025bb8c32f5` (us-west-1c),
+route table `rtb-0850dbed890457504`, Elastic IP `eipalloc-009449c7f2a87ac63`.
+
+The private route table carries only a local route, a default route to the NAT, and an S3 gateway
+endpoint, so no task can reach the internet by any other path.
 
 Support goes through the Partner X [support form](https://partner.streamlinevrs.com/support/contact_support)
-or `integrationpartners@streamlinevrs.com`.
+or `integrationpartners@streamlinevrs.com`. Our contact is Alex.
+
+---
+
+## Our commercial model
+
+Streamline's classification hinges on how money moves, so these are the facts as implemented, not as
+marketed. Note that our other channel docs describe Lagedra as "merchant of record"; that is true of
+the guest relationship but **not** of card settlement, and the distinction matters here.
+
+| Streamline's question | Lagedra's answer |
+|---|---|
+| Do you have a commission, and how is it collected? | We take **no commission out of the PM's rent**. We add a tenant service fee and a stay-protection fee **on top** of rent, retained via the Stripe `ApplicationFeeAmount`. Hosts pay a **flat monthly subscription**, not a per-booking cut. |
+| How do you settle with a PM? | **No settlement in arrears.** Stripe Connect destination charges split funds **at the moment of payment**: first month's rent and the security deposit transfer straight to the host's connected account. We never hold PM funds. |
+| Do you share guest payment methods with the PM? | **No.** We hold Stripe tokens only, never card numbers, and the booking push carries no payment instrument. |
+| Do you need to cancel reservations? | **Yes**, hence the request for `CancelReservation` and `ModifyReservation`. |
+
+Implementation: `StripeService.CreateDestinationPaymentIntentAsync` uses `TransferData.Destination`
+plus `OnBehalfOf` set to the host, which makes the **host the settlement merchant of record**, with
+`ApplicationFeeAmount` covering our fees. See `DealFinancials` for the tenant total breakdown.
+
+Because we neither buy at a net rate nor deduct commission from the folio, we fit **neither** of
+Streamline's two wholesale models cleanly. The `commission` parameter on
+`MakeReservationDistributionChannel` would be `0` or omitted for us.
+
+### The mid-term mismatch
+
+Streamline is a nightly vacation-rental system; Lagedra is a **mid-term marketplace** with monthly
+rent and stays clamped to **30–180 days** (`ListingImporter`), plus lease agreements. Other channel
+imports approximate monthly rent as `nightlyCents * 30`. Two consequences worth raising with
+Streamline before building:
+
+- **Rate structures.** Length-of-Stay rates matter far more to us than nightly rates, and monthly
+  rate plans may not be expressible in the 4.2.1 feed.
+- **Tax treatment.** Many US jurisdictions exempt stays over 30 days from transient occupancy tax.
+  We need to know whether `GetPreReservationPrice` applies those exemptions automatically for long
+  stays, or whether it will quote nightly-stay taxes that we would then be collecting incorrectly.
 
 ---
 

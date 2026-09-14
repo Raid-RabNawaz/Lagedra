@@ -51,4 +51,8 @@ public sealed record DealApplicationDto(
     bool OwnerConsentRequired = false,
     bool OwnerConsentGiven = false,
     bool OwnerConsentDeclined = false,
-    DateTime? OwnerConsentAt = null);
+    DateTime? OwnerConsentAt = null,
+    DateTime? LastScreenedAt = null,
+    string? ScreeningOrderStatus = null,
+    string? ScreeningResult = null,
+    Guid? ScreeningRequestedByHostUserId = null);

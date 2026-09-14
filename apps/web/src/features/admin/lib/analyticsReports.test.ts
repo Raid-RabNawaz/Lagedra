@@ -33,6 +33,9 @@ const listing: ListingAnalyticsItemDto = {
   conversionPercent: 25,
   qualityScore: 80,
   addedVia: "Hostaway",
+  city: "Los Angeles",
+  state: "CA",
+  country: "US",
 };
 
 describe("csvCell", () => {
@@ -65,11 +68,25 @@ describe("analytics reports", () => {
     );
   });
 
+  it("includes a formatted location and city/state/country on listing rows", () => {
+    const withCountry = buildListingAnalyticsCsv([
+      { ...listing, city: "Toronto", state: "ON", country: "Canada" },
+    ]);
+    expect(withCountry).toContain("\"Toronto, ON, Canada\",Toronto,ON,Canada");
+
+    const missing = buildListingAnalyticsCsv([
+      { ...listing, title: "Studio", city: null, state: null, country: null },
+    ]);
+    expect(missing).toContain("Studio,,,");
+  });
+
   it("builds listing rows matching the on-screen columns", () => {
     const csv = buildListingAnalyticsCsv([listing]);
-    expect(csv).toContain("listingId,title,landlordUserId");
+    expect(csv).toContain("listingId,title,location,city,state,country,landlordUserId");
     expect(csv).toContain("addedVia");
     expect(csv).toContain("\"Loft, downtown\"");
+    expect(csv).toContain("\"Los Angeles, CA\"");
+    expect(csv).toContain("Los Angeles,CA,US");
     expect(csv).toContain("2026-07-04,320000,3200.00,4,25.0,80,Hostaway");
     expect(listingAnalyticsFilename(new Date("2026-08-19T10:00:00.000Z"))).toBe(
       "lagedra-listing-analytics-2026-08-19.csv",

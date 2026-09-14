@@ -70,7 +70,10 @@ public sealed class GetListingAnalyticsQueryHandler(NpgsqlDataSource dataSource)
                    COALESCE(u."IsGovernmentIdVerified", false) AS host_verified,
                    l."AddedVia",
                    l."AddedViaDetail",
-                   ch."ProviderKey"
+                   ch."ProviderKey",
+                   l.precise_city,
+                   l.precise_state,
+                   l.precise_country
             FROM listings.listings l
             LEFT JOIN auth."AspNetUsers" u ON u."Id" = l."LandlordUserId"
             LEFT JOIN LATERAL (
@@ -175,6 +178,15 @@ public sealed class GetListingAnalyticsQueryHandler(NpgsqlDataSource dataSource)
             var channelProviderKey = await reader.IsDBNullAsync(20, cancellationToken).ConfigureAwait(false)
                 ? null
                 : reader.GetString(20);
+            var city = await reader.IsDBNullAsync(21, cancellationToken).ConfigureAwait(false)
+                ? null
+                : reader.GetString(21);
+            var state = await reader.IsDBNullAsync(22, cancellationToken).ConfigureAwait(false)
+                ? null
+                : reader.GetString(22);
+            var country = await reader.IsDBNullAsync(23, cancellationToken).ConfigureAwait(false)
+                ? null
+                : reader.GetString(23);
 
             var landlordName = $"{firstName} {lastName}".Trim();
             if (landlordName.Length == 0)
@@ -191,7 +203,8 @@ public sealed class GetListingAnalyticsQueryHandler(NpgsqlDataSource dataSource)
                 listingId, title, landlordUserId, landlordName, email,
                 listingStatus, createdAt, rentCents,
                 appCount, Math.Round(conversionPercent, 2), qualityScore,
-                ListingAddedViaFormatter.Format(addedVia, addedViaDetail, channelProviderKey)));
+                ListingAddedViaFormatter.Format(addedVia, addedViaDetail, channelProviderKey),
+                city, state, country));
         }
 
         return Result<IReadOnlyList<ListingAnalyticsItemDto>>.Success(items);

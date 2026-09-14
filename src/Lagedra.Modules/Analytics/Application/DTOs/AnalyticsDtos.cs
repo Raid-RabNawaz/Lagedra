@@ -23,4 +23,7 @@ public sealed record ListingAnalyticsItemDto(
     int ApplicationCount,
     double ConversionPercent,
     double QualityScore,
-    string AddedVia);
+    string AddedVia,
+    string? City = null,
+    string? State = null,
+    string? Country = null);

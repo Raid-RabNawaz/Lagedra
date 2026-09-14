@@ -26,7 +26,9 @@ public static class ReviewsModuleRegistration
 
         services.AddOutboxContext<ReviewsDbContext>();
 
-        services.AddScoped<IReviewReputationProvider, ReviewReputationProvider>();
+        services.AddScoped<ReviewReputationProvider>();
+        services.AddScoped<IReviewReputationProvider>(sp => sp.GetRequiredService<ReviewReputationProvider>());
+        services.AddScoped<IHostToGuestReputationProvider>(sp => sp.GetRequiredService<ReviewReputationProvider>());
 
         services.AddDomainEventHandler<StayCompletedEvent, OnStayCompletedOpenReviewWindowHandler>();
         services.AddDomainEventHandler<StayReviewWindowOpenedEvent, OnStayReviewWindowOpenedNotify>();

@@ -1,7 +1,9 @@
 using Lagedra.Modules.ActivationAndBilling.Domain.Aggregates;
 using Lagedra.Modules.ActivationAndBilling.Domain.Enums;
+using Lagedra.SharedKernel.Integration;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 namespace Lagedra.Modules.ActivationAndBilling.Infrastructure.Configurations;
 
@@ -53,8 +55,12 @@ public sealed class DealApplicationConfiguration : IEntityTypeConfiguration<Deal
 
         // Predetermined-deposit snapshot: the tier that selected the deposit
         // (string-converted so new tiers can be appended) + the reason text.
+        var tierConverter = new ValueConverter<TenantVerificationTier?, string?>(
+            v => v.HasValue ? TenantVerificationTierMapping.ToStorage(v.Value) : null,
+            v => TenantVerificationTierMapping.TryParse(v));
+
         builder.Property(a => a.TenantVerificationTierAtRequest)
-            .HasConversion<string>()
+            .HasConversion(tierConverter)
             .HasMaxLength(40)
             .IsRequired(false);
         builder.Property(a => a.DepositReason).HasMaxLength(200);

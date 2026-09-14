@@ -11,7 +11,7 @@
   "containerDefinitions": [
     {
       "name": "api",
-      "image": "930218374225.dkr.ecr.us-west-1.amazonaws.com/lagedra/api@sha256:672b4f07bf125989be42be8ff661f0934cc8d94d213d6109d6ae4440acab9588",
+      "image": "930218374225.dkr.ecr.us-west-1.amazonaws.com/lagedra/api@sha256:0df1c157fa05b38806b2b91042be2b7969ae69865b7b0ba6d56dc731e4762ea1",
       "essential": true,
       "portMappings": [
         {
@@ -51,10 +51,6 @@
         {
           "name": "App__MarketingUrl",
           "value": "https://staging.lagedra.com"
-        },
-        {
-          "name": "Stripe__PublishableKey",
-          "value": "pk_live_51Tw2UBJHpE3nFjtjkhYox4Qz3gjEQc0q0L8l4HzVWwUxb44bOEvRoY06AoG7UtCS0g3W2ixKECnklTSU5CgLAwov00bPgq2epa"
         },
         {
           "name": "MinIO__Endpoint",
@@ -213,6 +209,10 @@
         {
           "name": "Jwt__Secret",
           "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/jwt-secret"
+        },
+        {
+          "name": "Stripe__PublishableKey",
+          "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/stripe-publishable-key"
         },
         {
           "name": "Stripe__SecretKey",

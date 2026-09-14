@@ -78,7 +78,8 @@ public sealed partial class StripeService(
     }
 
     private static bool IsMissingResource(StripeException ex) =>
-        string.Equals(ex.StripeError?.Code, "resource_missing", StringComparison.Ordinal)
+        StripeConnectErrors.IsMissingAccount(ex)
+        || string.Equals(ex.StripeError?.Code, "resource_missing", StringComparison.Ordinal)
         || (ex.Message?.Contains("No such customer", StringComparison.OrdinalIgnoreCase) ?? false);
 
     public async Task<StripeSubscriptionResult> CreateSubscriptionAsync(string customerId, string priceId, string? idempotencyKey = null, CancellationToken ct = default)

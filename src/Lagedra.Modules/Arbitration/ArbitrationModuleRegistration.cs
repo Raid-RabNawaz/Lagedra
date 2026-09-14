@@ -30,6 +30,7 @@ public static class ArbitrationModuleRegistration
         services.AddScoped<ArbitratorAssignmentSelector>();
         services.AddScoped<ArbitrationCaseAccessEvaluator>();
         services.AddScoped<IArbitrationEvidenceManifestAccessProvider, ArbitrationEvidenceManifestAccessProvider>();
+        services.AddScoped<IArbitrationStandingProvider, ArbitrationStandingProvider>();
 
         // Notification handlers
         services.AddDomainEventHandler<CaseFiledEvent, OnCaseFiledNotify>();

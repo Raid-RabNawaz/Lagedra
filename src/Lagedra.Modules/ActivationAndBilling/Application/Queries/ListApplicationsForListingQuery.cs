@@ -14,7 +14,8 @@ public sealed record ListApplicationsForListingQuery(
 public sealed class ListApplicationsForListingQueryHandler(
     BillingDbContext dbContext,
     IListingProvider listingProvider,
-    IPartnerOrganizationBillingProfile partnerOrgBilling)
+    IPartnerOrganizationBillingProfile partnerOrgBilling,
+    IVerificationSignalProvider verificationSignals)
     : IRequestHandler<ListApplicationsForListingQuery, Result<IReadOnlyList<DealApplicationDto>>>
 {
     private static readonly Error Forbidden = new("Application.Forbidden", "You do not own this listing.");
@@ -76,6 +77,10 @@ public sealed class ListApplicationsForListingQueryHandler(
                 return DealApplicationDtoMapper.ToDto(a, partnerName);
             })
             .ToList();
+
+        dtos = await DealApplicationScreeningDates
+            .AttachAsync(dtos, verificationSignals, cancellationToken)
+            .ConfigureAwait(false);
 
         return Result<IReadOnlyList<DealApplicationDto>>.Success(dtos);
     }

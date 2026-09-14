@@ -1,5 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <ItemGroup>
+    <InternalsVisibleTo Include="Lagedra.Tests.Unit" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\..\Lagedra.SharedKernel\Lagedra.SharedKernel.csproj" />
     <ProjectReference Include="..\..\Lagedra.Infrastructure\Lagedra.Infrastructure.csproj" />
   </ItemGroup>

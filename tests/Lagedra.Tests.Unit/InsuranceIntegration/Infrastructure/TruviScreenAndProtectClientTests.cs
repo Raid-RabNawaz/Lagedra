@@ -21,7 +21,7 @@ public class TruviScreenAndProtectClientTests
     public async Task Create_sends_subscription_key_and_maps_approved()
     {
         var handler = new StubHandler(_ => (HttpStatusCode.OK,
-            """{"verificationId":"ver_1","status":"Approved"}"""));
+            """{"metadata":{"timeStamp":"2026-09-11T18:55:06.69","echoToken":"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"},"verification":{"verificationId":"ver_1","status":"Approved"}}"""));
         var client = CreateClient(handler);
 
         var result = await client.CreateAsync(SampleCreate(), CancellationToken.None);
@@ -37,14 +37,26 @@ public class TruviScreenAndProtectClientTests
     public async Task Create_maps_flagged_and_rejected()
     {
         var handler = new StubHandler(_ => (HttpStatusCode.OK,
-            """{"verificationId":"ver_2","status":"Flagged","flaggedReason":"Watchlist"}"""));
+            """{"verification":{"verificationId":"ver_2","status":"Flagged","flaggedReason":"Watchlist"}}"""));
         var flagged = await CreateClient(handler).CreateAsync(SampleCreate(), CancellationToken.None);
         flagged.Status.Should().Be(TruviScreeningStatus.Flagged);
         flagged.FlaggedReason.Should().Be("Watchlist");
 
-        handler.Router = _ => (HttpStatusCode.OK, """{"verificationId":"ver_3","status":"Rejected"}""");
+        handler.Router = _ => (HttpStatusCode.OK, """{"verification":{"verificationId":"ver_3","status":"Rejected"}}""");
         var rejected = await CreateClient(handler).CreateAsync(SampleCreate(), CancellationToken.None);
         rejected.Status.Should().Be(TruviScreeningStatus.Rejected);
+    }
+
+    [Fact]
+    public async Task Create_accepts_flat_legacy_body()
+    {
+        var handler = new StubHandler(_ => (HttpStatusCode.OK,
+            """{"verificationId":"ver_flat","status":"Approved"}"""));
+
+        var result = await CreateClient(handler).CreateAsync(SampleCreate(), CancellationToken.None);
+
+        result.VerificationId.Should().Be("ver_flat");
+        result.Status.Should().Be(TruviScreeningStatus.Approved);
     }
 
     [Fact]
@@ -127,7 +139,9 @@ public class TruviScreenAndProtectClientTests
             "ada@example.com",
             null,
             out var request,
-            out _).Should().BeTrue();
+            out _,
+            listingId: DealId,
+            listingName: "Sunset Loft").Should().BeTrue();
         return request!;
     }
 

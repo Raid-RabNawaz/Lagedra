@@ -3,6 +3,7 @@ import { Send, Loader2, Plus, Trash2, DollarSign, CheckCircle2 } from "lucide-re
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { NumberInput } from "@/components/ui/number-input";
 import { Select } from "@/components/ui/select";
 import { formatDate, formatMoney } from "@/utils/format";
 import { useIssueDecision } from "@/features/arbitration/hooks/useArbitration";
@@ -346,17 +347,18 @@ export function VerdictForm({ c, canDecide }: Props) {
                     </Select>
                   </div>
                   {penaltyRequiresAmount(row.penaltyType) && (
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      className="w-full rounded-lg border bg-background px-3 py-2 text-sm"
+                    <NumberInput
+                      min={0}
+                      decimalPlaces={2}
+                      className="w-full"
                       placeholder="Amount (USD)"
-                      value={row.amountDollars}
-                      onChange={(e) =>
+                      value={row.amountDollars === "" ? null : Number(row.amountDollars)}
+                      onValueChange={(n) =>
                         setPenalties((rows) =>
                           rows.map((r) =>
-                            r.id === row.id ? { ...r, amountDollars: e.target.value } : r,
+                            r.id === row.id
+                              ? { ...r, amountDollars: n == null ? "" : String(n) }
+                              : r,
                           ),
                         )
                       }
@@ -393,12 +395,13 @@ export function VerdictForm({ c, canDecide }: Props) {
             <label className="text-xs font-medium text-muted-foreground">
               Binding award amount (optional, USD)
             </label>
-            <input
-              type="number"
-              className="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm"
+            <NumberInput
+              min={0}
+              decimalPlaces={2}
+              className="mt-1 w-full"
               placeholder="Total award amount"
-              value={awardAmount}
-              onChange={(e) => setAwardAmount(e.target.value)}
+              value={awardAmount === "" ? null : Number(awardAmount)}
+              onValueChange={(n) => setAwardAmount(n == null ? "" : String(n))}
             />
           </div>
         )}

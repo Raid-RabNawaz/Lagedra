@@ -10,7 +10,6 @@ import {
   Loader2,
   MapPin,
   MessageCircle,
-  User,
   Users,
   CheckCircle2,
   XCircle,
@@ -23,13 +22,14 @@ import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { ApplicationStatusBadge } from "./ApplicationStatusBadge";
 import { TrustLevelBadge } from "./TrustLevelBadge";
+import { ScreeningStatusBadge } from "./ScreeningStatusBadge";
 import {
   ApplicationDetailDialog,
   type ApplicationPerspective,
 } from "./ApplicationDetailDialog";
 import { HostPayoutReadinessNotice } from "@/components/shared/HostPayoutReadinessNotice";
 import { useApplicationProfilePreview } from "./ApplicationProfilePanel";
-import { formatDate, formatMoney } from "@/utils/format";
+import { formatDate, formatDateTime, formatMoney } from "@/utils/format";
 import {
   useApproveApplication,
   useRejectApplication,
@@ -205,7 +205,18 @@ export const ApplicationCard = ({
                     <TrustLevelBadge
                       tier={application.tenantVerificationTier}
                       compact
+                      lastScreenedAt={application.lastScreenedAt}
                     />
+                    {(isHostView || isOwnerView) && application.screeningOrderStatus && (
+                      <ScreeningStatusBadge
+                        status={application.screeningOrderStatus}
+                        result={
+                          application.screeningOrderStatus === "Completed"
+                            ? application.screeningResult
+                            : null
+                        }
+                      />
+                    )}
                   </div>
                   <div className="mt-0.5 flex items-center gap-1.5 flex-wrap">
                     <p className="text-sm font-semibold leading-tight truncate">
@@ -241,7 +252,7 @@ export const ApplicationCard = ({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <InfoChip icon={Calendar} label="Dates" value={stayLabel} />
                 <InfoChip
                   icon={Clock}
@@ -252,6 +263,11 @@ export const ApplicationCard = ({
                   icon={Users}
                   label="Guests"
                   value={String(application.guestCount)}
+                />
+                <InfoChip
+                  icon={Clock}
+                  label="Requested"
+                  value={formatDateTime(application.submittedAt)}
                 />
               </div>
 
@@ -322,8 +338,8 @@ export const ApplicationCard = ({
 
               <div className="mt-3 space-y-0.5 text-right text-[11px] text-muted-foreground">
                 <p className="flex items-center justify-end gap-1">
-                  <User className="h-3 w-3" />
-                  {formatDate(application.submittedAt)}
+                  <Clock className="h-3 w-3" />
+                  Requested {formatDateTime(application.submittedAt)}
                 </p>
                 {application.decidedAt && (
                   <p>
@@ -455,15 +471,14 @@ export const ApplicationCard = ({
                     <XCircle className="h-3.5 w-3.5" />
                     Reject
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    className="ml-auto gap-1 text-muted-foreground"
-                    onClick={openDetailDialog}
+                  <Link
+                    to={`/app/applications/${application.applicationId}`}
+                    onClick={stopBubble}
+                    className="ml-auto inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                   >
                     Details
                     <ChevronRight className="h-3.5 w-3.5" />
-                  </Button>
+                  </Link>
                 </div>
               )}
 

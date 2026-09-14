@@ -296,6 +296,27 @@ try
         Log.Warning(ex, "Pre-launch setting seed skipped (DB error): {Message}", ex.Message);
     }
 
+    try
+    {
+        var platformSettings = settingsScope.ServiceProvider.GetRequiredService<IPlatformSettingsService>();
+        var existingScreeningFee = await platformSettings
+            .GetStringAsync(PlatformSettingKeys.ScreeningHostFeeCents)
+            .ConfigureAwait(false);
+        if (existingScreeningFee is null)
+        {
+            await platformSettings.SetAsync(
+                PlatformSettingKeys.ScreeningHostFeeCents,
+                "4500",
+                "Host-paid tenant screening fee in cents. Charged when a host orders a background check on an applicant. Set to 0 to waive the fee.",
+                updatedByUserId: null)
+                .ConfigureAwait(false);
+        }
+    }
+    catch (DbUpdateException ex)
+    {
+        Log.Warning(ex, "Screening fee setting seed skipped (DB error): {Message}", ex.Message);
+    }
+
     app.UseCorrelationId();
     app.UseGlobalExceptionHandler();
     app.UseSerilogRequestLogging();
@@ -341,6 +362,8 @@ try
     app.MapAuthEndpoints();
     app.MapTruthSurfaceEndpoints();
     app.MapApplicationEndpoints();
+    app.MapScreeningEndpoints();
+    app.MapScreeningWebhookEndpoints();
     app.MapActionEndpoints();
     app.MapActivationEndpoints();
     app.MapDealEndpoints();

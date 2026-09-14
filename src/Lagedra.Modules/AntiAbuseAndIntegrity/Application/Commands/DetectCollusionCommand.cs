@@ -1,3 +1,4 @@
+using Lagedra.Modules.AntiAbuseAndIntegrity.Application.Services;
 using Lagedra.Modules.AntiAbuseAndIntegrity.Domain.Aggregates;
 using Lagedra.Modules.AntiAbuseAndIntegrity.Domain.Entities;
 using Lagedra.Modules.AntiAbuseAndIntegrity.Domain.Enums;
@@ -24,6 +25,22 @@ public sealed class DetectCollusionCommandHandler(
 
         var abuseCase = AbuseCase.Open(request.PartyAUserId, AbuseType.Collusion);
         dbContext.AbuseCases.Add(abuseCase);
+        await FraudFlagWriter
+            .RaiseIfMissingAsync(
+                dbContext,
+                request.PartyAUserId,
+                FraudFlagType.BadFaithReporting,
+                Severity.High,
+                cancellationToken)
+            .ConfigureAwait(false);
+        await FraudFlagWriter
+            .RaiseIfMissingAsync(
+                dbContext,
+                request.PartyBUserId,
+                FraudFlagType.BadFaithReporting,
+                Severity.High,
+                cancellationToken)
+            .ConfigureAwait(false);
 
         var pattern = CollusionPattern.Create(
             abuseCase.Id,

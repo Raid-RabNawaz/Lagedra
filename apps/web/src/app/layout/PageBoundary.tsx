@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { Home, RotateCcw } from "lucide-react";
 import { ErrorState } from "@/components/shared/ErrorState";
 import { Button } from "@/components/ui/button";
+import { reloadOnceOnStaleChunk } from "@/lib/staleChunk";
 
 type Props = {
   children: ReactNode;
@@ -32,6 +33,7 @@ class PageBoundaryInner extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
+    if (reloadOnceOnStaleChunk(error)) return;
     if (import.meta.env.DEV) {
       console.error("[PageBoundary] caught:", error, info.componentStack);
     }

@@ -60,6 +60,7 @@ internal static class QuartzSetup
         services.AddScoped<PaymentConfirmationTimeoutJob>();
         services.AddScoped<ExpireStaleBookingRequestsJob>();
         services.AddScoped<ArbitrationBacklogSlaJob>();
+        services.AddScoped<RefundIncompleteScreeningOrdersJob>();
         services.AddScoped<ChannelBookingUpdateJob>();
         services.AddScoped<ComplianceScannerJob>();
         services.AddScoped<ChannelContentSyncJob>();

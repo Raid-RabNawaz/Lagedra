@@ -48,11 +48,12 @@ internal sealed class HourlySweepJob(
     PaymentConfirmationTimeoutJob paymentTimeouts,
     ExpireStaleBookingRequestsJob staleBookingRequests,
     ArbitrationBacklogSlaJob arbitrationBacklog,
+    RefundIncompleteScreeningOrdersJob incompleteScreeningRefunds,
     ILogger<HourlySweepJob> logger)
     : SequentialCompositeJob(logger)
 {
     protected override IReadOnlyList<IJob> Children =>
-        [paymentTimeouts, staleBookingRequests, arbitrationBacklog];
+        [paymentTimeouts, staleBookingRequests, arbitrationBacklog, incompleteScreeningRefunds];
 }
 
 /// <summary>

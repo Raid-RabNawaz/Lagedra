@@ -5,6 +5,7 @@ import type { SafetyDeviceDefinitionDto, ConsiderationDefinitionDto } from "@/ap
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { FormNumberInput } from "@/components/ui/number-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
@@ -145,19 +146,19 @@ export function ListingForm({
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
           <Field label="Monthly rent (USD)" error={form.formState.errors.monthlyRentDollars?.message}>
-            <Input
-              type="number"
-              step="0.01"
+            <FormNumberInput
+              control={form.control}
+              name="monthlyRentDollars"
               min={0}
-              {...form.register("monthlyRentDollars", { valueAsNumber: true })}
+              decimalPlaces={2}
             />
           </Field>
           <Field label="Maximum deposit (USD)" error={form.formState.errors.maxDepositDollars?.message}>
-            <Input
-              type="number"
-              step="0.01"
+            <FormNumberInput
+              control={form.control}
+              name="maxDepositDollars"
               min={0}
-              {...form.register("maxDepositDollars", { valueAsNumber: true })}
+              decimalPlaces={2}
             />
           </Field>
           <div className="sm:col-span-2">
@@ -165,14 +166,12 @@ export function ListingForm({
               label="Default deposit for instant book (USD, optional)"
               error={form.formState.errors.defaultDepositDollars?.message}
             >
-              <Input
-                type="number"
-                step="0.01"
+              <FormNumberInput
+                control={form.control}
+                name="defaultDepositDollars"
                 min={0}
+                decimalPlaces={2}
                 placeholder="Leave blank to use the maximum deposit"
-                {...form.register("defaultDepositDollars", {
-                  setValueAs: (v) => (v === "" || v === undefined ? undefined : Number(v)),
-                })}
               />
               <p className="text-xs text-muted-foreground">
                 Used when a guest books instantly. Cannot exceed the maximum deposit.
@@ -189,42 +188,36 @@ export function ListingForm({
             label="Deposit — unverified tenant (USD)"
             error={form.formState.errors.depositUnverifiedDollars?.message}
           >
-            <Input
-              type="number"
-              step="0.01"
+            <FormNumberInput
+              control={form.control}
+              name="depositUnverifiedDollars"
               min={0}
+              decimalPlaces={2}
               placeholder="Falls back to maximum deposit"
-              {...form.register("depositUnverifiedDollars", {
-                setValueAs: (v) => (v === "" || v === undefined ? undefined : Number(v)),
-              })}
             />
           </Field>
           <Field
-            label="Deposit — background-verified tenant (USD)"
+            label="Deposit — Trusted tenant (USD)"
             error={form.formState.errors.depositBackgroundVerifiedDollars?.message}
           >
-            <Input
-              type="number"
-              step="0.01"
+            <FormNumberInput
+              control={form.control}
+              name="depositBackgroundVerifiedDollars"
               min={0}
-              placeholder="Reduced deposit for verified tenants"
-              {...form.register("depositBackgroundVerifiedDollars", {
-                setValueAs: (v) => (v === "" || v === undefined ? undefined : Number(v)),
-              })}
+              decimalPlaces={2}
+              placeholder="Reduced deposit for Trusted guests"
             />
           </Field>
           <Field
-            label="Deposit — partner-guaranteed tenant (USD)"
+            label="Deposit — Elite tenant (USD)"
             error={form.formState.errors.depositPartnerGuaranteedDollars?.message}
           >
-            <Input
-              type="number"
-              step="0.01"
+            <FormNumberInput
+              control={form.control}
+              name="depositPartnerGuaranteedDollars"
               min={0}
-              placeholder="Much lower — a partner backs the tenant"
-              {...form.register("depositPartnerGuaranteedDollars", {
-                setValueAs: (v) => (v === "" || v === undefined ? undefined : Number(v)),
-              })}
+              decimalPlaces={2}
+              placeholder="Lowest band — Elite guests with partner backing"
             />
           </Field>
         </CardContent>
@@ -236,26 +229,25 @@ export function ListingForm({
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-3">
           <Field label="Bedrooms" error={form.formState.errors.bedrooms?.message}>
-            <Input type="number" min={0} {...form.register("bedrooms", { valueAsNumber: true })} />
+            <FormNumberInput control={form.control} name="bedrooms" min={0} decimalPlaces={0} />
           </Field>
           <Field label="Bathrooms" error={form.formState.errors.bathrooms?.message}>
-            <Input type="number" step="0.5" min={0.5} {...form.register("bathrooms", { valueAsNumber: true })} />
+            <FormNumberInput control={form.control} name="bathrooms" min={0.5} decimalPlaces={1} />
           </Field>
           <Field label="Sq ft (optional)" error={form.formState.errors.squareFootage?.message}>
-            <Input
-              type="number"
+            <FormNumberInput
+              control={form.control}
+              name="squareFootage"
               min={0}
+              decimalPlaces={0}
               placeholder="—"
-              {...form.register("squareFootage", {
-                setValueAs: (v) => (v === "" || v === undefined ? undefined : Number(v)),
-              })}
             />
           </Field>
           <Field label="Min stay (days)" error={form.formState.errors.minStayDays?.message}>
-            <Input type="number" min={30} max={180} {...form.register("minStayDays", { valueAsNumber: true })} />
+            <FormNumberInput control={form.control} name="minStayDays" min={30} max={180} decimalPlaces={0} />
           </Field>
           <Field label="Max stay (days)" error={form.formState.errors.maxStayDays?.message}>
-            <Input type="number" min={30} max={180} {...form.register("maxStayDays", { valueAsNumber: true })} />
+            <FormNumberInput control={form.control} name="maxStayDays" min={30} max={180} decimalPlaces={0} />
           </Field>
         </CardContent>
       </Card>
@@ -272,7 +264,7 @@ export function ListingForm({
             <Input type="time" {...form.register("checkOutTime")} />
           </Field>
           <Field label="Max guests" error={form.formState.errors.maxGuests?.message}>
-            <Input type="number" min={1} {...form.register("maxGuests", { valueAsNumber: true })} />
+            <FormNumberInput control={form.control} name="maxGuests" min={1} decimalPlaces={0} />
           </Field>
           <div className="flex flex-wrap gap-4 sm:col-span-2">
             <label className="flex items-center gap-2 text-sm cursor-pointer">
@@ -331,25 +323,23 @@ export function ListingForm({
             </Select>
           </Field>
           <Field label="Free cancellation (days before)" error={form.formState.errors.freeCancellationDays?.message}>
-            <Input type="number" min={0} {...form.register("freeCancellationDays", { valueAsNumber: true })} />
+            <FormNumberInput control={form.control} name="freeCancellationDays" min={0} decimalPlaces={0} />
           </Field>
           <Field label="Partial refund % (optional)" error={form.formState.errors.partialRefundPercent?.message}>
-            <Input
-              type="number"
+            <FormNumberInput
+              control={form.control}
+              name="partialRefundPercent"
               min={0}
               max={100}
-              {...form.register("partialRefundPercent", {
-                setValueAs: (v) => (v === "" || v === undefined ? undefined : Number(v)),
-              })}
+              decimalPlaces={0}
             />
           </Field>
           <Field label="Partial refund days (optional)" error={form.formState.errors.partialRefundDays?.message}>
-            <Input
-              type="number"
+            <FormNumberInput
+              control={form.control}
+              name="partialRefundDays"
               min={0}
-              {...form.register("partialRefundDays", {
-                setValueAs: (v) => (v === "" || v === undefined ? undefined : Number(v)),
-              })}
+              decimalPlaces={0}
             />
           </Field>
           <div className="sm:col-span-2">
@@ -396,11 +386,12 @@ export function ListingForm({
               label="Rent due day of month"
               error={form.formState.errors.rentDueDayOfMonth?.message}
             >
-              <Input
-                type="number"
+              <FormNumberInput
+                control={form.control}
+                name="rentDueDayOfMonth"
                 min={1}
                 max={28}
-                {...form.register("rentDueDayOfMonth", { valueAsNumber: true })}
+                decimalPlaces={0}
               />
               <p className="text-xs text-muted-foreground">Between the 1st and the 28th.</p>
             </Field>
@@ -414,44 +405,45 @@ export function ListingForm({
               label="Late fee (% of rent)"
               error={form.formState.errors.lateFeePercent?.message}
             >
-              <Input
-                type="number"
-                step="0.1"
+              <FormNumberInput
+                control={form.control}
+                name="lateFeePercent"
                 min={0}
                 max={100}
-                {...form.register("lateFeePercent", { valueAsNumber: true })}
+                decimalPlaces={1}
               />
             </Field>
             <Field
               label="Late fee grace period (days)"
               error={form.formState.errors.lateFeeGraceDays?.message}
             >
-              <Input
-                type="number"
+              <FormNumberInput
+                control={form.control}
+                name="lateFeeGraceDays"
                 min={0}
-                {...form.register("lateFeeGraceDays", { valueAsNumber: true })}
+                decimalPlaces={0}
               />
             </Field>
             <Field
               label="Returned payment fee — first (USD)"
               error={form.formState.errors.nsfFirstFeeDollars?.message}
             >
-              <Input
-                type="number"
-                step="0.01"
+              <FormNumberInput
+                control={form.control}
+                name="nsfFirstFeeDollars"
                 min={0}
-                {...form.register("nsfFirstFeeDollars", { valueAsNumber: true })}
+                decimalPlaces={2}
               />
             </Field>
             <Field
               label="Returned payment fee — subsequent (USD)"
               error={form.formState.errors.nsfSubsequentFeeDollars?.message}
             >
-              <Input
-                type="number"
-                step="0.01"
+              <FormNumberInput
+                control={form.control}
+                name="nsfSubsequentFeeDollars"
                 min={0}
-                {...form.register("nsfSubsequentFeeDollars", { valueAsNumber: true })}
+                decimalPlaces={2}
               />
             </Field>
           </div>
@@ -498,48 +490,50 @@ export function ListingForm({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Field label="Keys provided" error={form.formState.errors.keyCount?.message}>
-              <Input type="number" min={0} {...form.register("keyCount", { valueAsNumber: true })} />
+              <FormNumberInput control={form.control} name="keyCount" min={0} decimalPlaces={0} />
             </Field>
             <Field
               label="Mailbox keys provided"
               error={form.formState.errors.mailboxKeyCount?.message}
             >
-              <Input
-                type="number"
+              <FormNumberInput
+                control={form.control}
+                name="mailboxKeyCount"
                 min={0}
-                {...form.register("mailboxKeyCount", { valueAsNumber: true })}
+                decimalPlaces={0}
               />
             </Field>
             <Field
               label="Key replacement fee (USD)"
               error={form.formState.errors.keyReplacementFeeDollars?.message}
             >
-              <Input
-                type="number"
-                step="0.01"
+              <FormNumberInput
+                control={form.control}
+                name="keyReplacementFeeDollars"
                 min={0}
-                {...form.register("keyReplacementFeeDollars", { valueAsNumber: true })}
+                decimalPlaces={2}
               />
             </Field>
             <Field
               label="Lockout fee (USD)"
               error={form.formState.errors.lockoutFeeDollars?.message}
             >
-              <Input
-                type="number"
-                step="0.01"
+              <FormNumberInput
+                control={form.control}
+                name="lockoutFeeDollars"
                 min={0}
-                {...form.register("lockoutFeeDollars", { valueAsNumber: true })}
+                decimalPlaces={2}
               />
             </Field>
             <Field
               label="Parking spaces"
               error={form.formState.errors.parkingSpaceCount?.message}
             >
-              <Input
-                type="number"
+              <FormNumberInput
+                control={form.control}
+                name="parkingSpaceCount"
                 min={0}
-                {...form.register("parkingSpaceCount", { valueAsNumber: true })}
+                decimalPlaces={0}
               />
             </Field>
             <div className="self-end pb-2">
@@ -569,31 +563,33 @@ export function ListingForm({
               label="Max consecutive days for guests"
               error={form.formState.errors.maxGuestConsecutiveDays?.message}
             >
-              <Input
-                type="number"
+              <FormNumberInput
+                control={form.control}
+                name="maxGuestConsecutiveDays"
                 min={0}
-                {...form.register("maxGuestConsecutiveDays", { valueAsNumber: true })}
+                decimalPlaces={0}
               />
             </Field>
             <Field
               label="Renter's insurance minimum liability (USD)"
               error={form.formState.errors.rentersInsuranceMinLiabilityDollars?.message}
             >
-              <Input
-                type="number"
-                step="0.01"
+              <FormNumberInput
+                control={form.control}
+                name="rentersInsuranceMinLiabilityDollars"
                 min={0}
-                {...form.register("rentersInsuranceMinLiabilityDollars", { valueAsNumber: true })}
+                decimalPlaces={2}
               />
             </Field>
             <Field
               label="Early termination fee (months of rent)"
               error={form.formState.errors.earlyTerminationFeeMonths?.message}
             >
-              <Input
-                type="number"
+              <FormNumberInput
+                control={form.control}
+                name="earlyTerminationFeeMonths"
                 min={0}
-                {...form.register("earlyTerminationFeeMonths", { valueAsNumber: true })}
+                decimalPlaces={0}
               />
             </Field>
           </div>

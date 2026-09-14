@@ -101,6 +101,8 @@ public class TruviScreeningServiceTests
         sent!.Company.Name.Should().Be("Harbor Stays");
         sent.Company.Email.Should().Be("host@example.com");
         sent.Protection.StartingLevel.Should().Be(1000);
+        sent.Listing.ListingId.Should().Be(ListingId.ToString("D"));
+        sent.Listing.ListingName.Should().Be("Sunset Loft");
         store.Items[0].PolicyNumber.Should().Be(DealId.ToString("D"));
     }
 
@@ -258,6 +260,7 @@ public class TruviScreeningServiceTests
             500_000,
             275_000,
             null,
+            Title: "Sunset Loft",
             PreciseAddress: new ListingAddressDto("12 Main St", "Los Angeles", "CA", "90012", "United States"),
             HouseRules: new ListingHouseRulesDto("15:00", "11:00", 4, false, null, false, false, null, null, null, null),
             Bedrooms: 1,

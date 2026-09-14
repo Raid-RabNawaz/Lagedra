@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { HandCoins, Check, Clock, DoorOpen, Scale } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -324,13 +324,13 @@ function HandshakeCard({
                 <label className="mb-1 block text-sm font-medium">
                   Amount returned
                 </label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  inputMode="decimal"
-                  value={amountValue}
-                  onChange={(e) => setAmountInput(e.target.value)}
+                <NumberInput
+                  min={0}
+                  decimalPlaces={2}
+                  value={amountValue === "" ? null : Number(amountValue)}
+                  onValueChange={(n) =>
+                    setAmountInput(n == null ? "" : String(n))
+                  }
                 />
               </div>
               <div>

@@ -30,6 +30,7 @@ import type {
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -743,14 +744,13 @@ export const SearchPage = () => {
                   <FilterField label="Min price / mo (USD)">
                     <div className="relative">
                       <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">$</span>
-                      <Input
-                        type="number"
-                        inputMode="numeric"
+                      <NumberInput
                         min={0}
+                        decimalPlaces={0}
                         placeholder="Any"
-                        value={minPrice}
-                        onChange={(e) => {
-                          setMinPrice(e.target.value);
+                        value={minPrice === "" ? null : Number(minPrice)}
+                        onValueChange={(n) => {
+                          setMinPrice(n == null ? "" : String(n));
                           setPage(1);
                         }}
                         className="h-9 pl-5"
@@ -760,14 +760,13 @@ export const SearchPage = () => {
                   <FilterField label="Max price / mo (USD)">
                     <div className="relative">
                       <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">$</span>
-                      <Input
-                        type="number"
-                        inputMode="numeric"
+                      <NumberInput
                         min={0}
+                        decimalPlaces={0}
                         placeholder="Any"
-                        value={maxPrice}
-                        onChange={(e) => {
-                          setMaxPrice(e.target.value);
+                        value={maxPrice === "" ? null : Number(maxPrice)}
+                        onValueChange={(n) => {
+                          setMaxPrice(n == null ? "" : String(n));
                           setPage(1);
                         }}
                         className="h-9 pl-5"

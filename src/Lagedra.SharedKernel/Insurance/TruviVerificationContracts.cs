@@ -18,6 +18,8 @@ public sealed record TruviListingAddress(
     [property: JsonPropertyName("addressLine2")] string? AddressLine2 = null);
 
 public sealed record TruviListing(
+    [property: JsonPropertyName("listingId")] string ListingId,
+    [property: JsonPropertyName("listingName")] string ListingName,
     [property: JsonPropertyName("address")] TruviListingAddress Address,
     [property: JsonPropertyName("petsAllowed")] bool PetsAllowed,
     [property: JsonPropertyName("numberOfGuests")] int? NumberOfGuests = null,
@@ -35,7 +37,7 @@ public sealed record TruviGuest(
     [property: JsonPropertyName("firstName")] string FirstName,
     [property: JsonPropertyName("lastName")] string LastName,
     [property: JsonPropertyName("email")] string? Email = null,
-    [property: JsonPropertyName("phone")] string? Phone = null);
+    [property: JsonPropertyName("telephoneNumber")] string? TelephoneNumber = null);
 
 public sealed record TruviProtection(
     [property: JsonPropertyName("type")] string Type,

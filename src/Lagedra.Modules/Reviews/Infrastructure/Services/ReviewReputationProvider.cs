@@ -9,8 +9,29 @@ namespace Lagedra.Modules.Reviews.Infrastructure.Services;
 
 public sealed class ReviewReputationProvider(
     ReviewsDbContext dbContext,
-    IMediator mediator) : IReviewReputationProvider
+    IMediator mediator) : IReviewReputationProvider, IHostToGuestReputationProvider
 {
+    public async Task<HostToGuestReputationDto> GetAsync(Guid tenantUserId, CancellationToken ct = default)
+    {
+        var reviews = await dbContext.StayReviews
+            .AsNoTracking()
+            .Where(r => r.RevieweeUserId == tenantUserId
+                        && r.Direction == StayReviewDirection.HostToGuest
+                        && r.Status == StayReviewStatus.Published)
+            .Select(r => r.OverallRating)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+
+        if (reviews.Count == 0)
+        {
+            return new HostToGuestReputationDto(0, 0);
+        }
+
+        return new HostToGuestReputationDto(
+            reviews.Count,
+            Math.Round(reviews.Average(), 2));
+    }
+
     public async Task<UserReputationDto?> GetUserReputationAsync(
         Guid userId,
         CancellationToken ct = default)

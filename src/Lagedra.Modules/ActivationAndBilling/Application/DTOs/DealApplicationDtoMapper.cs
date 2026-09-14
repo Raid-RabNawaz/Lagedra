@@ -12,7 +12,8 @@ internal static class DealApplicationDtoMapper
 {
     public static DealApplicationDto ToDto(
         DealApplication a,
-        string? partnerOrganizationName = null)
+        string? partnerOrganizationName = null,
+        DateTime? lastScreenedAt = null)
     {
         ArgumentNullException.ThrowIfNull(a);
 
@@ -39,6 +40,7 @@ internal static class DealApplicationDtoMapper
             a.OwnerConsentRequired,
             a.OwnerTenancyConsentGiven,
             a.OwnerTenancyConsentDeclined,
-            a.OwnerTenancyConsentAt);
+            a.OwnerTenancyConsentAt,
+            lastScreenedAt);
     }
 }

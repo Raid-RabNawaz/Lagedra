@@ -9,6 +9,14 @@ const shortDateFormatter = new Intl.DateTimeFormat("en-US", {
   month: "short",
 });
 
+const dateTimeFormatter = new Intl.DateTimeFormat("en-US", {
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+});
+
 // Currency display policy (Lagedra): never show fractional cents. We
 // ceiling-round to the nearest whole dollar so the tenant is never
 // surprised by a higher charge than they were shown. Internally we still
@@ -30,6 +38,13 @@ export function formatDate(dateStr: string | Date | null | undefined): string {
 export function formatShortDate(dateStr: string | Date): string {
   const date = typeof dateStr === "string" ? new Date(dateStr) : dateStr;
   return shortDateFormatter.format(date);
+}
+
+export function formatDateTime(dateStr: string | Date | null | undefined): string {
+  if (dateStr == null || dateStr === "") return "—";
+  const date = typeof dateStr === "string" ? new Date(dateStr) : dateStr;
+  if (Number.isNaN(date.getTime())) return "—";
+  return dateTimeFormatter.format(date);
 }
 
 /**

@@ -13,7 +13,8 @@ public sealed record ListMyApplicationsQuery(
 public sealed class ListMyApplicationsQueryHandler(
     BillingDbContext dbContext,
     IListingProvider listingProvider,
-    IPartnerOrganizationBillingProfile partnerOrgBilling)
+    IPartnerOrganizationBillingProfile partnerOrgBilling,
+    IVerificationSignalProvider verificationSignals)
     : IRequestHandler<ListMyApplicationsQuery, Result<IReadOnlyList<DealApplicationDto>>>
 {
     public async Task<Result<IReadOnlyList<DealApplicationDto>>> Handle(
@@ -78,6 +79,10 @@ public sealed class ListMyApplicationsQueryHandler(
                     : dto;
             })
             .ToList();
+
+        dtos = await DealApplicationScreeningDates
+            .AttachAsync(dtos, verificationSignals, cancellationToken)
+            .ConfigureAwait(false);
 
         return Result<IReadOnlyList<DealApplicationDto>>.Success(dtos);
     }

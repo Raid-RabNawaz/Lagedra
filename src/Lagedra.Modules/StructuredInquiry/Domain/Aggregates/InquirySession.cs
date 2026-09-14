@@ -100,6 +100,14 @@ public sealed class InquirySession : AggregateRoot<Guid>
         return session;
     }
 
+    public void FlagInquiryVolumeAbuse(int inquiryCount24h)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(inquiryCount24h, 1);
+
+        AddDomainEvent(new SharedKernel.Integration.Events.InquiryVolumeAbuseDetectedEvent(
+            TenantUserId, inquiryCount24h));
+    }
+
     /// <summary>
     /// Create a new inquiry session bound to an existing deal. Defaults to
     /// <see cref="InquirySessionStatus.Open"/> as part of Phase 16

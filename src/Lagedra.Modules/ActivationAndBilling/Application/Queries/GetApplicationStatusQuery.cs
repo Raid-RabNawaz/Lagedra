@@ -15,7 +15,8 @@ public sealed record GetApplicationStatusQuery(
 public sealed class GetApplicationStatusQueryHandler(
     BillingDbContext dbContext,
     IPartnerMembershipProvider partnerMembership,
-    IPartnerOrganizationBillingProfile partnerOrgBilling)
+    IPartnerOrganizationBillingProfile partnerOrgBilling,
+    IVerificationSignalProvider verificationSignals)
     : IRequestHandler<GetApplicationStatusQuery, Result<DealApplicationDto>>
 {
     public async Task<Result<DealApplicationDto>> Handle(
@@ -63,7 +64,11 @@ public sealed class GetApplicationStatusQueryHandler(
                 .ConfigureAwait(false);
         }
 
-        return Result<DealApplicationDto>.Success(
-            DealApplicationDtoMapper.ToDto(application, partnerName));
+        var dto = DealApplicationDtoMapper.ToDto(application, partnerName);
+        var attached = await DealApplicationScreeningDates
+            .AttachAsync([dto], verificationSignals, cancellationToken)
+            .ConfigureAwait(false);
+
+        return Result<DealApplicationDto>.Success(attached[0]);
     }
 }

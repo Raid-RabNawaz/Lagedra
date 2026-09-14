@@ -5,7 +5,7 @@ namespace Lagedra.Modules.ActivationAndBilling.Application.Services;
 /// <summary>
 /// Resolves a tenant's <see cref="TenantVerificationTier"/> at reservation
 /// request time so the predetermined deposit can be selected automatically.
-/// Highest tier wins: PartnerGuaranteed &gt; BackgroundVerified &gt; Unverified.
+/// Highest tier wins: Blocklisted &gt; Elite &gt; Trusted &gt; Verified &gt; Unverified.
 /// </summary>
 public interface ITenantVerificationTierResolver
 {
@@ -16,7 +16,7 @@ public interface ITenantVerificationTierResolver
 
 /// <summary>
 /// Outcome of tier resolution. <see cref="PartnerOrganizationId"/> is populated
-/// only when <see cref="Tier"/> is <see cref="TenantVerificationTier.PartnerGuaranteed"/>.
+/// only when <see cref="Tier"/> is <see cref="TenantVerificationTier.Elite"/>.
 /// </summary>
 public sealed record TenantVerificationTierResult(
     TenantVerificationTier Tier,

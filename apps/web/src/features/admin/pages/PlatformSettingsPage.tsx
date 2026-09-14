@@ -5,6 +5,7 @@ import { ProtocolFeeReconciliationBanner } from "@/features/admin/components/Pro
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Select } from "@/components/ui/select";
 import { Loader } from "@/components/shared/Loader";
 
@@ -36,6 +37,12 @@ const groupMeta: Record<string, { label: string; description: string; order: num
     description:
       "Service fee added to the tenant's payment total, as a percentage of the first month's rent. Set to 0% to disable it.",
     order: 1.5,
+  },
+  screening: {
+    label: "Tenant screening (paid by host)",
+    description:
+      "Amount charged to the host when they order a background check on an applicant. Set to $0 to waive the fee.",
+    order: 1.6,
   },
   stripe: {
     label: "Stripe Connect",
@@ -77,6 +84,7 @@ const labelOverrides: Record<string, string> = {
   "service_fee.tenant_use_flat": "Fee type",
   "service_fee.tenant_bps": "Percentage rate",
   "service_fee.tenant_flat_cents": "Flat amount",
+  "screening.host_fee_cents": "Screening fee",
   "stripe.platform_fee_price_id": "Platform fee price ID",
 };
 
@@ -98,28 +106,17 @@ const humaniseKey = (key: string): string => {
     .trim();
 };
 
-const bpsToPercent = (bps: string): string => {
-  const n = Number(bps);
-  if (!Number.isFinite(n)) return "";
-  return String(n / 100);
-};
-
-const percentToBps = (percent: string): string => {
-  const n = Number(percent);
-  if (!Number.isFinite(n)) return "0";
-  return String(Math.round(n * 100));
-};
-
-const centsToDollars = (cents: string): string => {
+const centsAsDollars = (cents: string): number | null => {
   const n = Number(cents);
-  if (!Number.isFinite(n)) return "";
-  return (n / 100).toFixed(2);
+  return Number.isFinite(n) ? n / 100 : null;
 };
 
-const dollarsToCents = (dollars: string): string => {
-  const n = Number(dollars);
-  if (!Number.isFinite(n)) return "0";
-  return String(Math.round(n * 100));
+const dollarsAsCents = (dollars: number | null): string =>
+  String(Math.round((dollars ?? 0) * 100));
+
+const integerDraft = (raw: string): number | null => {
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
 };
 
 export const PlatformSettingsPage = () => {
@@ -277,32 +274,30 @@ function SettingRow({
         ) : kind === "money" ? (
           <div className="flex items-center gap-1">
             <span className="text-sm text-muted-foreground">$</span>
-            <Input
-              type="number"
-              step="0.01"
-              min="0"
-              value={centsToDollars(draft)}
-              onChange={(e) => onChange(dollarsToCents(e.target.value))}
+            <NumberInput
+              min={0}
+              decimalPlaces={2}
+              value={centsAsDollars(draft)}
+              onValueChange={(n) => onChange(dollarsAsCents(n))}
             />
           </div>
         ) : kind === "percent" ? (
           <div className="flex items-center gap-1">
-            <Input
-              type="number"
-              step="0.01"
-              min="0"
-              value={bpsToPercent(draft)}
-              onChange={(e) => onChange(percentToBps(e.target.value))}
+            <NumberInput
+              min={0}
+              decimalPlaces={2}
+              value={centsAsDollars(draft)}
+              onValueChange={(n) => onChange(dollarsAsCents(n))}
             />
             <span className="text-sm text-muted-foreground">%</span>
           </div>
         ) : kind === "days" ? (
           <div className="flex items-center gap-1">
-            <Input
-              type="number"
-              min="0"
-              value={draft}
-              onChange={(e) => onChange(e.target.value)}
+            <NumberInput
+              min={0}
+              decimalPlaces={0}
+              value={integerDraft(draft)}
+              onValueChange={(n) => onChange(String(n ?? 0))}
             />
             <span className="text-sm text-muted-foreground">days</span>
           </div>

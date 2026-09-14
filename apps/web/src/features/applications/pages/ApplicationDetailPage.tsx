@@ -16,8 +16,10 @@ import {
   useApproveApplication,
   useDealInsurance,
   useRejectApplication,
+  useApplicationScreening,
   useRescreenDealInsurance,
 } from "@/features/applications/hooks/useApplications";
+import { ApplicationScreeningPanel } from "@/features/applications/components/ApplicationScreeningPanel";
 import { useListingDetail } from "@/features/listings/hooks/useListings";
 import { ApplicationStatusBadge } from "@/features/applications/components/ApplicationStatusBadge";
 import { ApplicationProfilePanel } from "@/features/applications/components/ApplicationProfilePanel";
@@ -48,7 +50,7 @@ import {
   tierLabel,
 } from "@/features/applications/lib/bookingConsent";
 import { OwnerConsentPanel } from "@/features/applications/components/OwnerConsentPanel";
-import { formatDate, formatMoney } from "@/utils/format";
+import { formatDateTime, formatMoney } from "@/utils/format";
 import { STAY_PROTECTION_LABEL } from "@/features/listings/lib/stayProtection";
 import { cn } from "@/lib/utils";
 import {
@@ -67,6 +69,7 @@ export const ApplicationDetailPage = () => {
   } = useApplicationDetail(id);
   const { data: listing } = useListingDetail(application?.listingId);
   const { data: stayProtection } = useDealInsurance(application?.dealId);
+  const { data: screening } = useApplicationScreening(id);
   const rescreenProtection = useRescreenDealInsurance(application?.dealId);
   const approveMutation = useApproveApplication();
   const rejectMutation = useRejectApplication();
@@ -189,9 +192,16 @@ export const ApplicationDetailPage = () => {
             tier={application.tenantVerificationTier}
             detailed
             depositReason={application.depositReason}
+            lastScreenedAt={screening?.lastScreenedAt}
           />
         </div>
       )}
+
+      <ApplicationScreeningPanel
+        applicationId={application.applicationId}
+        tenantTier={application.tenantVerificationTier}
+        viewer={isApplicationLandlord || isApplicationOwner || isPlatformAdmin ? "host" : "guest"}
+      />
 
       <Card className="mb-6">
         <CardHeader className="pb-3">
@@ -276,7 +286,7 @@ export const ApplicationDetailPage = () => {
                 )}
               </div>
             )}
-            {application.insuranceFeeCents != null && (
+            {application.insuranceFeeCents != null && application.insuranceFeeCents > 0 && (
               <div className="flex items-center gap-2 text-sm">
                 <Shield className="h-4 w-4 text-muted-foreground" />
                 <span className="font-medium">{STAY_PROTECTION_LABEL}:</span>
@@ -393,9 +403,9 @@ export const ApplicationDetailPage = () => {
       {/* Timestamps */}
       <Separator className="my-6" />
       <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
-        <span>Submitted: {formatDate(application.submittedAt)}</span>
+        <span>Requested: {formatDateTime(application.submittedAt)}</span>
         {application.decidedAt && (
-          <span>Decided: {formatDate(application.decidedAt)}</span>
+          <span>Decided: {formatDateTime(application.decidedAt)}</span>
         )}
         {application.isPartnerReferred && !isPartnerDirect && (
           <span className="text-accent font-medium">Partner referred</span>

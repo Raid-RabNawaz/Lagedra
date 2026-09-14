@@ -47,6 +47,9 @@ public static class PlatformSettingKeys
     // Stripe Connect
     public const string StripePlatformFeePriceId = "stripe.platform_fee_price_id";
 
+    // Tenant screening (paid by host when they order a background check)
+    public const string ScreeningHostFeeCents = "screening.host_fee_cents";
+
     // Pre-launch / go-to-market
     // When true: institution partners join a waitlist; founding hosts get real
     // accounts limited to listings, PMS import, profile, phone verification,

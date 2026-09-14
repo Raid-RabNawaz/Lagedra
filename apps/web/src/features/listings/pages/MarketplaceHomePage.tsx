@@ -366,14 +366,12 @@ function Carousel({
 
 function CardSkeleton() {
   return (
-    <div className="aspect-[4/5] overflow-hidden rounded-2xl ring-1 ring-border/60">
-      <div className="grid h-full grid-rows-[4fr_1fr]">
-        <div className="min-h-0 animate-pulse bg-muted" />
-        <div className="space-y-2 px-3 py-2.5">
-          <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
-          <div className="h-3 w-1/2 animate-pulse rounded bg-muted" />
-          <div className="h-4 w-1/3 animate-pulse rounded bg-muted" />
-        </div>
+    <div className="overflow-hidden rounded-2xl ring-1 ring-border/60">
+      <div className="aspect-[4/3] animate-pulse bg-muted" />
+      <div className="space-y-2 px-2.5 py-2.5 sm:px-3">
+        <div className="h-4 w-3/4 animate-pulse rounded bg-muted" />
+        <div className="h-3 w-1/2 animate-pulse rounded bg-muted" />
+        <div className="h-4 w-1/3 animate-pulse rounded bg-muted" />
       </div>
     </div>
   );

@@ -16,7 +16,7 @@ namespace Lagedra.Modules.LeaseAgreements.Application.Queries;
 /// the host's own uploaded document, or a blank specimen of Lagedra's template
 /// for the listing's jurisdiction with the listing's terms filled in.
 /// </summary>
-public sealed record GetListingLeasePreviewQuery(Guid ListingId)
+public sealed record GetListingLeasePreviewQuery(Guid ListingId, bool SpecimenOnly = false)
     : IRequest<Result<ListingLeasePreview>>;
 
 [SuppressMessage(
@@ -58,7 +58,7 @@ public sealed class GetListingLeasePreviewQueryHandler(
             string.Equals(listing.LeaseAgreementSource, "HostProvided", StringComparison.Ordinal)
             && listing.CustomLeaseDocument is not null;
 
-        return usesHostDocument
+        return usesHostDocument && !request.SpecimenOnly
             ? await ReadHostDocumentAsync(listing.CustomLeaseDocument!, cancellationToken).ConfigureAwait(false)
             : await BuildSpecimenAsync(request.ListingId, cancellationToken).ConfigureAwait(false);
     }

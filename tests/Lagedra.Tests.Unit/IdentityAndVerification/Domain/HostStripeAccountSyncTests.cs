@@ -102,4 +102,24 @@ public sealed class HostStripeAccountSyncTests
         Assert.Equal(HostAccountRequirementStatus.Verified, account.TaxStatus);
         Assert.Equal(StripeOnboardingStatus.Restricted, account.OnboardingStatus);
     }
+
+    [Fact]
+    public void ReplaceConnectedAccount_resets_status_and_clears_soft_delete()
+    {
+        var account = HostStripeAccount.Create(
+            Guid.NewGuid(),
+            "acct_old",
+            new FixedClock(DateTime.UtcNow));
+        account.IsDeleted = true;
+        account.DeletedAt = DateTime.UtcNow;
+
+        account.ReplaceConnectedAccount("acct_new", new FixedClock(DateTime.UtcNow.AddMinutes(1)));
+
+        Assert.Equal("acct_new", account.StripeAccountId);
+        Assert.Equal(StripeOnboardingStatus.Pending, account.OnboardingStatus);
+        Assert.False(account.ChargesEnabled);
+        Assert.False(account.PayoutsEnabled);
+        Assert.False(account.IsDeleted);
+        Assert.Null(account.DeletedAt);
+    }
 }

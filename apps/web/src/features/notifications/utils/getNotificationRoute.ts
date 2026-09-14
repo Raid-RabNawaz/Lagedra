@@ -45,6 +45,9 @@ export function getNotificationRoute(n: InAppNotificationDto): string | null {
       // application_approved, review_due/reminder, booking_cancelled (tenant), default
       return `/app/deals/${id}`;
 
+    case "DealApplication":
+      return `/app/applications/${id}`;
+
     case "Listing":
       if (
         category === "application_submitted" ||

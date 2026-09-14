@@ -35,7 +35,11 @@ public static class ActivationAndBillingModuleRegistration
         services.AddScoped<IDealApplicationStatusProvider, DealApplicationStatusProvider>();
         services.AddScoped<IPartnerDirectBookingService, PartnerDirectBookingService>();
         services.AddScoped<ICardOnFileChargeService, CardOnFileChargeService>();
+        services.Configure<Lagedra.SharedKernel.Settings.TrustTiersOptions>(
+            configuration.GetSection(Lagedra.SharedKernel.Settings.TrustTiersOptions.SectionName));
         services.AddScoped<ITenantVerificationTierResolver, TenantVerificationTierResolver>();
+        services.AddScoped<ICompletedStayCountProvider, CompletedStayCountProvider>();
+        services.AddScoped<IApplicationScreeningContextProvider, ApplicationScreeningContextProvider>();
         services.AddScoped<IReservationPricingService, ReservationPricingService>();
 
         services.AddDomainEventHandler<TruthSurfaceConfirmedEvent,

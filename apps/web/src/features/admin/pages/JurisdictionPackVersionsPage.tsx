@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
+import { NumberInput } from "@/components/ui/number-input";
 import { Select } from "@/components/ui/select";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -484,11 +485,11 @@ export const JurisdictionPackVersionsPage = () => {
                       </div>
                       <div className="w-24">
                         <label className="text-xs text-muted-foreground">Max ×</label>
-                        <Input
-                          type="number"
-                          step="0.1"
+                        <NumberInput
+                          min={0}
+                          decimalPlaces={1}
                           value={rule.maxMultiplier}
-                          onChange={(e) => updateDepositCap(idx, "maxMultiplier", parseFloat(e.target.value) || 0)}
+                          onValueChange={(n) => updateDepositCap(idx, "maxMultiplier", n ?? 0)}
                         />
                       </div>
                       <div className="flex-1 min-w-[150px]">
@@ -509,11 +510,11 @@ export const JurisdictionPackVersionsPage = () => {
                       </div>
                       <div className="w-24">
                         <label className="text-xs text-muted-foreground">Exc. ×</label>
-                        <Input
-                          type="number"
-                          step="0.1"
-                          value={rule.exceptionMultiplier ?? ""}
-                          onChange={(e) => updateDepositCap(idx, "exceptionMultiplier", e.target.value ? parseFloat(e.target.value) : null)}
+                        <NumberInput
+                          min={0}
+                          decimalPlaces={1}
+                          value={rule.exceptionMultiplier}
+                          onValueChange={(n) => updateDepositCap(idx, "exceptionMultiplier", n)}
                         />
                       </div>
                       <Button variant="ghost" size="sm" onClick={() => removeDepositCap(idx)}>

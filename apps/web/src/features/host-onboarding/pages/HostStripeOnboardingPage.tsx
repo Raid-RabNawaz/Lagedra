@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 
 export default function HostStripeOnboardingPage() {
-  const { data: status, isLoading } = useHostStripeStatus();
+  const { data: status, isLoading, isError, error: statusError } = useHostStripeStatus();
   const { data: statement } = useHostBillingStatement();
 
   if (isLoading) {
@@ -57,7 +57,12 @@ export default function HostStripeOnboardingPage() {
         </p>
       </div>
 
-      <StripeConnectSection status={status} ready={ready} hasAccount={hasAccount} />
+      <StripeConnectSection
+        status={status}
+        ready={ready}
+        hasAccount={hasAccount}
+        statusError={isError ? statusError : null}
+      />
 
       <Separator />
 
@@ -97,10 +102,12 @@ function StripeConnectSection({
   status,
   ready,
   hasAccount,
+  statusError,
 }: {
-  status: HostStripeStatusDto | undefined;
+  status: HostStripeStatusDto | undefined | null;
   ready: boolean;
   hasAccount: boolean;
+  statusError: unknown;
 }) {
   const onboard = useHostStripeOnboard();
   const refresh = useRefreshOnboardingLink();
@@ -213,10 +220,16 @@ function StripeConnectSection({
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
-        {error && (
+        {!!(error || statusError) && (
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription>
+              {error ||
+                getApiErrorMessage(
+                  statusError,
+                  "Could not load Stripe payout status. Please try again.",
+                )}
+            </AlertDescription>
           </Alert>
         )}
 

@@ -1,16 +1,23 @@
+using Lagedra.Modules.InsuranceIntegration.Infrastructure.Truvi;
 using Lagedra.SharedKernel.Insurance;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace Lagedra.Modules.InsuranceIntegration.Application.Services;
 
 /// <summary>
 /// Tenant-facing stay-protection quote. Truvi has no quote API — this is the
 /// wholesale nightly schedule they invoice Lagedra, recovered from the tenant
-/// at booking.
+/// at booking. The line stays at $0 until Screen &amp; Protect can actually
+/// be placed (<see cref="TruviScreenAndProtectSettings.CanCallApi"/>).
 /// </summary>
-public sealed class TruviStayProtectionFeeCalculator(IConfiguration configuration)
+public sealed class TruviStayProtectionFeeCalculator(
+    IConfiguration configuration,
+    IOptions<TruviScreenAndProtectSettings> settings)
     : IInsuranceFeeCalculator
 {
+    private static readonly InsuranceFeeQuote Unavailable = new(0, "None", null);
+
     public Task<InsuranceFeeQuote> CalculateFeeAsync(
         long monthlyRentCents,
         int stayDurationDays,
@@ -18,6 +25,11 @@ public sealed class TruviStayProtectionFeeCalculator(IConfiguration configuratio
     {
         _ = monthlyRentCents;
         _ = ct;
+
+        if (!settings.Value.CanCallApi)
+        {
+            return Task.FromResult(Unavailable);
+        }
 
         var firstNights = ReadInt(
             configuration,

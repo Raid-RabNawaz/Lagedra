@@ -27,6 +27,10 @@ internal static class JobRegistry
     public static IReadOnlyList<ScheduledJob> Jobs { get; } =
     [
         // Core notification delivery + retry backoff (every 30 s).
+        // Staging has no worker — the API runs this loop in-process when
+        // Notifications:ProcessInProcess is true. Do not enable that flag
+        // on live or both processors will race (SKIP LOCKED still prevents
+        // duplicate sends, but it wastes work).
         new(typeof(NotificationProcessingJob), "0/30 * * * * ?"),
 
         // Evidence malware scanning (every 5 min). Standalone so it keeps its

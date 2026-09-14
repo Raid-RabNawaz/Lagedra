@@ -11,7 +11,7 @@
   "containerDefinitions": [
     {
       "name": "api",
-      "image": "930218374225.dkr.ecr.us-west-1.amazonaws.com/lagedra/api@sha256:1129f99390985b22302fb9264425a72651d678ac0a4c45f268de811bbb034977",
+      "image": "930218374225.dkr.ecr.us-west-1.amazonaws.com/lagedra/api@sha256:f6d07450bb2f67ae48b0bd0bbe51304fcb477527a1775756b266bb097dffcb14",
       "essential": true,
       "portMappings": [
         {
@@ -47,10 +47,6 @@
         {
           "name": "App__FrontendUrl",
           "value": "https://staging.lagedra.com"
-        },
-        {
-          "name": "Stripe__PublishableKey",
-          "value": "pk_test_51Tw2UkJMSA7VwQkWPC9pDzLC9Ja8TC2RyTUYsceEM4aPusZ8S1CE9osgYkFWbxBlr9ntFePSQxQBnQ7XvrG5KksF00iPhRMCJV"
         },
         {
           "name": "MinIO__Endpoint",
@@ -163,6 +159,50 @@
         {
           "name": "FeatureFlags__ListingImport.AiExtraction",
           "value": "false"
+        },
+        {
+          "name": "Insurance__FeeCalculationMode",
+          "value": "Truvi"
+        },
+        {
+          "name": "Insurance__Truvi__BaseUrl",
+          "value": "https://developer.api.truvi.com/screen-and-protect-sandbox"
+        },
+        {
+          "name": "Insurance__Truvi__CompanyName",
+          "value": "Lagedra"
+        },
+        {
+          "name": "Insurance__Truvi__CompanyEmail",
+          "value": "raid@lagedra.com"
+        },
+        {
+          "name": "Insurance__Truvi__ExtendedAmount",
+          "value": "50000"
+        },
+        {
+          "name": "Insurance__Truvi__ScreeningEnabled",
+          "value": "true"
+        },
+        {
+          "name": "Insurance__Truvi__FirstNights",
+          "value": "30"
+        },
+        {
+          "name": "Insurance__Truvi__FirstNightsFeeCents",
+          "value": "600"
+        },
+        {
+          "name": "Insurance__Truvi__AdditionalNightFeeCents",
+          "value": "400"
+        },
+        {
+          "name": "Insurance__Truvi__ScreeningFeeCents",
+          "value": "100"
+        },
+        {
+          "name": "Screening__Provider",
+          "value": "Checkr"
         }
       ],
       "secrets": [
@@ -171,12 +211,16 @@
           "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/jwt-secret"
         },
         {
+          "name": "Stripe__PublishableKey",
+          "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/staging/stripe-publishable-key"
+        },
+        {
           "name": "Stripe__SecretKey",
-          "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/stripe-secret-key"
+          "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/staging/stripe-secret-key"
         },
         {
           "name": "Stripe__WebhookSecret",
-          "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/stripe-webhook-secret"
+          "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/staging/stripe-webhook-secret"
         },
         {
           "name": "GoogleMaps__ApiKey",
@@ -201,6 +245,18 @@
         {
           "name": "Twilio__SendGridApiKey",
           "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/twilio-sendgrid-api-key"
+        },
+        {
+          "name": "Insurance__Truvi__SubscriptionKey",
+          "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/staging/truvi-subscription-key"
+        },
+        {
+          "name": "Checkr__SecretKey",
+          "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/staging/checkr-secret-key"
+        },
+        {
+          "name": "Checkr__WebhookSecret",
+          "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/staging/checkr-webhook-secret"
         }
       ],
       "logConfiguration": {

@@ -57,7 +57,32 @@ DB_SG_ID='sg-xxx' \
 RDS_ENDPOINT='lagedra-db.xxx.rds.amazonaws.com' \
 RDS_MASTER_PASSWORD='...' \
 bash deploy/aws/10-migrations.sh
+
+# 11. Stable outbound IP (only needed for IP-allow-listed partners)
+bash deploy/aws/11-egress-nat.sh
 ```
+
+## Stable outbound IP
+
+By default, Fargate tasks run in public subnets with `assignPublicIp=ENABLED`, so outbound calls
+come from an ephemeral IP that changes on every deploy. Partners that allow-list source IPs
+(currently [Streamline VRS](../../docs/integrations/streamline/README.md)) need a fixed address.
+
+`11-egress-nat.sh` creates private subnets, a NAT Gateway holding one Elastic IP, and a default
+route through it, then moves the ECS services into those subnets. The Elastic IP it prints as
+`EGRESS_IP` is the single address all outbound traffic then originates from. It also creates a free
+S3 gateway endpoint so bucket traffic bypasses the NAT rather than incurring processing charges.
+
+The script is idempotent — every resource is looked up by tag first — so it is safe to re-run. To
+migrate services one at a time, set `EGRESS_SERVICES`:
+
+```bash
+EGRESS_SERVICES='lagedra-api-staging' bash deploy/aws/11-egress-nat.sh
+```
+
+Tasks in private subnets reach ECR, Secrets Manager, and CloudWatch through the NAT, so the NAT must
+be `available` before services are moved. The script waits for this. The ALB is unaffected: it stays
+in the public subnets and reaches tasks over private addresses.
 
 ## GitHub Actions CI/CD
 
@@ -92,3 +117,4 @@ After initial setup, deployments are automated via `.github/workflows/deploy.yml
 | S3 + CloudFront | ~$2-3 |
 | CloudWatch Logs | ~$1-2 |
 | **Total** | **~$40-45/mo** (year 1) |
+| NAT Gateway (only if step 11 is run) | ~$33 + ~$0.045/GB |

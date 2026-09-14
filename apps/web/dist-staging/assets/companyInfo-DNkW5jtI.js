@@ -1,0 +1,1 @@
+const e={brand:"Lagedra",legalName:"Lagedra LLC",street:"14622 Ventura Boulevard",city:"Sherman Oaks",region:"CA",postalCode:"91403",country:"United States"},a=`${e.street}, ${e.city}, ${e.region} ${e.postalCode}`;export{e as C,a};

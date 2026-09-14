@@ -17,6 +17,7 @@ public sealed class IdentityDbContext(
     public DbSet<VerificationCase> VerificationCases => Set<VerificationCase>();
     public DbSet<KycDocument> KycDocuments => Set<KycDocument>();
     public DbSet<BackgroundCheckReport> BackgroundCheckReports => Set<BackgroundCheckReport>();
+    public DbSet<ScreeningOrder> ScreeningOrders => Set<ScreeningOrder>();
     public DbSet<AffiliationVerification> AffiliationVerifications => Set<AffiliationVerification>();
     public DbSet<FraudFlag> FraudFlags => Set<FraudFlag>();
     public DbSet<HostPaymentDetails> HostPaymentDetails => Set<HostPaymentDetails>();

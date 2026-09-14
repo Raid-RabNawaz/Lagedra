@@ -1,9 +1,9 @@
 import { Link } from "react-router-dom";
-import { Calendar, MapPin, ArrowRight } from "lucide-react";
+import { Calendar, Clock, MapPin, ArrowRight } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { DealPhaseBadge } from "./DealPhaseBadge";
 import { EndingSoonBadge } from "./BookingAttentionBanner";
-import { formatDate, formatMoney } from "@/utils/format";
+import { formatDate, formatDateTime, formatMoney } from "@/utils/format";
 import { useAuthStore } from "@/app/auth/authStore";
 import {
   getDealIssue,
@@ -114,6 +114,10 @@ export function DealCard({ deal }: { deal: DealSummaryDto }) {
                 <span>–</span>
                 <span>{formatDate(deal.requestedCheckOut)}</span>
               </div>
+              <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                <Clock className="h-3.5 w-3.5" />
+                Requested {formatDateTime(deal.createdAt)}
+              </p>
 
               {issue && (
                 <p

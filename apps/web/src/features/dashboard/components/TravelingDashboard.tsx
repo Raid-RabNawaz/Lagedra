@@ -39,6 +39,7 @@ import {
   sortDealsByAttention,
 } from "@/features/deals/utils/bookingAttention";
 import { cn } from "@/lib/utils";
+import { formatDateTime } from "@/utils/format";
 
 const ONGOING_PHASES = new Set([
   "TruthSurface",
@@ -186,6 +187,7 @@ export function TravelingDashboard({ user }: { user: UserProfileDto }) {
                             </span>
                           )}
                           <span>{formatDayRange(d.requestedCheckIn, d.requestedCheckOut)}</span>
+                          <span>Requested {formatDateTime(d.createdAt)}</span>
                         </p>
                       </div>
                       <div className="flex shrink-0 flex-col items-end gap-1">
@@ -242,6 +244,7 @@ export function TravelingDashboard({ user }: { user: UserProfileDto }) {
                           </p>
                           <p className="text-xs text-muted-foreground">
                             {formatDayRange(a.requestedCheckIn, a.requestedCheckOut)}
+                            {` · Requested ${formatDateTime(a.submittedAt)}`}
                           </p>
                         </div>
                         <Badge variant={meta.variant}>{meta.label}</Badge>

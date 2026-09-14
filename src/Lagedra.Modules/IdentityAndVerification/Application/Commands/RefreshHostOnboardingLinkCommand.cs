@@ -3,6 +3,7 @@ using Lagedra.Modules.IdentityAndVerification.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Results;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Stripe;
 
 namespace Lagedra.Modules.IdentityAndVerification.Application.Commands;
 
@@ -33,9 +34,27 @@ public sealed class RefreshHostOnboardingLinkCommandHandler(
                 new Error("HostStripe.NotFound", "No Stripe account found. Please start onboarding first."));
         }
 
-        var status = await stripeService
-            .GetAccountStatusAsync(account.StripeAccountId, cancellationToken)
-            .ConfigureAwait(false);
+        StripeAccountStatusResult status;
+        try
+        {
+            status = await stripeService
+                .GetAccountStatusAsync(account.StripeAccountId, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (StripeException ex) when (StripeConnectErrors.IsMissingAccount(ex))
+        {
+            return Result<Uri>.Failure(
+                new Error("HostStripe.NotFound", "No Stripe account found. Please start onboarding first."));
+        }
+        catch (StripeException ex)
+        {
+            return Result<Uri>.Failure(
+                new Error(
+                    "HostStripe.ProviderError",
+                    string.IsNullOrWhiteSpace(ex.StripeError?.Message)
+                        ? "Could not refresh your Stripe link. Please try again."
+                        : ex.StripeError.Message));
+        }
 
         if (status.ChargesEnabled && status.PayoutsEnabled)
         {
@@ -51,14 +70,26 @@ public sealed class RefreshHostOnboardingLinkCommandHandler(
                     "Stripe is still reviewing your information. Nothing more can be submitted right now."));
         }
 
-        var url = await stripeService
-            .CreateConnectActionLinkAsync(
-                account.StripeAccountId,
-                request.ReturnUrl,
-                request.RefreshUrl,
-                cancellationToken)
-            .ConfigureAwait(false);
+        try
+        {
+            var url = await stripeService
+                .CreateConnectActionLinkAsync(
+                    account.StripeAccountId,
+                    request.ReturnUrl,
+                    request.RefreshUrl,
+                    cancellationToken)
+                .ConfigureAwait(false);
 
-        return Result<Uri>.Success(url);
+            return Result<Uri>.Success(url);
+        }
+        catch (StripeException ex)
+        {
+            return Result<Uri>.Failure(
+                new Error(
+                    "HostStripe.ProviderError",
+                    string.IsNullOrWhiteSpace(ex.StripeError?.Message)
+                        ? "Could not refresh your Stripe link. Please try again."
+                        : ex.StripeError.Message));
+        }
     }
 }

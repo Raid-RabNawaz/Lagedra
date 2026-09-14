@@ -1,15 +1,26 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { adminApi } from "@/features/admin/services/adminApi";
-import { http } from "@/api/http";
-import { endpoints } from "@/api/endpoints";
 import type { ViolationDto, ViolationCategory, ViolationStatus } from "@/api/types";
+import { getApiErrorMessage } from "@/api/errors";
+import { violationActions } from "@/features/admin/lib/adminQueueActions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select } from "@/components/ui/select";
+import { Alert } from "@/components/ui/alert";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Loader } from "@/components/shared/Loader";
+import { AdminDetailList } from "@/features/admin/components/AdminDetailList";
 
 const statusVariant = (status: ViolationStatus) => {
   switch (status) {
@@ -29,9 +40,6 @@ const statusVariant = (status: ViolationStatus) => {
 const statusClassName = (status: ViolationStatus) =>
   status === "Open" ? "bg-yellow-100 text-yellow-800 border-yellow-300" : undefined;
 
-const truncate = (value: string, len = 12) =>
-  value.length > len ? value.slice(0, len) + "…" : value;
-
 const allStatuses: ViolationStatus[] = ["Open", "UnderReview", "Resolved", "Dismissed", "Escalated"];
 const allCategories: ViolationCategory[] = [
   "NonPayment",
@@ -50,6 +58,7 @@ export const ComplianceViolationsPage = () => {
   const [statusFilter, setStatusFilter] = useState<"All" | ViolationStatus>("All");
   const [categoryFilter, setCategoryFilter] = useState<"All" | ViolationCategory>("All");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [selected, setSelected] = useState<ViolationDto | null>(null);
 
   const loadViolations = async () => {
     setIsLoading(true);
@@ -57,8 +66,8 @@ export const ComplianceViolationsPage = () => {
     try {
       const data = await adminApi.getAllViolations();
       setViolations(data);
-    } catch {
-      setError("Failed to load violations.");
+    } catch (err) {
+      setError(getApiErrorMessage(err, "Failed to load violations."));
     } finally {
       setIsLoading(false);
     }
@@ -76,27 +85,30 @@ export const ComplianceViolationsPage = () => {
 
   const handleAction = async (id: string, action: "resolve" | "dismiss" | "escalate") => {
     setActionLoading(id);
+    setError(null);
     try {
-      const url =
-        action === "resolve"
-          ? endpoints.compliance.resolveViolation(id)
-          : action === "dismiss"
-            ? endpoints.compliance.dismissViolation(id)
-            : endpoints.compliance.escalateViolation(id);
-      await http.post(url);
+      if (action === "resolve") await adminApi.resolveViolation(id);
+      else if (action === "dismiss") await adminApi.dismissViolation(id);
+      else await adminApi.escalateViolation(id);
+      setSelected(null);
       await loadViolations();
-    } catch {
-      setError(`Failed to ${action} violation.`);
+    } catch (err) {
+      setError(getApiErrorMessage(err, `Failed to ${action} violation.`));
     } finally {
       setActionLoading(null);
     }
   };
 
+  const selectedActions = selected ? violationActions(selected.status) : null;
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Compliance Violations</h1>
-        <p className="mt-1 text-muted-foreground">All violations across all deals.</p>
+        <p className="mt-1 text-muted-foreground">
+          All violations across deals. Open a row for the full record and only
+          the actions that are valid for its current status.
+        </p>
       </div>
 
       <Card>
@@ -132,7 +144,7 @@ export const ComplianceViolationsPage = () => {
               <TabsContent key={tab} value={tab}>
                 {isLoading ? (
                   <Loader label="Loading violations..." />
-                ) : error ? (
+                ) : error && !selected ? (
                   <p className="py-8 text-center text-destructive">{error}</p>
                 ) : filtered.length === 0 ? (
                   <p className="py-8 text-center text-muted-foreground">No violations found.</p>
@@ -140,22 +152,31 @@ export const ComplianceViolationsPage = () => {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Deal ID</TableHead>
-                        <TableHead>Reported By</TableHead>
-                        <TableHead>Target User</TableHead>
+                        <TableHead>Listing / deal</TableHead>
+                        <TableHead>Target</TableHead>
                         <TableHead>Category</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="hidden lg:table-cell">Description</TableHead>
-                        <TableHead>Detected At</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
+                        <TableHead>Detected</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {filtered.map((v) => (
-                        <TableRow key={v.id}>
-                          <TableCell className="font-mono text-xs">{truncate(v.dealId)}</TableCell>
-                          <TableCell className="font-mono text-xs">{truncate(v.reportedByUserId)}</TableCell>
-                          <TableCell className="font-mono text-xs">{truncate(v.targetUserId)}</TableCell>
+                        <TableRow
+                          key={v.id}
+                          className="cursor-pointer"
+                          onClick={() => setSelected(v)}
+                        >
+                          <TableCell>
+                            <p className="font-medium">{v.listingTitle || "Deal"}</p>
+                            <p className="font-mono text-xs text-muted-foreground">{v.dealId.slice(0, 12)}…</p>
+                          </TableCell>
+                          <TableCell>
+                            <p>{v.targetName || v.targetEmail || v.targetUserId.slice(0, 8) + "…"}</p>
+                            {v.targetEmail && v.targetName && (
+                              <p className="text-xs text-muted-foreground">{v.targetEmail}</p>
+                            )}
+                          </TableCell>
                           <TableCell>
                             <Badge variant="outline">{v.category}</Badge>
                           </TableCell>
@@ -164,45 +185,11 @@ export const ComplianceViolationsPage = () => {
                               {v.status}
                             </Badge>
                           </TableCell>
-                          <TableCell className="hidden lg:table-cell max-w-[200px] truncate text-sm text-muted-foreground">
+                          <TableCell className="hidden max-w-[200px] truncate text-sm text-muted-foreground lg:table-cell">
                             {v.description}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">
                             {new Date(v.detectedAt).toLocaleDateString()}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-1">
-                              {v.status !== "Resolved" && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  disabled={actionLoading === v.id}
-                                  onClick={() => handleAction(v.id, "resolve")}
-                                >
-                                  Resolve
-                                </Button>
-                              )}
-                              {v.status !== "Dismissed" && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  disabled={actionLoading === v.id}
-                                  onClick={() => handleAction(v.id, "dismiss")}
-                                >
-                                  Dismiss
-                                </Button>
-                              )}
-                              {v.status !== "Escalated" && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  disabled={actionLoading === v.id}
-                                  onClick={() => handleAction(v.id, "escalate")}
-                                >
-                                  Escalate
-                                </Button>
-                              )}
-                            </div>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -214,6 +201,81 @@ export const ComplianceViolationsPage = () => {
           </Tabs>
         </CardContent>
       </Card>
+
+      <Dialog open={selected !== null} onOpenChange={(open) => !open && setSelected(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Violation details</DialogTitle>
+            <DialogDescription>
+              Resolve or dismiss after review. Escalate only while the item is
+              still open.
+            </DialogDescription>
+          </DialogHeader>
+          {selected && selectedActions && (
+            <div className="space-y-4">
+              {error && <Alert variant="destructive">{error}</Alert>}
+              <AdminDetailList
+                rows={[
+                  { label: "Listing", value: selected.listingTitle },
+                  {
+                    label: "Deal",
+                    value: (
+                      <Link className="underline" to={`/app/deals/${selected.dealId}`}>
+                        {selected.dealId}
+                      </Link>
+                    ),
+                  },
+                  { label: "Target", value: selected.targetName },
+                  { label: "Target email", value: selected.targetEmail },
+                  { label: "Reported by", value: selected.reportedByName || selected.reportedByEmail },
+                  { label: "Category", value: selected.category },
+                  { label: "Status", value: selected.status },
+                  { label: "Description", value: selected.description },
+                  { label: "Evidence", value: selected.evidenceReference },
+                  { label: "Detected", value: new Date(selected.detectedAt).toLocaleString() },
+                  {
+                    label: "Resolved",
+                    value: selected.resolvedAt
+                      ? new Date(selected.resolvedAt).toLocaleString()
+                      : "—",
+                  },
+                ]}
+              />
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSelected(null)}>
+              Close
+            </Button>
+            {selected && selectedActions?.canDismiss && (
+              <Button
+                variant="ghost"
+                disabled={actionLoading === selected.id}
+                onClick={() => void handleAction(selected.id, "dismiss")}
+              >
+                Dismiss
+              </Button>
+            )}
+            {selected && selectedActions?.canEscalate && (
+              <Button
+                variant="outline"
+                disabled={actionLoading === selected.id}
+                onClick={() => void handleAction(selected.id, "escalate")}
+              >
+                Escalate
+              </Button>
+            )}
+            {selected && selectedActions?.canResolve && (
+              <Button
+                disabled={actionLoading === selected.id}
+                onClick={() => void handleAction(selected.id, "resolve")}
+              >
+                {actionLoading === selected.id ? "Saving…" : "Resolve"}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

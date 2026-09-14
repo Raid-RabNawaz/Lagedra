@@ -84,6 +84,10 @@ export const endpoints = {
     ownerDecline: (id: string) => `/v1/applications/${id}/owner-decline`,
     attachPayment: (id: string) => `/v1/applications/${id}/attach-payment`,
     forListing: (listingId: string) => `/v1/applications/listing/${listingId}`,
+    screening: (id: string) => `/v1/applications/${id}/screening`,
+    screeningCheckout: (id: string) => `/v1/applications/${id}/screening/checkout`,
+    screeningReport: (id: string) => `/v1/applications/${id}/screening/report`,
+    screeningReportPdf: (id: string) => `/v1/applications/${id}/screening/report/pdf`,
   },
   me: {
     verificationTier: "/v1/me/verification-tier",
@@ -286,6 +290,7 @@ export const endpoints = {
   // ── Admin-only endpoints ──────────────────────────────────
   adminInsurance: {
     unknownQueue: "/v1/admin/insurance/unknown-queue",
+    resolve: (dealId: string) => `/v1/admin/insurance/${dealId}/resolve`,
   },
   adminIntegrity: {
     allFlags: "/v1/admin/integrity/flags",
@@ -316,6 +321,8 @@ export const endpoints = {
     manualDetail: (id: string) => `/v1/admin/identity/manual-queue/${id}`,
     approveManual: (id: string) => `/v1/admin/identity/manual-queue/${id}/approve`,
     rejectManual: (id: string) => `/v1/admin/identity/manual-queue/${id}/reject`,
+    allFraudFlags: "/v1/admin/identity/fraud-flags",
+    resolveFraudFlag: (id: string) => `/v1/admin/identity/fraud-flags/${id}/resolve`,
   },
   adminCompliance: {
     allViolations: "/v1/admin/compliance/violations",
@@ -401,8 +408,8 @@ export const endpoints = {
       `/v1/lease-agreements/${id}/versions/${versionId}/deprecate`,
     getByCode: (code: string) => `/v1/lease-agreements/${code}`,
     dealPdf: (dealId: string) => `/v1/lease-agreements/deals/${dealId}/pdf`,
-    listingPreview: (listingId: string) =>
-      `/v1/lease-agreements/listings/${listingId}/preview`,
+    listingPreview: (listingId: string, specimen = false) =>
+      `/v1/lease-agreements/listings/${listingId}/preview?specimen=${specimen ? "true" : "false"}`,
   },
   jurisdictionPacks: {
     create: "/v1/jurisdiction-packs",

@@ -22,9 +22,10 @@ import { authApi } from "@/features/auth/services/authApi";
 import { privacyApi } from "@/features/privacy/services/privacyApi";
 import {
   useVerificationStatus,
-  useSubmitBackgroundCheckConsent,
+  useMyVerificationTier,
   useRiskView,
 } from "@/features/verification/hooks/useVerification";
+import { formatScreenedOn, tierDescription, tierLabel } from "@/features/applications/lib/bookingConsent";
 import { ManualKycUpload } from "@/features/verification/components/ManualKycUpload";
 import type { VerificationStatus, VerificationClassLevel } from "@/api/types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -34,7 +35,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { BackLink } from "@/components/shared/BackLink";
 import { Loader } from "@/components/shared/Loader";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatMoney } from "@/utils/format";
@@ -78,10 +78,8 @@ export const VerificationPage = () => {
   const { data: verificationStatus, isLoading, error: statusError } = useVerificationStatus(userId);
   const riskUserId = verificationStatus?.status === "Verified" ? userId : undefined;
   const { data: riskView } = useRiskView(riskUserId);
+  const { data: trustTier } = useMyVerificationTier(Boolean(userId));
 
-  const bgConsent = useSubmitBackgroundCheckConsent();
-
-  const [consentChecked, setConsentChecked] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
@@ -204,20 +202,6 @@ export const VerificationPage = () => {
     const id = hash.replace(/^#/, "");
     const el = document.getElementById(id);
     if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
-
-  const handleBackgroundCheck = async () => {
-    if (!userId) return;
-    setActionError(null);
-    setActionSuccess(null);
-    try {
-      await bgConsent.mutateAsync({ userId });
-      setActionSuccess(
-        "Background check consent submitted. With no provider configured we've auto-cleared it for you.",
-      );
-    } catch (e) {
-      setActionError((e as Error)?.message ?? "Failed to submit background check consent.");
-    }
   };
 
   const handleResendVerification = async () => {
@@ -705,48 +689,29 @@ export const VerificationPage = () => {
             Background check
           </CardTitle>
           <CardDescription>
-            A background check helps build trust with landlords and can lower your deposit requirements. This
-            is optional but recommended.
+            Hosts may optionally pay for a background and credit check on a booking request.
+            A recent Pass is one factor in your Lagedra trust profile — it never grants Elite
+            by itself.
           </CardDescription>
         </CardHeader>
-        <CardContent>
-          {!isVerified ? (
-            <div className="rounded-lg border p-4 bg-muted/30 flex items-start gap-3">
-              <Clock className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-              <p className="text-sm text-muted-foreground">
-                Complete identity verification above before requesting a background check.
-              </p>
-            </div>
+        <CardContent className="space-y-3 text-sm">
+          {trustTier && (
+            <p>
+              Trust level: <span className="font-medium">{tierLabel(trustTier.tier)}</span>
+              {" — "}
+              {tierDescription(trustTier.tier)}
+            </p>
+          )}
+          {formatScreenedOn(trustTier?.lastScreenedAt) ? (
+            <p>
+              Last background &amp; credit check:{" "}
+              <span className="font-medium">{formatScreenedOn(trustTier?.lastScreenedAt)}</span>
+            </p>
           ) : (
-            <div className="space-y-4">
-              <div className="rounded-lg border p-4 bg-muted/30 space-y-2">
-                <p className="text-sm">
-                  By consenting, you authorize a consumer report under the Fair Credit Reporting Act (FCRA).
-                  The report may include criminal records, eviction history, and credit information. Results
-                  are kept confidential and used only for rental verification.
-                </p>
-              </div>
-
-              <div className="flex items-start gap-2">
-                <Checkbox
-                  id="bg-consent"
-                  checked={consentChecked}
-                  onCheckedChange={(checked) => setConsentChecked(checked === true)}
-                />
-                <label htmlFor="bg-consent" className="text-sm leading-tight cursor-pointer">
-                  I consent to a background check and understand my rights under the FCRA.
-                </label>
-              </div>
-
-              <Button
-                onClick={() => void handleBackgroundCheck()}
-                disabled={bgConsent.isPending || !consentChecked}
-                className="gap-2"
-              >
-                <FileSearch className="h-4 w-4" />
-                {bgConsent.isPending ? "Submitting..." : "Submit background check consent"}
-              </Button>
-            </div>
+            <p className="text-muted-foreground">
+              No host-paid screening on file yet. Hosts request this from your application,
+              not from this page.
+            </p>
           )}
         </CardContent>
       </Card>

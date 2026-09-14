@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { ArrowUp, ArrowDown, Download, Search, X } from "lucide-react";
 import { adminApi } from "@/features/admin/services/adminApi";
 import { downloadListingAnalyticsReport } from "@/features/admin/lib/analyticsReports";
+import { listingReviewLocationLabel } from "@/features/admin/lib/listingReviewFilters";
 import type { AdminListingStatus, ListingAnalyticsItemDto } from "@/api/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -14,10 +15,20 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Loader } from "@/components/shared/Loader";
 import { formatMoney } from "@/utils/format";
 
-type SortKey = keyof Pick<
-  ListingAnalyticsItemDto,
-  "title" | "landlordName" | "status" | "createdAt" | "monthlyRentCents" | "applicationCount" | "conversionPercent" | "qualityScore" | "addedVia"
->;
+type SortKey =
+  | keyof Pick<
+      ListingAnalyticsItemDto,
+      | "title"
+      | "landlordName"
+      | "status"
+      | "createdAt"
+      | "monthlyRentCents"
+      | "applicationCount"
+      | "conversionPercent"
+      | "qualityScore"
+      | "addedVia"
+    >
+  | "location";
 type SortDir = "asc" | "desc";
 
 const LISTING_STATUSES: AdminListingStatus[] = [
@@ -102,8 +113,8 @@ export const ListingAnalyticsPage = () => {
   };
 
   const sorted = [...items].sort((a, b) => {
-    const av = a[sortKey];
-    const bv = b[sortKey];
+    const av = sortKey === "location" ? listingReviewLocationLabel(a) : a[sortKey];
+    const bv = sortKey === "location" ? listingReviewLocationLabel(b) : b[sortKey];
     if (typeof av === "string" && typeof bv === "string") {
       return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
     }
@@ -251,6 +262,7 @@ export const ListingAnalyticsPage = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>{headerButton("Title", "title")}</TableHead>
+                  <TableHead>{headerButton("Location", "location")}</TableHead>
                   <TableHead>{headerButton("Landlord", "landlordName")}</TableHead>
                   <TableHead>{headerButton("Status", "status")}</TableHead>
                   <TableHead className="hidden md:table-cell">{headerButton("Added", "createdAt")}</TableHead>
@@ -271,6 +283,9 @@ export const ListingAnalyticsPage = () => {
                           {truncate(item.listingId, 12)}
                         </p>
                       </div>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {listingReviewLocationLabel(item) || "—"}
                     </TableCell>
                     <TableCell>
                       <div>

@@ -951,6 +951,10 @@ export type DealApplicationStatus =
 /** Tenant verification level that drives the predetermined deposit. */
 export type TenantVerificationTier =
   | "Unverified"
+  | "Verified"
+  | "Trusted"
+  | "Elite"
+  | "Blocklisted"
   | "BackgroundVerified"
   | "PartnerGuaranteed";
 
@@ -958,6 +962,54 @@ export type TenantVerificationTier =
 export type MyVerificationTierDto = {
   tier: TenantVerificationTier;
   partnerOrganizationId: string | null;
+  lastScreenedAt?: string | null;
+};
+
+export type ScreeningOrderStatus =
+  | "PendingPayment"
+  | "Paid"
+  | "WaitingForApplicant"
+  | "Pending"
+  | "Completed"
+  | "Canceled"
+  | "Failed";
+
+export type ScreeningStatusDto = {
+  screeningOrderId: string | null;
+  status: ScreeningOrderStatus | null;
+  applicationUrl: string | null;
+  lastScreenedAt: string | null;
+  latestResult: "Pass" | "Review" | "Fail" | null;
+  hostFeeCents: number;
+  canRequest: boolean;
+  canViewReport: boolean;
+  isRequester?: boolean;
+  canCompleteApply?: boolean;
+  lastFailureReason?: string | null;
+};
+
+export type ScreeningCheckoutDto = {
+  clientSecret: string;
+  paymentIntentId: string;
+  status: string;
+  amountCents: number;
+  currency: string;
+  screeningOrderId: string;
+};
+
+export type ScreeningReportProduct = {
+  key: string;
+  label: string;
+  status: string | null;
+  detail: string | null;
+};
+
+export type ScreeningReportView = {
+  providerReportId: string;
+  providerOrderId: string;
+  overallResult: "Pass" | "Review" | "Fail";
+  summary: string | null;
+  products: ScreeningReportProduct[];
 };
 
 export type DealApplicationDto = {
@@ -1006,6 +1058,10 @@ export type DealApplicationDto = {
   ownerConsentGiven?: boolean;
   ownerConsentDeclined?: boolean;
   ownerConsentAt?: string | null;
+  lastScreenedAt?: string | null;
+  screeningOrderStatus?: ScreeningOrderStatus | string | null;
+  screeningResult?: "Pass" | "Review" | "Fail" | string | null;
+  screeningRequestedByHostUserId?: string | null;
 };
 
 export type DealApplicationSource = "TenantSelfApply" | "PartnerDirectReservation";
@@ -1747,6 +1803,12 @@ export type ViolationDto = {
   evidenceReference: string | null;
   detectedAt: string;
   resolvedAt: string | null;
+  targetEmail?: string | null;
+  targetName?: string | null;
+  reportedByEmail?: string | null;
+  reportedByName?: string | null;
+  listingId?: string | null;
+  listingTitle?: string | null;
 };
 
 export type TrustLedgerEntryType =
@@ -1967,6 +2029,19 @@ export type InsuranceQueueItemDto = {
   tenantUserId: string;
   unknownSince: string;
   hoursRemaining: number;
+  tenantEmail?: string | null;
+  tenantName?: string | null;
+  listingId?: string | null;
+  listingTitle?: string | null;
+  checkIn?: string | null;
+  checkOut?: string | null;
+  provider?: string | null;
+  policyNumber?: string | null;
+  coverageScope?: string | null;
+  screeningStatus?: string | null;
+  flaggedReason?: string | null;
+  expiresAt?: string | null;
+  verifiedAt?: string | null;
 };
 
 // ── Admin: Fraud Flags ──────────────────────────────────────
@@ -1979,6 +2054,27 @@ export type FraudFlagDto = {
   category: string;
   detectedAt: string;
   isResolved: boolean;
+  userEmail?: string | null;
+  userDisplayName?: string | null;
+};
+
+export type IdentityFraudFlagDto = {
+  id: string;
+  userId: string;
+  reason: string;
+  source: string;
+  detectedAt: string;
+  slaDeadline: string;
+  isResolved: boolean;
+  isEscalated: boolean;
+  userEmail?: string | null;
+  userDisplayName?: string | null;
+};
+
+export type CompleteInsuranceVerificationRequest = {
+  isActive: boolean;
+  provider?: string | null;
+  policyNumber?: string | null;
 };
 
 // ── Admin: User Restrictions ────────────────────────────────
@@ -2096,6 +2192,9 @@ export type ListingAnalyticsItemDto = {
   conversionPercent: number;
   qualityScore: number;
   addedVia: string;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
 };
 
 export type ListingAnalyticsFilters = {

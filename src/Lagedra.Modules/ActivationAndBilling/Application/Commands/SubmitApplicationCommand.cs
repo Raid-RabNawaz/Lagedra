@@ -70,6 +70,9 @@ public sealed partial class SubmitApplicationCommandHandler(
     private static readonly Error PaymentMethodRequired = new(
         "Application.PaymentMethodRequired",
         "A payment method is required to submit a reservation request.");
+    private static readonly Error Blocklisted = new(
+        "Application.Blocklisted",
+        "This account cannot submit booking requests. Contact support if you believe this is a mistake.");
 
     public async Task<Result<SubmitApplicationResult>> Handle(
         SubmitApplicationCommand request,
@@ -165,6 +168,11 @@ public sealed partial class SubmitApplicationCommandHandler(
         var pricing = await reservationPricingService
             .ComputeAsync(listing, request.TenantUserId, duration, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
+
+        if (pricing.Tier == TenantVerificationTier.Blocklisted)
+        {
+            return Result<SubmitApplicationResult>.Failure(Blocklisted);
+        }
 
         var tenantConsent = request.TruthSurfaceConsentGiven
             ? new TruthSurfaceConsentInput(

@@ -13,6 +13,8 @@ namespace Lagedra.Modules.Notifications.Infrastructure.Seeding;
 /// Seeding is upsert-by-(TemplateId, Channel): existing rows with the
 /// same template id + channel are left untouched so an admin can override
 /// the body without their changes being clobbered on the next deploy.
+/// <c>deal_activated</c> is the exception — it is a system transactional
+/// email that must keep promising (and linking to) the attached lease.
 /// </summary>
 public static partial class NotificationTemplateSeeder
 {
@@ -36,7 +38,7 @@ public static partial class NotificationTemplateSeeder
             .GetRequiredService<ILoggerFactory>()
             .CreateLogger("NotificationTemplateSeeder");
 
-        var templates = BuildBaselineTemplates().Concat(BuildSmsTemplates()).ToList();
+        var templates = EnumerateBaselineTemplates().ToList();
 
         var existingKeys = await dbContext.Templates
             .Select(t => new { t.TemplateId, t.Channel })
@@ -62,7 +64,73 @@ public static partial class NotificationTemplateSeeder
             await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
             LogSeeded(logger, added);
         }
+
+        var refreshed = await RefreshSystemEmailTemplatesAsync(dbContext, templates, ct)
+            .ConfigureAwait(false);
+        if (refreshed > 0)
+        {
+            LogRefreshed(logger, refreshed);
+        }
+
+        var requeued = await RequeueMissingTemplateFailuresAsync(dbContext, ct)
+            .ConfigureAwait(false);
+        if (requeued > 0)
+        {
+            LogRequeued(logger, requeued);
+        }
     }
+
+    internal static IEnumerable<NotificationTemplate> EnumerateBaselineTemplates() =>
+        BuildBaselineTemplates()
+            .Concat(BuildTransactionalEmailTemplates())
+            .Concat(BuildSmsTemplates());
+
+    private static async Task<int> RefreshSystemEmailTemplatesAsync(
+        NotificationDbContext dbContext,
+        IReadOnlyList<NotificationTemplate> seeded,
+        CancellationToken ct)
+    {
+        var desired = seeded.FirstOrDefault(t =>
+            t.Channel == NotificationChannel.Email
+            && string.Equals(t.TemplateId, "deal_activated", StringComparison.Ordinal));
+
+        if (desired is null)
+        {
+            return 0;
+        }
+
+        var existing = await dbContext.Templates
+            .FirstOrDefaultAsync(t =>
+                t.Channel == NotificationChannel.Email && t.TemplateId == "deal_activated", ct)
+            .ConfigureAwait(false);
+
+        if (existing is null
+            || (string.Equals(existing.Subject, desired.Subject, StringComparison.Ordinal)
+                && string.Equals(existing.HtmlBody, desired.HtmlBody, StringComparison.Ordinal)
+                && string.Equals(existing.PlainTextBody, desired.PlainTextBody, StringComparison.Ordinal)))
+        {
+            return 0;
+        }
+
+        existing.ReplaceContent(desired.Subject, desired.HtmlBody, desired.PlainTextBody);
+        await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+        return 1;
+    }
+
+    private static Task<int> RequeueMissingTemplateFailuresAsync(
+        NotificationDbContext dbContext,
+        CancellationToken ct) =>
+        dbContext.Notifications
+            .Where(n => n.Status == NotificationStatus.Failed
+                        && n.LastError != null
+                        && n.LastError.Contains("not found for"))
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(n => n.Status, NotificationStatus.Queued)
+                    .SetProperty(n => n.AttemptCount, 0)
+                    .SetProperty(n => n.LastError, (string?)null)
+                    .SetProperty(n => n.UpdatedAt, DateTime.UtcNow),
+                ct);
 
     private static IEnumerable<NotificationTemplate> BuildBaselineTemplates()
     {
@@ -164,9 +232,15 @@ public static partial class NotificationTemplateSeeder
             <html>
             <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; color: #111;">
               <h2 style="margin-top: 32px;">Your booking is active</h2>
-              <p>Deal <strong>{dealId}</strong> is now active. Your signed lease agreement PDF is attached to this email for your records.</p>
+              <p>Your stay is confirmed. The signed lease agreement PDF is attached to this email for your records.</p>
+              <p style="margin: 24px 0;">
+                <a href="{dealUrl}"
+                   style="display: inline-block; background: #4141E5; color: #fff; padding: 12px 20px; border-radius: 10px; text-decoration: none; font-weight: 600;">
+                  Open deal &amp; download lease
+                </a>
+              </p>
               <p style="font-size: 13px; color: #666;">
-                Keep this document for your records. You can also download it later from your deal page in Lagedra.
+                Keep the attached PDF. You can also download it later from your deal page in Lagedra.
               </p>
             </body>
             </html>
@@ -175,7 +249,9 @@ public static partial class NotificationTemplateSeeder
         const string dealActivatedText = """
             Your booking is active
 
-            Deal {dealId} is now active. Your signed lease agreement PDF is attached to this email for your records.
+            Your stay is confirmed. The signed lease agreement PDF is attached to this email for your records.
+
+            Open deal & download lease: {dealUrl}
             """;
 
         yield return new NotificationTemplate(
@@ -393,6 +469,65 @@ public static partial class NotificationTemplateSeeder
             subject: "Owner declined — {listingTitle}",
             htmlBody: ownerConsentDeclinedHtml,
             plainTextBody: ownerConsentDeclinedText);
+
+        const string screeningApplyHtml = """
+            <!doctype html>
+            <html>
+            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; color: #111;">
+              <h2 style="margin-top: 32px;">Complete your background screening</h2>
+              <p>Your host requested a background and credit check for <strong>{listingTitle}</strong>.</p>
+              <p>This is completed on the screening provider's site (name, date of birth, and SSN). Lagedra never collects those fields.</p>
+              <p style="margin: 24px 0;">
+                <a href="{applyUrl}"
+                   style="display: inline-block; background: #111; color: #fff; padding: 12px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">
+                  Complete screening
+                </a>
+              </p>
+              <p>You can also open the booking request: <a href="{applicationUrl}">{applicationUrl}</a></p>
+            </body>
+            </html>
+            """;
+
+        const string screeningApplyText = """
+            Complete your background screening
+
+            Your host requested a background and credit check for {listingTitle}.
+            Complete it here: {applyUrl}
+
+            Booking request: {applicationUrl}
+            """;
+
+        yield return new NotificationTemplate(
+            templateId: "screening_apply_link_ready",
+            channel: NotificationChannel.Email,
+            subject: "Complete your screening for {listingTitle}",
+            htmlBody: screeningApplyHtml,
+            plainTextBody: screeningApplyText);
+
+        const string screeningRefundHtml = """
+            <!doctype html>
+            <html>
+            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; color: #111;">
+              <h2 style="margin-top: 32px;">Screening fee refunded</h2>
+              <p>The guest did not complete the background and credit check for <strong>{listingTitle}</strong>.</p>
+              <p>The screening fee was refunded to the card you used.</p>
+            </body>
+            </html>
+            """;
+
+        const string screeningRefundText = """
+            Screening fee refunded
+
+            The guest did not complete the screening for {listingTitle}.
+            The check fee was refunded.
+            """;
+
+        yield return new NotificationTemplate(
+            templateId: "screening_incomplete_refunded",
+            channel: NotificationChannel.Email,
+            subject: "Screening refunded — {listingTitle}",
+            htmlBody: screeningRefundHtml,
+            plainTextBody: screeningRefundText);
     }
 
     private static IEnumerable<NotificationTemplate> BuildSmsTemplates()
@@ -459,6 +594,10 @@ public static partial class NotificationTemplateSeeder
             "Lagedra: Identity verification failed: {reason}");
         yield return Sms("insurance_status_changed",
             "Lagedra: Insurance status is now {newState} for deal {dealId}.");
+        yield return Sms("screening_apply_link_ready",
+            "Lagedra: Complete your background screening for {listingTitle}: {applyUrl}");
+        yield return Sms("screening_incomplete_refunded",
+            "Lagedra: Screening fee refunded — the guest did not finish the check for {listingTitle}.");
     }
 
     private static NotificationTemplate Sms(string templateId, string body) =>
@@ -474,4 +613,16 @@ public static partial class NotificationTemplateSeeder
         Level = LogLevel.Information,
         Message = "Seeded {Count} notification templates")]
     private static partial void LogSeeded(ILogger logger, int count);
+
+    [LoggerMessage(
+        EventId = 16101,
+        Level = LogLevel.Information,
+        Message = "Requeued {Count} notifications that failed because a template was missing")]
+    private static partial void LogRequeued(ILogger logger, int count);
+
+    [LoggerMessage(
+        EventId = 16102,
+        Level = LogLevel.Information,
+        Message = "Refreshed {Count} system notification email templates")]
+    private static partial void LogRefreshed(ILogger logger, int count);
 }

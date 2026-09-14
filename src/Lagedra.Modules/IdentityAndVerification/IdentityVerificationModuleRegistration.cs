@@ -44,7 +44,9 @@ public static class IdentityVerificationModuleRegistration
         services.AddDomainEventHandler<SharedKernel.Integration.StripeAccountUpdatedEvent,
             OnStripeAccountUpdatedSyncHandler>();
         services.AddDomainEventHandler<IdentityVerificationFailedEvent, OnIdentityVerificationFailedNotify>();
+        services.AddDomainEventHandler<IdentityVerificationFailedEvent, OnIdentityVerificationFailedRaiseFraudFlagHandler>();
         services.AddDomainEventHandler<VerificationClassChangedEvent, OnVerificationClassChangedNotify>();
+        services.AddDomainEventHandler<ScreeningPaymentPaidEvent, OnScreeningPaymentPaidHandler>();
 
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(IdentityVerificationModuleRegistration).Assembly));

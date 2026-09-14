@@ -2,7 +2,9 @@ import { http } from "@/api/http";
 import { endpoints } from "@/api/endpoints";
 import type {
   InsuranceQueueItemDto,
+  CompleteInsuranceVerificationRequest,
   FraudFlagDto,
+  IdentityFraudFlagDto,
   UserRestrictionDto,
   ApplyRestrictionRequest,
   ArbitrationBacklogItemDto,
@@ -50,14 +52,27 @@ export const adminApi = {
     const r = await http.get<InsuranceQueueItemDto[]>(endpoints.adminInsurance.unknownQueue);
     return r.data;
   },
+  async resolveInsuranceUnknown(
+    dealId: string,
+    body: CompleteInsuranceVerificationRequest,
+  ): Promise<void> {
+    await http.post(endpoints.adminInsurance.resolve(dealId), body);
+  },
 
   // Fraud Flags
   async getAllFraudFlags(): Promise<FraudFlagDto[]> {
     const r = await http.get<FraudFlagDto[]>(endpoints.adminIntegrity.allFlags);
     return r.data;
   },
+  async getIdentityFraudFlags(): Promise<IdentityFraudFlagDto[]> {
+    const r = await http.get<IdentityFraudFlagDto[]>(endpoints.adminIdentity.allFraudFlags);
+    return r.data;
+  },
   async resolveFlag(id: string): Promise<void> {
     await http.post(endpoints.adminIntegrity.resolveFlag(id));
+  },
+  async resolveIdentityFlag(id: string): Promise<void> {
+    await http.post(endpoints.adminIdentity.resolveFraudFlag(id));
   },
 
   // User Restrictions
@@ -117,6 +132,15 @@ export const adminApi = {
   async getAllViolations(): Promise<ViolationDto[]> {
     const r = await http.get<ViolationDto[]>(endpoints.adminCompliance.allViolations);
     return r.data;
+  },
+  async resolveViolation(id: string): Promise<void> {
+    await http.put(endpoints.compliance.resolveViolation(id));
+  },
+  async dismissViolation(id: string): Promise<void> {
+    await http.put(endpoints.compliance.dismissViolation(id));
+  },
+  async escalateViolation(id: string): Promise<void> {
+    await http.put(endpoints.compliance.escalateViolation(id));
   },
 
   // Audit Log

@@ -4,6 +4,7 @@ import {
   getDealIssue,
   getEndingSoon,
   NEAR_END_DAYS,
+  sortDealsByAttention,
 } from "./bookingAttention";
 import type { DealSummaryDto } from "@/api/types";
 
@@ -120,6 +121,15 @@ describe("bookingAttention", () => {
       "guest",
     );
     expect(issue?.kind).toBe("AwaitingDepositReturn");
+  });
+
+  it("orders remaining deals by requested time, newest first", () => {
+    const older = deal({ dealId: "old", createdAt: "2026-06-01T10:00:00Z" });
+    const newer = deal({ dealId: "new", createdAt: "2026-06-08T18:30:00Z" });
+    expect(sortDealsByAttention([older, newer]).map((d) => d.dealId)).toEqual([
+      "new",
+      "old",
+    ]);
   });
 
   it("hides deposit return attention once settled", () => {

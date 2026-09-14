@@ -8,7 +8,12 @@ import { ErrorState } from "@/components/shared/ErrorState";
 
 export const OwnerConsentsPage = () => {
   const { data, isLoading, isError, refetch } = useOwnerPendingApplications();
-  const applications = data ?? [];
+  const applications = (data ?? [])
+    .slice()
+    .sort(
+      (a, b) =>
+        new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime(),
+    );
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">

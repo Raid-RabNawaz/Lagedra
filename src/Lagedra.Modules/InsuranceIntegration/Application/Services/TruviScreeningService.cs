@@ -242,6 +242,10 @@ public sealed partial class TruviScreeningService(
 
         var guest = await parties.GetAsync(deal.TenantUserId, cancellationToken).ConfigureAwait(false);
         var address = listing?.PreciseAddress;
+        var listingName = TruviVerificationRequestFactory.ResolveListingName(
+            listing?.Title,
+            address?.Street,
+            address?.City);
 
         if (!TruviVerificationRequestFactory.TryCreate(
             deal.DealId,
@@ -266,6 +270,8 @@ public sealed partial class TruviScreeningService(
             guest?.Phone,
             deal.DepositAmountCents,
             reservationId,
+            listing?.Id,
+            listingName,
             out var request,
             out var error))
         {

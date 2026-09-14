@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useParams, Navigate, Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useParams, Navigate, Link, useSearchParams } from "react-router-dom";
 import {
   CreditCard,
   Clock,
@@ -53,7 +53,10 @@ import {
 import { BackLink } from "@/components/shared/BackLink";
 import { Loader } from "@/components/shared/Loader";
 import { formatDate, formatMoney } from "@/utils/format";
-import { STAY_PROTECTION_LABEL } from "@/features/listings/lib/stayProtection";
+import {
+  STAY_PROTECTION_CLAIM_QUERY,
+  STAY_PROTECTION_LABEL,
+} from "@/features/listings/lib/stayProtection";
 
 export const BillingPage = () => {
   const { dealId } = useParams<{ dealId: string }>();
@@ -69,7 +72,9 @@ export const BillingPage = () => {
 
   const isPostActive =
     !!deal &&
-    (deal.dealPhase === "Active" || deal.dealPhase === "Closed");
+    (deal.dealPhase === "Active"
+      || deal.dealPhase === "AwaitingDepositReturn"
+      || deal.dealPhase === "Closed");
 
   const {
     data: billing,
@@ -103,6 +108,29 @@ export const BillingPage = () => {
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showDamageClaimDialog, setShowDamageClaimDialog] = useState(false);
   const [showStopBillingDialog, setShowStopBillingDialog] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  useEffect(() => {
+    if (searchParams.get(STAY_PROTECTION_CLAIM_QUERY) !== "1") {
+      return;
+    }
+    if (dealsLoading || paymentLoading) {
+      return;
+    }
+    if (isLandlord && payment?.status === "Confirmed") {
+      setShowDamageClaimDialog(true);
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete(STAY_PROTECTION_CLAIM_QUERY);
+    setSearchParams(next, { replace: true });
+  }, [
+    dealsLoading,
+    isLandlord,
+    payment?.status,
+    paymentLoading,
+    searchParams,
+    setSearchParams,
+  ]);
 
   const accessError = billingError ?? paymentError;
   const isAccessDenied = isForbiddenError(accessError);
@@ -111,8 +139,8 @@ export const BillingPage = () => {
   const isOtherError =
     !!accessError && !isAccessDenied && !isNotFoundError(accessError);
 
-  // Phase 16.6: enforce the single-money-surface rule **eagerly**. Redirect
-  // pre-Active deals away from billing once the deal list has loaded.
+  // Redirect deals that are still before a confirmed stay. Active, deposit
+  // return, and closed bookings stay on billing so hosts can file claims.
   if (deal && dealId && !isPostActive) {
     const redirectTo =
       deal.dealPhase === "Checkout"

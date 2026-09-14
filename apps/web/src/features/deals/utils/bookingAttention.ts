@@ -151,10 +151,7 @@ export function sortDealsByAttention(
     const bEnd = getEndingSoon(b, now)?.daysRemaining ?? 999;
     if (aEnd !== bEnd) return aEnd - bEnd;
 
-    return (
-      new Date(a.requestedCheckIn).getTime() -
-      new Date(b.requestedCheckIn).getTime()
-    );
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 }
 

@@ -9,6 +9,9 @@ import { ErrorBoundary } from "@/app/layout/ErrorBoundary";
 import { App } from "@/app/App";
 import { appConfig } from "@/app/config";
 import { getApiErrorStatus } from "@/api/errors";
+import { installStaleChunkReload } from "@/lib/staleChunk";
+
+installStaleChunkReload();
 
 const queryClient = new QueryClient({
   defaultOptions: {

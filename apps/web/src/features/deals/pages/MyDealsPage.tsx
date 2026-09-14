@@ -75,9 +75,10 @@ export function MyDealsPage() {
 
   const visible = useMemo(() => {
     const filtered = scoped.filter((d) => matchesFilter(d, phase));
-    return phase === "attention" || phase === "active"
-      ? sortDealsByAttention(filtered)
-      : filtered;
+    if (phase === "attention") return sortDealsByAttention(filtered);
+    return [...filtered].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
   }, [scoped, phase]);
 
   const attentionDeals = useMemo(

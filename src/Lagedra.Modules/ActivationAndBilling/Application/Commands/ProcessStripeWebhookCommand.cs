@@ -118,6 +118,18 @@ public sealed partial class ProcessStripeWebhookCommandHandler(
             return;
         }
 
+        if (paymentIntent.Metadata is not null
+            && paymentIntent.Metadata.TryGetValue(ScreeningPaymentMetadata.PurposeKey, out var screeningPurpose)
+            && screeningPurpose == ScreeningPaymentMetadata.PurposeValue
+            && paymentIntent.Metadata.TryGetValue(ScreeningPaymentMetadata.OrderIdKey, out var orderIdRaw)
+            && Guid.TryParse(orderIdRaw, out var screeningOrderId))
+        {
+            await eventBus
+                .Publish(new ScreeningPaymentPaidEvent(screeningOrderId, paymentIntent.Id), ct)
+                .ConfigureAwait(false);
+            return;
+        }
+
         var confirmation = await dbContext.DealPaymentConfirmations
             .FirstOrDefaultAsync(c => c.StripePaymentIntentId == paymentIntent.Id, ct)
             .ConfigureAwait(false);

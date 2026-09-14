@@ -245,9 +245,13 @@ public static class LeaseAgreementEndpoints
     private static async Task<IResult> DownloadListingLeasePreview(
         [FromRoute] Guid listingId,
         IMediator mediator,
-        CancellationToken ct)
+        CancellationToken ct,
+        // Defaulted so tenants can GET the preview without a query string.
+        // A non-nullable bool with no default is required in minimal APIs and
+        // returns 400 when the parameter is omitted.
+        [FromQuery] bool specimen = false)
     {
-        var result = await mediator.Send(new GetListingLeasePreviewQuery(listingId), ct)
+        var result = await mediator.Send(new GetListingLeasePreviewQuery(listingId, specimen), ct)
             .ConfigureAwait(true);
 
         if (result.IsFailure)

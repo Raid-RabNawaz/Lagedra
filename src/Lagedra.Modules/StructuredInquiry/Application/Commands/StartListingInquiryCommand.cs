@@ -75,6 +75,17 @@ public sealed class StartListingInquiryCommandHandler(
         var session = InquirySession.CreateForListing(
             request.ListingId, request.TenantUserId, listing.LandlordUserId);
 
+        var since = DateTime.UtcNow.AddHours(-24);
+        var recentCount = await dbContext.Sessions
+            .CountAsync(
+                s => s.TenantUserId == request.TenantUserId && s.CreatedAt >= since,
+                cancellationToken)
+            .ConfigureAwait(false);
+        if (recentCount + 1 >= 8)
+        {
+            session.FlagInquiryVolumeAbuse(recentCount + 1);
+        }
+
         dbContext.Sessions.Add(session);
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 

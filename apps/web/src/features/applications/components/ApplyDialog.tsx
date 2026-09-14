@@ -147,6 +147,7 @@ export const ApplyDialog = ({
   const detailsValid = datesValid && guestsValid && !messageTooLong;
 
   const preview = useReservationPreview(listing.id, checkIn, checkOut, datesValid);
+  const isBlocked = preview.data?.tier === "Blocklisted";
 
   const dateErrorMessage = !checkIn && !checkOut
     ? "Select check-in and check-out dates."
@@ -183,7 +184,7 @@ export const ApplyDialog = ({
 
   const handleContinueToPayment = async () => {
     setSubmitAttempted(true);
-    if (!detailsValid || !user) return;
+    if (!detailsValid || !user || isBlocked) return;
 
     setSubmitErrorMessage(null);
     try {
@@ -381,8 +382,14 @@ export const ApplyDialog = ({
               type="submit"
               className={cn("w-full gap-2", !detailsValid && "opacity-60")}
               aria-disabled={!detailsValid}
-              disabled={messageTooLong || setupIntentMutation.isPending}
-              title={!detailsValid ? "Pick valid check-in and check-out dates first." : undefined}
+              disabled={messageTooLong || setupIntentMutation.isPending || isBlocked}
+              title={
+                isBlocked
+                  ? "This account cannot submit booking requests."
+                  : !detailsValid
+                    ? "Pick valid check-in and check-out dates first."
+                    : undefined
+              }
             >
               <CreditCard className="h-4 w-4" />
               {setupIntentMutation.isPending ? "Preparing…" : "Continue to payment"}
@@ -477,6 +484,11 @@ function PriceBreakdown({
           </span>
         </div>
       </div>
+      {preview.tier === "Blocklisted" && (
+        <Alert variant="destructive" className="text-sm">
+          This account cannot submit booking requests. Contact support if you believe this is a mistake.
+        </Alert>
+      )}
       <div className="space-y-2 text-sm">
         <div className="flex justify-between">
           <span className="text-muted-foreground">First month's rent</span>

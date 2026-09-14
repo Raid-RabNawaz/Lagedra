@@ -19,6 +19,7 @@ import { InquiryQuestion } from "@/features/inquiry/components/InquiryQuestion";
 import { InquiryResponseForm } from "@/features/inquiry/components/InquiryResponseForm";
 import { InquiryOfferPanel } from "@/features/inquiry/components/InquiryOfferPanel";
 import { InquiryParticipantsPanel } from "@/features/inquiry/components/InquiryParticipantsPanel";
+import { InquiryGuestDetailsCard } from "@/features/inquiry/components/InquiryGuestDetailsCard";
 import { ApplyDialog } from "@/features/applications/components/ApplyDialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert } from "@/components/ui/alert";
@@ -231,6 +232,10 @@ export const ListingInquiryPage = () => {
           </span>
         )}
       </div>
+
+      {(isLandlord || isPartner) && (
+        <InquiryGuestDetailsCard tenantUserId={inquiry.tenantUserId} />
+      )}
 
       {(isTenant || isLandlord || isPartner) && (
         <InquiryParticipantsPanel

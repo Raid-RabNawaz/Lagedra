@@ -28,6 +28,7 @@ import type {
   ListingSummaryDto,
 } from "@/api/types";
 import { cn } from "@/lib/utils";
+import { formatDateTime } from "@/utils/format";
 
 type StatusFilter = DealApplicationStatus | "All" | "NeedsAttention";
 
@@ -52,6 +53,7 @@ type ListingGroup = {
   listingCity: string | null;
   applications: DealApplicationDto[];
   pendingCount: number;
+  latestSubmission: string;
 };
 
 export const ApplicationsPage = () => {
@@ -124,12 +126,13 @@ export const ApplicationsPage = () => {
           listingCity: sorted[0]?.listingCity ?? null,
           applications: sorted,
           pendingCount: sorted.filter((a) => needsAttention(a)).length,
+          latestSubmission: sorted[0]?.submittedAt ?? "",
         };
       })
       .sort(
         (a, b) =>
-          b.pendingCount - a.pendingCount ||
-          (a.listing?.title ?? "").localeCompare(b.listing?.title ?? ""),
+          new Date(b.latestSubmission).getTime() -
+          new Date(a.latestSubmission).getTime(),
       );
   }, [landlordApps, listings, statusFilter]);
 
@@ -288,6 +291,9 @@ export const ApplicationsPage = () => {
                                 {group.applications.length}{" "}
                                 {group.applications.length === 1 ? "request" : "requests"}
                               </span>
+                              {group.latestSubmission && (
+                                <span>Latest {formatDateTime(group.latestSubmission)}</span>
+                              )}
                             </span>
                           </span>
                         </button>

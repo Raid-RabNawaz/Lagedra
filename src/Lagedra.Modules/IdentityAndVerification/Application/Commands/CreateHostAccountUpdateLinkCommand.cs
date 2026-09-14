@@ -3,6 +3,7 @@ using Lagedra.Modules.IdentityAndVerification.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Results;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Stripe;
 
 namespace Lagedra.Modules.IdentityAndVerification.Application.Commands;
 
@@ -33,14 +34,31 @@ public sealed class CreateHostAccountUpdateLinkCommandHandler(
                 new Error("HostStripe.NotFound", "No Stripe account found. Please start onboarding first."));
         }
 
-        var url = await stripeService
-            .CreateAccountUpdateLinkAsync(
-                account.StripeAccountId,
-                request.ReturnUrl,
-                request.RefreshUrl,
-                cancellationToken)
-            .ConfigureAwait(false);
+        try
+        {
+            var url = await stripeService
+                .CreateAccountUpdateLinkAsync(
+                    account.StripeAccountId,
+                    request.ReturnUrl,
+                    request.RefreshUrl,
+                    cancellationToken)
+                .ConfigureAwait(false);
 
-        return Result<Uri>.Success(url);
+            return Result<Uri>.Success(url);
+        }
+        catch (StripeException ex) when (StripeConnectErrors.IsMissingAccount(ex))
+        {
+            return Result<Uri>.Failure(
+                new Error("HostStripe.NotFound", "No Stripe account found. Please start onboarding first."));
+        }
+        catch (StripeException ex)
+        {
+            return Result<Uri>.Failure(
+                new Error(
+                    "HostStripe.ProviderError",
+                    string.IsNullOrWhiteSpace(ex.StripeError?.Message)
+                        ? "Could not open Stripe account update. Please try again."
+                        : ex.StripeError.Message));
+        }
     }
 }

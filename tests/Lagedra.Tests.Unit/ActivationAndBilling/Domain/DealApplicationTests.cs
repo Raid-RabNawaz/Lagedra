@@ -21,7 +21,7 @@ public class DealApplicationTests
 
     private static ReservationDepositSnapshot Snapshot() =>
         new(
-            Tier: TenantVerificationTier.BackgroundVerified,
+            Tier: TenantVerificationTier.Trusted,
             DepositAmountCents: 200_000,
             FirstMonthRentCents: 300_000,
             InsuranceFeeCents: 10_000,
@@ -51,7 +51,7 @@ public class DealApplicationTests
         app.InsuranceFeeCents.Should().Be(10_000);
         app.ServiceFeeCents.Should().Be(5_000);
         app.TotalPayableSnapshotCents.Should().Be(515_000);
-        app.TenantVerificationTierAtRequest.Should().Be(TenantVerificationTier.BackgroundVerified);
+        app.TenantVerificationTierAtRequest.Should().Be(TenantVerificationTier.Trusted);
         app.DepositReason.Should().Be("Verified tenant discount applied");
 
         app.TenantTruthSurfaceConsentGiven.Should().BeTrue();

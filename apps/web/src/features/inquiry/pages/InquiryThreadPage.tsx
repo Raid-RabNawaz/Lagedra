@@ -20,6 +20,7 @@ import { InquiryStatusBadge } from "@/features/inquiry/components/InquiryStatusB
 import { InquiryQuestion } from "@/features/inquiry/components/InquiryQuestion";
 import { InquiryResponseForm } from "@/features/inquiry/components/InquiryResponseForm";
 import { InquiryOfferPanel } from "@/features/inquiry/components/InquiryOfferPanel";
+import { InquiryGuestDetailsCard } from "@/features/inquiry/components/InquiryGuestDetailsCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
@@ -207,6 +208,10 @@ export const InquiryThreadPage = () => {
         <Alert variant="destructive">
           {getApiErrorMessage(error, "Failed to load inquiry session.")}
         </Alert>
+      )}
+
+      {isLandlord && inquiry && (
+        <InquiryGuestDetailsCard tenantUserId={inquiry.tenantUserId} />
       )}
 
       {/* Locked — waiting for landlord */}

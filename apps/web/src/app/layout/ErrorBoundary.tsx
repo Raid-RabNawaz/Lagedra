@@ -1,6 +1,7 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { AlertTriangle, Home, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { reloadOnceOnStaleChunk } from "@/lib/staleChunk";
 
 type Props = { children: ReactNode };
 type State = { hasError: boolean; error: Error | null };
@@ -22,6 +23,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
+    if (reloadOnceOnStaleChunk(error)) return;
     if (import.meta.env.DEV) {
       console.error("[ErrorBoundary] caught:", error, info.componentStack);
     }

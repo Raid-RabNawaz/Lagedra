@@ -22,6 +22,8 @@ public static class AdminIdentityEndpoints
         group.MapGet("/manual-queue/{id:guid}", GetManualDetail);
         group.MapPost("/manual-queue/{id:guid}/approve", ApproveManual);
         group.MapPost("/manual-queue/{id:guid}/reject", RejectManual);
+        group.MapGet("/fraud-flags", GetAllFraudFlags);
+        group.MapPost("/fraud-flags/{id:guid}/resolve", ResolveFraudFlag);
 
         return app;
     }
@@ -64,6 +66,25 @@ public static class AdminIdentityEndpoints
         CancellationToken ct)
     {
         var result = await mediator.Send(new RejectManualVerificationCommand(id), ct).ConfigureAwait(true);
+        return result.IsSuccess
+            ? Results.Ok()
+            : Results.NotFound(new { error = result.Error.Code, detail = result.Error.Description });
+    }
+
+    private static async Task<IResult> GetAllFraudFlags(IMediator mediator, CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetAllIdentityFraudFlagsQuery(), ct).ConfigureAwait(true);
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : Results.Problem(statusCode: 500, detail: result.Error.Description);
+    }
+
+    private static async Task<IResult> ResolveFraudFlag(
+        [FromRoute] Guid id,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(new ResolveIdentityFraudFlagCommand(id), ct).ConfigureAwait(true);
         return result.IsSuccess
             ? Results.Ok()
             : Results.NotFound(new { error = result.Error.Code, detail = result.Error.Description });

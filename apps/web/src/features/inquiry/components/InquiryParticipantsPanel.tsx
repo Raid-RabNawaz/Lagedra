@@ -14,6 +14,8 @@ import {
   useAddInquiryPartner,
   useRemoveInquiryPartner,
 } from "@/features/inquiry/hooks/useInquiry";
+import { usePublicProfile } from "@/features/auth/hooks/usePublicProfile";
+import { profileDisplayName } from "@/features/applications/lib/applicationProfileUtils";
 
 type Props = {
   inquiry: InquiryDto;
@@ -37,6 +39,8 @@ export const InquiryParticipantsPanel = ({
   const addPartner = useAddInquiryPartner();
   const removePartner = useRemoveInquiryPartner();
   const [orgId, setOrgId] = useState("");
+  const tenantProfile = usePublicProfile(inquiry.tenantUserId);
+  const tenantName = profileDisplayName(tenantProfile.data, "Guest");
 
   const endorsements = useQuery({
     queryKey: ["me", "partner-endorsements"],
@@ -63,7 +67,7 @@ export const InquiryParticipantsPanel = ({
         <div className="flex flex-wrap gap-2">
           <Badge variant="secondary" className="gap-1">
             <User className="h-3 w-3" />
-            Tenant{isTenant ? " (you)" : ""}
+            {isTenant ? "Guest (you)" : tenantName}
           </Badge>
           <Badge variant="secondary" className="gap-1">
             <User className="h-3 w-3" />

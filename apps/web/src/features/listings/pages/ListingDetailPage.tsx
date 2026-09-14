@@ -41,7 +41,13 @@ import { ListingLeasePreviewCard } from "@/features/listings/components/ListingL
 import { ListingCard } from "@/features/listings/components/ListingCard";
 import { PhotoLightbox } from "@/features/listings/components/PhotoLightbox";
 import { PhotoGalleryModal } from "@/features/listings/components/PhotoGalleryModal";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
+import type {
+  ListingDetailsDto,
+  PublicUserProfileDto,
+  StayReviewDto,
+  UserReputationDto,
+} from "@/api/types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
@@ -323,6 +329,33 @@ export const ListingDetailPage = () => {
                 </span>
               )}
             </div>
+
+            {listing.hostProfile && (
+              hostUserId ? (
+                <Link
+                  to={`/app/users/${hostUserId}`}
+                  className="mt-3 inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <Avatar className="h-7 w-7">
+                    {listing.hostProfile.profilePhotoUrl ? (
+                      <AvatarImage src={listing.hostProfile.profilePhotoUrl} alt={hostName} />
+                    ) : null}
+                    <AvatarFallback className="text-[10px]">{hostInitials}</AvatarFallback>
+                  </Avatar>
+                  Hosted by <span className="font-medium text-foreground">{hostName}</span>
+                </Link>
+              ) : (
+                <p className="mt-3 inline-flex items-center gap-2 text-sm text-muted-foreground">
+                  <Avatar className="h-7 w-7">
+                    {listing.hostProfile.profilePhotoUrl ? (
+                      <AvatarImage src={listing.hostProfile.profilePhotoUrl} alt={hostName} />
+                    ) : null}
+                    <AvatarFallback className="text-[10px]">{hostInitials}</AvatarFallback>
+                  </Avatar>
+                  Hosted by <span className="font-medium text-foreground">{hostName}</span>
+                </p>
+              )
+            )}
           </div>
 
           <Separator />
@@ -413,6 +446,21 @@ export const ListingDetailPage = () => {
             <ListingLeasePreviewCard listing={listing} isSignedIn={Boolean(user)} />
           </section>
 
+          {listing.hostProfile && (
+            <>
+              <Separator />
+              <HostAboutSection
+                listing={listing}
+                hostName={hostName}
+                hostInitials={hostInitials}
+                hostUserId={hostUserId}
+                hostPublic={hostPublic.data}
+                hostReputation={hostReputation}
+                listingReviews={listingReviews}
+              />
+            </>
+          )}
+
           {/* Where you'll be */}
           {listing.latitude != null && listing.longitude != null && (
             <>
@@ -449,21 +497,11 @@ export const ListingDetailPage = () => {
         </div>
 
         {/* Sidebar */}
-        <div className="lg:col-span-1 space-y-6">
-          {/* Price card.
-              `sticky` creates a new stacking context but defaults to
-              `z-auto`, which puts the booking card *behind* the host
-              card sibling below as soon as they overlap (most visible
-              when the host card scrolls upward into the sticky card or
-              when the date-picker popover opens). Pinning the card to
-              `z-20` keeps the entire reservation widget — including
-              its calendar popover — above the host card. The popover
-              itself uses `z-30` so it still beats anything else inside
-              this stacking context. */}
-          <Card className="sticky top-24 z-20">
-            <CardContent className="p-6">
-              <div className="flex items-baseline gap-1 mb-4">
-                <span className="text-3xl font-bold">{formatMoney(listing.monthlyRentCents)}</span>
+        <div className="lg:col-span-1">
+          <Card className="sticky top-24">
+            <CardContent className="p-5">
+              <div className="flex items-baseline gap-1 mb-3">
+                <span className="text-2xl font-bold">{formatMoney(listing.monthlyRentCents)}</span>
                 <span className="text-muted-foreground">/ month</span>
               </div>
 
@@ -528,183 +566,6 @@ export const ListingDetailPage = () => {
               </p>
             </CardContent>
           </Card>
-
-          {/* Host card */}
-          {listing.hostProfile && (
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base">Hosted by</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Identity row — avatar + name + member-since + view-profile link */}
-                <div className="flex items-start gap-3">
-                  <Avatar className="h-14 w-14">
-                    {listing.hostProfile.profilePhotoUrl ? (
-                      <AvatarImage src={listing.hostProfile.profilePhotoUrl} alt={hostName} />
-                    ) : null}
-                    <AvatarFallback className="text-base">
-                      {hostInitials}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold truncate">{hostName}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Host · Member since{" "}
-                      {new Date(listing.hostProfile.memberSince).getFullYear()}
-                    </p>
-                    {hostReputation && hostReputation.reviewCount > 0 && (
-                      <div className="mt-1">
-                        <StarRatingDisplay
-                          average={hostReputation.averageOverall}
-                          count={hostReputation.reviewCount}
-                          className="text-xs"
-                        />
-                      </div>
-                    )}
-                    {/* Optional one-liner: occupation pulled from the
-                        public profile, only rendered when populated so
-                        we never show an empty subtitle row. */}
-                    {hostPublic.data?.occupation ? (
-                      <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground truncate">
-                        <Briefcase className="h-3 w-3 shrink-0" />
-                        {hostPublic.data.occupation}
-                      </p>
-                    ) : null}
-                    {(hostPublic.data?.city || hostPublic.data?.country) && (
-                      <p className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground truncate">
-                        <MapPin className="h-3 w-3 shrink-0" />
-                        {[
-                          hostPublic.data?.city,
-                          hostPublic.data?.state,
-                          hostPublic.data?.country,
-                        ]
-                          .filter(Boolean)
-                          .join(", ")}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Bio — collapsed to ~4 lines; viewing full text is
-                    one click away on the public profile page. */}
-                {hostPublic.data?.bio ? (
-                  <p className="text-sm text-muted-foreground leading-relaxed line-clamp-4 whitespace-pre-line">
-                    {hostPublic.data.bio}
-                  </p>
-                ) : null}
-
-                {/* Verification chips */}
-                <div className="space-y-1.5">
-                  {listing.hostProfile.isGovernmentIdVerified && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
-                      Identity verified
-                    </div>
-                  )}
-                  {listing.hostProfile.isPhoneVerified && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
-                      Phone verified
-                    </div>
-                  )}
-                  {hostPublic.data?.isEmailVerified && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <MailCheck className="h-4 w-4 text-success shrink-0" />
-                      Email verified
-                    </div>
-                  )}
-                  {listing.hostVerificationBadges?.isInsuranceActive && (
-                    <div className="flex items-center gap-2 text-sm">
-                      <ShieldCheck className="h-4 w-4 text-success shrink-0" />
-                      Insurance active
-                    </div>
-                  )}
-                  {hostPublic.data?.languages ? (
-                    <div className="flex items-center gap-2 text-sm">
-                      <Languages className="h-4 w-4 text-muted-foreground shrink-0" />
-                      Speaks {hostPublic.data.languages}
-                    </div>
-                  ) : null}
-                </div>
-
-                {/* Response stats — bumped to a 2-col tile only when at
-                    least one stat is available; we render a single tile
-                    when only response rate is present. */}
-                {listing.hostProfile.responseRatePercent != null && (
-                  <div
-                    className={cn(
-                      "grid gap-2 rounded-lg bg-secondary p-3 text-center",
-                      listing.hostProfile.responseTimeMinutes != null
-                        ? "grid-cols-2"
-                        : "grid-cols-1",
-                    )}
-                  >
-                    <div>
-                      <p className="text-lg font-semibold flex items-center justify-center gap-1">
-                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                        {listing.hostProfile.responseRatePercent}%
-                      </p>
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
-                        Response rate
-                      </p>
-                    </div>
-                    {listing.hostProfile.responseTimeMinutes != null && (
-                      <div>
-                        <p className="text-lg font-semibold flex items-center justify-center gap-1">
-                          <Clock className="h-4 w-4 text-muted-foreground" />
-                          {listing.hostProfile.responseTimeMinutes < 60
-                            ? `${listing.hostProfile.responseTimeMinutes}m`
-                            : `${Math.round(listing.hostProfile.responseTimeMinutes / 60)}h`}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wide">
-                          Response time
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {listingReviews && listingReviews.length > 0 && (
-                  <div className="space-y-2 rounded-lg border p-3">
-                    <StarRatingDisplay
-                      average={
-                        listingReviews.reduce((s, r) => s + r.overallRating, 0) /
-                        listingReviews.length
-                      }
-                      count={listingReviews.length}
-                    />
-                    {listingReviews.slice(0, 2).map((r) => (
-                      <div key={r.id} className="border-t pt-2 text-sm">
-                        <span className="inline-flex items-center gap-1 font-medium">
-                          <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
-                          {r.overallRating}
-                        </span>
-                        <p className="mt-1 text-muted-foreground line-clamp-2">
-                          {r.publicComment}
-                        </p>
-                      </div>
-                    ))}
-                    <p className="text-[11px] text-muted-foreground">
-                      See all guest reviews below
-                    </p>
-                  </div>
-                )}
-
-                {hostUserId ? (
-                  <Link
-                    to={`/app/users/${hostUserId}`}
-                    className={cn(
-                      buttonVariants({ variant: "outline", size: "sm" }),
-                      "w-full gap-1.5",
-                    )}
-                  >
-                    View full profile
-                    <ArrowUpRight className="h-3.5 w-3.5" />
-                  </Link>
-                ) : null}
-              </CardContent>
-            </Card>
-          )}
         </div>
       </div>
 
@@ -753,6 +614,190 @@ export const ListingDetailPage = () => {
     </div>
   );
 };
+
+function HostAboutSection({
+  listing,
+  hostName,
+  hostInitials,
+  hostUserId,
+  hostPublic,
+  hostReputation,
+  listingReviews,
+}: {
+  listing: ListingDetailsDto;
+  hostName: string;
+  hostInitials: string;
+  hostUserId?: string;
+  hostPublic?: PublicUserProfileDto;
+  hostReputation?: UserReputationDto;
+  listingReviews?: StayReviewDto[];
+}) {
+  const host = listing.hostProfile;
+  if (!host) return null;
+
+  const location = [hostPublic?.city, hostPublic?.state, hostPublic?.country]
+    .filter(Boolean)
+    .join(", ");
+  const badges = [
+    host.isGovernmentIdVerified && { icon: CheckCircle2, label: "Identity verified" },
+    host.isPhoneVerified && { icon: CheckCircle2, label: "Phone verified" },
+    hostPublic?.isEmailVerified && { icon: MailCheck, label: "Email verified" },
+    listing.hostVerificationBadges?.isInsuranceActive && {
+      icon: ShieldCheck,
+      label: "Insurance active",
+    },
+    hostPublic?.languages && { icon: Languages, label: `Speaks ${hostPublic.languages}` },
+  ].filter(Boolean) as { icon: typeof CheckCircle2; label: string }[];
+
+  const reviewSnippets = listingReviews?.slice(0, 2) ?? [];
+  const hasDetails = Boolean(
+    hostPublic?.bio ||
+      badges.length > 0 ||
+      host.responseRatePercent != null ||
+      host.responseTimeMinutes != null,
+  );
+
+  return (
+    <section>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-lg font-semibold">Meet the host</h2>
+        {hostUserId ? (
+          <Link
+            to={`/app/users/${hostUserId}`}
+            className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}
+          >
+            View full profile
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          </Link>
+        ) : null}
+      </div>
+
+      <div className="rounded-2xl border bg-card p-5">
+        <div
+          className={cn(
+            "flex flex-col gap-5",
+            hasDetails && "sm:flex-row sm:items-start",
+            !hasDetails && "sm:flex-row sm:items-center",
+          )}
+        >
+          <div
+            className={cn(
+              "flex items-center gap-4",
+              hasDetails && "sm:w-52 sm:shrink-0 sm:flex-col sm:text-center",
+            )}
+          >
+            <Avatar className="h-16 w-16 sm:h-20 sm:w-20">
+              {host.profilePhotoUrl ? (
+                <AvatarImage src={host.profilePhotoUrl} alt={hostName} />
+              ) : null}
+              <AvatarFallback className="text-lg">{hostInitials}</AvatarFallback>
+            </Avatar>
+            <div className="min-w-0">
+              <p className="truncate font-semibold">{hostName}</p>
+              <p className="text-xs text-muted-foreground">
+                Host · Member since {new Date(host.memberSince).getFullYear()}
+              </p>
+              {hostReputation && hostReputation.reviewCount > 0 && (
+                <div className={cn("mt-1.5", hasDetails && "sm:flex sm:justify-center")}>
+                  <StarRatingDisplay
+                    average={hostReputation.averageOverall}
+                    count={hostReputation.reviewCount}
+                  />
+                </div>
+              )}
+              {hostPublic?.occupation ? (
+                <p className="mt-1.5 flex items-center gap-1 text-xs text-muted-foreground">
+                  <Briefcase className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{hostPublic.occupation}</span>
+                </p>
+              ) : null}
+              {location ? (
+                <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                  <MapPin className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{location}</span>
+                </p>
+              ) : null}
+            </div>
+          </div>
+
+          {hasDetails && (
+            <div className="min-w-0 flex-1 space-y-4 sm:border-l sm:pl-5">
+              {hostPublic?.bio ? (
+                <p className="text-sm leading-relaxed text-muted-foreground line-clamp-5 whitespace-pre-line">
+                  {hostPublic.bio}
+                </p>
+              ) : null}
+
+              {badges.length > 0 && (
+                <ul className="flex flex-wrap gap-2">
+                  {badges.map(({ icon: Icon, label }) => (
+                    <li
+                      key={label}
+                      className="inline-flex items-center gap-1.5 rounded-full border bg-background px-2.5 py-1 text-xs"
+                    >
+                      <Icon className="h-3.5 w-3.5 text-success shrink-0" />
+                      {label}
+                    </li>
+                  ))}
+                </ul>
+              )}
+
+              {(host.responseRatePercent != null || host.responseTimeMinutes != null) && (
+                <div
+                  className={cn(
+                    "grid gap-3 rounded-xl bg-secondary/70 p-3 text-center",
+                    host.responseRatePercent != null && host.responseTimeMinutes != null
+                      ? "grid-cols-2"
+                      : "grid-cols-1 sm:max-w-xs",
+                  )}
+                >
+                  {host.responseRatePercent != null && (
+                    <div>
+                      <p className="flex items-center justify-center gap-1 text-lg font-semibold">
+                        <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                        {host.responseRatePercent}%
+                      </p>
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        Response rate
+                      </p>
+                    </div>
+                  )}
+                  {host.responseTimeMinutes != null && (
+                    <div>
+                      <p className="flex items-center justify-center gap-1 text-lg font-semibold">
+                        <Clock className="h-4 w-4 text-muted-foreground" />
+                        {host.responseTimeMinutes < 60
+                          ? `${host.responseTimeMinutes}m`
+                          : `${Math.round(host.responseTimeMinutes / 60)}h`}
+                      </p>
+                      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        Response time
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {reviewSnippets.length > 0 && (
+          <div className="mt-5 grid gap-3 border-t pt-5 sm:grid-cols-2">
+            {reviewSnippets.map((r) => (
+              <div key={r.id} className="rounded-xl bg-secondary/50 p-3 text-sm">
+                <span className="inline-flex items-center gap-1 font-medium">
+                  <Star className="h-3 w-3 fill-amber-500 text-amber-500" />
+                  {r.overallRating}
+                </span>
+                <p className="mt-1.5 line-clamp-3 text-muted-foreground">{r.publicComment}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
 
 /** Collapses long listing descriptions to 10 lines with a Show more control. */
 function ExpandableDescription({ text }: { text: string }) {

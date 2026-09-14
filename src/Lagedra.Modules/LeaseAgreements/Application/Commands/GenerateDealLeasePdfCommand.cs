@@ -55,6 +55,11 @@ public sealed class GenerateDealLeasePdfCommandHandler(
 
             if (filled.MissingRequiredPlaceholders.Count > 0)
             {
+                if (existing is not null && existing.Content is { Length: > 0 })
+                {
+                    return Result<DealLeaseDocument>.Success(existing);
+                }
+
                 return Result<DealLeaseDocument>.Failure(new Error(
                     "LeaseTemplate.MissingFields",
                     FormatMissingFieldsMessage(filled.MissingRequiredPlaceholders)));
@@ -78,6 +83,11 @@ public sealed class GenerateDealLeasePdfCommandHandler(
         }
         catch (InvalidOperationException ex)
         {
+            if (existing is not null && existing.Content is { Length: > 0 })
+            {
+                return Result<DealLeaseDocument>.Success(existing);
+            }
+
             return Result<DealLeaseDocument>.Failure(new Error("LeaseTemplate.FillFailed", ex.Message));
         }
     }

@@ -11,7 +11,7 @@
   "containerDefinitions": [
     {
       "name": "worker",
-      "image": "930218374225.dkr.ecr.us-west-1.amazonaws.com/lagedra/worker@sha256:4203e4ef2b159c00356585433fd50a90cb7ecc628abdf9eba4b44968d55010bd",
+      "image": "930218374225.dkr.ecr.us-west-1.amazonaws.com/lagedra/worker@sha256:9f0bc6701737f187814008e428ab1b8dc37d129943c1793e5bc5ff7d5764b750",
       "essential": true,
       "environment": [
         {
@@ -57,10 +57,6 @@
         {
           "name": "MinIO__UseIamRole",
           "value": "true"
-        },
-        {
-          "name": "Stripe__PublishableKey",
-          "value": "pk_live_51Tw2UBJHpE3nFjtjkhYox4Qz3gjEQc0q0L8l4HzVWwUxb44bOEvRoY06AoG7UtCS0g3W2ixKECnklTSU5CgLAwov00bPgq2epa"
         },
         {
           "name": "Twilio__FromEmail",
@@ -195,6 +191,10 @@
         {
           "name": "Jwt__Secret",
           "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/jwt-secret"
+        },
+        {
+          "name": "Stripe__PublishableKey",
+          "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/prod/stripe-publishable-key"
         },
         {
           "name": "Stripe__SecretKey",
