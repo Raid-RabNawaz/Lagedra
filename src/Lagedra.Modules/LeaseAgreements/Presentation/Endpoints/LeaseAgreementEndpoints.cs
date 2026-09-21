@@ -232,6 +232,11 @@ public static class LeaseAgreementEndpoints
             return Results.File(existing.Content, existing.ContentType, existing.FileName);
         }
 
+        if (result.Error.Code == "LeaseAgreement.NotUsed")
+        {
+            return Results.NotFound(new { error = result.Error.Code, detail = result.Error.Description });
+        }
+
         return Results.Problem(
             detail: result.Error.Description,
             statusCode: StatusCodes.Status422UnprocessableEntity,
@@ -257,7 +262,7 @@ public static class LeaseAgreementEndpoints
         if (result.IsFailure)
         {
             var payload = new { error = result.Error.Code, detail = result.Error.Description };
-            return result.Error.Code == "Listing.NotFound"
+            return result.Error.Code is "Listing.NotFound" or "LeaseAgreement.NotUsed"
                 ? Results.NotFound(payload)
                 : Results.Problem(
                     detail: result.Error.Description,

@@ -4,7 +4,18 @@ public sealed class TruviScreenAndProtectSettings
 {
     public const string SectionName = "Insurance:Truvi";
 
-    public Uri BaseUrl { get; init; } = new("https://developer.api.truvi.com/screen-and-protect-sandbox");
+    /// <summary>Sandbox host. Staging and local default.</summary>
+    public const string SandboxBaseUrl = "https://developer.api.truvi.com/screen-and-protect-sandbox";
+
+    /// <summary>
+    /// Production host confirmed by Truvi. Create is
+    /// <c>POST {ProductionBaseUrl}/verificationRequests</c>;
+    /// cancel is <c>PUT {ProductionBaseUrl}/verificationRequests/cancel</c>.
+    /// Modify stays <c>PUT {ProductionBaseUrl}/verificationRequests</c>.
+    /// </summary>
+    public const string ProductionBaseUrl = "https://developer.api.truvi.com/screen-and-protect";
+
+    public Uri BaseUrl { get; init; } = new(SandboxBaseUrl);
 
     public string? SubscriptionKey { get; init; }
 

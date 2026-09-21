@@ -42,6 +42,15 @@ public sealed partial class TruviScreeningService(
             return;
         }
 
+        var listing = await listings
+            .GetListingDetailsAsync(deal.ListingId, cancellationToken)
+            .ConfigureAwait(false);
+        if (listing is { StayProtectionEnabled: false })
+        {
+            LogScreeningSkipped(logger, dealId, "Listing does not include Stay Protection.");
+            return;
+        }
+
         var today = DateOnly.FromDateTime(clock.UtcNow);
         if (deal.RequestedCheckIn < today)
         {

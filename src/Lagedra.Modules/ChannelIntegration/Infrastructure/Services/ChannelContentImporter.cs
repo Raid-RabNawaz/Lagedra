@@ -74,7 +74,12 @@ public sealed partial class ChannelContentImporter(
         {
             byExternalId.TryGetValue(snapshot.ExternalListingId, out var map);
 
-            var request = BuildImportRequest(connection.ProviderKey, connection.HostUserId, snapshot, map?.ListingId);
+            var request = BuildImportRequest(
+                connection.ProviderKey,
+                connection.HostUserId,
+                snapshot,
+                map?.ListingId,
+                map?.SyncPriceFromPms ?? false);
 
             ListingImportResult importResult;
             try
@@ -122,7 +127,8 @@ public sealed partial class ChannelContentImporter(
         string providerKey,
         Guid hostUserId,
         ChannelListingSnapshot snapshot,
-        Guid? existingListingId)
+        Guid? existingListingId,
+        bool syncPriceFromPms)
     {
         var monthlyRentCents = snapshot.MonthlyRentCents
             ?? (snapshot.NightlyRateCents.HasValue ? snapshot.NightlyRateCents.Value * 30 : 0);
@@ -159,7 +165,8 @@ public sealed partial class ChannelContentImporter(
             Longitude: snapshot.Longitude,
             Address: address,
             Photos: photos,
-            AmenityNames: snapshot.AmenityCodes);
+            AmenityNames: snapshot.AmenityCodes,
+            SyncPriceFromPms: syncPriceFromPms);
     }
 
     private static ListingImportPropertyType ParsePropertyType(string? type) => (type ?? string.Empty).ToUpperInvariant() switch

@@ -21,7 +21,15 @@ import {
 import { useListings } from "@/features/listings/hooks/useListings";
 import { useListingDefinitions } from "@/features/listings/hooks/useListingDefinitions";
 import { ListingCard } from "@/features/listings/components/ListingCard";
+import { PlaceSearchField } from "@/features/listings/components/PlaceSearchField";
+import type { PlaceSuggestion } from "@/features/listings/lib/placeSearch";
 import type { MapBounds } from "@/features/listings/components/ListingMap";
+import {
+  applyLocationToSearchParams,
+  geocodePlace,
+  radiusBounds,
+  type GeocodedPlace,
+} from "@/features/listings/lib/placeSearch";
 import type {
   PropertyType,
   SearchListingsParams,
@@ -29,7 +37,6 @@ import type {
 } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
-import { Input } from "@/components/ui/input";
 import { NumberInput } from "@/components/ui/number-input";
 import { Select } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
@@ -67,19 +74,7 @@ const sortOptions: { value: SearchListingsSortBy; label: string }[] = [
   { value: "Distance", label: "Distance" },
 ];
 
-async function geocodeCity(query: string): Promise<{ lat: number; lng: number } | null> {
-  try {
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=1`;
-    const res = await fetch(url, { headers: { "Accept-Language": "en" } });
-    const data = await res.json();
-    if (data.length > 0) {
-      return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) };
-    }
-  } catch {
-    /* geocoding is best-effort */
-  }
-  return null;
-}
+type FlyToTarget = { lat: number; lng: number; zoom?: number; bounds?: MapBounds };
 
 export const SearchPage = () => {
   const [keyword, setKeyword] = useState("");
@@ -104,20 +99,45 @@ export const SearchPage = () => {
   const [showMap, setShowMap] = useState(false);
   const [searchOnMove, setSearchOnMove] = useState(true);
   const [mapBounds, setMapBounds] = useState<MapBounds | null>(null);
-  const [flyTo, setFlyTo] = useState<{ lat: number; lng: number; zoom?: number } | null>(null);
+  const [placeBounds, setPlaceBounds] = useState<MapBounds | null>(null);
+  const [placeResolved, setPlaceResolved] = useState(false);
+  const [geoPending, setGeoPending] = useState(false);
+  const [radiusAnchor, setRadiusAnchor] = useState<{
+    lat: number;
+    lng: number;
+    radiusKm: number;
+  } | null>(null);
+  const [flyTo, setFlyTo] = useState<FlyToTarget | null>(null);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
 
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const defs = useListingDefinitions();
+
+  const applyPlace = useCallback((place: GeocodedPlace) => {
+    setPlaceResolved(true);
+    setPlaceBounds(place.bounds);
+    setRadiusAnchor(null);
+    setFlyTo({ lat: place.lat, lng: place.lng, zoom: 12, bounds: place.bounds });
+    setShowMap(true);
+  }, []);
 
   const [searchParams] = useSearchParams();
   useEffect(() => {
     const kw = searchParams.get("keyword");
     const pt = searchParams.get("propertyType") as PropertyType | null;
     const g = searchParams.get("guests");
-    if (kw) {
-      setKeyword(kw);
-      setSearchKeyword(kw);
+    const from = searchParams.get("availableFrom");
+    const to = searchParams.get("availableTo");
+    const sort = searchParams.get("sortBy") as SearchListingsSortBy | null;
+    const lat = Number(searchParams.get("latitude"));
+    const lng = Number(searchParams.get("longitude"));
+    const radius = Number(searchParams.get("radiusKm"));
+    const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
+
+    if (from) setAvailableFrom(from);
+    if (to) setAvailableTo(to);
+    if (sort && sortOptions.some((o) => o.value === sort)) {
+      setSortBy(sort);
     }
     if (pt && propertyTypes.includes(pt)) {
       setPropertyType(pt);
@@ -128,6 +148,29 @@ export const SearchPage = () => {
     if (Number.isInteger(gNum) && gNum > 0) {
       setGuests(String(gNum));
     }
+
+    if (hasCoords) {
+      const km = Number.isFinite(radius) && radius > 0 ? radius : 25;
+      const bounds = radiusBounds(lat, lng, km);
+      setPlaceResolved(true);
+      setPlaceBounds(bounds);
+      setRadiusAnchor({ lat, lng, radiusKm: km });
+      setFlyTo({ lat, lng, zoom: 12, bounds });
+      setShowMap(true);
+    }
+
+    if (kw) {
+      setKeyword(kw);
+      setSearchKeyword(kw);
+      if (!hasCoords) {
+        setGeoPending(true);
+        setShowMap(true);
+        void geocodePlace(kw).then((place) => {
+          if (place) applyPlace(place);
+          setGeoPending(false);
+        });
+      }
+    }
     // intentionally only run on initial mount — URL params seed initial filters
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -136,7 +179,6 @@ export const SearchPage = () => {
 
   const params = useMemo<SearchListingsParams>(() => {
     const p: SearchListingsParams = { page, pageSize, sortBy };
-    if (searchKeyword.trim()) p.keyword = searchKeyword.trim();
     if (propertyType) p.propertyType = propertyType;
     if (minBedrooms) p.minBedrooms = Number(minBedrooms);
     if (minBathrooms) p.minBathrooms = Number(minBathrooms);
@@ -152,17 +194,16 @@ export const SearchPage = () => {
     if (amenityIds.length > 0) p.amenityIds = amenityIds;
     if (safetyDeviceIds.length > 0) p.safetyDeviceIds = safetyDeviceIds;
     if (considerationIds.length > 0) p.considerationIds = considerationIds;
-    if (showMap && mapBounds) {
-      p.swLat = mapBounds.swLat;
-      p.swLng = mapBounds.swLng;
-      p.neLat = mapBounds.neLat;
-      p.neLng = mapBounds.neLng;
-      p.latitude = mapBounds.centerLat;
-      p.longitude = mapBounds.centerLng;
-    }
-    return p;
+    return applyLocationToSearchParams(p, {
+      keyword: searchKeyword,
+      placeResolved,
+      userMapBounds: mapBounds,
+      placeBounds,
+      radiusAnchor,
+    });
   }, [
     searchKeyword,
+    placeResolved,
     propertyType,
     minBedrooms,
     minBathrooms,
@@ -179,30 +220,50 @@ export const SearchPage = () => {
     sortBy,
     page,
     pageSize,
-    showMap,
     mapBounds,
+    placeBounds,
+    radiusAnchor,
   ]);
 
-  const { data, isLoading, isError } = useListings(params);
+  const { data, isLoading, isError } = useListings(params, { enabled: !geoPending });
+
+  const runLocationSearch = useCallback(
+    async (term: string, place?: GeocodedPlace | null) => {
+      const trimmed = term.trim();
+      setKeyword(trimmed);
+      setSearchKeyword(trimmed);
+      setPage(1);
+      setMapBounds(null);
+      setPlaceResolved(false);
+      setPlaceBounds(null);
+      setRadiusAnchor(null);
+      if (!showMap) setShowMap(true);
+      if (!trimmed) return;
+      if (place) {
+        applyPlace(place);
+        return;
+      }
+      setGeoPending(true);
+      const resolved = await geocodePlace(trimmed);
+      if (resolved) applyPlace(resolved);
+      setGeoPending(false);
+    },
+    [showMap, applyPlace],
+  );
 
   const handleSearch = useCallback(
-    async (e: React.FormEvent) => {
+    (e: React.FormEvent) => {
       e.preventDefault();
-      const term = keyword.trim();
-      setSearchKeyword(term);
-      setPage(1);
-      // Submitting the search should always reveal the map alongside the
-      // results — users want to see the geographic context for the filter.
-      if (!showMap) {
-        setMapBounds(null);
-        setShowMap(true);
-      }
-      if (term) {
-        const geo = await geocodeCity(term);
-        if (geo) setFlyTo({ lat: geo.lat, lng: geo.lng, zoom: 12 });
-      }
+      void runLocationSearch(keyword);
     },
-    [keyword, showMap],
+    [keyword, runLocationSearch],
+  );
+
+  const handlePlaceSelect = useCallback(
+    (suggestion: PlaceSuggestion) => {
+      void runLocationSearch(suggestion.query, suggestion.place);
+    },
+    [runLocationSearch],
   );
 
   const handleBoundsChange = useCallback((bounds: MapBounds) => {
@@ -230,14 +291,14 @@ export const SearchPage = () => {
         // showing the country-wide default view.
         const term = searchKeyword.trim();
         if (term) {
-          void geocodeCity(term).then((geo) => {
-            if (geo) setFlyTo({ lat: geo.lat, lng: geo.lng, zoom: 12 });
+          void geocodePlace(term).then((place) => {
+            if (place) applyPlace(place);
           });
         }
       }
       return !v;
     });
-  }, [searchKeyword]);
+  }, [searchKeyword, applyPlace]);
 
   const toggleAmenity = (id: string) => {
     setAmenityIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -302,6 +363,9 @@ export const SearchPage = () => {
       onClear: () => {
         setKeyword("");
         setSearchKeyword("");
+        setPlaceResolved(false);
+        setPlaceBounds(null);
+        setRadiusAnchor(null);
         setPage(1);
       },
     });
@@ -544,15 +608,18 @@ export const SearchPage = () => {
           </div>
 
           <form onSubmit={handleSearch} className="mt-4 flex gap-2 max-w-2xl">
-            <div className="relative flex-1">
-              <Search className="absolute left-3.5 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
-                placeholder="Search by city, neighborhood, or keyword..."
-                className="h-11 pl-11 bg-background text-foreground border-0 rounded-xl text-base"
-              />
-            </div>
+            <PlaceSearchField
+              className="flex-1"
+              value={keyword}
+              onChange={setKeyword}
+              onSelect={handlePlaceSelect}
+              showPopularWhenEmpty
+              placeholder="Search by city, address, or state..."
+              leadingIcon={
+                <Search className="pointer-events-none absolute left-3.5 top-1/2 z-10 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+              }
+              inputClassName="h-11 border-0 bg-background pl-11 text-base text-foreground rounded-xl"
+            />
             <Button type="submit" variant="accent" size="lg" className="rounded-xl px-6 h-11">
               Search
             </Button>
@@ -649,6 +716,10 @@ export const SearchPage = () => {
                   clearAllFilters();
                   setKeyword("");
                   setSearchKeyword("");
+                  setPlaceResolved(false);
+                  setPlaceBounds(null);
+                  setRadiusAnchor(null);
+                  setMapBounds(null);
                 }}
                 className="text-xs text-muted-foreground hover:text-foreground underline-offset-2 hover:underline cursor-pointer"
               >
@@ -892,7 +963,7 @@ export const SearchPage = () => {
             {listContent}
           </div>
 
-          <div className="flex-1 relative">
+          <div className="flex-1 relative min-h-[50vh]">
             <Suspense
               fallback={
                 <div className="h-full flex items-center justify-center">

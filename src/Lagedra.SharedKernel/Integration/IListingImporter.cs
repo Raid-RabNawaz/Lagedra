@@ -65,7 +65,8 @@ public sealed record ListingImportRequest(
     double? Longitude = null,
     ListingImportAddress? Address = null,
     IReadOnlyList<ListingImportPhoto>? Photos = null,
-    IReadOnlyList<string>? AmenityNames = null);
+    IReadOnlyList<string>? AmenityNames = null,
+    bool SyncPriceFromPms = false);
 
 public sealed record ListingImportResult(
     Guid ListingId,

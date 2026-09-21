@@ -78,6 +78,7 @@ public sealed class GetListingQuoteQueryHandler(
                 l.SuggestedDepositHighCents,
                 MinStayDays = l.StayRange != null ? (int?)l.StayRange.MinDays : null,
                 MaxStayDays = l.StayRange != null ? (int?)l.StayRange.MaxDays : null,
+                l.StayProtectionEnabled,
             })
             .FirstOrDefaultAsync(cancellationToken)
             .ConfigureAwait(false);
@@ -114,13 +115,14 @@ public sealed class GetListingQuoteQueryHandler(
             listing.SuggestedDepositHighCents,
             listing.MaxDepositCents);
 
-        // Stay protection is included on eligible bookings. The fee
-        // calculator (Truvi nightly recovery, or another registered
-        // mode) decides the tenant line from stay length. There is no
-        // host opt-in flag.
-        var insuranceQuote = await insuranceFeeCalculator
-            .CalculateFeeAsync(listing.MonthlyRentCents, stayDays, cancellationToken)
-            .ConfigureAwait(false);
+        // Stay protection is included only when the host opted this listing
+        // in. The fee calculator (Truvi nightly recovery, or another
+        // registered mode) decides the tenant line from stay length.
+        var insuranceQuote = listing.StayProtectionEnabled
+            ? await insuranceFeeCalculator
+                .CalculateFeeAsync(listing.MonthlyRentCents, stayDays, cancellationToken)
+                .ConfigureAwait(false)
+            : new InsuranceFeeQuote(0, "None", null);
 
         var protocolFeeCents = await ResolveProtocolFeeAsync(cancellationToken).ConfigureAwait(false);
 

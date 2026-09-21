@@ -6,7 +6,7 @@ public sealed class CheckrSettings
 
     public string SecretKey { get; set; } = string.Empty;
     public string WebhookSecret { get; set; } = string.Empty;
-    public string PackageSlug { get; set; } = "starter";
+    public string PackageSlug { get; set; } = "essential";
     public string ApiVersion { get; set; } = "2026-04-29";
     public Uri BaseUrl { get; set; } = new("https://tenant.checkr.com/api/");
 

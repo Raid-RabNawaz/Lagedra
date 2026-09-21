@@ -232,16 +232,14 @@ public static partial class NotificationTemplateSeeder
             <html>
             <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; color: #111;">
               <h2 style="margin-top: 32px;">Your booking is active</h2>
-              <p>Your stay is confirmed. The signed lease agreement PDF is attached to this email for your records.</p>
+              <p>Your stay is confirmed.{leaseIntroHtml}</p>
               <p style="margin: 24px 0;">
                 <a href="{dealUrl}"
                    style="display: inline-block; background: #4141E5; color: #fff; padding: 12px 20px; border-radius: 10px; text-decoration: none; font-weight: 600;">
-                  Open deal &amp; download lease
+                  {leaseCta}
                 </a>
               </p>
-              <p style="font-size: 13px; color: #666;">
-                Keep the attached PDF. You can also download it later from your deal page in Lagedra.
-              </p>
+              {leaseFooterHtml}
             </body>
             </html>
             """;
@@ -249,15 +247,17 @@ public static partial class NotificationTemplateSeeder
         const string dealActivatedText = """
             Your booking is active
 
-            Your stay is confirmed. The signed lease agreement PDF is attached to this email for your records.
+            Your stay is confirmed.{leaseIntroText}
 
-            Open deal & download lease: {dealUrl}
+            {leaseCtaText}: {dealUrl}
+
+            {leaseFooterText}
             """;
 
         yield return new NotificationTemplate(
             templateId: "deal_activated",
             channel: NotificationChannel.Email,
-            subject: "Booking active — lease agreement attached",
+            subject: "Booking active{leaseSubjectSuffix}",
             htmlBody: dealActivatedHtml,
             plainTextBody: dealActivatedText);
 

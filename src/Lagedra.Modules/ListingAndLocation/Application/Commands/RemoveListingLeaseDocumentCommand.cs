@@ -8,8 +8,8 @@ using Microsoft.Extensions.Options;
 namespace Lagedra.Modules.ListingAndLocation.Application.Commands;
 
 /// <summary>
-/// Removes the host's uploaded lease agreement, returning the listing to
-/// Lagedra's standard lease.
+/// Removes the host's uploaded lease agreement. If the listing was using
+/// that file, it falls back to Lagedra's standard lease.
 /// </summary>
 public sealed record RemoveListingLeaseDocumentCommand(Guid ListingId, Guid CallerUserId)
     : IRequest<Result<bool>>;

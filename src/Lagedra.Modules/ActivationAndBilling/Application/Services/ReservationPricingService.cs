@@ -120,9 +120,11 @@ public sealed class ReservationPricingService(
             negotiatedOfferId = null;
         }
 
-        var insuranceQuote = await insuranceFeeCalculator
-            .CalculateFeeAsync(rentCents, stayDurationDays, cancellationToken)
-            .ConfigureAwait(false);
+        var insuranceQuote = listing.StayProtectionEnabled
+            ? await insuranceFeeCalculator
+                .CalculateFeeAsync(rentCents, stayDurationDays, cancellationToken)
+                .ConfigureAwait(false)
+            : new InsuranceFeeQuote(0, "None", null);
 
         var serviceFee = await ResolveServiceFeeAsync(rentCents, cancellationToken)
             .ConfigureAwait(false);

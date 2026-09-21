@@ -23,7 +23,14 @@ public sealed partial class DealLeasePdfService(
 
         if (result.IsFailure)
         {
-            LogGenerateFailed(logger, dealId, result.Error.Code, result.Error.Description);
+            if (string.Equals(result.Error.Code, "LeaseAgreement.NotUsed", StringComparison.Ordinal))
+            {
+                LogLeaseNotUsed(logger, dealId);
+            }
+            else
+            {
+                LogGenerateFailed(logger, dealId, result.Error.Code, result.Error.Description);
+            }
         }
 
         // Same fallback the download endpoint uses: a previously sealed PDF
@@ -43,6 +50,9 @@ public sealed partial class DealLeasePdfService(
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "On-demand lease PDF generation failed for deal {DealId}: {ErrorCode} {ErrorDescription}")]
     private static partial void LogGenerateFailed(ILogger logger, Guid dealId, string errorCode, string errorDescription);
+
+    [LoggerMessage(Level = LogLevel.Debug, Message = "Skipped lease PDF for deal {DealId} — listing does not use a lease agreement")]
+    private static partial void LogLeaseNotUsed(ILogger logger, Guid dealId);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Lease PDF for deal {DealId} served from the stored document after generation failed")]
     private static partial void LogFellBackToStored(ILogger logger, Guid dealId);

@@ -31,7 +31,8 @@ public sealed record CreateListingRequest(
     bool IncludeBrokerClause = false,
     LeaseAgreementSource LeaseAgreementSource = LeaseAgreementSource.LagedraTemplate,
     ListingAddedVia AddedVia = ListingAddedVia.Manual,
-    string? AddedViaDetail = null);
+    string? AddedViaDetail = null,
+    bool StayProtectionEnabled = true);
 
 public sealed record HouseRulesRequest(
     TimeOnly CheckInTime,

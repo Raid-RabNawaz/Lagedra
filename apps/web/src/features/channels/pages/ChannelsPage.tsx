@@ -5,6 +5,7 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Badge, type BadgeProps } from "@/components/ui/badge";
 import {
   Card,
@@ -28,6 +29,7 @@ import {
   useChannelListings,
   useChannelProviders,
   useStartOwnerRezOAuth,
+  useSetChannelListingSync,
 } from "@/features/channels/hooks/useChannels";
 import type {
   ChannelConnectionDto,
@@ -386,6 +388,7 @@ function OwnerRezConnectedCard({
 
         {expanded && (
           <ImportedListingsList
+            connectionId={connection.id}
             listings={listings.data}
             isLoading={listings.isLoading}
             providerLabel="OwnerRez"
@@ -768,6 +771,7 @@ function HostawayConnectedCard({
 
         {expanded && (
           <ImportedListingsList
+            connectionId={connection.id}
             listings={listings.data}
             isLoading={listings.isLoading}
             providerLabel="Hostaway"
@@ -1047,6 +1051,7 @@ function GuestyConnectedCard({
 
         {expanded && (
           <ImportedListingsList
+            connectionId={connection.id}
             listings={listings.data}
             isLoading={listings.isLoading}
             providerLabel="Guesty"
@@ -1318,6 +1323,7 @@ function HosthubConnectedCard({
 
         {expanded && (
           <ImportedListingsList
+            connectionId={connection.id}
             listings={listings.data}
             isLoading={listings.isLoading}
             providerLabel="Hosthub"
@@ -1572,6 +1578,7 @@ function SmoobuConnectedCard({
 
         {expanded && (
           <ImportedListingsList
+            connectionId={connection.id}
             listings={listings.data}
             isLoading={listings.isLoading}
             providerLabel="Smoobu"
@@ -1850,6 +1857,7 @@ function ConnectionCard({ connection }: { connection: ChannelConnectionDto }) {
 
         {expanded && (
           <ImportedListingsList
+            connectionId={connection.id}
             listings={listings.data}
             isLoading={listings.isLoading}
             providerLabel={label}
@@ -1895,10 +1903,12 @@ function ImportedListingsToggle({
 }
 
 function ImportedListingsList({
+  connectionId,
   listings,
   isLoading,
   providerLabel: label,
 }: {
+  connectionId: string;
   listings: ChannelListingMapDto[] | undefined;
   isLoading: boolean;
   providerLabel: string;
@@ -1918,36 +1928,94 @@ function ImportedListingsList({
   return (
     <ul className="max-h-80 divide-y overflow-y-auto rounded-md border">
       {listings.map((listing) => (
-        <li
+        <ImportedListingRow
           key={listing.id}
-          className="flex items-center justify-between gap-3 p-3"
-        >
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium">
-              {listing.title ?? listing.providerListingId}
-            </p>
-            <p className="truncate text-xs text-muted-foreground">
-              {listing.providerListingId} · imported{" "}
-              {formatDate(listing.lastImportedAt)}
-            </p>
-          </div>
-          {listing.listingId ? (
-            <Link
-              to={`/app/listings/${listing.listingId}`}
-              className={cn(
-                buttonVariants({ variant: "outline", size: "sm" }),
-                "gap-1 shrink-0",
-              )}
-            >
-              Open draft
-              <ExternalLink className="h-3.5 w-3.5" />
-            </Link>
-          ) : (
-            <Badge variant="secondary">Pending</Badge>
-          )}
-        </li>
+          connectionId={connectionId}
+          listing={listing}
+        />
       ))}
     </ul>
+  );
+}
+
+function ImportedListingRow({
+  connectionId,
+  listing,
+}: {
+  connectionId: string;
+  listing: ChannelListingMapDto;
+}) {
+  const saveSync = useSetChannelListingSync(connectionId);
+  const imported = Boolean(listing.listingId);
+  const busy = saveSync.isPending;
+
+  const setFlag = (field: "syncPriceFromPms" | "syncCalendarFromPms", value: boolean) => {
+    if (!imported) return;
+    void saveSync.mutateAsync({
+      mapId: listing.id,
+      syncPriceFromPms:
+        field === "syncPriceFromPms" ? value : listing.syncPriceFromPms,
+      syncCalendarFromPms:
+        field === "syncCalendarFromPms" ? value : listing.syncCalendarFromPms,
+    });
+  };
+
+  return (
+    <li className="flex flex-col gap-2 p-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">
+          {listing.title ?? listing.providerListingId}
+        </p>
+        <p className="truncate text-xs text-muted-foreground">
+          {listing.providerListingId} · imported{" "}
+          {formatDate(listing.lastImportedAt)}
+        </p>
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5">
+          <label className="flex items-center gap-2 text-xs text-foreground">
+            <Checkbox
+              checked={listing.syncPriceFromPms}
+              disabled={!imported || busy}
+              onCheckedChange={(checked) => setFlag("syncPriceFromPms", checked)}
+              aria-label="Sync price from PMS"
+            />
+            Price from PMS
+          </label>
+          <label className="flex items-center gap-2 text-xs text-foreground">
+            <Checkbox
+              checked={listing.syncCalendarFromPms}
+              disabled={!imported || busy}
+              onCheckedChange={(checked) => setFlag("syncCalendarFromPms", checked)}
+              aria-label="Sync calendar from PMS"
+            />
+            Calendar from PMS
+          </label>
+        </div>
+        {!imported && (
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            Import this listing first, then choose what to keep in sync.
+          </p>
+        )}
+        {saveSync.isError && (
+          <p className="mt-1 text-[11px] text-destructive">
+            Could not save sync preference. Try again.
+          </p>
+        )}
+      </div>
+      {listing.listingId ? (
+        <Link
+          to={`/app/listings/${listing.listingId}`}
+          className={cn(
+            buttonVariants({ variant: "outline", size: "sm" }),
+            "gap-1 shrink-0",
+          )}
+        >
+          Open draft
+          <ExternalLink className="h-3.5 w-3.5" />
+        </Link>
+      ) : (
+        <Badge variant="secondary">Pending</Badge>
+      )}
+    </li>
   );
 }
 
@@ -1989,6 +2057,12 @@ function HowItWorks() {
         <li>
           Sync anytime to update listings you already imported and pull in new
           ones from your PMS.
+        </li>
+        <li>
+          Price and calendar stay as you set them in Lagedra unless you turn on
+          <strong> Price from PMS</strong> or <strong>Calendar from PMS</strong>{" "}
+          on that imported listing. Those fields then update whenever a sync
+          job runs.
         </li>
         <li>
           One connection per PMS. To switch accounts or replace an API key,

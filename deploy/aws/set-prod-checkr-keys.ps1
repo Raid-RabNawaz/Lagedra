@@ -101,10 +101,11 @@ function Update-CheckrTaskDefinition([string] $ServiceName) {
         throw "Task definition $taskArn has no container."
     }
 
-    $envReplace = @("Screening__Provider")
+    $envReplace = @("Screening__Provider", "Checkr__PackageSlug")
     $container.environment = @(
         @($container.environment | Where-Object { $envReplace -notcontains $_.name }) +
-        [pscustomobject]@{ name = "Screening__Provider"; value = "Checkr" }
+        [pscustomobject]@{ name = "Screening__Provider"; value = "Checkr" } +
+        [pscustomobject]@{ name = "Checkr__PackageSlug"; value = "essential" }
     )
 
     $kept = @($container.secrets | Where-Object { -not $secretMap.ContainsKey($_.name) })

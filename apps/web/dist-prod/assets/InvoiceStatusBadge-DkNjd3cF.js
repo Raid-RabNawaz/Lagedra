@@ -1,1 +1,0 @@
-import{j as s,s as d}from"./index-DyMjpOpA.js";const a={Paid:{label:"Paid",variant:"success"},Pending:{label:"Pending",variant:"secondary"},Failed:{label:"Failed",variant:"destructive"},Disputed:{label:"Disputed",variant:"destructive"}},l=({status:e,className:i})=>{const{label:t,variant:n}=a[e]??a.Pending;return s.jsx(d,{variant:n,className:i,children:t})};export{l as I};

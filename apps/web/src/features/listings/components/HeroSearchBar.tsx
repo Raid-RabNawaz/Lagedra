@@ -10,6 +10,7 @@ import {
   Plus,
 } from "lucide-react";
 import { DateRangeCalendar, type DateRange } from "@/features/listings/components/DateRangeCalendar";
+import { PlaceSearchField } from "@/features/listings/components/PlaceSearchField";
 import { cn } from "@/lib/utils";
 
 type Segment = "where" | "checkin" | "checkout" | "who" | "filter" | null;
@@ -20,15 +21,6 @@ function guestsLabel(n: number) {
   if (n <= 0) return null;
   return `${n} guest${n === 1 ? "" : "s"}`;
 }
-
-const POPULAR_DESTINATIONS = [
-  { label: "New York, NY", hint: "United States" },
-  { label: "San Francisco, CA", hint: "United States" },
-  { label: "Austin, TX", hint: "United States" },
-  { label: "Miami, FL", hint: "United States" },
-  { label: "Los Angeles, CA", hint: "United States" },
-  { label: "Seattle, WA", hint: "United States" },
-];
 
 function formatDateShort(d: Date | null) {
   if (!d) return null;
@@ -109,29 +101,34 @@ export function HeroSearchBar() {
     <div ref={containerRef} className="relative">
       {/* Mobile pill */}
       <form
-        className="flex items-stretch overflow-hidden rounded-full bg-background shadow-[0_12px_40px_-16px_rgba(15,23,42,0.35)] ring-1 ring-border sm:hidden"
+        className="relative sm:hidden"
         onSubmit={(e) => {
           e.preventDefault();
           submit();
         }}
       >
-        <div className="flex flex-1 items-center gap-2 px-4 py-2.5">
-          <MapPin className="h-4 w-4 text-muted-foreground" />
-          <input
-            type="text"
-            value={where}
-            onChange={(e) => setWhere(e.target.value)}
-            placeholder="Where to?"
-            className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-          />
-        </div>
-        <button
-          type="submit"
-          aria-label="Search"
-          className="flex items-center justify-center bg-primary px-5 text-primary-foreground transition-colors hover:bg-primary/90"
-        >
-          <Search className="h-4 w-4" />
-        </button>
+        <PlaceSearchField
+          className="w-full"
+          value={where}
+          onChange={setWhere}
+          onSelect={(s) => setWhere(s.query)}
+          showPopularWhenEmpty
+          placeholder="Where to?"
+          fieldClassName="flex items-stretch overflow-hidden rounded-full bg-background shadow-[0_12px_40px_-16px_rgba(15,23,42,0.35)] ring-1 ring-border"
+          leadingIcon={
+            <MapPin className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          }
+          inputClassName="h-11 rounded-none border-0 bg-transparent py-2.5 pl-10 pr-3 text-sm shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+          trailing={
+            <button
+              type="submit"
+              aria-label="Search"
+              className="flex h-11 w-14 shrink-0 items-center justify-center bg-primary text-primary-foreground transition-colors hover:bg-primary/90"
+            >
+              <Search className="h-4 w-4" />
+            </button>
+          }
+        />
       </form>
 
       {/* Desktop segmented bar */}
@@ -320,45 +317,15 @@ function WherePanel({
   onPick: (v: string) => void;
 }) {
   return (
-    <div>
-      <div className="flex items-center gap-3 rounded-2xl border border-border bg-background px-4 py-3 ring-1 ring-transparent focus-within:ring-primary/30">
-        <MapPin className="h-4 w-4 text-muted-foreground" />
-        <input
-          ref={inputRef}
-          type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder="Search a city, neighborhood, or address"
-          className="w-full bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
-        />
-      </div>
-      <p className="mt-5 mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-        Popular destinations
-      </p>
-      <ul className="grid grid-cols-1 gap-1 sm:grid-cols-2">
-        {POPULAR_DESTINATIONS.map((d) => (
-          <li key={d.label}>
-            <button
-              type="button"
-              onClick={() => onPick(d.label)}
-              className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left transition-colors hover:bg-secondary"
-            >
-              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-secondary">
-                <MapPin className="h-4 w-4 text-muted-foreground" />
-              </span>
-              <span className="min-w-0">
-                <span className="block truncate text-sm font-medium text-foreground">
-                  {d.label}
-                </span>
-                <span className="block truncate text-xs text-muted-foreground">
-                  {d.hint}
-                </span>
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </div>
+    <PlaceSearchField
+      variant="panel"
+      value={value}
+      inputRef={inputRef}
+      onChange={onChange}
+      onSelect={(s) => onPick(s.query)}
+      showPopularWhenEmpty
+      placeholder="Search a city, address, or state"
+    />
   );
 }
 

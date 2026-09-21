@@ -28,4 +28,6 @@ public sealed record DealSummaryDto(
     bool? TruthSurfaceLocked = null,
     DateTime? HostConfirmedDepositReturnedAt = null,
     DateTime? TenantConfirmedDepositReceivedAt = null,
-    DateTime? DepositReturnSettledAt = null);
+    DateTime? DepositReturnSettledAt = null,
+    long? InsuranceFeeCents = null,
+    string? LeaseAgreementSource = null);

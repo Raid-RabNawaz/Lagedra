@@ -2,6 +2,7 @@ using Lagedra.Infrastructure.External.Channels;
 using Lagedra.Modules.ChannelIntegration.Domain.Enums;
 using Lagedra.Modules.ChannelIntegration.Infrastructure.Persistence;
 using Lagedra.Modules.ChannelIntegration.Infrastructure.Services;
+using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -10,8 +11,8 @@ using Quartz;
 namespace Lagedra.Modules.ChannelIntegration.Infrastructure.Jobs;
 
 /// <summary>
-/// Refreshes availability calendars for every mapped listing on each active
-/// channel connection. Runs more frequently than content sync so blocked dates
+/// Refreshes availability calendars for mapped listings that opted into
+/// calendar sync. Runs more frequently than content sync so blocked dates
 /// stay fresh and double-bookings are avoided.
 /// </summary>
 [DisallowConcurrentExecution]
@@ -19,6 +20,7 @@ public sealed partial class ChannelAvailabilitySyncJob(
     ChannelDbContext dbContext,
     IChannelProviderRegistry providers,
     IEncryptionService encryption,
+    IListingProvider listings,
     ILogger<ChannelAvailabilitySyncJob> logger) : IJob
 {
     public async Task Execute(IJobExecutionContext context)
@@ -52,7 +54,9 @@ public sealed partial class ChannelAvailabilitySyncJob(
                 var credentials = connection.ToCredentials(encryption);
 
                 var maps = await dbContext.ListingMaps
-                    .Where(m => m.ConnectionId == connection.Id)
+                    .Where(m => m.ConnectionId == connection.Id
+                        && m.SyncCalendarFromPms
+                        && m.ListingId != null)
                     .ToListAsync(ct)
                     .ConfigureAwait(false);
 
@@ -63,9 +67,11 @@ public sealed partial class ChannelAvailabilitySyncJob(
                         .PullAvailabilityAsync(credentials, map.ProviderListingId, ct)
                         .ConfigureAwait(false);
 
-                    // TODO: project calendar.Blocks onto the mapped Lagedra listing's
-                    // availability so the booking flow blocks the right dates.
-                    totalBlocks += calendar.Blocks.Count;
+                    var ranges = ChannelCalendarProjection.ToHostBlockedRanges(calendar.Blocks);
+                    await listings
+                        .ReplaceHostBlockedDatesAsync(map.ListingId!.Value, ranges, ct)
+                        .ConfigureAwait(false);
+                    totalBlocks += ranges.Count;
                 }
 
                 LogSynced(logger, connection.Id, maps.Count, totalBlocks);

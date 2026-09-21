@@ -31,6 +31,7 @@ import { LeaveStayReviewPanel } from "@/features/reviews/components/LeaveStayRev
 import { useMyDeals } from "@/features/deals/hooks/useDeals";
 import { useSnapshotByDealId } from "@/features/truth-surface/hooks/useTruthSurface";
 import { LeaseAgreementDownloadButton } from "@/features/truth-surface/components/LeaseAgreementDownloadButton";
+import { listingHasLeaseAgreement } from "@/features/listings/lib/leaseAgreement";
 import { useAuthStore } from "@/app/auth/authStore";
 import { isAdmin } from "@/app/auth/permissions";
 import { isNotFoundError } from "@/api/errors";
@@ -292,6 +293,8 @@ export function DealDetailPage() {
   const stayProtection = stayProtectionStatus(
     isNotFoundError(insuranceQuery.error) ? null : insuranceQuery.data,
   );
+  const stayProtectionIncluded =
+    (deal?.insuranceFeeCents ?? 0) > 0 || !!insuranceQuery.data;
 
   if (isLoading) {
     return <Loader label="Loading deal..." />;
@@ -398,7 +401,7 @@ export function DealDetailPage() {
                 Payment: {deal.paymentStatus}
               </Badge>
             )}
-            {!insuranceQuery.isLoading && (insuranceQuery.data || isNotFoundError(insuranceQuery.error)) && (
+            {!insuranceQuery.isLoading && stayProtectionIncluded && (
               <Badge variant={stayProtection.badgeVariant} className="text-[10px]">
                 {STAY_PROTECTION_LABEL}: {stayProtection.headline}
               </Badge>
@@ -414,16 +417,18 @@ export function DealDetailPage() {
         truthSurface={truthSurface ?? null}
       />
 
-      <DealStayProtectionCard
-        dealId={deal.dealId}
-        canRescreen={isLandlord || isPlatformAdmin}
-        perspective={isLandlord ? "host" : isTenant ? "guest" : "other"}
-        canFileDamageClaim={
-          isLandlord
-          && deal.paymentStatus === "Confirmed"
-          && showBilling
-        }
-      />
+      {stayProtectionIncluded && (
+        <DealStayProtectionCard
+          dealId={deal.dealId}
+          canRescreen={isLandlord || isPlatformAdmin}
+          perspective={isLandlord ? "host" : isTenant ? "guest" : "other"}
+          canFileDamageClaim={
+            isLandlord
+            && deal.paymentStatus === "Confirmed"
+            && showBilling
+          }
+        />
+      )}
 
       <DealStayAccessCard
         dealId={deal.dealId}
@@ -471,7 +476,9 @@ export function DealDetailPage() {
           />
         )}
 
-        {truthSurface?.status === "Confirmed" && (isLandlord || isTenant) && (
+        {truthSurface?.status === "Confirmed"
+          && (isLandlord || isTenant)
+          && listingHasLeaseAgreement(deal.leaseAgreementSource) && (
           <div className="flex items-center justify-between gap-3 rounded-xl border p-4">
             <div className="min-w-0">
               <p className="text-sm font-medium">Lease agreement</p>

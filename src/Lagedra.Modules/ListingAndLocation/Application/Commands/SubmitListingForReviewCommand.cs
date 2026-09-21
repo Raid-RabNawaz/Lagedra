@@ -103,12 +103,6 @@ public sealed class SubmitListingForReviewCommandHandler(
             return Result<ListingDetailsDto>.Failure(ProfileIncomplete(completeness));
         }
 
-        if (listing.ManagerRole == Domain.Enums.ListingManagerRole.PropertyManager
-            && listing.HomeOwnerUserId is null)
-        {
-            return Result<ListingDetailsDto>.Failure(ListingManagementGuard.HomeOwnerRequired);
-        }
-
         try
         {
             listing.SubmitForReview();

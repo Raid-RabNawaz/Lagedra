@@ -99,6 +99,31 @@ public class ListingCustomLeaseAgreementTests
     }
 
     [Fact]
+    public void Submits_for_review_with_no_lease_agreement()
+    {
+        var listing = SubmittableListing();
+        listing.SetLeaseAgreementSource(LeaseAgreementSource.None);
+
+        listing.SubmitForReview();
+
+        listing.Status.Should().Be(ListingStatus.InReview);
+        listing.HasLeaseAgreement.Should().BeFalse();
+    }
+
+    [Fact]
+    public void Removing_the_document_keeps_none_when_the_listing_has_no_lease()
+    {
+        var listing = NewListing();
+        listing.AttachCustomLeaseDocument(SampleDocument());
+        listing.SetLeaseAgreementSource(LeaseAgreementSource.None);
+
+        listing.RemoveCustomLeaseDocument();
+
+        listing.CustomLeaseDocument.Should().BeNull();
+        listing.LeaseAgreementSource.Should().Be(LeaseAgreementSource.None);
+    }
+
+    [Fact]
     public void Submits_for_review_once_the_host_lease_is_uploaded()
     {
         var listing = SubmittableListing();

@@ -87,8 +87,9 @@ export function ListingForm({
   const amenityIds = useWatch({ control: form.control, name: "amenityIds" }) ?? [];
   const safetyDeviceIds = useWatch({ control: form.control, name: "safetyDeviceIds" }) ?? [];
   const considerationIds = useWatch({ control: form.control, name: "considerationIds" }) ?? [];
-  const usesOwnLease =
-    useWatch({ control: form.control, name: "leaseAgreementSource" }) === "HostProvided";
+  const leaseSource = useWatch({ control: form.control, name: "leaseAgreementSource" });
+  const usesOwnLease = leaseSource === "HostProvided";
+  const usesNoLease = leaseSource === "None";
 
   const toggleId = (field: "amenityIds" | "safetyDeviceIds" | "considerationIds", id: string) => {
     const current = form.getValues(field);
@@ -133,10 +134,12 @@ export function ListingForm({
 
       <Card id="ownership" className="scroll-mt-24">
         <CardHeader>
-          <CardTitle className="text-lg">Ownership & lease parties</CardTitle>
+          <CardTitle className="text-lg">
+            {usesNoLease ? "Ownership" : "Ownership & lease parties"}
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <ListingOwnershipFields form={form} showBrokerClause />
+          <ListingOwnershipFields form={form} showBrokerClause={!usesNoLease} />
         </CardContent>
       </Card>
 
@@ -365,12 +368,17 @@ export function ListingForm({
         </CardHeader>
         <CardContent className="space-y-6">
           <p className="rounded-lg border bg-muted/30 p-3 text-xs text-muted-foreground">
-            {usesOwnLease ? (
+            {usesNoLease ? (
+              <>
+                These terms stay on the listing for how you run the property.
+                They are not printed on a lease, because this listing has no
+                lease agreement.
+              </>
+            ) : usesOwnLease ? (
               <>
                 You&apos;re using your own lease agreement, so these terms are
-                not merged into it. They still drive the lease preview
-                fallback and stay saved if you switch back to Lagedra&apos;s
-                standard lease.
+                not merged into it. They still stay saved if you switch back to
+                Lagedra&apos;s standard lease.
               </>
             ) : (
               <>
@@ -479,9 +487,11 @@ export function ListingForm({
                   placeholder="e.g. Refrigerator, washer, dryer, dishwasher"
                   {...form.register("includedAppliancesNotes")}
                 />
-                <p className="text-xs text-muted-foreground">
-                  Leave blank to list your selected amenities in the lease.
-                </p>
+                {!usesNoLease && (
+                  <p className="text-xs text-muted-foreground">
+                    Leave blank to list your selected amenities in the lease.
+                  </p>
+                )}
               </Field>
             </div>
           </div>
@@ -734,6 +744,20 @@ export function ListingForm({
           <label className="flex items-center gap-2 text-sm cursor-pointer">
             <input type="checkbox" {...form.register("instantBookingEnabled")} className="rounded border-input" />
             Instant booking (tenants can book without approval)
+          </label>
+          <label className="flex items-start gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              {...form.register("stayProtectionEnabled")}
+              className="mt-0.5 rounded border-input"
+            />
+            <span>
+              Include Stay Protection (Truvi)
+              <span className="block text-xs text-muted-foreground font-normal">
+                Guests see and pay the insurance amount when they book. Uncheck
+                if this listing does not need insurance.
+              </span>
+            </span>
           </label>
           <Field label="Virtual tour URL (optional)">
             <Input type="url" placeholder="https://..." {...form.register("virtualTourUrl")} />

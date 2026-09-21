@@ -12,7 +12,9 @@ public sealed record ChannelListingMapDto(
     string ProviderListingId,
     Guid? ListingId,
     string? Title,
-    DateTime? LastImportedAt);
+    DateTime? LastImportedAt,
+    bool SyncPriceFromPms,
+    bool SyncCalendarFromPms);
 
 public static class ChannelListingMapMapper
 {
@@ -25,6 +27,8 @@ public static class ChannelListingMapMapper
             map.ProviderListingId,
             map.ListingId,
             map.Title,
-            map.LastImportedAt);
+            map.LastImportedAt,
+            map.SyncPriceFromPms,
+            map.SyncCalendarFromPms);
     }
 }

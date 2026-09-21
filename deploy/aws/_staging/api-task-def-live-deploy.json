@@ -11,7 +11,7 @@
   "containerDefinitions": [
     {
       "name": "api",
-      "image": "930218374225.dkr.ecr.us-west-1.amazonaws.com/lagedra/api@sha256:0df1c157fa05b38806b2b91042be2b7969ae69865b7b0ba6d56dc731e4762ea1",
+      "image": "930218374225.dkr.ecr.us-west-1.amazonaws.com/lagedra/api@sha256:c7b8d66cce86612e29b4157ceefdcf9c99c564b1a84bd70f7a5b95cabef83864",
       "essential": true,
       "portMappings": [
         {
@@ -170,7 +170,7 @@
         },
         {
           "name": "Insurance__Truvi__BaseUrl",
-          "value": "https://developer.api.truvi.com/screen-and-protect-sandbox"
+          "value": "https://developer.api.truvi.com/screen-and-protect"
         },
         {
           "name": "Insurance__Truvi__CompanyName",

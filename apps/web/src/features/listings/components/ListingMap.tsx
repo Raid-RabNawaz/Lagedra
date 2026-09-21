@@ -18,7 +18,7 @@ type ListingMapProps = {
   highlightedId: string | null;
   onHover: (id: string | null) => void;
   onBoundsChange: (bounds: MapBounds) => void;
-  flyTo?: { lat: number; lng: number; zoom?: number } | null;
+  flyTo?: { lat: number; lng: number; zoom?: number; bounds?: MapBounds } | null;
   searchOnMove: boolean;
 };
 
@@ -67,6 +67,13 @@ function MapEvents({
   const map = useMapEvents({
     moveend: () => {
       if (!searchOnMoveRef.current) return;
+      // The first settle is the default/fit view, not a user pan. Sending
+      // those bounds immediately re-filters the result set and hides pins
+      // that were used to frame the map.
+      if (!initialDispatched.current) {
+        initialDispatched.current = true;
+        return;
+      }
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
         onBoundsRef.current(extractBounds(map));
@@ -74,22 +81,16 @@ function MapEvents({
     },
     zoomend: () => {
       if (!searchOnMoveRef.current) return;
+      if (!initialDispatched.current) {
+        initialDispatched.current = true;
+        return;
+      }
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
         onBoundsRef.current(extractBounds(map));
       }, 400);
     },
   });
-
-  useEffect(() => {
-    if (initialDispatched.current) return;
-    initialDispatched.current = true;
-    // Defer to next tick so the map has settled its size/zoom.
-    const handle = setTimeout(() => {
-      onBoundsRef.current(extractBounds(map));
-    }, 50);
-    return () => clearTimeout(handle);
-  }, [map]);
 
   return null;
 }
@@ -101,9 +102,21 @@ function FlyToHandler({ flyTo }: { flyTo: ListingMapProps["flyTo"] }) {
   useEffect(() => {
     if (
       flyTo &&
-      (flyTo.lat !== prevFlyTo.current?.lat || flyTo.lng !== prevFlyTo.current?.lng)
+      (flyTo.lat !== prevFlyTo.current?.lat
+        || flyTo.lng !== prevFlyTo.current?.lng
+        || flyTo.bounds !== prevFlyTo.current?.bounds)
     ) {
-      map.flyTo([flyTo.lat, flyTo.lng], flyTo.zoom ?? 12, { duration: 1.2 });
+      if (flyTo.bounds) {
+        map.fitBounds(
+          [
+            [flyTo.bounds.swLat, flyTo.bounds.swLng],
+            [flyTo.bounds.neLat, flyTo.bounds.neLng],
+          ],
+          { padding: [40, 40], maxZoom: 13, animate: true },
+        );
+      } else {
+        map.flyTo([flyTo.lat, flyTo.lng], flyTo.zoom ?? 12, { duration: 1.2 });
+      }
     }
     prevFlyTo.current = flyTo;
   }, [flyTo, map]);

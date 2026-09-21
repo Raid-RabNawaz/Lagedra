@@ -78,7 +78,7 @@ export function ListingOwnershipFields({
           <RoleOption
             selected={managerRole === "PropertyManager"}
             title="I am the property manager"
-            detail="You manage this property. You can name the home owner now or add them later before you submit for review."
+            detail="You manage this property. You can name the home owner now or add them later."
             onSelect={() => setRole("PropertyManager")}
           />
         </div>
@@ -87,9 +87,8 @@ export function ListingOwnershipFields({
       {managerRole === "PropertyManager" && (
         <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
           <p className="text-xs text-muted-foreground">
-            Optional for now. Look up the home owner by the email on their Lagedra account.
-            They will be named on the lease and asked to consent to the tenancy. You will
-            need this before submitting the listing for review.
+            Optional. Look up the home owner by the email on their Lagedra account.
+            They will be named on the lease and asked to consent to the tenancy.
           </p>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
             <div className="min-w-0 flex-1 space-y-2">

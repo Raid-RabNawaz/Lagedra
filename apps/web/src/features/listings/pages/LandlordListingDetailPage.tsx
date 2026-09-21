@@ -195,6 +195,11 @@ export const LandlordListingDetailPage = () => {
                 Instant book
               </Badge>
             )}
+            {listing.stayProtectionEnabled !== false && (
+              <Badge variant="outline" className="gap-1">
+                Stay protection
+              </Badge>
+            )}
           </div>
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl truncate">{listing.title}</h1>
           <p className="mt-1 text-sm text-muted-foreground">

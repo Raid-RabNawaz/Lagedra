@@ -49,7 +49,8 @@ public sealed record ListingDetailsDto(
     bool IncludeBrokerClause = false,
     ListingHomeOwnerDto? HomeOwner = null,
     LeaseAgreementSource LeaseAgreementSource = LeaseAgreementSource.LagedraTemplate,
-    CustomLeaseDocumentDto? CustomLeaseDocument = null);
+    CustomLeaseDocumentDto? CustomLeaseDocument = null,
+    bool StayProtectionEnabled = true);
 
 public sealed record ListingHomeOwnerDto(
     Guid UserId,

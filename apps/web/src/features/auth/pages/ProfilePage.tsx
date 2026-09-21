@@ -32,12 +32,13 @@ import {
 import { authApi } from "@/features/auth/services/authApi";
 import { useAuthStore } from "@/app/auth/authStore";
 import { roleLabel, roles } from "@/app/auth/roles";
+import { useModeStore } from "@/app/auth/modeStore";
 import type { UpdateProfileRequest } from "@/api/types";
 import {
   phoneVerificationStatus,
   type ProfileSignalStatus,
 } from "@/features/auth/lib/profileCompleteness";
-import { useHostStripeStatus } from "@/features/host-onboarding/hooks/useHostStripe";
+import { AccountReadinessCard } from "@/features/auth/components/AccountReadinessCard";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -408,6 +409,7 @@ export const ProfilePage = () => {
   // their working data lives in their own workspaces (partner org, cases, …).
   const role = String(user?.role ?? "");
   const isMember = role === roles.member;
+  const mode = useModeStore((s) => s.mode);
   const sections = {
     about: isMember,
     leaseDetails: isMember,
@@ -607,7 +609,7 @@ export const ProfilePage = () => {
                 <span>{isMember ? "Manage trust checks" : "Manage verification"}</span>
                 <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
               </Link>
-              {sections.hosting && (
+              {sections.hosting && mode === "host" && (
                 <Link
                   to="/app/payout-setup"
                   className="flex items-center justify-between text-sm text-primary hover:underline group"
@@ -646,7 +648,12 @@ export const ProfilePage = () => {
 
         {/* Main content */}
         <div className="lg:col-span-2">
-          {sections.hosting && <HostingStatusCard />}
+          {isMember && (
+            <AccountReadinessCard
+              audience={mode === "host" ? "host" : "guest"}
+              className="mb-6"
+            />
+          )}
 
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList>
@@ -975,83 +982,6 @@ export const ProfilePage = () => {
     </div>
   );
 };
-
-function HostingStatusCard() {
-  const { data: stripeStatus } = useHostStripeStatus();
-  const user = useAuthStore((s) => s.user);
-
-  const payoutLabel = stripeStatus
-    ? stripeStatus.payoutsEnabled
-      ? "Active"
-      : stripeStatus.detailsSubmitted &&
-          !(stripeStatus.outstandingRequirements?.length)
-        ? "Under review"
-        : stripeStatus.onboardingStatus === "Pending"
-          ? "Onboarding"
-          : stripeStatus.onboardingStatus === "Restricted"
-            ? "Action needed"
-            : "Set up needed"
-    : "Set up needed";
-  const payoutGood = stripeStatus?.payoutsEnabled === true;
-  const idGood = Boolean(user?.isGovernmentIdVerified);
-  const phoneGood = Boolean(user?.isPhoneVerified);
-
-  return (
-    <Card className="mb-6 border-primary/20 bg-primary/5">
-      <CardHeader>
-        <CardTitle className="text-lg">Hosting profile</CardTitle>
-        <CardDescription>
-          Keep this profile complete to improve booking confidence and payout readiness.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-3 sm:grid-cols-3">
-        <HostStatTile
-          label="Identity"
-          value={idGood ? "Verified" : "Pending"}
-          good={idGood}
-          to="/app/verification#kyc"
-        />
-        <HostStatTile
-          label="Phone"
-          value={phoneGood ? "Verified" : "Pending"}
-          good={phoneGood}
-          to="/app/verification#phone"
-        />
-        <HostStatTile
-          label="Payouts"
-          value={payoutLabel}
-          good={payoutGood}
-          to="/app/payout-setup"
-        />
-      </CardContent>
-    </Card>
-  );
-}
-
-function HostStatTile({
-  label,
-  value,
-  good,
-  to,
-}: {
-  label: string;
-  value: string;
-  good: boolean;
-  to: string;
-}) {
-  return (
-    <Link
-      to={to}
-      className="group rounded-lg border bg-background p-3 transition-colors hover:border-primary/40 hover:bg-muted/40"
-    >
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <div className="mt-1 flex items-center justify-between gap-2">
-        <p className={`text-sm font-medium ${good ? "text-emerald-600" : ""}`}>{value}</p>
-        <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
-      </div>
-    </Link>
-  );
-}
 
 function AccountAndDataSection() {
   const navigate = useNavigate();

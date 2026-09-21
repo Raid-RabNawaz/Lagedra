@@ -2,10 +2,11 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { hostStripeApi } from "@/features/host-onboarding/services/hostStripeApi";
 import type { SavePaymentDetailsRequest } from "@/api/types";
 
-export function useHostStripeStatus() {
+export function useHostStripeStatus(options: { enabled?: boolean } = {}) {
   return useQuery({
     queryKey: ["hostStripe", "status"],
     queryFn: () => hostStripeApi.getStatus(),
+    enabled: options.enabled ?? true,
     // Always re-sync from Stripe when landing back from Account Links.
     staleTime: 0,
     refetchOnMount: "always",

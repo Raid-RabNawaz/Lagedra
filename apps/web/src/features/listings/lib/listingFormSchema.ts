@@ -66,6 +66,7 @@ export const listingFormSchema = z
     maxStayDays: z.number().int().min(30).max(180),
     squareFootage: optionalInt,
     instantBookingEnabled: z.boolean(),
+    stayProtectionEnabled: z.boolean(),
     virtualTourUrl: z.string().optional().nullable(),
     managerRole: z.enum(listingManagerRoles),
     homeOwnerUserId: z.string().optional().nullable(),
@@ -117,13 +118,14 @@ export const listingFormSchema = z
     rentCapJustCauseExempt: z.boolean(),
     // Which lease binds bookings. The document itself is uploaded separately
     // (it needs a listing id), so the form only tracks whether one is attached.
-    leaseAgreementSource: z.enum(["LagedraTemplate", "HostProvided"]),
+    leaseAgreementSource: z.enum(["LagedraTemplate", "HostProvided", "None"]),
     hasCustomLeaseDocument: z.boolean(),
   })
   .refine(
-    (d) => d.leaseAgreementSource === "LagedraTemplate" || d.hasCustomLeaseDocument,
+    (d) =>
+      d.leaseAgreementSource !== "HostProvided" || d.hasCustomLeaseDocument,
     {
-      message: "Upload your lease agreement, or use Lagedra's standard lease",
+      message: "Upload your lease agreement, use Lagedra's standard lease, or choose no lease",
       path: ["hasCustomLeaseDocument"],
     },
   )
@@ -216,6 +218,7 @@ export const defaultListingFormValues: ListingFormValues = {
   maxStayDays: 180,
   squareFootage: undefined,
   instantBookingEnabled: false,
+  stayProtectionEnabled: true,
   virtualTourUrl: "",
   managerRole: "Owner",
   homeOwnerUserId: "",

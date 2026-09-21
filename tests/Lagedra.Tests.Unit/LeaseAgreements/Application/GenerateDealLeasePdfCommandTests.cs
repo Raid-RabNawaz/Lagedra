@@ -76,6 +76,43 @@ public class GenerateDealLeasePdfCommandTests
     }
 
     [Fact]
+    public async Task Skips_generation_when_the_listing_has_no_lease()
+    {
+        var listingId = Guid.NewGuid();
+        _store.GetByDealIdAsync(_dealId, Arg.Any<CancellationToken>()).Returns((DealLeaseDocument?)null);
+        _deals.GetDealDetailsAsync(_dealId, Arg.Any<CancellationToken>())
+            .Returns(new DealApplicationDetailsDto(
+                Guid.NewGuid(),
+                _dealId,
+                listingId,
+                Guid.NewGuid(),
+                Guid.NewGuid(),
+                new DateOnly(2026, 10, 1),
+                new DateOnly(2026, 11, 1),
+                31,
+                300_000,
+                300_000,
+                0,
+                null));
+        _listings.GetListingDetailsAsync(listingId, Arg.Any<CancellationToken>())
+            .Returns(new ListingDetailsDto(
+                listingId,
+                Guid.NewGuid(),
+                30,
+                180,
+                300_000,
+                300_000,
+                "US-CA",
+                LeaseAgreementSource: "None"));
+
+        var result = await CreateHandler().Handle(new GenerateDealLeasePdfCommand(_dealId), CancellationToken.None);
+
+        result.IsFailure.Should().BeTrue();
+        result.Error.Code.Should().Be("LeaseAgreement.NotUsed");
+        await _filler.DidNotReceiveWithAnyArgs().FillForDealAsync(default, default);
+    }
+
+    [Fact]
     public async Task Fails_when_fill_throws_and_no_stored_pdf_exists()
     {
         _store.GetByDealIdAsync(_dealId, Arg.Any<CancellationToken>()).Returns((DealLeaseDocument?)null);

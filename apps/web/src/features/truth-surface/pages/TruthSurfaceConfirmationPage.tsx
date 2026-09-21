@@ -20,6 +20,7 @@ import { TruthSurfaceStatusBadge } from "@/features/truth-surface/components/Tru
 import { TruthSnapshotViewer } from "@/features/truth-surface/components/TruthSnapshotViewer";
 import { AgreementDocument } from "@/features/truth-surface/components/AgreementDocument";
 import { LeaseAgreementDownloadButton } from "@/features/truth-surface/components/LeaseAgreementDownloadButton";
+import { listingHasLeaseAgreement } from "@/features/listings/lib/leaseAgreement";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -291,7 +292,10 @@ export const TruthSurfaceConfirmationPage = () => {
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
-              {isConfirmed && (isTenant || isLandlord) && (
+              {isConfirmed
+                && (isTenant || isLandlord)
+                && deal != null
+                && listingHasLeaseAgreement(deal.leaseAgreementSource) && (
                 <LeaseAgreementDownloadButton dealId={snapshot.dealId} />
               )}
             </div>

@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { UseFormReturn } from "react-hook-form";
 import { FileText, Loader2, ShieldCheck, Trash2, Upload } from "lucide-react";
-import type { ListingDetailsDto } from "@/api/types";
+import type { LeaseAgreementSource, ListingDetailsDto } from "@/api/types";
 import { listingApi } from "@/features/listings/services/listingApi";
 import type { ListingFormValues } from "@/features/listings/lib/listingFormSchema";
 import { ListingLeaseSpecimenPreview } from "@/features/listings/components/ListingLeaseSpecimenPreview";
@@ -17,6 +17,31 @@ const ACCEPTED_TYPES = [
 ];
 const MAX_BYTES = 10 * 1024 * 1024;
 
+const OPTIONS: {
+  value: LeaseAgreementSource;
+  title: string;
+  description: string;
+}[] = [
+  {
+    value: "LagedraTemplate",
+    title: "Lagedra / California lease",
+    description:
+      "Our counsel-vetted lease for your property's jurisdiction. Tenant and landlord names, dates, rent and your lease terms are filled in automatically when a booking is confirmed.",
+  },
+  {
+    value: "HostProvided",
+    title: "Upload your own lease",
+    description:
+      "Attached to every booking exactly as you upload it. Leave blanks for the tenant's name, dates and signatures — and do not include anyone's personal details, since prospective tenants can read this before booking.",
+  },
+  {
+    value: "None",
+    title: "No lease agreement",
+    description:
+      "This listing will not show or attach a lease. Bookings still follow your house rules, cancellation policy and Lagedra terms.",
+  },
+];
+
 type ListingLeaseAgreementEditorProps = {
   form: UseFormReturn<ListingFormValues>;
   /**
@@ -27,10 +52,10 @@ type ListingLeaseAgreementEditorProps = {
 };
 
 /**
- * Lets a host choose between Lagedra's jurisdiction lease and their own
- * uploaded document. Used by both the create wizard and the edit form; the
- * upload saves immediately through the listing-scoped endpoint, while the
- * choice itself rides along with the surrounding form save.
+ * Lets a host choose Lagedra's jurisdiction lease, their own uploaded
+ * document, or no lease at all. Used by both the create wizard and the edit
+ * form; the upload saves immediately through the listing-scoped endpoint,
+ * while the choice itself rides along with the surrounding form save.
  */
 export function ListingLeaseAgreementEditor({
   form,
@@ -43,6 +68,7 @@ export function ListingLeaseAgreementEditor({
 
   const source = form.watch("leaseAgreementSource");
   const usesOwnLease = source === "HostProvided";
+  const usesLagedraLease = source === "LagedraTemplate";
   const document = listing?.customLeaseDocument ?? null;
 
   const uploadMutation = useMutation({
@@ -60,9 +86,12 @@ export function ListingLeaseAgreementEditor({
     onSuccess: () => {
       setUploadError(null);
       form.setValue("hasCustomLeaseDocument", false, { shouldDirty: true });
-      // The server also falls the listing back to the standard lease, so keep
-      // the form in step rather than leaving it pointing at a deleted file.
-      form.setValue("leaseAgreementSource", "LagedraTemplate", { shouldDirty: true, shouldValidate: true });
+      if (form.getValues("leaseAgreementSource") === "HostProvided") {
+        form.setValue("leaseAgreementSource", "LagedraTemplate", {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+      }
       void queryClient.invalidateQueries({ queryKey: ["listing", listing!.id] });
     },
     onError: (error: unknown) => setUploadError(readErrorDetail(error)),
@@ -88,28 +117,43 @@ export function ListingLeaseAgreementEditor({
 
   return (
     <div className="space-y-4">
-      <label className="flex items-start gap-3 rounded-lg border p-4 cursor-pointer hover:bg-muted/30 transition-colors">
-        <input
-          type="checkbox"
-          className="mt-1 rounded border-input"
-          checked={!usesOwnLease}
-          onChange={(e) => setSource(e.target.checked ? "LagedraTemplate" : "HostProvided")}
-        />
-        <div className="space-y-1">
-          <p className="text-sm font-medium flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-muted-foreground" />
-            Use Lagedra&apos;s standard lease agreement
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Our counsel-vetted lease for your property&apos;s jurisdiction. Tenant and
-            landlord names, dates, rent and your lease terms are filled in
-            automatically when a booking is confirmed. Download the blank
-            copy before you decide.
-          </p>
-        </div>
-      </label>
+      <fieldset className="space-y-3">
+        <legend className="sr-only">Lease agreement</legend>
+        {OPTIONS.map((option) => {
+          const selected = source === option.value;
+          return (
+            <label
+              key={option.value}
+              className={cn(
+                "flex items-start gap-3 rounded-lg border p-4 cursor-pointer hover:bg-muted/30 transition-colors",
+                selected && "border-primary bg-primary/5",
+              )}
+            >
+              <input
+                type="radio"
+                name="leaseAgreementSource"
+                className="mt-1"
+                checked={selected}
+                onChange={() => setSource(option.value)}
+              />
+              <div className="space-y-1">
+                <p className="text-sm font-medium flex items-center gap-2">
+                  {option.value === "LagedraTemplate" && (
+                    <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  {option.value === "HostProvided" && (
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  {option.title}
+                </p>
+                <p className="text-xs text-muted-foreground">{option.description}</p>
+              </div>
+            </label>
+          );
+        })}
+      </fieldset>
 
-      {!usesOwnLease && (
+      {usesLagedraLease && (
         <div className="space-y-2 rounded-lg border p-4">
           <p className="text-sm font-medium">Lagedra&apos;s standard lease</p>
           <p className="text-xs text-muted-foreground">
@@ -137,10 +181,7 @@ export function ListingLeaseAgreementEditor({
           <div>
             <p className="text-sm font-medium">Your own lease agreement</p>
             <p className="text-xs text-muted-foreground">
-              Attached to every booking exactly as you upload it. Because we
-              cannot fill it in for you, leave blanks for the tenant&apos;s name,
-              dates and signatures — and do not include anyone&apos;s personal
-              details, since prospective tenants can read this before booking.
+              PDF or Word (.docx), up to 10 MB.
             </p>
           </div>
 
@@ -204,7 +245,6 @@ export function ListingLeaseAgreementEditor({
                 {uploadMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Choose a file
               </Button>
-              <p className="text-xs text-muted-foreground">PDF or Word (.docx), up to 10 MB</p>
               <input
                 ref={fileInputRef}
                 type="file"

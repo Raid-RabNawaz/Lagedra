@@ -49,6 +49,7 @@ describe("parseListingImportWorkbook", () => {
         petsAllowed: "Yes",
         amenities: "wifi, Dishwasher",
         instantBooking: "Yes",
+        stayProtection: "No",
       }),
     ]);
 
@@ -66,6 +67,7 @@ describe("parseListingImportWorkbook", () => {
     expect(row.values!.checkInTime).toBe("16:00");
     expect(row.values!.petsAllowed).toBe(true);
     expect(row.values!.instantBookingEnabled).toBe(true);
+    expect(row.values!.stayProtectionEnabled).toBe(false);
     expect(row.values!.amenityIds).toEqual(["a-wifi", "a-dishwasher"]);
     // Defaults for columns left blank.
     expect(row.values!.minStayDays).toBe(30);

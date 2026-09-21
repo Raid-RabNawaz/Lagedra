@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { ListingDetailsDto } from "@/api/types";
+import { leaseAgreementChoiceLabel, listingHasLeaseAgreement } from "./leaseAgreement";
 import {
   defaultListingFormValues,
   listingFormSchema,
@@ -74,6 +75,57 @@ describe("lease agreement source", () => {
 
     expect(form.leaseAgreementSource).toBe("LagedraTemplate");
     expect(form.hasCustomLeaseDocument).toBe(false);
+  });
+
+  it("accepts no lease agreement without an uploaded document", () => {
+    const result = listingFormSchema.safeParse(
+      values({ leaseAgreementSource: "None", hasCustomLeaseDocument: false }),
+    );
+
+    expect(result.success).toBe(true);
+    expect(toCreateListingRequest(values({ leaseAgreementSource: "None" })).leaseAgreementSource).toBe(
+      "None",
+    );
+  });
+
+  it("round-trips a listing that opted out of a lease", () => {
+    const form = listingDetailsToFormValues({
+      ...baseListing,
+      leaseAgreementSource: "None",
+    });
+
+    expect(form.leaseAgreementSource).toBe("None");
+    expect(form.hasCustomLeaseDocument).toBe(false);
+  });
+
+  it("hides tenant-facing lease UI only when the host chose none", () => {
+    expect(listingHasLeaseAgreement("None")).toBe(false);
+    expect(listingHasLeaseAgreement("LagedraTemplate")).toBe(true);
+    expect(listingHasLeaseAgreement("HostProvided")).toBe(true);
+    expect(listingHasLeaseAgreement(undefined)).toBe(true);
+    expect(leaseAgreementChoiceLabel("None")).toBe("No lease agreement");
+  });
+});
+
+describe("stay protection opt-in", () => {
+  it("defaults new listings to include Stay Protection", () => {
+    expect(defaultListingFormValues.stayProtectionEnabled).toBe(true);
+    expect(toCreateListingRequest(values()).stayProtectionEnabled).toBe(true);
+    expect(toUpdateListingRequest(values()).stayProtectionEnabled).toBe(true);
+  });
+
+  it("sends the host choice on create and update", () => {
+    const form = values({ stayProtectionEnabled: false });
+
+    expect(toCreateListingRequest(form).stayProtectionEnabled).toBe(false);
+    expect(toUpdateListingRequest(form).stayProtectionEnabled).toBe(false);
+  });
+
+  it("round-trips an existing listing's Stay Protection choice", () => {
+    expect(listingDetailsToFormValues(baseListing).stayProtectionEnabled).toBe(true);
+    expect(
+      listingDetailsToFormValues({ ...baseListing, stayProtectionEnabled: false }).stayProtectionEnabled,
+    ).toBe(false);
   });
 });
 

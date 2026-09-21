@@ -213,6 +213,16 @@ namespace ChannelIntegration.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<bool>("SyncCalendarFromPms")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
+                    b.Property<bool>("SyncPriceFromPms")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("Title")
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");

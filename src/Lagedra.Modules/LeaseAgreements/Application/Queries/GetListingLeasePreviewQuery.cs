@@ -54,6 +54,11 @@ public sealed class GetListingLeasePreviewQueryHandler(
             return Failure("Listing.NotFound", "Listing not found.");
         }
 
+        if (string.Equals(listing.LeaseAgreementSource, "None", StringComparison.Ordinal))
+        {
+            return Failure("LeaseAgreement.NotUsed", "This listing does not use a lease agreement.");
+        }
+
         var usesHostDocument =
             string.Equals(listing.LeaseAgreementSource, "HostProvided", StringComparison.Ordinal)
             && listing.CustomLeaseDocument is not null;

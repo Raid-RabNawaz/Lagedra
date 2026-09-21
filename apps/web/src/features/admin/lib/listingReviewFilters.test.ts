@@ -135,4 +135,12 @@ describe("filterListingReviewItems", () => {
     ).toEqual(["listing-3"]);
     expect(filterListingReviewItems([withoutFlag], filters({ lease: "custom" }))).toHaveLength(0);
   });
+
+  it("filters listings that opted out of a lease", () => {
+    const none = item({ id: "listing-4", leaseAgreementSource: "None" });
+    expect(filterListingReviewItems([none], filters({ lease: "none" })).map((i) => i.id)).toEqual([
+      "listing-4",
+    ]);
+    expect(filterListingReviewItems([none], filters({ lease: "standard" }))).toHaveLength(0);
+  });
 });

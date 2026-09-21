@@ -83,18 +83,33 @@ public sealed partial class ListingImporter(
         }
         else if (listing.Status is ListingStatus.Draft or ListingStatus.Denied)
         {
-            // Refresh editable drafts with the latest channel content. Published
-            // listings are left untouched (we only re-affirm the mapping).
+            // Refresh draft/denied content. Rent stays Lagedra-owned unless
+            // the host opted this listing into PMS price sync.
+            var rent = request.SyncPriceFromPms ? monthlyRentCents : listing.MonthlyRentCents;
+            var deposit = request.SyncPriceFromPms ? maxDepositCents : listing.MaxDepositCents;
+            var previousRent = listing.MonthlyRentCents;
             listing.Update(
                 propertyType,
                 title,
                 description,
-                monthlyRentCents,
+                rent,
                 bedrooms,
                 bathrooms,
                 stayRange,
-                maxDepositCents,
+                deposit,
                 request.SquareFootage);
+            if (request.SyncPriceFromPms && previousRent != rent)
+            {
+                await RecordRentChangeAsync(listing.Id, rent, ct).ConfigureAwait(false);
+            }
+        }
+        else if (request.SyncPriceFromPms
+            && listing.Status is ListingStatus.Published or ListingStatus.Activated)
+        {
+            if (listing.ApplyChannelMonthlyRent(monthlyRentCents))
+            {
+                await RecordRentChangeAsync(listing.Id, monthlyRentCents, ct).ConfigureAwait(false);
+            }
         }
 
         if (!created)
@@ -139,6 +154,16 @@ public sealed partial class ListingImporter(
 
         await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
         return new ListingImportResult(listing.Id, created);
+    }
+
+    private async Task RecordRentChangeAsync(Guid listingId, long monthlyRentCents, CancellationToken ct)
+    {
+        var today = DateOnly.FromDateTime(clock.UtcNow);
+        var openRecord = await dbContext.ListingPriceHistory
+            .FirstOrDefaultAsync(h => h.ListingId == listingId && h.EffectiveTo == null, ct)
+            .ConfigureAwait(false);
+        openRecord?.Close(today);
+        dbContext.ListingPriceHistory.Add(ListingPriceHistory.Create(listingId, monthlyRentCents, today));
     }
 
     /// <summary>

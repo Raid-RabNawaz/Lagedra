@@ -219,7 +219,7 @@ export const listingApi = {
     return response.data;
   },
 
-  /** Removes the uploaded lease, returning the listing to Lagedra's standard lease. */
+  /** Removes the uploaded lease. Host-provided listings fall back to Lagedra's standard lease. */
   async removeLeaseDocument(listingId: string): Promise<void> {
     await http.delete(endpoints.listings.leaseDocument(listingId));
   },

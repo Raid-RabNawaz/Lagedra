@@ -28,6 +28,19 @@ public class TruviScreeningServiceTests
     private static readonly DateTime Now = new(2026, 9, 4, 12, 0, 0, DateTimeKind.Utc);
 
     [Fact]
+    public async Task Skips_when_listing_opts_out_of_stay_protection()
+    {
+        var store = new FakeStore();
+        var client = Substitute.For<ITruviScreenAndProtectClient>();
+        var sut = CreateSut(store, client, stayProtectionEnabled: false);
+
+        await sut.RequestForDealAsync(DealId, CancellationToken.None);
+
+        await client.DidNotReceiveWithAnyArgs().CreateAsync(default!, default);
+        store.Items.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task Skips_when_already_screened()
     {
         var store = new FakeStore();
@@ -243,7 +256,8 @@ public class TruviScreeningServiceTests
     private static TruviScreeningService CreateSut(
         FakeStore store,
         ITruviScreenAndProtectClient client,
-        IDealApplicationStatusProvider? deals = null)
+        IDealApplicationStatusProvider? deals = null,
+        bool stayProtectionEnabled = true)
     {
         if (deals is null)
         {
@@ -264,7 +278,8 @@ public class TruviScreeningServiceTests
             PreciseAddress: new ListingAddressDto("12 Main St", "Los Angeles", "CA", "90012", "United States"),
             HouseRules: new ListingHouseRulesDto("15:00", "11:00", 4, false, null, false, false, null, null, null, null),
             Bedrooms: 1,
-            Bathrooms: 1m));
+            Bathrooms: 1m,
+            StayProtectionEnabled: stayProtectionEnabled));
 
         var parties = Substitute.For<ILeasePartyProfileProvider>();
         parties.GetAsync(TenantId, Arg.Any<CancellationToken>()).Returns(new LeasePartyProfileDto(

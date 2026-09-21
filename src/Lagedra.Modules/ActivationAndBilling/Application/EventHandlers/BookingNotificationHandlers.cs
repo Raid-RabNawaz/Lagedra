@@ -424,7 +424,11 @@ public sealed class OnPaymentDisputeResolvedNotify(BillingDbContext db, IMediato
     }
 }
 
-public sealed class OnDealActivatedNotify(IMediator m, IConfiguration configuration)
+public sealed class OnDealActivatedNotify(
+    IMediator m,
+    IConfiguration configuration,
+    IDealApplicationStatusProvider deals,
+    IListingProvider listings)
     : IDomainEventHandler<DealActivatedEvent>
 {
     public async Task Handle(DealActivatedEvent e, CancellationToken ct = default)
@@ -433,11 +437,27 @@ public sealed class OnDealActivatedNotify(IMediator m, IConfiguration configurat
         var frontendUrl = (configuration["App:FrontendUrl"] ?? "http://localhost:3000")
             .TrimEnd('/');
         var dealUrl = $"{frontendUrl}/app/deals/{e.DealId}";
+        var hasLease = await ListingUsesLeaseAsync(e.DealId, ct).ConfigureAwait(false);
         var payload = new Dictionary<string, string>
         {
             ["dealId"] = e.DealId.ToString(),
             ["frontendUrl"] = frontendUrl,
             ["dealUrl"] = dealUrl,
+            ["leaseSubjectSuffix"] = hasLease ? " — lease agreement attached" : "",
+            ["leaseIntroHtml"] = hasLease
+                ? " The signed lease agreement PDF is attached to this email for your records."
+                : "",
+            ["leaseIntroText"] = hasLease
+                ? " The signed lease agreement PDF is attached to this email for your records."
+                : "",
+            ["leaseCta"] = hasLease ? "Open deal &amp; download lease" : "Open your deal",
+            ["leaseCtaText"] = hasLease ? "Open deal & download lease" : "Open your deal",
+            ["leaseFooterHtml"] = hasLease
+                ? "<p style=\"font-size: 13px; color: #666;\">Keep the attached PDF. You can also download it later from your deal page in Lagedra.</p>"
+                : "",
+            ["leaseFooterText"] = hasLease
+                ? "Keep the attached PDF. You can also download it later from your deal page in Lagedra."
+                : "",
         };
 
         await m.Send(new NotifyUserCommand(
@@ -453,6 +473,18 @@ public sealed class OnDealActivatedNotify(IMediator m, IConfiguration configurat
             "Deal complete. Your booking is active and insurance is in place.",
             new Dictionary<string, string>(payload),
             Channels.EmailInAppAndSms, e.DealId, "Deal"), ct).ConfigureAwait(false);
+    }
+
+    private async Task<bool> ListingUsesLeaseAsync(Guid dealId, CancellationToken ct)
+    {
+        var deal = await deals.GetDealDetailsAsync(dealId, ct).ConfigureAwait(false);
+        if (deal is null)
+        {
+            return true;
+        }
+
+        var listing = await listings.GetListingDetailsAsync(deal.ListingId, ct).ConfigureAwait(false);
+        return !string.Equals(listing?.LeaseAgreementSource, "None", StringComparison.Ordinal);
     }
 }
 

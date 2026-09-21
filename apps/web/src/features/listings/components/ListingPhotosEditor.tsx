@@ -13,6 +13,10 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { listingApi } from "@/features/listings/services/listingApi";
+import {
+  imageFilesFromList,
+  uploadListingPhotoFiles,
+} from "@/features/listings/lib/uploadListingPhotoFiles";
 import type { ListingDetailsDto } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -44,6 +48,10 @@ export function ListingPhotosEditor({
   const [photoCaption, setPhotoCaption] = useState("");
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [mediaError, setMediaError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<{
+    completed: number;
+    total: number;
+  } | null>(null);
 
   const hasPhotos = listing.photos.length > 0;
 
@@ -66,11 +74,37 @@ export function ListingPhotosEditor({
     },
   });
 
-  const uploadMediaMutation = useMutation({
-    mutationFn: (params: { file: File; caption?: string | null }) =>
-      listingApi.uploadMedia(id, params.file, params.caption ?? null),
-    onSuccess: () => {
+  const uploadPhotosMutation = useMutation({
+    mutationFn: (files: File[]) =>
+      uploadListingPhotoFiles(id, files, {
+        caption: photoCaption,
+        onProgress: (completed, total) => setUploadProgress({ completed, total }),
+      }),
+    onSuccess: (result) => {
       setPhotoCaption("");
+      if (result.failed > 0 && result.uploaded === 0) {
+        setMediaError("None of the selected photos could be uploaded.");
+      } else if (result.failed > 0) {
+        setMediaError(
+          `${result.uploaded} uploaded. ${result.failed} could not be uploaded.`,
+        );
+      } else {
+        setMediaError(null);
+      }
+      void queryClient.invalidateQueries({ queryKey: ["listing", id] });
+    },
+    onError: (error: unknown) => {
+      const detail =
+        (error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+        (error instanceof Error ? error.message : "Upload failed.");
+      setMediaError(detail);
+    },
+    onSettled: () => setUploadProgress(null),
+  });
+
+  const uploadVideoMutation = useMutation({
+    mutationFn: (file: File) => listingApi.uploadMedia(id, file, null),
+    onSuccess: () => {
       setMediaError(null);
       void queryClient.invalidateQueries({ queryKey: ["listing", id] });
     },
@@ -81,6 +115,9 @@ export function ListingPhotosEditor({
       setMediaError(detail);
     },
   });
+
+  const mediaBusy =
+    uploadPhotosMutation.isPending || uploadVideoMutation.isPending;
 
   const removePhotoMutation = useMutation({
     mutationFn: (photoId: string) => listingApi.removePhoto(id, photoId),
@@ -129,14 +166,14 @@ export function ListingPhotosEditor({
           )}
         </CardTitle>
         <CardDescription>
-          Upload from your device (stored on Lagedra object storage) or add an existing image URL.
-          First photo can be set as cover.
+          Upload one or more photos from your device (stored on Lagedra object storage)
+          or add an existing image URL. First photo can be set as cover.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <fieldset disabled={readOnly} className="min-w-0 space-y-4 border-0 p-0 m-0">
         <div className="space-y-1.5">
-          <Label htmlFor="caption">Caption (optional, applies to next upload)</Label>
+          <Label htmlFor="caption">Caption (optional, applies to this upload)</Label>
           <Input
             id="caption"
             value={photoCaption}
@@ -150,27 +187,34 @@ export function ListingPhotosEditor({
             <Button
               type="button"
               variant="secondary"
-              disabled={readOnly || uploadMediaMutation.isPending}
+              disabled={readOnly || mediaBusy}
               className="relative"
             >
               <label className="cursor-pointer flex items-center">
-                {uploadMediaMutation.isPending ? (
+                {uploadPhotosMutation.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 ) : (
                   <Upload className="h-4 w-4 mr-2" />
                 )}
-                {uploadMediaMutation.isPending ? "Uploading..." : "Upload photo"}
+                {uploadPhotosMutation.isPending && uploadProgress
+                  ? `Uploading ${uploadProgress.completed} of ${uploadProgress.total}...`
+                  : uploadPhotosMutation.isPending
+                    ? "Uploading..."
+                    : "Upload photos"}
                 <input
                   type="file"
                   accept="image/jpeg,image/png,image/gif,image/webp,image/heic,image/heif"
+                  multiple
                   className="absolute inset-0 opacity-0 cursor-pointer"
-                  disabled={uploadMediaMutation.isPending}
+                  disabled={mediaBusy}
                   onChange={(e) => {
-                    const file = e.target.files?.[0];
+                    const files = imageFilesFromList(e.target.files);
                     const inputEl = e.target;
-                    if (file) {
+                    if (files.length > 0) {
                       setMediaError(null);
-                      uploadMediaMutation.mutate({ file, caption: photoCaption });
+                      uploadPhotosMutation.mutate(files);
+                    } else if (e.target.files && e.target.files.length > 0) {
+                      setMediaError("Select JPEG, PNG, GIF, WebP, or HEIC images.");
                     }
                     inputEl.value = "";
                   }}
@@ -181,23 +225,29 @@ export function ListingPhotosEditor({
             <Button
               type="button"
               variant="outline"
-              disabled={uploadMediaMutation.isPending}
+              disabled={mediaBusy}
               className="relative"
             >
               <label className="cursor-pointer flex items-center">
-                <Film className="h-4 w-4 mr-2" />
-                Upload virtual tour video
+                {uploadVideoMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <Film className="h-4 w-4 mr-2" />
+                )}
+                {uploadVideoMutation.isPending
+                  ? "Uploading..."
+                  : "Upload virtual tour video"}
                 <input
                   type="file"
                   accept="video/mp4,video/quicktime,video/webm"
                   className="absolute inset-0 opacity-0 cursor-pointer"
-                  disabled={uploadMediaMutation.isPending}
+                  disabled={mediaBusy}
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     const inputEl = e.target;
                     if (file) {
                       setMediaError(null);
-                      uploadMediaMutation.mutate({ file, caption: null });
+                      uploadVideoMutation.mutate(file);
                     }
                     inputEl.value = "";
                   }}
@@ -206,8 +256,9 @@ export function ListingPhotosEditor({
             </Button>
           </div>
           <p className="text-[11px] text-muted-foreground">
-            Photos: JPEG, PNG, GIF, WebP, HEIC up to 15 MB. Videos: MP4, MOV, WebM up to 100 MB. A video
-            replaces the listing&apos;s virtual tour URL.
+            Select multiple photos at once. JPEG, PNG, GIF, WebP, HEIC up to 15 MB each.
+            Videos: MP4, MOV, WebM up to 100 MB. A video replaces the listing&apos;s virtual
+            tour URL.
           </p>
           {mediaError && <p className="text-sm text-destructive">{mediaError}</p>}
         </div>

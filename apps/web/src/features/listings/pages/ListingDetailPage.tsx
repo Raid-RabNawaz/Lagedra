@@ -38,6 +38,7 @@ import { ConsiderationList } from "@/features/listings/components/ConsiderationL
 import { HouseRulesSection } from "@/features/listings/components/HouseRulesSection";
 import { CancellationPolicySummary } from "@/features/listings/components/CancellationPolicySummary";
 import { ListingLeasePreviewCard } from "@/features/listings/components/ListingLeasePreviewCard";
+import { listingHasLeaseAgreement } from "@/features/listings/lib/leaseAgreement";
 import { ListingCard } from "@/features/listings/components/ListingCard";
 import { PhotoLightbox } from "@/features/listings/components/PhotoLightbox";
 import { PhotoGalleryModal } from "@/features/listings/components/PhotoGalleryModal";
@@ -282,6 +283,11 @@ export const ListingDetailPage = () => {
                   <Zap className="h-3 w-3" /> Instant book
                 </Badge>
               )}
+              {listing.stayProtectionEnabled !== false && (
+                <Badge variant="outline" className="gap-1">
+                  <ShieldCheck className="h-3 w-3" /> Stay protection
+                </Badge>
+              )}
             </div>
 
             <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
@@ -439,12 +445,15 @@ export const ListingDetailPage = () => {
             </>
           )}
 
-          {/* Lease agreement */}
-          <Separator />
-          <section>
-            <h2 className="text-lg font-semibold mb-3">Lease agreement</h2>
-            <ListingLeasePreviewCard listing={listing} isSignedIn={Boolean(user)} />
-          </section>
+          {listingHasLeaseAgreement(listing.leaseAgreementSource) && (
+            <>
+              <Separator />
+              <section>
+                <h2 className="text-lg font-semibold mb-3">Lease agreement</h2>
+                <ListingLeasePreviewCard listing={listing} isSignedIn={Boolean(user)} />
+              </section>
+            </>
+          )}
 
           {listing.hostProfile && (
             <>

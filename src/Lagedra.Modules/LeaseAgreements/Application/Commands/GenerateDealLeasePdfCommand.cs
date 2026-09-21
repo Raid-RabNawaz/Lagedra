@@ -34,8 +34,25 @@ public sealed class GenerateDealLeasePdfCommandHandler(
         var existing = await documentStore.GetByDealIdAsync(request.DealId, cancellationToken)
             .ConfigureAwait(false);
 
-        var hostDocument = await ResolveHostDocumentAsync(request.DealId, cancellationToken)
+        var listing = await ResolveListingAsync(request.DealId, cancellationToken)
             .ConfigureAwait(false);
+
+        if (string.Equals(listing?.LeaseAgreementSource, "None", StringComparison.Ordinal))
+        {
+            if (existing is not null && existing.Content is { Length: > 0 })
+            {
+                return Result<DealLeaseDocument>.Success(existing);
+            }
+
+            return Result<DealLeaseDocument>.Failure(new Error(
+                "LeaseAgreement.NotUsed",
+                "This listing does not use a lease agreement."));
+        }
+
+        var hostDocument = listing is not null
+            && string.Equals(listing.LeaseAgreementSource, "HostProvided", StringComparison.Ordinal)
+                ? listing.CustomLeaseDocument
+                : null;
 
         if (hostDocument is not null)
         {
@@ -92,11 +109,7 @@ public sealed class GenerateDealLeasePdfCommandHandler(
         }
     }
 
-    /// <summary>
-    /// Returns the host's own lease for the deal's listing, or null when the
-    /// listing uses Lagedra's template.
-    /// </summary>
-    private async Task<ListingCustomLeaseDocumentDto?> ResolveHostDocumentAsync(
+    private async Task<ListingDetailsDto?> ResolveListingAsync(
         Guid dealId,
         CancellationToken cancellationToken)
     {
@@ -106,16 +119,9 @@ public sealed class GenerateDealLeasePdfCommandHandler(
             return null;
         }
 
-        var listing = await listingProvider
+        return await listingProvider
             .GetListingDetailsAsync(deal.ListingId, cancellationToken)
             .ConfigureAwait(false);
-
-        if (!string.Equals(listing?.LeaseAgreementSource, "HostProvided", StringComparison.Ordinal))
-        {
-            return null;
-        }
-
-        return listing!.CustomLeaseDocument;
     }
 
     /// <summary>

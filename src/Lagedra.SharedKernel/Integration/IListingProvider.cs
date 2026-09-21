@@ -100,22 +100,37 @@ public sealed record ListingDetailsDto(
     string? ManagerRole = null,
     Guid? HomeOwnerUserId = null,
     bool IncludeBrokerClause = false,
-    // "LagedraTemplate" or "HostProvided" — decides whether the deal's lease is
-    // generated from the jurisdiction template or is the host's own upload.
+    // "LagedraTemplate", "HostProvided", or "None" — decides whether the deal's
+    // lease is generated from the jurisdiction template, is the host's own
+    // upload, or is skipped entirely.
     string? LeaseAgreementSource = null,
-    ListingCustomLeaseDocumentDto? CustomLeaseDocument = null);
+    ListingCustomLeaseDocumentDto? CustomLeaseDocument = null,
+    bool StayProtectionEnabled = true);
+
+public sealed record ListingDateRangeDto(DateOnly CheckIn, DateOnly CheckOut);
 
 public sealed record ListingSummaryInfoDto(
     Guid Id,
     string Title,
     Uri? CoverPhotoUri,
-    string? City);
+    string? City,
+    string? LeaseAgreementSource = null);
 
 public interface IListingProvider
 {
     Task<ListingDetailsDto?> GetListingDetailsAsync(Guid listingId, CancellationToken ct = default);
     Task<bool> IsAvailableAsync(Guid listingId, DateOnly checkIn, DateOnly checkOut, CancellationToken ct = default);
     Task BlockDatesForDealAsync(Guid listingId, Guid dealId, DateOnly checkIn, DateOnly checkOut, CancellationToken ct = default);
+
+    /// <summary>
+    /// Replaces host-blocked ranges with the PMS calendar. Booked (deal)
+    /// blocks stay so paid Lagedra stays are not wiped. No-ops when the
+    /// listing does not exist.
+    /// </summary>
+    Task ReplaceHostBlockedDatesAsync(
+        Guid listingId,
+        IReadOnlyList<ListingDateRangeDto> blockedRanges,
+        CancellationToken ct = default);
     Task<IReadOnlyList<ListingSummaryInfoDto>> GetListingSummariesAsync(IReadOnlyList<Guid> listingIds, CancellationToken ct = default);
 
     /// <summary>

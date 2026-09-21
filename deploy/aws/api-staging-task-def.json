@@ -205,6 +205,10 @@
           "value": "Checkr"
         },
         {
+          "name": "Checkr__PackageSlug",
+          "value": "essential"
+        },
+        {
           "name": "Notifications__ProcessInProcess",
           "value": "true"
         }

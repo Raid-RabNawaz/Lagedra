@@ -41,7 +41,8 @@ public sealed record ListingReviewItemDto(
     // Surfaced so a reviewer knows to read the host's own lease before
     // approving. Does not block approval.
     bool UsesCustomLeaseAgreement = false,
-    string? CustomLeaseFileName = null);
+    string? CustomLeaseFileName = null,
+    string LeaseAgreementSource = "LagedraTemplate");
 
 public sealed class ListListingsForReviewQueryHandler(
     ListingsDbContext dbContext,
@@ -79,7 +80,8 @@ public sealed class ListListingsForReviewQueryHandler(
                 l.PreciseAddress != null ? l.PreciseAddress.Country : null,
                 l.InstantBookingEnabled,
                 l.LeaseAgreementSource == LeaseAgreementSource.HostProvided,
-                l.CustomLeaseDocument != null ? l.CustomLeaseDocument.FileName : null))
+                l.CustomLeaseDocument != null ? l.CustomLeaseDocument.FileName : null,
+                l.LeaseAgreementSource.ToString()))
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
@@ -115,7 +117,8 @@ public sealed class ListListingsForReviewQueryHandler(
                 r.Country,
                 r.InstantBookingEnabled,
                 r.UsesCustomLeaseAgreement,
-                r.CustomLeaseFileName);
+                r.CustomLeaseFileName,
+                r.LeaseAgreementSource);
         }).ToList();
 
         return Result<IReadOnlyList<ListingReviewItemDto>>.Success(items);
@@ -138,5 +141,6 @@ public sealed class ListListingsForReviewQueryHandler(
         string? Country,
         bool InstantBookingEnabled,
         bool UsesCustomLeaseAgreement,
-        string? CustomLeaseFileName);
+        string? CustomLeaseFileName,
+        string LeaseAgreementSource);
 }

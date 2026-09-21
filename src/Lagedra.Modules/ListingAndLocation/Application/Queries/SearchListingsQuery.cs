@@ -61,10 +61,17 @@ public sealed class SearchListingsQueryHandler(
 
         if (!string.IsNullOrWhiteSpace(request.Keyword))
         {
-            var pattern = $"%{request.Keyword.Trim()}%";
-            query = query.Where(l =>
-                EF.Functions.ILike(l.Title, pattern) ||
-                EF.Functions.ILike(l.Description, pattern));
+            foreach (var token in SearchKeywordTokenizer.Tokenize(request.Keyword))
+            {
+                var pattern = $"%{token}%";
+                query = query.Where(l =>
+                    EF.Functions.ILike(l.Title, pattern) ||
+                    EF.Functions.ILike(l.Description, pattern) ||
+                    (l.PreciseAddress != null && (
+                        EF.Functions.ILike(l.PreciseAddress.City, pattern) ||
+                        EF.Functions.ILike(l.PreciseAddress.State, pattern) ||
+                        EF.Functions.ILike(l.PreciseAddress.ZipCode, pattern))));
+            }
         }
 
         if (request.PropertyType.HasValue)

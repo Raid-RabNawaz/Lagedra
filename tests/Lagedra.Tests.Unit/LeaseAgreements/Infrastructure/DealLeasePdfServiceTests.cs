@@ -69,4 +69,26 @@ public class DealLeasePdfServiceTests
 
         result.Should().BeNull();
     }
+
+    [Fact]
+    public async Task GetOrGenerate_returns_null_when_the_listing_has_no_lease()
+    {
+        var dealId = Guid.NewGuid();
+        var mediator = Substitute.For<IMediator>();
+        mediator.Send(Arg.Any<GenerateDealLeasePdfCommand>(), Arg.Any<CancellationToken>())
+            .Returns(Result<DealLeaseDocument>.Failure(
+                new Error("LeaseAgreement.NotUsed", "This listing does not use a lease agreement.")));
+
+        var store = Substitute.For<IDealLeaseDocumentStore>();
+        store.GetByDealIdAsync(dealId, Arg.Any<CancellationToken>()).Returns((DealLeaseDocument?)null);
+
+        var service = new DealLeasePdfService(
+            mediator,
+            store,
+            Substitute.For<ILogger<DealLeasePdfService>>());
+
+        var result = await service.GetOrGenerateAsync(dealId);
+
+        result.Should().BeNull();
+    }
 }

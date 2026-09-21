@@ -32,8 +32,8 @@ public class NotificationTemplateSeederTests
         var template = NotificationTemplateSeeder.EnumerateBaselineTemplates()
             .Single(t => t.TemplateId == "deal_activated" && t.Channel == NotificationChannel.Email);
 
-        template.Subject.Should().Contain("lease agreement");
-        template.HtmlBody.Should().Contain("attached");
+        template.Subject.Should().Contain("{leaseSubjectSuffix}");
+        template.HtmlBody.Should().Contain("{leaseIntroHtml}");
         template.HtmlBody.Should().Contain("{dealUrl}");
     }
 

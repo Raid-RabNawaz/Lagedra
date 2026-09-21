@@ -47,6 +47,7 @@ public sealed class ListingConfiguration : IEntityTypeConfiguration<Listing>
         builder.Property(l => l.DepositPartnerGuaranteedCents);
         builder.Property(l => l.JurisdictionCode).HasMaxLength(50);
         builder.Property(l => l.InstantBookingEnabled).HasDefaultValue(false);
+        builder.Property(l => l.StayProtectionEnabled).HasDefaultValue(true);
         builder.Property(l => l.AcceptsPartnerDirectReservations).HasDefaultValue(true);
         builder.Property(l => l.VirtualTourUrl).HasMaxLength(2000);
 

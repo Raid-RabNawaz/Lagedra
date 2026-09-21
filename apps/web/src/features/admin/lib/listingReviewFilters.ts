@@ -8,7 +8,7 @@ export type ListingReviewFilters = {
   hostName: string;
   propertyType: PropertyType | "";
   title: string;
-  lease: "any" | "custom" | "standard";
+  lease: "any" | "custom" | "standard" | "none";
   instantBooking: ListingReviewTriState;
   hostIdVerified: ListingReviewTriState;
   hostProfile: "any" | "incomplete";
@@ -94,10 +94,8 @@ export function filterListingReviewItems(
       }
     }
 
-    if (filters.lease === "custom" && item.usesCustomLeaseAgreement !== true) {
-      return false;
-    }
-    if (filters.lease === "standard" && item.usesCustomLeaseAgreement === true) {
+    const leaseKind = resolveListingReviewLease(item);
+    if (filters.lease !== "any" && leaseKind !== filters.lease) {
       return false;
     }
 
@@ -118,4 +116,14 @@ export function filterListingReviewItems(
 
     return true;
   });
+}
+
+export function resolveListingReviewLease(
+  item: Pick<ListingReviewItemDto, "leaseAgreementSource" | "usesCustomLeaseAgreement">,
+): "custom" | "standard" | "none" {
+  if (item.leaseAgreementSource === "None") return "none";
+  if (item.leaseAgreementSource === "HostProvided" || item.usesCustomLeaseAgreement === true) {
+    return "custom";
+  }
+  return "standard";
 }

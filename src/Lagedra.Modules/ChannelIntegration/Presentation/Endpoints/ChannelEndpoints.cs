@@ -90,6 +90,19 @@ public static class ChannelEndpoints
             return ToHttpResult(result);
         });
 
+        group.MapPatch("/{id:guid}/listings/{mapId:guid}", async (
+            Guid id,
+            Guid mapId,
+            SetChannelListingSyncRequest req,
+            ClaimsPrincipal user,
+            ISender sender) =>
+        {
+            var result = await sender.Send(new SetChannelListingSyncCommand(
+                id, mapId, GetUserId(user), req.SyncPriceFromPms, req.SyncCalendarFromPms))
+                .ConfigureAwait(false);
+            return ToHttpResult(result);
+        });
+
         group.MapPost("/{id:guid}/disable", async (Guid id, ClaimsPrincipal user, ISender sender) =>
         {
             var result = await sender.Send(new SetChannelStatusCommand(id, GetUserId(user), Enable: false))
@@ -174,7 +187,8 @@ public static class ChannelEndpoints
         error.Code switch
         {
             "Channel.NotFound" or
-            "Channel.ListingNotMapped" => Results.NotFound(error),
+            "Channel.ListingNotMapped" or
+            "Channel.ListingMapNotFound" => Results.NotFound(error),
 
             "Channel.ProviderAlreadyConnected" =>
                 Results.Json(error, statusCode: StatusCodes.Status409Conflict),

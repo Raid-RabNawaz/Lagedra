@@ -164,9 +164,13 @@ public sealed class TruthSurfaceSnapshotBuilder(
             ? listing!.JurisdictionCode!
             : DefaultJurisdictionCode;
 
-        var leaseTemplate = await leaseAgreementTemplateProvider
-            .GetActiveTemplateAsync(jurisdictionCode, cancellationToken)
-            .ConfigureAwait(false);
+        var usesLease = !string.Equals(listing?.LeaseAgreementSource, "None", StringComparison.Ordinal);
+
+        var leaseTemplate = usesLease
+            ? await leaseAgreementTemplateProvider
+                .GetActiveTemplateAsync(jurisdictionCode, cancellationToken)
+                .ConfigureAwait(false)
+            : null;
 
         var jurisdictionPackVersion = leaseTemplate is not null
             ? $"{jurisdictionCode}@v{leaseTemplate.VersionNumber}"
@@ -254,6 +258,8 @@ public sealed class TruthSurfaceSnapshotBuilder(
         IReadOnlyList<ActiveEndorsementInfo> tenantActiveEndorsements,
         SnapshotConsentInput? consent)
     {
+        var usesLease = !string.Equals(listing?.LeaseAgreementSource, "None", StringComparison.Ordinal);
+
         var firstMonth = deal.FirstMonthRentCents ?? 0;
         var deposit = deal.DepositAmountCents ?? 0;
         var insurance = deal.InsuranceFeeCents ?? 0;
@@ -351,12 +357,15 @@ public sealed class TruthSurfaceSnapshotBuilder(
             {
                 ["code"] = jurisdictionCode,
                 ["packVersion"] = jurisdictionPackVersion,
-                ["leaseTemplateVersion"] = jurisdictionPackVersion,
-                ["leaseTemplateId"] = leaseTemplate?.TemplateId.ToString(),
-                ["leaseTemplateVersionId"] = leaseTemplate?.ActiveVersionId.ToString(),
-                ["leaseTemplateVersionNumber"] = leaseTemplate?.VersionNumber,
-                ["leaseTemplateTitle"] = leaseTemplate?.Title,
-                ["leaseTemplateEffectiveDate"] = leaseTemplate?.EffectiveDate?.ToString("o", CultureInfo.InvariantCulture),
+                ["leaseAgreementSource"] = listing?.LeaseAgreementSource ?? "LagedraTemplate",
+                ["leaseTemplateVersion"] = usesLease ? jurisdictionPackVersion : null,
+                ["leaseTemplateId"] = usesLease ? leaseTemplate?.TemplateId.ToString() : null,
+                ["leaseTemplateVersionId"] = usesLease ? leaseTemplate?.ActiveVersionId.ToString() : null,
+                ["leaseTemplateVersionNumber"] = usesLease ? leaseTemplate?.VersionNumber : null,
+                ["leaseTemplateTitle"] = usesLease ? leaseTemplate?.Title : null,
+                ["leaseTemplateEffectiveDate"] = usesLease
+                    ? leaseTemplate?.EffectiveDate?.ToString("o", CultureInfo.InvariantCulture)
+                    : null,
                 ["warning"] = deal.JurisdictionWarning
             },
 

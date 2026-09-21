@@ -49,8 +49,8 @@ internal static class ListingManagementGuard
 
         if (account is null)
         {
-            // Drafts may be saved without an owner. Submit-for-review still
-            // requires one (Listing.SubmitForReview / this guard's error).
+            // Property-manager drafts may be saved and submitted without an
+            // owner. The host can name one later for lease consent.
             if (homeOwnerUserId is null && string.IsNullOrWhiteSpace(homeOwnerEmail))
             {
                 return Result<ResolvedListingManagement>.Success(

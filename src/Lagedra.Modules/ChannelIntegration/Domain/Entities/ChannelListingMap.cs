@@ -21,6 +21,20 @@ public sealed class ChannelListingMap : Entity<Guid>
 
     public DateTime? LastImportedAt { get; private set; }
 
+    /// <summary>
+    /// When true, content sync overwrites this listing's monthly rent from the
+    /// PMS on every run (including published listings). Off by default so a
+    /// host's Lagedra price is not clobbered after the first import.
+    /// </summary>
+    public bool SyncPriceFromPms { get; private set; }
+
+    /// <summary>
+    /// When true, the availability job replaces this listing's host-blocked
+    /// dates from the PMS calendar. Off by default; Lagedra booked stays are
+    /// never removed by that job.
+    /// </summary>
+    public bool SyncCalendarFromPms { get; private set; }
+
     private ChannelListingMap() { }
 
     public static ChannelListingMap Create(
@@ -55,6 +69,15 @@ public sealed class ChannelListingMap : Entity<Guid>
         }
 
         LastImportedAt = clock.UtcNow;
+        UpdatedAt = clock.UtcNow;
+    }
+
+    public void SetSyncPreferences(bool syncPriceFromPms, bool syncCalendarFromPms, IClock clock)
+    {
+        ArgumentNullException.ThrowIfNull(clock);
+
+        SyncPriceFromPms = syncPriceFromPms;
+        SyncCalendarFromPms = syncCalendarFromPms;
         UpdatedAt = clock.UtcNow;
     }
 }

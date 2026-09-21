@@ -53,6 +53,7 @@ export type ColumnKey =
   | "cancellationPolicy"
   | "freeCancellationDays"
   | "instantBooking"
+  | "stayProtection"
   | "amenities"
   | "virtualTourUrl";
 
@@ -252,6 +253,15 @@ export const LISTING_IMPORT_COLUMNS: readonly ListingImportColumn[] = [
     width: 14,
     example: "No",
     note: "Optional. Yes or No. Defaults to No.",
+    options: YES_NO,
+  },
+  {
+    key: "stayProtection",
+    label: "Stay protection",
+    required: false,
+    width: 16,
+    example: "Yes",
+    note: "Optional. Yes or No. Include Truvi Stay Protection (guest pays at booking). Defaults to Yes.",
     options: YES_NO,
   },
   {
@@ -497,6 +507,7 @@ export function mapRowToListing(
   setBoolean("smokingAllowed", (b) => (values.smokingAllowed = b));
   setBoolean("partiesAllowed", (b) => (values.partiesAllowed = b));
   setBoolean("instantBooking", (b) => (values.instantBookingEnabled = b));
+  setBoolean("stayProtection", (b) => (values.stayProtectionEnabled = b));
 
   if (!isBlank(raw.additionalRules)) values.additionalRules = cellText(raw.additionalRules);
   if (!isBlank(raw.virtualTourUrl)) values.virtualTourUrl = cellText(raw.virtualTourUrl);

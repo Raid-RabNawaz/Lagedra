@@ -65,4 +65,16 @@ export const channelsApi = {
     );
     return response.data;
   },
+
+  async setListingSync(
+    connectionId: string,
+    mapId: string,
+    payload: { syncPriceFromPms: boolean; syncCalendarFromPms: boolean },
+  ): Promise<ChannelListingMapDto> {
+    const response = await http.patch<ChannelListingMapDto>(
+      endpoints.channels.listingSync(connectionId, mapId),
+      payload,
+    );
+    return response.data;
+  },
 };

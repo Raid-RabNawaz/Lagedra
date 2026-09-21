@@ -229,6 +229,7 @@ export const ListingReviewPage = () => {
                   <option value="any">Any lease</option>
                   <option value="custom">Host-provided lease</option>
                   <option value="standard">Lagedra template</option>
+                  <option value="none">No lease</option>
                 </Select>
               </div>
               <div className="space-y-1.5">
@@ -545,6 +546,12 @@ function ReviewCard({
               Read it on the listing page before approving — Lagedra&apos;s
               standard lease will not apply to bookings here.
             </span>
+          </div>
+        )}
+        {item.leaseAgreementSource === "None" && (
+          <div className="flex items-start gap-2 rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground">
+            <FileSignature className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>This listing has no lease agreement. Bookings will not attach one.</span>
           </div>
         )}
 

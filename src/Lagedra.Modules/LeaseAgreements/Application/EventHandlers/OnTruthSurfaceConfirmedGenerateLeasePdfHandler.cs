@@ -21,7 +21,14 @@ public sealed partial class OnTruthSurfaceConfirmedGenerateLeasePdfHandler(
 
         if (result.IsFailure)
         {
-            LogPdfFailed(logger, domainEvent.DealId, result.Error.Description);
+            if (string.Equals(result.Error.Code, "LeaseAgreement.NotUsed", StringComparison.Ordinal))
+            {
+                LogPdfSkipped(logger, domainEvent.DealId);
+            }
+            else
+            {
+                LogPdfFailed(logger, domainEvent.DealId, result.Error.Description);
+            }
         }
         else
         {
@@ -31,6 +38,9 @@ public sealed partial class OnTruthSurfaceConfirmedGenerateLeasePdfHandler(
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Lease PDF generation failed for deal {DealId}: {Error}")]
     private static partial void LogPdfFailed(ILogger logger, Guid dealId, string? error);
+
+    [LoggerMessage(Level = LogLevel.Information, Message = "Skipped lease PDF for deal {DealId} — listing does not use a lease agreement")]
+    private static partial void LogPdfSkipped(ILogger logger, Guid dealId);
 
     [LoggerMessage(Level = LogLevel.Information, Message = "Lease PDF generated for deal {DealId}: {FileName}")]
     private static partial void LogPdfGenerated(ILogger logger, Guid dealId, string fileName);

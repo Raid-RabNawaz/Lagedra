@@ -21,6 +21,7 @@ import { useUnreadCount } from "@/features/notifications/hooks/useNotifications"
 import { Badge } from "@/components/ui/badge";
 import type { UserProfileDto } from "@/api/types";
 import { ProfileHealthCard } from "./ProfileHealthCard";
+import { AccountReadinessCard } from "@/features/auth/components/AccountReadinessCard";
 import {
   StatCard,
   SectionCard,
@@ -112,6 +113,8 @@ export function TravelingDashboard({ user }: { user: UserProfileDto }) {
           })}
         </div>
       )}
+
+      <AccountReadinessCard audience="guest" />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard

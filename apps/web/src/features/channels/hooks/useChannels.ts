@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { channelsApi } from "@/features/channels/services/channelsApi";
-import type { ConnectChannelRequest } from "@/api/types";
+import type { ChannelListingMapDto, ConnectChannelRequest } from "@/api/types";
 
 const channelKeys = {
   providers: ["channels", "providers"] as const,
@@ -76,6 +76,32 @@ export function useDisconnectChannel() {
 export function useStartOwnerRezOAuth() {
   return useMutation({
     mutationFn: () => channelsApi.startOwnerRezOAuth(),
+  });
+}
+
+export function useSetChannelListingSync(connectionId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      mapId,
+      syncPriceFromPms,
+      syncCalendarFromPms,
+    }: {
+      mapId: string;
+      syncPriceFromPms: boolean;
+      syncCalendarFromPms: boolean;
+    }) =>
+      channelsApi.setListingSync(connectionId, mapId, {
+        syncPriceFromPms,
+        syncCalendarFromPms,
+      }),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<ChannelListingMapDto[]>(
+        channelKeys.listings(connectionId),
+        (current) =>
+          current?.map((row) => (row.id === updated.id ? updated : row)) ?? current,
+      );
+    },
   });
 }
 

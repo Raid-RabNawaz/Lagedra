@@ -30,7 +30,8 @@ public sealed record UpdateListingRequest(
     Guid? HomeOwnerUserId = null,
     string? HomeOwnerEmail = null,
     bool IncludeBrokerClause = false,
-    LeaseAgreementSource? LeaseAgreementSource = null);
+    LeaseAgreementSource? LeaseAgreementSource = null,
+    bool? StayProtectionEnabled = null);
 
 public sealed record LeaseTermsRequest(
     int RentDueDayOfMonth = 1,

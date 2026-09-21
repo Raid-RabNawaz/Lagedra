@@ -44,7 +44,8 @@ public sealed record UpdateListingCommand(
     Guid? HomeOwnerUserId = null,
     string? HomeOwnerEmail = null,
     bool IncludeBrokerClause = false,
-    LeaseAgreementSource? LeaseAgreementSource = null) : IRequest<Result<ListingDetailsDto>>;
+    LeaseAgreementSource? LeaseAgreementSource = null,
+    bool? StayProtectionEnabled = null) : IRequest<Result<ListingDetailsDto>>;
 
 public sealed class UpdateListingCommandValidator : AbstractValidator<UpdateListingCommand>
 {
@@ -218,6 +219,11 @@ public sealed class UpdateListingCommandHandler(
             if (request.InstantBookingEnabled.HasValue)
             {
                 listing.SetInstantBooking(request.InstantBookingEnabled.Value);
+            }
+
+            if (request.StayProtectionEnabled.HasValue)
+            {
+                listing.SetStayProtection(request.StayProtectionEnabled.Value);
             }
 
             if (request.VirtualTourUrl is not null)

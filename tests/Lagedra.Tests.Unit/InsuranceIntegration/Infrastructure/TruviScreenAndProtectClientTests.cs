@@ -109,9 +109,21 @@ public class TruviScreenAndProtectClientTests
         handler.LastRequest.RequestUri.AbsolutePath.Should().NotEndWith("/cancel");
     }
 
+    [Theory]
+    [InlineData("verificationRequests", "https://developer.api.truvi.com/screen-and-protect/verificationRequests")]
+    [InlineData("verificationRequests/cancel", "https://developer.api.truvi.com/screen-and-protect/verificationRequests/cancel")]
+    public void Production_base_joins_official_paths(string relative, string expected)
+    {
+        var baseAddress = new Uri(TruviScreenAndProtectSettings.ProductionBaseUrl.TrimEnd('/') + "/");
+        new Uri(baseAddress, relative).AbsoluteUri.Should().Be(expected);
+    }
+
     private static TruviScreenAndProtectClient CreateClient(StubHandler handler)
         => new(
-            new HttpClient(handler) { BaseAddress = new Uri("https://developer.api.truvi.com/screen-and-protect-sandbox/") },
+            new HttpClient(handler)
+            {
+                BaseAddress = new Uri(TruviScreenAndProtectSettings.SandboxBaseUrl.TrimEnd('/') + "/"),
+            },
             Options.Create(new TruviScreenAndProtectSettings { SubscriptionKey = "test-key" }),
             NullLogger<TruviScreenAndProtectClient>.Instance);
 

@@ -45,6 +45,18 @@ public class ListingEditabilityTests
             listing.SquareFootage);
 
     [Fact]
+    public void ApplyChannelMonthlyRent_updates_published_rent()
+    {
+        var listing = ReadyForReview();
+        listing.SubmitForReview();
+        listing.ApproveByAdmin(Guid.NewGuid());
+
+        listing.ApplyChannelMonthlyRent(425_000).Should().BeTrue();
+        listing.MonthlyRentCents.Should().Be(425_000);
+        listing.ApplyChannelMonthlyRent(425_000).Should().BeFalse();
+    }
+
+    [Fact]
     public void Published_listing_can_change_marketplace_details()
     {
         var listing = ReadyForReview();

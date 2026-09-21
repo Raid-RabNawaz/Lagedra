@@ -35,6 +35,7 @@ export function listingDetailsToFormValues(listing: ListingDetailsDto): ListingF
     maxStayDays: listing.maxStayDays ?? 180,
     squareFootage: listing.squareFootage ?? undefined,
     instantBookingEnabled: listing.instantBookingEnabled,
+    stayProtectionEnabled: listing.stayProtectionEnabled ?? true,
     virtualTourUrl: listing.virtualTourUrl ?? "",
     managerRole: listing.managerRole ?? "Owner",
     homeOwnerUserId: listing.homeOwnerUserId ?? listing.homeOwner?.userId ?? "",

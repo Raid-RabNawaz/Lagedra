@@ -125,6 +125,8 @@ export const endpoints = {
     disable: (id: string) => `/v1/channels/${id}/disable`,
     sync: (id: string) => `/v1/channels/${id}/sync`,
     listings: (id: string) => `/v1/channels/${id}/listings`,
+    listingSync: (id: string, mapId: string) =>
+      `/v1/channels/${id}/listings/${mapId}`,
     disconnect: (id: string) => `/v1/channels/${id}`,
     ownerRezOAuthStart: "/v1/channels/ownerrez/oauth/start",
   },

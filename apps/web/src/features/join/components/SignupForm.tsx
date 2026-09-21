@@ -205,7 +205,7 @@ export const SignupForm = ({ variant, preLaunch, onBack, onSuccess }: SignupForm
           <Field label="City">
             <input
               className={inputClass}
-              placeholder="Austin, TX"
+              placeholder="Los Angeles, CA"
               disabled={isSubmitting}
               {...form.register("city")}
             />

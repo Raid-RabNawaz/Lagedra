@@ -162,7 +162,7 @@ const STEPS: Step[] = [
     label: "Lease agreement",
     shortLabel: "Lease",
     icon: FileSignature,
-    description: "Use Lagedra's standard lease, or upload your own for this property.",
+    description: "Use Lagedra's California lease, upload your own, or list without a lease.",
     fields: ["leaseAgreementSource", "hasCustomLeaseDocument"],
   },
   {
@@ -171,7 +171,12 @@ const STEPS: Step[] = [
     shortLabel: "Review",
     icon: CheckCircle2,
     description: "Review everything and finish your listing.",
-    fields: ["instantBookingEnabled", "virtualTourUrl", "includeBrokerClause"],
+    fields: [
+      "instantBookingEnabled",
+      "stayProtectionEnabled",
+      "virtualTourUrl",
+      "includeBrokerClause",
+    ],
   },
 ];
 
@@ -949,6 +954,20 @@ function ReviewStep({
             </p>
           </div>
         </label>
+        <label className="flex items-start gap-3 rounded-lg border p-3 cursor-pointer hover:bg-muted/30 transition-colors">
+          <input
+            type="checkbox"
+            {...form.register("stayProtectionEnabled")}
+            className="mt-1 rounded border-input"
+          />
+          <div>
+            <p className="text-sm font-medium">Include Stay Protection (Truvi)</p>
+            <p className="text-xs text-muted-foreground">
+              Guests see and pay the insurance amount when they book. Turn this
+              off if this listing does not need Stay Protection.
+            </p>
+          </div>
+        </label>
         <Field label="Virtual tour URL (optional)">
           <Input
             type="url"
@@ -956,20 +975,22 @@ function ReviewStep({
             {...form.register("virtualTourUrl")}
           />
         </Field>
-        <label className="flex items-start gap-3 rounded-lg border p-3 cursor-pointer hover:bg-muted/30 transition-colors sm:col-span-2">
-          <input
-            type="checkbox"
-            {...form.register("includeBrokerClause")}
-            className="mt-1 rounded border-input"
-          />
-          <div>
-            <p className="text-sm font-medium">Include the broker clause on this listing&apos;s lease</p>
-            <p className="text-xs text-muted-foreground">
-              Adds the broker disclosure addendum using the broker name and DRE license from your
-              profile. Add those under Profile → Broker disclosure if they are not filled in yet.
-            </p>
-          </div>
-        </label>
+        {v.leaseAgreementSource !== "None" && (
+          <label className="flex items-start gap-3 rounded-lg border p-3 cursor-pointer hover:bg-muted/30 transition-colors sm:col-span-2">
+            <input
+              type="checkbox"
+              {...form.register("includeBrokerClause")}
+              className="mt-1 rounded border-input"
+            />
+            <div>
+              <p className="text-sm font-medium">Include the broker clause on this listing&apos;s lease</p>
+              <p className="text-xs text-muted-foreground">
+                Adds the broker disclosure addendum using the broker name and DRE license from your
+                profile. Add those under Profile → Broker disclosure if they are not filled in yet.
+              </p>
+            </div>
+          </label>
+        )}
       </div>
 
       <Separator />
@@ -988,10 +1009,12 @@ function ReviewStep({
                 : "Home owner"
             }
           />
-          <ReviewRow
-            label="Broker clause"
-            value={v.includeBrokerClause ? "Included on the lease" : "Not included"}
-          />
+          {v.leaseAgreementSource !== "None" && (
+            <ReviewRow
+              label="Broker clause"
+              value={v.includeBrokerClause ? "Included on the lease" : "Not included"}
+            />
+          )}
           <ReviewRow
             label="Description"
             value={v.description ? `${v.description.slice(0, 120)}${v.description.length > 120 ? "…" : ""}` : "—"}
@@ -1112,7 +1135,9 @@ function ReviewStep({
             value={
               v.leaseAgreementSource === "HostProvided"
                 ? "Your own lease agreement"
-                : "Lagedra standard lease"
+                : v.leaseAgreementSource === "None"
+                  ? "No lease agreement"
+                  : "Lagedra / California lease"
             }
           />
           {v.leaseAgreementSource === "HostProvided" && (

@@ -46,7 +46,8 @@ public sealed record CreateListingCommand(
     bool IncludeBrokerClause = false,
     LeaseAgreementSource LeaseAgreementSource = LeaseAgreementSource.LagedraTemplate,
     ListingAddedVia AddedVia = ListingAddedVia.Manual,
-    string? AddedViaDetail = null) : IRequest<Result<ListingDetailsDto>>;
+    string? AddedViaDetail = null,
+    bool StayProtectionEnabled = true) : IRequest<Result<ListingDetailsDto>>;
 
 public sealed class CreateListingCommandValidator : AbstractValidator<CreateListingCommand>
 {
@@ -162,6 +163,7 @@ public sealed class CreateListingCommandHandler(
         }
 
         listing.SetInstantBooking(request.InstantBookingEnabled);
+        listing.SetStayProtection(request.StayProtectionEnabled);
         if (request.VirtualTourUrl is not null)
         {
             listing.SetVirtualTourUrl(request.VirtualTourUrl);

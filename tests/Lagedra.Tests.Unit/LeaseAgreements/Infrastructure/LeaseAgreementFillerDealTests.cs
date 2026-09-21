@@ -102,6 +102,12 @@ public class LeaseAgreementFillerDealTests
         public Task BlockDatesForDealAsync(Guid listingId, Guid dealId, DateOnly checkIn, DateOnly checkOut, CancellationToken ct = default) =>
             Task.CompletedTask;
 
+        public Task ReplaceHostBlockedDatesAsync(
+            Guid listingId,
+            IReadOnlyList<ListingDateRangeDto> blockedRanges,
+            CancellationToken ct = default) =>
+            Task.CompletedTask;
+
         public Task<IReadOnlyList<ListingSummaryInfoDto>> GetListingSummariesAsync(IReadOnlyList<Guid> listingIds, CancellationToken ct = default) =>
             Task.FromResult<IReadOnlyList<ListingSummaryInfoDto>>([]);
 

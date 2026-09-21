@@ -60,6 +60,15 @@ public sealed class Listing : AggregateRoot<Guid>
     public bool InstantBookingEnabled { get; private set; }
 
     /// <summary>
+    /// When <c>true</c> (default), bookings on this listing include Truvi Stay
+    /// Protection: the guest is quoted and charged the insurance amount, and
+    /// screening runs when the booking is confirmed. When <c>false</c>, the host
+    /// has opted this listing out — no insurance line on the quote and no Truvi
+    /// placement. Replaces the former <c>InsuranceRequired</c> column.
+    /// </summary>
+    public bool StayProtectionEnabled { get; private set; } = true;
+
+    /// <summary>
     /// When <c>true</c> (default), verified partner organizations may create direct
     /// reservations for this listing on behalf of their guests / employees / clients
     /// (Phase 18.7). When <c>false</c>, the landlord has opted this listing out and
@@ -71,7 +80,7 @@ public sealed class Listing : AggregateRoot<Guid>
 
     /// <summary>
     /// Whether the listing creator is the home owner or a property manager.
-    /// Property managers must name <see cref="HomeOwnerUserId"/> so the owner
+    /// Property managers may name <see cref="HomeOwnerUserId"/> so the owner
     /// can consent on the lease for stays longer than 30 days.
     /// </summary>
     public ListingManagerRole ManagerRole { get; private set; } = ListingManagerRole.Owner;
@@ -91,9 +100,15 @@ public sealed class Listing : AggregateRoot<Guid>
 
     /// <summary>
     /// Whether bookings on this listing are bound by Lagedra's template for the
-    /// listing's jurisdiction or by a document the host uploaded themselves.
+    /// listing's jurisdiction, by a document the host uploaded themselves, or
+    /// by no lease at all.
     /// </summary>
     public LeaseAgreementSource LeaseAgreementSource { get; private set; } = LeaseAgreementSource.LagedraTemplate;
+
+    /// <summary>
+    /// True when bookings on this listing should generate or attach a lease.
+    /// </summary>
+    public bool HasLeaseAgreement => LeaseAgreementSource != LeaseAgreementSource.None;
 
     /// <summary>
     /// The host's uploaded lease. Retained when the host switches back to the
@@ -316,6 +331,29 @@ public sealed class Listing : AggregateRoot<Guid>
         }
     }
 
+    /// <summary>
+    /// Overwrites monthly rent from a PMS content sync. Used only when the
+    /// host opted this listing into price sync. Returns false when the amount
+    /// is unchanged so callers can skip price-history rows.
+    /// </summary>
+    public bool ApplyChannelMonthlyRent(long monthlyRentCents)
+    {
+        EnsureEditable();
+
+        if (monthlyRentCents <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(monthlyRentCents), "Monthly rent must be positive.");
+        }
+
+        if (MonthlyRentCents == monthlyRentCents)
+        {
+            return false;
+        }
+
+        MonthlyRentCents = monthlyRentCents;
+        return true;
+    }
+
     public void SetHouseRules(HouseRules houseRules)
     {
         EnsureEditable();
@@ -335,6 +373,7 @@ public sealed class Listing : AggregateRoot<Guid>
     /// <see cref="LeaseAgreementSource.HostProvided"/> is allowed before a
     /// document exists so the host can make the choice and upload in either
     /// order; <see cref="SubmitForReview"/> is where the pairing is enforced.
+    /// <see cref="LeaseAgreementSource.None"/> skips a lease on this listing.
     /// </summary>
     public void SetLeaseAgreementSource(LeaseAgreementSource source)
     {
@@ -350,14 +389,19 @@ public sealed class Listing : AggregateRoot<Guid>
     }
 
     /// <summary>
-    /// Drops the uploaded lease. Falls the listing back to the Lagedra template
-    /// rather than leaving it pointing at a document that no longer exists.
+    /// Drops the uploaded lease. If the listing was pointing at that file,
+    /// falls back to the Lagedra template rather than leaving a dangling
+    /// HostProvided choice. A listing already set to
+    /// <see cref="LeaseAgreementSource.None"/> stays that way.
     /// </summary>
     public void RemoveCustomLeaseDocument()
     {
         EnsureEditable();
         CustomLeaseDocument = null;
-        LeaseAgreementSource = LeaseAgreementSource.LagedraTemplate;
+        if (LeaseAgreementSource == LeaseAgreementSource.HostProvided)
+        {
+            LeaseAgreementSource = LeaseAgreementSource.LagedraTemplate;
+        }
     }
 
     public void SetCancellationPolicy(CancellationPolicy policy)
@@ -371,6 +415,16 @@ public sealed class Listing : AggregateRoot<Guid>
     {
         EnsureEditable();
         InstantBookingEnabled = enabled;
+    }
+
+    /// <summary>
+    /// Host opt-in for Truvi Stay Protection on this listing. Applies to new
+    /// bookings only; already-snapshotted deals keep their quoted insurance fee.
+    /// </summary>
+    public void SetStayProtection(bool enabled)
+    {
+        EnsureEditable();
+        StayProtectionEnabled = enabled;
     }
 
     /// <summary>
@@ -482,9 +536,9 @@ public sealed class Listing : AggregateRoot<Guid>
 
     /// <summary>
     /// Sets whether the creator is the owner or a property manager, an
-    /// optional home owner account (property managers can add this later;
-    /// it is required before submit-for-review), and whether this listing's
-    /// lease should include the broker disclosure addendum.
+    /// optional home owner account (property managers can add this later),
+    /// and whether this listing's lease should include the broker disclosure
+    /// addendum.
     /// </summary>
     public void SetManagement(
         ListingManagerRole managerRole,
@@ -655,16 +709,10 @@ public sealed class Listing : AggregateRoot<Guid>
             throw new InvalidOperationException("A full property address must be set before submitting for review.");
         }
 
-        if (ManagerRole == ListingManagerRole.PropertyManager && HomeOwnerUserId is null)
-        {
-            throw new InvalidOperationException(
-                "A home owner with a Lagedra account must be selected before submitting a property-manager listing.");
-        }
-
         if (LeaseAgreementSource == LeaseAgreementSource.HostProvided && CustomLeaseDocument is null)
         {
             throw new InvalidOperationException(
-                "Upload your lease agreement, or switch to Lagedra's standard lease, before submitting for review.");
+                "Upload your lease agreement, switch to Lagedra's standard lease, or choose no lease agreement before submitting for review.");
         }
 
         Status = ListingStatus.InReview;

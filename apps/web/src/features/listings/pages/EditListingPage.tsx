@@ -87,8 +87,6 @@ export const EditListingPage = () => {
   const hasLocation = listing ? listing.latitude != null && listing.longitude != null : false;
   const hasPreciseAddress = listing ? Boolean(listing.preciseAddress) : false;
   const hasPhotos = listing ? listing.photos.length > 0 : false;
-  const isPropertyManager = listing?.managerRole === "PropertyManager";
-  const hasHomeOwner = Boolean(listing?.homeOwnerUserId || listing?.homeOwner?.userId);
   const isDenied = listing?.status === "Denied";
   const isInReview = listing?.status === "InReview";
   const isLive = listing?.status === "Published" || listing?.status === "Activated";
@@ -120,8 +118,7 @@ export const EditListingPage = () => {
     && hasLocation
     && hasPreciseAddress
     && !payoutBlocks
-    && profileComplete
-    && (!isPropertyManager || hasHomeOwner);
+    && profileComplete;
   const submitLabel = isDenied ? "Resubmit for review" : "Submit for review";
   const submitBlockedReason = !listing
     ? ""
@@ -137,9 +134,7 @@ export const EditListingPage = () => {
             ? "Set up your payout details before submitting this listing."
             : !profileComplete
               ? `Complete at least ${MIN_HOST_PROFILE_COMPLETENESS}% of your host profile before submitting (you're at ${profileCompleteness.percent}%).`
-              : isPropertyManager && !hasHomeOwner
-                ? "Select the home owner (they need a Lagedra account) before submitting this property-manager listing."
-                : "";
+              : "";
 
   const scrollToId = useCallback((targetId: string) => {
     const el = document.getElementById(targetId);
@@ -364,16 +359,6 @@ export const EditListingPage = () => {
               jumpLabel="Add address"
               onJump={() => scrollToId("precise-address")}
             />
-            {isPropertyManager && (
-              <ChecklistRow
-                done={hasHomeOwner}
-                required
-                label="Select the home owner"
-                detail="California stays over 30 days need the owner's consent on the lease. Look them up by the email on their Lagedra account in Ownership & lease parties."
-                jumpLabel="Add owner"
-                onJump={() => scrollToId("ownership")}
-              />
-            )}
             <ChecklistRow
               done={profileComplete}
               required

@@ -385,11 +385,13 @@ export type ListingDetailsDto = {
   homeOwner?: ListingHomeOwnerDto | null;
   leaseAgreementSource?: LeaseAgreementSource;
   customLeaseDocument?: CustomLeaseDocumentDto | null;
+  /** Host opt-in for Truvi Stay Protection on this listing. Defaults to true. */
+  stayProtectionEnabled?: boolean;
 };
 
-// Whether bookings on a listing are bound by Lagedra's jurisdiction template or
-// by a lease agreement the host uploaded themselves.
-export type LeaseAgreementSource = "LagedraTemplate" | "HostProvided";
+// Whether bookings on a listing are bound by Lagedra's jurisdiction template,
+// by a lease the host uploaded themselves, or by no lease at all.
+export type LeaseAgreementSource = "LagedraTemplate" | "HostProvided" | "None";
 
 export type CustomLeaseDocumentDto = {
   fileName: string;
@@ -453,6 +455,7 @@ export type ListingReviewItemDto = {
   instantBookingEnabled?: boolean;
   usesCustomLeaseAgreement?: boolean;
   customLeaseFileName?: string | null;
+  leaseAgreementSource?: LeaseAgreementSource;
 };
 
 export type DenyListingRequest = {
@@ -594,6 +597,7 @@ export type CreateListingRequest = {
   leaseAgreementSource?: LeaseAgreementSource;
   addedVia?: ListingAddedVia;
   addedViaDetail?: string | null;
+  stayProtectionEnabled?: boolean;
 };
 
 export type ListingAddedVia = "Manual" | "Url" | "Excel" | "Xml";
@@ -670,6 +674,7 @@ export type UpdateListingRequest = {
   homeOwnerEmail?: string | null;
   includeBrokerClause?: boolean;
   leaseAgreementSource?: LeaseAgreementSource;
+  stayProtectionEnabled?: boolean | null;
 };
 
 export type SetApproxLocationRequest = {
@@ -1236,6 +1241,8 @@ export type ChannelListingMapDto = {
   listingId: string | null;
   title: string | null;
   lastImportedAt: string | null;
+  syncPriceFromPms: boolean;
+  syncCalendarFromPms: boolean;
 };
 
 /** Summary returned after an on-demand content sync. */
@@ -1709,6 +1716,10 @@ export type DealSummaryDto = {
   tenantConfirmedDepositReceivedAt?: string | null;
   /** Both sides confirmed — deposit return is complete. */
   depositReturnSettledAt?: string | null;
+  /** Snapshotted stay-protection amount charged on this booking. */
+  insuranceFeeCents?: number | null;
+  /** Listing lease choice at read time. Missing means Lagedra's template. */
+  leaseAgreementSource?: LeaseAgreementSource | null;
 };
 
 // ── Notifications ────────────────────────────────────────────

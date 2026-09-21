@@ -93,6 +93,7 @@ export function toCreateListingRequest(
     safetyDeviceIds: v.safetyDeviceIds.length ? v.safetyDeviceIds : null,
     considerationIds: v.considerationIds.length ? v.considerationIds : null,
     instantBookingEnabled: v.instantBookingEnabled,
+    stayProtectionEnabled: v.stayProtectionEnabled,
     virtualTourUrl: v.virtualTourUrl?.trim() || null,
     defaultDepositCents:
       v.defaultDepositDollars === undefined
@@ -123,6 +124,7 @@ export function toUpdateListingRequest(v: ListingFormValues): UpdateListingReque
     safetyDeviceIds: v.safetyDeviceIds.length ? v.safetyDeviceIds : null,
     considerationIds: v.considerationIds.length ? v.considerationIds : null,
     instantBookingEnabled: v.instantBookingEnabled,
+    stayProtectionEnabled: v.stayProtectionEnabled,
     virtualTourUrl: v.virtualTourUrl?.trim() || null,
     defaultDepositCents:
       v.defaultDepositDollars === undefined

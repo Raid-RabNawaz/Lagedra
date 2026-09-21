@@ -56,16 +56,17 @@ public class ListingManagementTests
     }
 
     [Fact]
-    public void Property_manager_cannot_submit_for_review_without_home_owner()
+    public void Property_manager_can_submit_for_review_without_home_owner()
     {
         var listing = NewListing();
         listing.SetManagement(ListingManagerRole.PropertyManager, null, false);
         listing.SetApproxLocation(new GeoPoint(37.7749, -122.4194));
         listing.LockPreciseAddress(new Address("123 Main St", "San Francisco", "CA", "94102", "US"), "US-CA");
 
-        var act = listing.SubmitForReview;
+        listing.SubmitForReview();
 
-        act.Should().Throw<InvalidOperationException>().WithMessage("*home owner*");
+        listing.Status.Should().Be(ListingStatus.InReview);
+        listing.HomeOwnerUserId.Should().BeNull();
     }
 
     [Fact]

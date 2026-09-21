@@ -74,6 +74,8 @@ public sealed partial class SendEmailNotificationCommandHandler(
                 }
                 else
                 {
+                    // Listings that opted out of a lease never produce a PDF;
+                    // that is expected, not a generation failure.
                     LogLeaseAttachmentMissing(logger, notification.Id, dealId);
                 }
             }
@@ -146,6 +148,6 @@ public sealed partial class SendEmailNotificationCommandHandler(
     [LoggerMessage(Level = LogLevel.Error, Message = "Email send failed for notification {NotificationId} to {RecipientAddress}")]
     private static partial void LogEmailFailed(ILogger logger, Guid notificationId, string recipientAddress, Exception ex);
 
-    [LoggerMessage(Level = LogLevel.Warning, Message = "Deal-activated email {NotificationId} sent without lease PDF — none could be generated for deal {DealId}")]
+    [LoggerMessage(Level = LogLevel.Information, Message = "Deal-activated email {NotificationId} sent without a lease PDF for deal {DealId}")]
     private static partial void LogLeaseAttachmentMissing(ILogger logger, Guid notificationId, Guid dealId);
 }

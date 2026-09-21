@@ -1,5 +1,6 @@
 using System.Globalization;
 using Lagedra.Modules.ListingAndLocation.Domain.Entities;
+using Lagedra.Modules.ListingAndLocation.Domain.Enums;
 using Lagedra.Modules.ListingAndLocation.Domain.Services;
 using Lagedra.Modules.ListingAndLocation.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Integration;
@@ -149,7 +150,8 @@ public sealed class ListingProvider(ListingsDbContext db) : IListingProvider
                     customLease.SizeBytes,
                     customLease.ContentHash,
                     customLease.UploadedAtUtc)
-                : null);
+                : null,
+            listing.StayProtectionEnabled);
     }
 
     public async Task<bool> IsAvailableAsync(
@@ -186,6 +188,42 @@ public sealed class ListingProvider(ListingsDbContext db) : IListingProvider
         await db.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 
+    public async Task ReplaceHostBlockedDatesAsync(
+        Guid listingId,
+        IReadOnlyList<ListingDateRangeDto> blockedRanges,
+        CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(blockedRanges);
+
+        var exists = await db.Listings
+            .AsNoTracking()
+            .AnyAsync(l => l.Id == listingId, ct)
+            .ConfigureAwait(false);
+        if (!exists)
+        {
+            return;
+        }
+
+        var hostBlocks = await db.ListingAvailabilityBlocks
+            .Where(b => b.ListingId == listingId && b.BlockType == AvailabilityBlockType.HostBlocked)
+            .ToListAsync(ct)
+            .ConfigureAwait(false);
+        db.ListingAvailabilityBlocks.RemoveRange(hostBlocks);
+
+        foreach (var range in blockedRanges)
+        {
+            if (range.CheckOut <= range.CheckIn)
+            {
+                continue;
+            }
+
+            db.ListingAvailabilityBlocks.Add(
+                ListingAvailabilityBlock.CreateHostBlocked(listingId, range.CheckIn, range.CheckOut));
+        }
+
+        await db.SaveChangesAsync(ct).ConfigureAwait(false);
+    }
+
     public async Task<IReadOnlyList<ListingSummaryInfoDto>> GetListingSummariesAsync(
         IReadOnlyList<Guid> listingIds,
         CancellationToken ct = default)
@@ -205,7 +243,8 @@ public sealed class ListingProvider(ListingsDbContext db) : IListingProvider
                 l.Title,
                 l.Photos.Where(p => p.IsCover).Select(p => p.Url).FirstOrDefault()
                     ?? l.Photos.OrderBy(p => p.SortOrder).Select(p => p.Url).FirstOrDefault(),
-                l.PreciseAddress != null ? l.PreciseAddress.City : null))
+                l.PreciseAddress != null ? l.PreciseAddress.City : null,
+                l.LeaseAgreementSource.ToString()))
             .ToListAsync(ct)
             .ConfigureAwait(false);
     }

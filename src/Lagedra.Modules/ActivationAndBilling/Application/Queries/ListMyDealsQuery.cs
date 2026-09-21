@@ -118,7 +118,9 @@ public sealed class ListMyDealsQueryHandler(
                 truthSurface?.IsSealed,
                 payment?.HostConfirmedDepositReturnedAt,
                 payment?.TenantConfirmedDepositReceivedAt,
-                payment?.DepositReturnSettledAt));
+                payment?.DepositReturnSettledAt,
+                app.InsuranceFeeCents,
+                listing?.LeaseAgreementSource));
         }
 
         return Result<IReadOnlyList<DealSummaryDto>>.Success(results);

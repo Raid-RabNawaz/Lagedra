@@ -27,6 +27,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { buttonVariants } from "@/components/ui/button-variants";
 import type { ListingStatus, UserProfileDto } from "@/api/types";
 import { ProfileHealthCard } from "./ProfileHealthCard";
+import { AccountReadinessCard } from "@/features/auth/components/AccountReadinessCard";
 import {
   StatCard,
   SectionCard,
@@ -187,6 +188,8 @@ export function HostingDashboard({ user }: { user: UserProfileDto }) {
           </AlertDescription>
         </Alert>
       )}
+
+      <AccountReadinessCard audience="host" />
 
       {statement && statement.currentMonthlyFeeCents > 0 && (
         <Alert>
