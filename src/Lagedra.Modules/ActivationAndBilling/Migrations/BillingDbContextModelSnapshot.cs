@@ -214,6 +214,16 @@ namespace ActivationAndBilling.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<long>("EvictionProtectionFeeCents")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L);
+
+                    b.Property<bool>("EvictionProtectionIncluded")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<long?>("FirstMonthRentCents")
                         .HasColumnType("bigint");
 
@@ -448,6 +458,15 @@ namespace ActivationAndBilling.Migrations
                     b.Property<string>("DisputeReason")
                         .HasMaxLength(2000)
                         .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("EvictionProtectionClaimStanding")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<long>("EvictionProtectionFeeCents")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint")
+                        .HasDefaultValue(0L);
 
                     b.Property<long>("FirstMonthRentCents")
                         .ValueGeneratedOnAdd()

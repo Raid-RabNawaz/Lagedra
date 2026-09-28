@@ -4,4 +4,5 @@ public sealed record CancellationResultDto(
     Guid DealId,
     long TenantRefundCents,
     long InsuranceRefundCents,
-    string PolicyApplied);
+    string PolicyApplied,
+    long EvictionProtectionRefundCents = 0);

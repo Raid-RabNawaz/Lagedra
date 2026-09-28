@@ -1,5 +1,6 @@
 using Lagedra.Modules.ActivationAndBilling.Domain.Enums;
 using Lagedra.SharedKernel.Integration;
+using Lagedra.SharedKernel.Settings;
 
 namespace Lagedra.Modules.ActivationAndBilling.Application.DTOs;
 
@@ -30,4 +31,7 @@ public sealed record DealSummaryDto(
     DateTime? TenantConfirmedDepositReceivedAt = null,
     DateTime? DepositReturnSettledAt = null,
     long? InsuranceFeeCents = null,
-    string? LeaseAgreementSource = null);
+    string? LeaseAgreementSource = null,
+    long EvictionProtectionFeeCents = 0,
+    bool EvictionProtectionIncluded = false,
+    EvictionProtectionClaimStanding? EvictionProtectionClaimStanding = null);

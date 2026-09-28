@@ -4,7 +4,8 @@ namespace Lagedra.Modules.ListingAndLocation.Application.DTOs;
 /// Itemised pre-flight quote for a Listing Detail page (Phase 16).
 /// <see cref="TotalCents"/> sums the tenant-payable lines
 /// (<see cref="RentCents"/> + <see cref="DepositCents"/> +
-/// <see cref="InsuranceFeeCents"/> + <see cref="ServiceFeeCents"/>);
+/// <see cref="InsuranceFeeCents"/> + <see cref="ServiceFeeCents"/> +
+/// <see cref="EvictionProtectionFeeCents"/>);
 /// <see cref="ProtocolFeeCents"/> is the host's monthly platform fee, surfaced
 /// to the tenant for transparency only and not added to the total.
 /// </summary>
@@ -18,4 +19,6 @@ public sealed record QuoteDto(
     long ProtocolFeeCents,
     long ServiceFeeCents,
     long TotalCents,
-    string Currency);
+    string Currency,
+    long EvictionProtectionFeeCents = 0,
+    bool EvictionProtectionIncluded = false);

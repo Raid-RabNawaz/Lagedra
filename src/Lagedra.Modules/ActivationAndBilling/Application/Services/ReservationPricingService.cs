@@ -42,7 +42,9 @@ public sealed record ReservationPricing(
     long ServiceFeeCents,
     long MonthlyProtocolFeeCents,
     long TotalPayableCents,
-    Guid? NegotiatedOfferId = null)
+    Guid? NegotiatedOfferId = null,
+    long EvictionProtectionFeeCents = 0,
+    bool EvictionProtectionIncluded = false)
 {
     public bool IsNegotiatedOffer => NegotiatedOfferId is not null;
 
@@ -52,14 +54,17 @@ public sealed record ReservationPricing(
         FirstMonthRentCents,
         InsuranceFeeCents,
         ServiceFeeCents,
-        DepositReason);
+        DepositReason,
+        EvictionProtectionFeeCents,
+        EvictionProtectionIncluded);
 }
 
 public sealed class ReservationPricingService(
     ITenantVerificationTierResolver tierResolver,
     IInsuranceFeeCalculator insuranceFeeCalculator,
     IPlatformSettingsService settings,
-    IAcceptedInquiryOfferProvider acceptedOfferProvider)
+    IAcceptedInquiryOfferProvider acceptedOfferProvider,
+    IPartnerEndorsementProvider partnerEndorsementProvider)
     : IReservationPricingService
 {
     public async Task<ReservationPricing> ComputeAsync(
@@ -132,10 +137,14 @@ public sealed class ReservationPricingService(
         var protocolFee = await ResolveMonthlyProtocolFeeAsync(cancellationToken)
             .ConfigureAwait(false);
 
+        var eviction = await ResolveEvictionProtectionAsync(tenantUserId, cancellationToken)
+            .ConfigureAwait(false);
+
         var total = depositCents
             + rentCents
             + insuranceQuote.FeeCents
-            + serviceFee;
+            + serviceFee
+            + eviction.FeeCents;
 
         return new ReservationPricing(
             tier,
@@ -147,7 +156,27 @@ public sealed class ReservationPricingService(
             serviceFee,
             protocolFee,
             total,
-            negotiatedOfferId);
+            negotiatedOfferId,
+            eviction.FeeCents,
+            eviction.Included);
+    }
+
+    private async Task<(long FeeCents, bool Included)> ResolveEvictionProtectionAsync(
+        Guid tenantUserId,
+        CancellationToken ct)
+    {
+        var endorsed = await partnerEndorsementProvider
+            .HasActiveEndorsementAsync(tenantUserId, ct)
+            .ConfigureAwait(false);
+        if (!endorsed)
+        {
+            return (0, false);
+        }
+
+        var configured = await settings
+            .GetLongAsync(PlatformSettingKeys.EvictionProtectionFeeCents, EvictionProtectionFee.DefaultFeeCents, ct)
+            .ConfigureAwait(false);
+        return (EvictionProtectionFee.Normalize(configured), true);
     }
 
     private async Task<long> ResolveServiceFeeAsync(long rentBaseCents, CancellationToken ct)

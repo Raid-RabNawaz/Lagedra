@@ -122,8 +122,11 @@ public sealed class SearchListingsQueryHandler(
         {
             var from = request.AvailableFrom.Value;
             var to = request.AvailableTo.Value;
+            // Hide a listing only when one stay covers the whole search.
+            // A booking in the middle (for example Jan 10–31 inside a
+            // Jan 1–Mar 20 search) leaves the listing in the results.
             query = query.Where(l => !l.AvailabilityBlocks.Any(b =>
-                b.CheckInDate < to && b.CheckOutDate > from));
+                b.CheckInDate <= from && b.CheckOutDate >= to));
         }
 
         if (request.Latitude.HasValue && request.Longitude.HasValue && request.RadiusKm.HasValue)

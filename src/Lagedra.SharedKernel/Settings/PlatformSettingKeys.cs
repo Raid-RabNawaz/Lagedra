@@ -50,6 +50,10 @@ public static class PlatformSettingKeys
     // Tenant screening (paid by host when they order a background check)
     public const string ScreeningHostFeeCents = "screening.host_fee_cents";
 
+    // Lagedra Partner Eviction Protection (paid by an endorsed guest at booking).
+    // Coverage still applies when this is 0; the admin uses 0 to waive the fee.
+    public const string EvictionProtectionFeeCents = "eviction_protection.fee_cents";
+
     // Pre-launch / go-to-market
     // When true: institution partners join a waitlist; founding hosts get real
     // accounts limited to listings, PMS import, profile, phone verification,

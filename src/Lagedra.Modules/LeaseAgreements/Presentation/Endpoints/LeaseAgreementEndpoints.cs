@@ -21,6 +21,8 @@ public static class LeaseAgreementEndpoints
 
         group.MapGet("/placeholders", GetPlaceholders).RequireAuthorization("RequirePackApprover");
         group.MapGet("/deals/{dealId:guid}/pdf", DownloadDealPdf);
+        group.MapGet("/deals/{dealId:guid}/signing", GetDealSigningStatus);
+        group.MapPost("/deals/{dealId:guid}/sign", SignDealLease);
 
         // Group-level auth only: any signed-in user may read a listing's lease
         // before requesting a booking, unlike the deal PDF which is restricted
@@ -186,6 +188,59 @@ public static class LeaseAgreementEndpoints
     {
         var result = await mediator.Send(new ListPendingLeaseApprovalsQuery(), ct).ConfigureAwait(true);
         return result.Match(Results.Ok, err => Results.BadRequest(new { error = err.Code, detail = err.Description }));
+    }
+
+    private static async Task<IResult> GetDealSigningStatus(
+        [FromRoute] Guid dealId,
+        HttpContext httpContext,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(
+            new GetDealLeaseSigningStatusQuery(dealId, GetUserId(httpContext)), ct)
+            .ConfigureAwait(true);
+
+        if (result.IsSuccess)
+        {
+            return Results.Ok(result.Value);
+        }
+
+        return result.Error.Code switch
+        {
+            "LeaseAgreement.DealNotFound" => Results.NotFound(
+                new { error = result.Error.Code, detail = result.Error.Description }),
+            "LeaseAgreement.Forbidden" => Results.Forbid(),
+            _ => Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description }),
+        };
+    }
+
+    private static async Task<IResult> SignDealLease(
+        [FromRoute] Guid dealId,
+        [FromBody] SignDealLeaseRequest request,
+        HttpContext httpContext,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(
+            new SignDealLeaseCommand(
+                dealId,
+                GetUserId(httpContext),
+                request.TypedName,
+                request.Accepted),
+            ct).ConfigureAwait(true);
+
+        if (result.IsSuccess)
+        {
+            return Results.Ok(result.Value);
+        }
+
+        return result.Error.Code switch
+        {
+            "LeaseAgreement.DealNotFound" => Results.NotFound(
+                new { error = result.Error.Code, detail = result.Error.Description }),
+            "LeaseAgreement.Forbidden" => Results.Forbid(),
+            _ => Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description }),
+        };
     }
 
     private static async Task<IResult> DownloadDealPdf(

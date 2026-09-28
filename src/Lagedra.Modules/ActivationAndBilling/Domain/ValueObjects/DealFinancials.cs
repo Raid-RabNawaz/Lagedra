@@ -13,8 +13,16 @@ public sealed record DealFinancials
     /// </summary>
     public long ServiceFeeCents { get; init; }
 
+    /// <summary>
+    /// Snapshotted Lagedra Partner Eviction Protection fee. Kept by the
+    /// platform. Zero when the guest was not endorsed, or when the admin
+    /// waived the fee.
+    /// </summary>
+    public long EvictionProtectionFeeCents { get; init; }
+
     public long TotalTenantPaymentCents =>
-        FirstMonthRentCents + DepositAmountCents + InsuranceFeeCents + ServiceFeeCents;
+        FirstMonthRentCents + DepositAmountCents + InsuranceFeeCents + ServiceFeeCents
+        + EvictionProtectionFeeCents;
 
     public long TotalHostPlatformPaymentCents =>
         InsuranceFeeCents + MonthlyProtocolFeeCents;
@@ -26,13 +34,15 @@ public sealed record DealFinancials
         long depositAmountCents,
         long insuranceFeeCents,
         long monthlyProtocolFeeCents,
-        long serviceFeeCents = 0)
+        long serviceFeeCents = 0,
+        long evictionProtectionFeeCents = 0)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(firstMonthRentCents);
         ArgumentOutOfRangeException.ThrowIfNegative(depositAmountCents);
         ArgumentOutOfRangeException.ThrowIfNegative(insuranceFeeCents);
         ArgumentOutOfRangeException.ThrowIfNegative(monthlyProtocolFeeCents);
         ArgumentOutOfRangeException.ThrowIfNegative(serviceFeeCents);
+        ArgumentOutOfRangeException.ThrowIfNegative(evictionProtectionFeeCents);
 
         return new DealFinancials
         {
@@ -40,7 +50,8 @@ public sealed record DealFinancials
             DepositAmountCents = depositAmountCents,
             InsuranceFeeCents = insuranceFeeCents,
             MonthlyProtocolFeeCents = monthlyProtocolFeeCents,
-            ServiceFeeCents = serviceFeeCents
+            ServiceFeeCents = serviceFeeCents,
+            EvictionProtectionFeeCents = evictionProtectionFeeCents
         };
     }
 }

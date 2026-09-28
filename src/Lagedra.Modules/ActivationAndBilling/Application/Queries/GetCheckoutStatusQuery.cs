@@ -60,9 +60,13 @@ public sealed class GetCheckoutStatusQueryHandler(
                     confirmation.FirstMonthRentCents,
                     confirmation.DepositAmountCents,
                     confirmation.InsuranceFeeCents,
-                    confirmation.InsuranceFeeCents + confirmation.MonthlyProtocolFeeCents + confirmation.ServiceFeeCents,
+                    confirmation.InsuranceFeeCents
+                        + confirmation.MonthlyProtocolFeeCents
+                        + confirmation.ServiceFeeCents
+                        + confirmation.EvictionProtectionFeeCents,
                     confirmation.ServiceFeeCents,
-                    "usd"));
+                    "usd",
+                    confirmation.EvictionProtectionFeeCents));
         }
 
         var pi = await stripeService
@@ -78,8 +82,12 @@ public sealed class GetCheckoutStatusQueryHandler(
                 confirmation.FirstMonthRentCents,
                 confirmation.DepositAmountCents,
                 confirmation.InsuranceFeeCents,
-                confirmation.InsuranceFeeCents + confirmation.MonthlyProtocolFeeCents + confirmation.ServiceFeeCents,
+                confirmation.InsuranceFeeCents
+                    + confirmation.MonthlyProtocolFeeCents
+                    + confirmation.ServiceFeeCents
+                    + confirmation.EvictionProtectionFeeCents,
                 confirmation.ServiceFeeCents,
-                "usd"));
+                "usd",
+                confirmation.EvictionProtectionFeeCents));
     }
 }

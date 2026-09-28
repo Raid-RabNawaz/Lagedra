@@ -1,6 +1,7 @@
 using Lagedra.Infrastructure.External.Channels;
 using Lagedra.Modules.ChannelIntegration.Domain.Aggregates;
 using Lagedra.Modules.ChannelIntegration.Domain.Entities;
+using Lagedra.Modules.ChannelIntegration.Domain.Enums;
 using Lagedra.Modules.ChannelIntegration.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Security;
@@ -79,7 +80,8 @@ public sealed partial class ChannelContentImporter(
                 connection.HostUserId,
                 snapshot,
                 map?.ListingId,
-                map?.SyncPriceFromPms ?? false);
+                map?.SyncPriceFromPms ?? false,
+                map?.PmsPriceBasis);
 
             ListingImportResult importResult;
             try
@@ -100,6 +102,9 @@ public sealed partial class ChannelContentImporter(
             }
 
             map.LinkLagedraListing(importResult.ListingId, snapshot.Title, clock);
+            map.RememberPmsSourceAmount(
+                ChannelListingPriceInterpretation.SourceAmountCents(snapshot),
+                clock);
 
             if (importResult.Created)
             {
@@ -128,10 +133,11 @@ public sealed partial class ChannelContentImporter(
         Guid hostUserId,
         ChannelListingSnapshot snapshot,
         Guid? existingListingId,
-        bool syncPriceFromPms)
+        bool syncPriceFromPms,
+        ChannelPmsPriceBasis? savedPriceBasis)
     {
-        var monthlyRentCents = snapshot.MonthlyRentCents
-            ?? (snapshot.NightlyRateCents.HasValue ? snapshot.NightlyRateCents.Value * 30 : 0);
+        var interpreted = ChannelListingPriceInterpretation.Resolve(snapshot, savedPriceBasis);
+        var monthlyRentCents = interpreted.MonthlyRentCents ?? 0;
 
         var address = snapshot.Address is null
             ? null
@@ -166,7 +172,8 @@ public sealed partial class ChannelContentImporter(
             Address: address,
             Photos: photos,
             AmenityNames: snapshot.AmenityCodes,
-            SyncPriceFromPms: syncPriceFromPms);
+            SyncPriceFromPms: syncPriceFromPms,
+            PmsAmountIsMonthlyRent: interpreted.PriceBasis == ChannelPriceBasis.Monthly);
     }
 
     private static ListingImportPropertyType ParsePropertyType(string? type) => (type ?? string.Empty).ToUpperInvariant() switch

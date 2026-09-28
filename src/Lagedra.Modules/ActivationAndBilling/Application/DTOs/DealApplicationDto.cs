@@ -55,4 +55,6 @@ public sealed record DealApplicationDto(
     DateTime? LastScreenedAt = null,
     string? ScreeningOrderStatus = null,
     string? ScreeningResult = null,
-    Guid? ScreeningRequestedByHostUserId = null);
+    Guid? ScreeningRequestedByHostUserId = null,
+    long EvictionProtectionFeeCents = 0,
+    bool EvictionProtectionIncluded = false);

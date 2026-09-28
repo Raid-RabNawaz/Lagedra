@@ -47,6 +47,9 @@ public static class StructuredInquiryModuleRegistration
         services.AddDomainEventHandler<Domain.Events.InquiryPartnerQuestionSubmittedEvent,
             OnInquiryPartnerQuestionSubmittedNotifyHandler>();
 
+        services.AddDomainEventHandler<Domain.Events.InquiryTenantQuestionSubmittedEvent,
+            OnInquiryTenantQuestionSubmittedNotifyHandler>();
+
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(StructuredInquiryModuleRegistration).Assembly));
 

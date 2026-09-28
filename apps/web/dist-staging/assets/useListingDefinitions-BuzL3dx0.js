@@ -1,0 +1,1 @@
+import{o as s}from"./index-BUSvGy_4.js";import{l as i}from"./listingApi-Dx_RWI61.js";function a(){return s({queryKey:["listing-definitions"],queryFn:async()=>{const[e,n,t]=await Promise.all([i.getAmenityDefinitions(),i.getSafetyDeviceDefinitions(),i.getConsiderationDefinitions()]);return{amenities:e,safetyDevices:n,considerations:t}},staleTime:10*6e4})}export{a as u};

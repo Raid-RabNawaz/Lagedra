@@ -467,7 +467,7 @@ export const termsDocument: LegalDocument = {
           </p>
           <p>
             Support: <a href="mailto:info@lagedra.com">info@lagedra.com</a> or{" "}
-            <a href="tel:+12137352362">213-735-2362</a>.
+            <a href="tel:+12133775272">+1 (213) 377-5272</a>.
           </p>
         </>
       ),
@@ -618,7 +618,7 @@ export const termsDocument: LegalDocument = {
             <a href="mailto:info@lagedra.com">info@lagedra.com</a>
             <br />
             Phone:{" "}
-            <a href="tel:+12137352362">213-735-2362</a>
+            <a href="tel:+12133775272">+1 (213) 377-5272</a>
             <br />
             Mail: {COMPANY.legalName}, {COMPANY_MAILING_ADDRESS}
             <br />

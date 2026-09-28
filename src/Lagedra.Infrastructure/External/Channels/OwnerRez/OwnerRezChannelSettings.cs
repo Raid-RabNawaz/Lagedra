@@ -80,6 +80,33 @@ public sealed class OwnerRezChannelSettings
     public bool IsOAuthConfigured =>
         !string.IsNullOrWhiteSpace(ClientId) && !string.IsNullOrWhiteSpace(ClientSecret);
 
+    /// <summary>
+    /// When false (the default), new OwnerRez connections use the channel feed:
+    /// the host pastes the Connection ID (<c>ora…</c>) and Lagedra reads HA-XML.
+    /// The API-for-apps client stays in place and still serves any connection that
+    /// already holds a token. Set this to true to offer personal access tokens or
+    /// OAuth on the Channels page again.
+    /// </summary>
+    public bool OpenApiEnabled { get; init; }
+
+    /// <summary>
+    /// HA-XML root. Sandbox is <c>https://faststage.ownerrez.com</c>. Production,
+    /// once OwnerRez issues a live username and key, is <c>https://fast.ownerrez.com</c>.
+    /// </summary>
+    public Uri HaXmlBaseUrl { get; init; } = new("https://faststage.ownerrez.com");
+
+    /// <summary>Channel username OwnerRez issued. Sandbox value is <c>HaXmlSandbox</c>.</summary>
+    public string HaXmlUsername { get; init; } = string.Empty;
+
+    /// <summary>Channel key OwnerRez issued. Kept in configuration, never on the host connection.</summary>
+    public string HaXmlKey { get; init; } = string.Empty;
+
+    /// <summary>User-Agent sent on HA-XML calls. OwnerRez requires the app name.</summary>
+    public string HaXmlUserAgent { get; init; } = "Lagedra/1.0";
+
+    public bool IsHaXmlConfigured =>
+        !string.IsNullOrWhiteSpace(HaXmlUsername) && !string.IsNullOrWhiteSpace(HaXmlKey);
+
     /// <summary>Full User-Agent header value, e.g. <c>Lagedra/1.0 (c_1234)</c>.</summary>
     public string BuildUserAgent() =>
         string.IsNullOrWhiteSpace(ClientId) ? UserAgent : $"{UserAgent} ({ClientId})";

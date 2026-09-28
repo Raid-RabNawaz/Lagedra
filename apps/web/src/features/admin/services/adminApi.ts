@@ -15,6 +15,7 @@ import type {
   EvidenceScanQueueItemDto,
   ManualVerificationItemDto,
   ManualVerificationDetailDto,
+  KycDocumentType,
   ViolationDto,
   AuditSearchParams,
   AuditSearchResultDto,
@@ -119,6 +120,18 @@ export const adminApi = {
   },
   async getManualVerificationDetail(id: string): Promise<ManualVerificationDetailDto> {
     const r = await http.get<ManualVerificationDetailDto>(endpoints.adminIdentity.manualDetail(id));
+    return r.data;
+  },
+  async getManualVerificationDocument(
+    id: string,
+    documentType: KycDocumentType,
+    signal?: AbortSignal,
+  ): Promise<Blob> {
+    const r = await http.get<Blob>(endpoints.adminIdentity.manualDocument(id, documentType), {
+      responseType: "blob",
+      timeout: 60_000,
+      signal,
+    });
     return r.data;
   },
   async approveManualVerification(id: string): Promise<void> {

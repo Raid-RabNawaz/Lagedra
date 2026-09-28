@@ -21,7 +21,7 @@ export const privacyDocument: LegalDocument = {
             <a href="https://www.lagedra.com">www.lagedra.com</a>. Brand name:{" "}
             {COMPANY.brand}. Mailing address: {COMPANY_MAILING_ADDRESS}. Support:{" "}
             <a href="mailto:info@lagedra.com">info@lagedra.com</a> or{" "}
-            <a href="tel:+12137352362">213-735-2362</a>. More business
+            <a href="tel:+12133775272">+1 (213) 377-5272</a>. More business
             information is on our <Link to="/about">About</Link> page.
           </p>
           <p>
@@ -433,7 +433,7 @@ export const privacyDocument: LegalDocument = {
             <a href="mailto:info@lagedra.com">info@lagedra.com</a>
             <br />
             Phone:{" "}
-            <a href="tel:+12137352362">213-735-2362</a>
+            <a href="tel:+12133775272">+1 (213) 377-5272</a>
             <br />
             Mail: {COMPANY.legalName}, {COMPANY_MAILING_ADDRESS}
             <br />

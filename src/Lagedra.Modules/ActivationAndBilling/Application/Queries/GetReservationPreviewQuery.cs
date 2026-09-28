@@ -64,6 +64,8 @@ public sealed class GetReservationPreviewQueryHandler(
             pricing.TotalPayableCents,
             duration,
             pricing.IsNegotiatedOffer,
-            pricing.NegotiatedOfferId));
+            pricing.NegotiatedOfferId,
+            pricing.EvictionProtectionFeeCents,
+            pricing.EvictionProtectionIncluded));
     }
 }

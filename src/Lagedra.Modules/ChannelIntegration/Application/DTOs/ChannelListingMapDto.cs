@@ -1,4 +1,6 @@
+using Lagedra.Infrastructure.External.Channels;
 using Lagedra.Modules.ChannelIntegration.Domain.Entities;
+using Lagedra.Modules.ChannelIntegration.Domain.Enums;
 
 namespace Lagedra.Modules.ChannelIntegration.Application.DTOs;
 
@@ -14,7 +16,14 @@ public sealed record ChannelListingMapDto(
     string? Title,
     DateTime? LastImportedAt,
     bool SyncPriceFromPms,
-    bool SyncCalendarFromPms);
+    bool SyncCalendarFromPms,
+    ChannelPmsPriceBasis? PmsPriceBasis,
+    long? PmsSourceAmountCents,
+    /// <summary>
+    /// True when the raw PMS amount is high enough that a nightly reading would
+    /// exceed the monthly cap. The host is asked only in that case.
+    /// </summary>
+    bool PmsPriceNeedsConfirmation);
 
 public static class ChannelListingMapMapper
 {
@@ -29,6 +38,9 @@ public static class ChannelListingMapMapper
             map.Title,
             map.LastImportedAt,
             map.SyncPriceFromPms,
-            map.SyncCalendarFromPms);
+            map.SyncCalendarFromPms,
+            map.PmsPriceBasis,
+            map.PmsSourceAmountCents,
+            ChannelRateNormalizer.NeedsPricePeriodConfirmation(map.PmsSourceAmountCents));
     }
 }

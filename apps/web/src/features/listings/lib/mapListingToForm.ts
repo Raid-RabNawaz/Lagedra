@@ -86,5 +86,6 @@ export function listingDetailsToFormValues(listing: ListingDetailsDto): ListingF
     rentCapJustCauseExempt: lt?.rentCapJustCauseExempt ?? false,
     leaseAgreementSource: listing.leaseAgreementSource ?? "LagedraTemplate",
     hasCustomLeaseDocument: listing.customLeaseDocument != null,
+    requireLeaseSignatures: listing.requireLeaseSignatures === true,
   };
 }

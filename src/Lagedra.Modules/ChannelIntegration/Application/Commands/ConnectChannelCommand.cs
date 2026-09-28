@@ -47,6 +47,18 @@ public sealed class ConnectChannelCommandHandler(
         "OwnerRez is now connected by authorizing Lagedra in your OwnerRez account, not with an API "
         + "token. Use Connect with OwnerRez.");
 
+    private static readonly Error OpenApiDisabled = new(
+        "Channel.OpenApiDisabled",
+        "OwnerRez is connected with the channel Connection ID. API keys are not accepted.");
+
+    private static readonly Error HaXmlNotConfigured = new(
+        "Channel.HaXmlNotConfigured",
+        "OwnerRez channel import is not available right now. Please try again later.");
+
+    private static readonly Error InvalidAdvertiserId = new(
+        "Channel.InvalidAdvertiserId",
+        "Enter the OwnerRez Connection ID from the channel page. It starts with ora.");
+
     public async Task<Result<ChannelConnectionDto>> Handle(
         ConnectChannelCommand request, CancellationToken cancellationToken)
     {
@@ -58,16 +70,38 @@ public sealed class ConnectChannelCommandHandler(
             return Result<ChannelConnectionDto>.Failure(UnknownProvider);
         }
 
-        // Once an OwnerRez OAuth app is configured it becomes the only way in:
-        // personal access tokens are capped at two accounts per IP per day, so
-        // letting them back in after the switch would silently reintroduce that
-        // ceiling for whoever used the older path.
-        if (provider.ProviderKey == OwnerRezOAuthFlow.ProviderKey && ownerRezOAuth.IsConfigured)
+        var accountId = request.ExternalAccountId?.Trim() ?? string.Empty;
+        if (provider.ProviderKey == OwnerRezOAuthFlow.ProviderKey && !ownerRezOAuth.IsOpenApiEnabled)
         {
+            // HA-XML is the live path. The token and OAuth handlers stay callable
+            // once Channels:OwnerRez:OpenApiEnabled is turned back on.
+            if (!ownerRezOAuth.IsHaXmlConfigured)
+            {
+                return Result<ChannelConnectionDto>.Failure(HaXmlNotConfigured);
+            }
+
+            if (!string.IsNullOrWhiteSpace(request.Secret))
+            {
+                return Result<ChannelConnectionDto>.Failure(OpenApiDisabled);
+            }
+
+            if (!OwnerRezAdvertiserIds.IsValid(accountId))
+            {
+                return Result<ChannelConnectionDto>.Failure(InvalidAdvertiserId);
+            }
+
+            accountId = OwnerRezAdvertiserIds.Canonical(accountId);
+        }
+        else if (provider.ProviderKey == OwnerRezOAuthFlow.ProviderKey && ownerRezOAuth.IsConfigured)
+        {
+            // Once an OwnerRez OAuth app is configured it becomes the only way in:
+            // personal access tokens are capped at two accounts per IP per day, so
+            // letting them back in after the switch would silently reintroduce that
+            // ceiling for whoever used the older path.
             return Result<ChannelConnectionDto>.Failure(OwnerRezRequiresOAuth);
         }
 
-        if (string.IsNullOrWhiteSpace(request.ExternalAccountId)
+        if (string.IsNullOrWhiteSpace(accountId)
             || string.IsNullOrWhiteSpace(request.DisplayName))
         {
             return Result<ChannelConnectionDto>.Failure(InvalidAccount);
@@ -83,7 +117,7 @@ public sealed class ConnectChannelCommandHandler(
                 new LinkChannelRequest(
                     request.HostUserId,
                     provider.ProviderKey,
-                    request.ExternalAccountId,
+                    accountId,
                     request.DisplayName,
                     request.Username,
                     encryptedSecret),

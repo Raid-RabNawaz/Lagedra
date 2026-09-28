@@ -76,6 +76,10 @@ public static class LeasePlaceholderCatalog
         Def("deal.monthlyRent", "Deal", "Monthly rent", "Monthly rent amount.", "$3,600.00", true),
         Def("deal.securityDeposit", "Deal", "Security deposit", "Security deposit amount.", "$3,600.00", true),
         Def("deal.guestCount", "Deal", "Guest count", "Number of guests on the booking.", "2", false),
+        Def("host.signatureName", "Signature", "Host typed signature", "Name the host typed when signing in Lagedra.", "Jane Host", false),
+        Def("host.signedAt", "Signature", "Host signed at", "Date the host signed in Lagedra.", "September 21, 2026", false),
+        Def("tenant.signatureName", "Signature", "Tenant typed signature", "Name the tenant typed when signing in Lagedra.", "Jordan Tenant", false),
+        Def("tenant.signedAt", "Signature", "Tenant signed at", "Date the tenant signed in Lagedra.", "September 21, 2026", false),
     ];
 
     public static IReadOnlySet<string> RequiredKeys { get; } =

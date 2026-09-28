@@ -11,7 +11,7 @@
   "containerDefinitions": [
     {
       "name": "api",
-      "image": "930218374225.dkr.ecr.us-west-1.amazonaws.com/lagedra/api@sha256:f6d07450bb2f67ae48b0bd0bbe51304fcb477527a1775756b266bb097dffcb14",
+      "image": "930218374225.dkr.ecr.us-west-1.amazonaws.com/lagedra/api@sha256:66299c3eb2ade4074f5d5b5af721d5950e64fa8ceea807254b91927fa1832754",
       "essential": true,
       "portMappings": [
         {
@@ -115,6 +115,22 @@
         {
           "name": "Channels__OwnerRez__WebhookUsername",
           "value": "lagedra-ownerrez"
+        },
+        {
+          "name": "Channels__OwnerRez__OpenApiEnabled",
+          "value": "false"
+        },
+        {
+          "name": "Channels__OwnerRez__HaXmlBaseUrl",
+          "value": "https://faststage.ownerrez.com"
+        },
+        {
+          "name": "Channels__OwnerRez__HaXmlUsername",
+          "value": "HaXmlSandbox"
+        },
+        {
+          "name": "Channels__OwnerRez__HaXmlUserAgent",
+          "value": "Lagedra/1.0 (staging)"
         },
         {
           "name": "Channels__Hostaway__BaseUrl",
@@ -265,6 +281,10 @@
         {
           "name": "Checkr__WebhookSecret",
           "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/staging/checkr-webhook-secret"
+        },
+        {
+          "name": "Channels__OwnerRez__HaXmlKey",
+          "valueFrom": "arn:aws:ssm:us-west-1:930218374225:parameter/lagedra/staging/ownerrez-haxml-key"
         }
       ],
       "logConfiguration": {

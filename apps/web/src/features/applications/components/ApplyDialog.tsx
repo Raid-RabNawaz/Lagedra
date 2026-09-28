@@ -43,12 +43,20 @@ import {
   tierLabel,
 } from "@/features/applications/lib/bookingConsent";
 import { DateRangeField } from "@/features/listings/components/DateRangeField";
+import { useListingAvailabilityBlocks } from "@/features/listings/hooks/useListings";
+import { toUnavailableStays } from "@/features/listings/lib/unavailableStays";
 import { privacyApi } from "@/features/privacy/services/privacyApi";
 import { formatMoney } from "@/utils/format";
 import { cn } from "@/lib/utils";
 import type { ListingDetailsDto, ReservationPreviewDto } from "@/api/types";
 import { getApiErrorMessage } from "@/api/errors";
 import { STAY_PROTECTION_LABEL } from "@/features/listings/lib/stayProtection";
+import { EvictionProtectionTermsList } from "@/features/listings/components/EvictionProtectionTermsList";
+import {
+  EVICTION_PROTECTION_LABEL,
+  evictionProtectionAmountLabel,
+  evictionProtectionApplies,
+} from "@/features/listings/lib/evictionProtection";
 import { StayProtectionGuestAgreementNote } from "@/features/listings/components/StayProtectionGuestAgreementNote";
 
 /** Server-side hard cap on the cover note. Mirrors `DealApplication.MessageMaxLength`. */
@@ -145,6 +153,12 @@ export const ApplyDialog = ({
   const messageTooLong = messageLength > MESSAGE_MAX_LENGTH;
   const guestsValid = guestCount >= 1 && guestCount <= maxGuests;
   const detailsValid = datesValid && guestsValid && !messageTooLong;
+
+  const blockedStays = useListingAvailabilityBlocks(listing.id);
+  const unavailableStays = useMemo(
+    () => toUnavailableStays(blockedStays.data),
+    [blockedStays.data],
+  );
 
   const preview = useReservationPreview(listing.id, checkIn, checkOut, datesValid);
   const isBlocked = preview.data?.tier === "Blocklisted";
@@ -273,6 +287,7 @@ export const ApplyDialog = ({
               error={showDateError}
               errorMessage={showDateError ? dateErrorMessage : undefined}
               id="apply-dialog-dates"
+              unavailableStays={unavailableStays}
             />
 
             {stayDays > 0 && isValidStay && (
@@ -510,6 +525,15 @@ function PriceBreakdown({
             <span>{formatMoney(preview.serviceFeeCents)}</span>
           </div>
         )}
+        {evictionProtectionApplies(
+          preview.evictionProtectionIncluded,
+          preview.evictionProtectionFeeCents,
+        ) && (
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">{EVICTION_PROTECTION_LABEL}</span>
+            <span>{evictionProtectionAmountLabel(preview.evictionProtectionFeeCents ?? 0)}</span>
+          </div>
+        )}
         <div className="border-t pt-2 flex justify-between font-semibold">
           <span>Total charged on approval</span>
           <span>{formatMoney(preview.totalPayableCents)}</span>
@@ -529,12 +553,30 @@ function PriceBreakdown({
       {preview.insuranceFeeCents > 0 && (
         <StayProtectionGuestAgreementNote />
       )}
+      {evictionProtectionApplies(
+        preview.evictionProtectionIncluded,
+        preview.evictionProtectionFeeCents,
+      ) && (
+        <div className="space-y-1 text-[11px] text-muted-foreground">
+          <p>
+            {EVICTION_PROTECTION_LABEL} covers qualifying unpaid rent and eviction
+            costs, up to $10,000. It is separate from Stay Protection.
+          </p>
+          <EvictionProtectionTermsList />
+        </div>
+      )}
       <p className="flex items-start gap-1.5 border-t pt-2 text-[11px] text-muted-foreground">
         <Lock className="h-3.5 w-3.5 mt-0.5 shrink-0" />
-        Your first month's rent and deposit are paid directly to the host through
-        Stripe. Lagedra only collects its service fee and stay protection —
-        we never hold your funds. The host returns your deposit directly after
-        move-out.
+        Your first month&apos;s rent and deposit are paid directly to the host through
+        Stripe. Lagedra collects its service fee
+        {preview.insuranceFeeCents > 0 ? ", stay protection" : ""}
+        {evictionProtectionApplies(
+          preview.evictionProtectionIncluded,
+          preview.evictionProtectionFeeCents,
+        )
+          ? ", and Eviction Protection"
+          : ""}
+        . The host returns your deposit directly after move-out.
       </p>
     </div>
   );

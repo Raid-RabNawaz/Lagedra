@@ -18,7 +18,8 @@ namespace Lagedra.Modules.StructuredInquiry.Application.Commands;
 /// </summary>
 public sealed record StartListingInquiryCommand(
     Guid ListingId,
-    Guid TenantUserId) : IRequest<Result<InquiryDto>>;
+    Guid TenantUserId,
+    string? InitialMessage = null) : IRequest<Result<InquiryDto>>;
 
 public sealed class StartListingInquiryCommandHandler(
     InquiryDbContext dbContext,
@@ -51,6 +52,14 @@ public sealed class StartListingInquiryCommandHandler(
                     "You cannot start an inquiry on your own listing."));
         }
 
+        var initialMessage = request.InitialMessage?.Trim();
+        if (initialMessage is { Length: > 1000 })
+        {
+            return Result<InquiryDto>.Failure(
+                new Error("Inquiry.MessageTooLong",
+                    "Question must be 1000 characters or fewer."));
+        }
+
         // One open pre-booking thread per (listing, tenant). Deal-linked
         // threads stay on the booking and must not be reused from the listing.
         var existing = await dbContext.Sessions
@@ -73,7 +82,10 @@ public sealed class StartListingInquiryCommandHandler(
         }
 
         var session = InquirySession.CreateForListing(
-            request.ListingId, request.TenantUserId, listing.LandlordUserId);
+            request.ListingId,
+            request.TenantUserId,
+            listing.LandlordUserId,
+            string.IsNullOrWhiteSpace(initialMessage) ? null : initialMessage);
 
         var since = DateTime.UtcNow.AddHours(-24);
         var recentCount = await dbContext.Sessions
@@ -87,6 +99,11 @@ public sealed class StartListingInquiryCommandHandler(
         }
 
         dbContext.Sessions.Add(session);
+        foreach (var question in session.Questions)
+        {
+            dbContext.Entry(question).State = EntityState.Added;
+        }
+
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
         return Result<InquiryDto>.Success(

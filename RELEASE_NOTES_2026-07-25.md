@@ -21,7 +21,7 @@ This release improves **email delivery and onboarding**, adds **admin-operationa
 - **SendGrid provider** — Replaces Brevo/MailKit SMTP with `SendGridEmailService` (`Twilio:SendGridApiKey`, `Twilio:FromEmail`, `Twilio:FromName`).
 - **Universal footer** — All emails append contact details via `EmailFooter`:
   - Contact / Email Us at: **info@lagedra.com**
-  - **213-735-2362**
+  - **+1 (213) 377-5272**
 - **Welcome / verify templates** — `WelcomeEmailComposer` centralizes host, tenant, partner, founding-host, and pre-launch partner copy; verify links target the SPA `/auth/verify-email` route.
 - **Forgot password** — Sends to inactive or unverified accounts so founding hosts on waitlist can recover access.
 - **Reset password** — Successful reset also marks email confirmed and account active (supports first-time password setup).

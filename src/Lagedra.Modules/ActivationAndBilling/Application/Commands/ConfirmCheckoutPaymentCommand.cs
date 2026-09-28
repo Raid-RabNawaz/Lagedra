@@ -104,9 +104,10 @@ public sealed partial class ConfirmCheckoutPaymentCommandHandler(
             c.FirstMonthRentCents,
             c.DepositAmountCents,
             c.InsuranceFeeCents,
-            c.InsuranceFeeCents + c.MonthlyProtocolFeeCents + c.ServiceFeeCents,
+            c.InsuranceFeeCents + c.MonthlyProtocolFeeCents + c.ServiceFeeCents + c.EvictionProtectionFeeCents,
             c.ServiceFeeCents,
-            "usd");
+            "usd",
+            c.EvictionProtectionFeeCents);
 
     [LoggerMessage(Level = LogLevel.Information,
         Message = "Payment confirmed for deal {DealId}, PI {PaymentIntentId} — activating deal")]

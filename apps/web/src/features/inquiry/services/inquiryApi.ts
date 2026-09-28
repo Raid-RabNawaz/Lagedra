@@ -79,9 +79,10 @@ export const inquiryApi = {
 
   // Phase 17 — pre-booking inquiry endpoints (listing-scoped).
 
-  async startListingInquiry(listingId: string): Promise<InquiryDto> {
+  async startListingInquiry(listingId: string, message?: string): Promise<InquiryDto> {
     const response = await http.post<InquiryDto>(
       endpoints.inquiry.startListingInquiry(listingId),
+      message ? { message } : {},
     );
     return response.data;
   },

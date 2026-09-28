@@ -44,6 +44,7 @@ public sealed partial class OnTruthSurfaceConfirmedCreatePaymentConfirmationHand
 
         var rentBaseCents = application?.FirstMonthRentCents ?? 1;
         var serviceFee = await ResolveServiceFeeAsync(rentBaseCents, ct).ConfigureAwait(false);
+        var evictionProtectionFee = application?.EvictionProtectionFeeCents ?? 0;
 
         if (!existing)
         {
@@ -52,7 +53,8 @@ public sealed partial class OnTruthSurfaceConfirmedCreatePaymentConfirmationHand
                 application?.DepositAmountCents ?? 0,
                 application?.InsuranceFeeCents ?? 0,
                 protocolFee,
-                serviceFee);
+                serviceFee,
+                evictionProtectionFee);
 
             var graceDays = (int)await settings
                 .GetLongAsync(PlatformSettingKeys.PaymentGracePeriodDays, 3, ct).ConfigureAwait(false);
@@ -93,7 +95,8 @@ public sealed partial class OnTruthSurfaceConfirmedCreatePaymentConfirmationHand
                 application.InsuranceFeeCents ?? 0,
                 protocolFee,
                 serviceFee,
-                ct).ConfigureAwait(false);
+                ct,
+                application.EvictionProtectionFeeCents).ConfigureAwait(false);
 
             if (!chargeResult.Charged)
             {

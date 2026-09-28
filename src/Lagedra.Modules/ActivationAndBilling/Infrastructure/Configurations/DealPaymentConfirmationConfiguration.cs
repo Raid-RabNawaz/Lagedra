@@ -24,6 +24,11 @@ public sealed class DealPaymentConfirmationConfiguration
         builder.Property(c => c.InsuranceFeeCents).IsRequired().HasDefaultValue(0L);
         builder.Property(c => c.MonthlyProtocolFeeCents).IsRequired().HasDefaultValue(0L);
         builder.Property(c => c.ServiceFeeCents).IsRequired().HasDefaultValue(0L);
+        builder.Property(c => c.EvictionProtectionFeeCents).IsRequired().HasDefaultValue(0L);
+        builder.Property(c => c.EvictionProtectionClaimStanding)
+            .HasConversion<string>()
+            .HasMaxLength(32);
+        builder.Ignore(c => c.GuestPlatformFeeCents);
         builder.Property(c => c.HostPaidPlatform).IsRequired();
 
         builder.Property(c => c.HostConfirmed).IsRequired();

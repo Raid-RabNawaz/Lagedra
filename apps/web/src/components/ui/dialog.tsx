@@ -52,7 +52,13 @@ function DialogTrigger({ asChild, children }: DialogTriggerProps) {
   );
 }
 
-function DialogPortal({ children }: { children: React.ReactNode }) {
+function DialogPortal({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
   const { open, onOpenChange } = useDialogContext();
 
   React.useEffect(() => {
@@ -95,37 +101,38 @@ function DialogPortal({ children }: { children: React.ReactNode }) {
           if (e.target === e.currentTarget) onOpenChange(false);
         }}
       >
-        <div className="w-full max-w-lg">{children}</div>
+        <div className={cn("w-full max-w-lg", className)}>{children}</div>
       </div>
     </div>,
     document.body,
   );
 }
 
-const DialogContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, children, ...props }, ref) => {
-    const { onOpenChange } = useDialogContext();
-    return (
-      <DialogPortal>
-        <div
-          ref={ref}
-          className={cn("relative rounded-xl border bg-background p-6 shadow-lg", className)}
-          {...props}
+const DialogContent = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement> & { containerClassName?: string }
+>(({ className, children, containerClassName, ...props }, ref) => {
+  const { onOpenChange } = useDialogContext();
+  return (
+    <DialogPortal className={containerClassName}>
+      <div
+        ref={ref}
+        className={cn("relative rounded-xl border bg-background p-6 shadow-lg", className)}
+        {...props}
+      >
+        {children}
+        <button
+          type="button"
+          onClick={() => onOpenChange(false)}
+          className="absolute right-4 top-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 cursor-pointer"
+          aria-label="Close"
         >
-          {children}
-          <button
-            type="button"
-            onClick={() => onOpenChange(false)}
-            className="absolute right-4 top-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 cursor-pointer"
-            aria-label="Close"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-      </DialogPortal>
-    );
-  },
-);
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+    </DialogPortal>
+  );
+});
 DialogContent.displayName = "DialogContent";
 
 function DialogClose({

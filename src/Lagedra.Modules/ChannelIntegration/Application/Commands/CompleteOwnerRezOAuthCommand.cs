@@ -31,10 +31,19 @@ public sealed class CompleteOwnerRezOAuthCommandHandler(
         "Channel.OAuthExchangeFailed",
         "OwnerRez would not confirm the authorization. Please try connecting again.");
 
+    private static readonly Error OpenApiDisabled = new(
+        "Channel.OpenApiDisabled",
+        "OwnerRez is connected with the channel Connection ID. Account authorization is turned off.");
+
     public async Task<Result<Guid>> Handle(
         CompleteOwnerRezOAuthCommand request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        if (!flow.IsOpenApiEnabled)
+        {
+            return Result<Guid>.Failure(OpenApiDisabled);
+        }
 
         if (flow.TryReadState(request.State) is not { } hostUserId
             || string.IsNullOrWhiteSpace(request.Code))

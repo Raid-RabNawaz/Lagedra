@@ -1,1 +1,0 @@
-import{j as o,m as r,d as t}from"./index-lsd6rsb8.js";const e=({tone:s="brand",className:a})=>o.jsx("img",{src:r,alt:"Lagedra",className:t("h-7 w-auto",s==="onDark"&&"brightness-0 invert",a)});export{e as J};

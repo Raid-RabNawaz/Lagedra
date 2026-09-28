@@ -34,10 +34,19 @@ public sealed class StartOwnerRezOAuthCommandHandler(
         "Channel.OwnerRezNotConfigured",
         "OwnerRez connections are not available right now. Please try again later.");
 
+    private static readonly Error OpenApiDisabled = new(
+        "Channel.OpenApiDisabled",
+        "OwnerRez is connected with the channel Connection ID. Account authorization is turned off.");
+
     public async Task<Result<OwnerRezAuthorizationDto>> Handle(
         StartOwnerRezOAuthCommand request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        if (!flow.IsOpenApiEnabled)
+        {
+            return Result<OwnerRezAuthorizationDto>.Failure(OpenApiDisabled);
+        }
 
         if (!flow.IsConfigured)
         {

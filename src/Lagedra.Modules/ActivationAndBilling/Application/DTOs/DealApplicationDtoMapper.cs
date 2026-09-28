@@ -41,6 +41,8 @@ internal static class DealApplicationDtoMapper
             a.OwnerTenancyConsentGiven,
             a.OwnerTenancyConsentDeclined,
             a.OwnerTenancyConsentAt,
-            lastScreenedAt);
+            lastScreenedAt,
+            EvictionProtectionFeeCents: a.EvictionProtectionFeeCents,
+            EvictionProtectionIncluded: a.EvictionProtectionIncluded);
     }
 }

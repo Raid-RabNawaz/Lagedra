@@ -40,4 +40,6 @@ public sealed record DealApplicationDetailsDto(
     bool OwnerConsentRequired = false,
     bool OwnerTenancyConsentGiven = false,
     DateTime? OwnerTenancyConsentAt = null,
-    string? OwnerConsentVersion = null);
+    string? OwnerConsentVersion = null,
+    long EvictionProtectionFeeCents = 0,
+    bool EvictionProtectionIncluded = false);

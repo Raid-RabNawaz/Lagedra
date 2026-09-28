@@ -124,7 +124,8 @@ public sealed partial class LeasePdfGenerator : ILeasePdfGenerator
                 break;
 
             case HtmlBlockKind.SignatureLine:
-                col.Item().PaddingTop(12).Width(200).BorderBottom(0.7f).BorderColor(Colors.Black).Height(16);
+                col.Item().PaddingTop(12).Width(220).MinHeight(16).BorderBottom(0.7f).BorderColor(Colors.Black)
+                    .AlignBottom().Text(block.PlainText).Italic();
                 break;
 
             case HtmlBlockKind.DateLine:
@@ -276,7 +277,8 @@ public sealed partial class LeasePdfGenerator : ILeasePdfGenerator
             _ => HtmlBlockKind.Paragraph
         };
 
-        var plain = kind is HtmlBlockKind.Party or HtmlBlockKind.PartyName or HtmlBlockKind.DateLine
+        var plain = kind is HtmlBlockKind.Party or HtmlBlockKind.PartyName
+            or HtmlBlockKind.DateLine or HtmlBlockKind.SignatureLine
             ? Decode(StripTags(inner)).Trim()
             : string.Empty;
 

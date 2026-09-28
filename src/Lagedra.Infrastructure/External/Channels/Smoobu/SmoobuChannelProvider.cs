@@ -127,11 +127,14 @@ public sealed partial class SmoobuChannelProvider(
             typeName = Str(type, "name");
         }
 
+        // Apartment `price.minimal` is a daily amount with no period flag.
+        var rate = ChannelRateNormalizer.Normalize(nightlyCents);
+
         return new ChannelListingSnapshot(
             ExternalListingId: externalId,
             Title: title,
-            MonthlyRentCents: nightlyCents.HasValue ? nightlyCents.Value * 30 : null,
-            NightlyRateCents: nightlyCents,
+            MonthlyRentCents: rate.MonthlyRentCents,
+            NightlyRateCents: rate.NightlyRateCents,
             Currency: Str(root, "currency") ?? "USD",
             Bedrooms: bedrooms,
             Bathrooms: bathrooms,
@@ -139,7 +142,8 @@ public sealed partial class SmoobuChannelProvider(
             Longitude: longitude,
             PropertyType: MapPropertyType(typeName),
             Address: address,
-            AmenityCodes: amenities);
+            AmenityCodes: amenities,
+            PriceBasis: rate.PriceBasis);
     }
 
     private static List<string>? ParseStringArray(JsonElement root, string name)

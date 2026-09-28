@@ -189,10 +189,10 @@ public static class InfrastructureServiceRegistration
             .GetSection(HosthubChannelSettings.SectionName)
             .Get<HosthubChannelSettings>() ?? new HosthubChannelSettings();
 
-        // OwnerRez API v2: hosts authorize the Lagedra OAuth app, and the issued
-        // per-host access token on ChannelConnection is sent as a bearer token.
-        // The OAuth app's client id/secret are the only platform-level values.
-        // OwnerRez requires a User-Agent naming the app and its client id.
+        // OwnerRez has two clients behind one provider key. The gateway sends a
+        // connection that still has an API token to the v2 client, and a channel
+        // Connection ID to the HA-XML client. OpenApiEnabled only controls which
+        // connect screen is offered; both clients stay registered.
         var ownerRezUserAgent = ownerRezSettings.BuildUserAgent();
         services.AddHttpClient<OwnerRezChannelProvider>(client =>
         {
@@ -200,7 +200,14 @@ public static class InfrastructureServiceRegistration
             client.Timeout = TimeSpan.FromSeconds(60);
             client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", ownerRezUserAgent);
         });
-        services.AddScoped<IChannelProvider>(sp => sp.GetRequiredService<OwnerRezChannelProvider>());
+        services.AddHttpClient<OwnerRezHaXmlChannelProvider>(client =>
+        {
+            client.BaseAddress = ownerRezSettings.HaXmlBaseUrl;
+            client.Timeout = TimeSpan.FromSeconds(60);
+            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", ownerRezSettings.HaXmlUserAgent);
+        });
+        services.AddScoped<OwnerRezChannelGateway>();
+        services.AddScoped<IChannelProvider>(sp => sp.GetRequiredService<OwnerRezChannelGateway>());
 
         services.AddHttpClient<OwnerRezOAuthClient>(client =>
         {

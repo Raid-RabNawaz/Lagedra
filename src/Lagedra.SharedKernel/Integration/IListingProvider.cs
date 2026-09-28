@@ -105,7 +105,8 @@ public sealed record ListingDetailsDto(
     // upload, or is skipped entirely.
     string? LeaseAgreementSource = null,
     ListingCustomLeaseDocumentDto? CustomLeaseDocument = null,
-    bool StayProtectionEnabled = true);
+    bool StayProtectionEnabled = true,
+    bool RequireLeaseSignatures = false);
 
 public sealed record ListingDateRangeDto(DateOnly CheckIn, DateOnly CheckOut);
 

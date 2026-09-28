@@ -50,7 +50,8 @@ public sealed record ListingDetailsDto(
     ListingHomeOwnerDto? HomeOwner = null,
     LeaseAgreementSource LeaseAgreementSource = LeaseAgreementSource.LagedraTemplate,
     CustomLeaseDocumentDto? CustomLeaseDocument = null,
-    bool StayProtectionEnabled = true);
+    bool StayProtectionEnabled = true,
+    bool RequireLeaseSignatures = false);
 
 public sealed record ListingHomeOwnerDto(
     Guid UserId,

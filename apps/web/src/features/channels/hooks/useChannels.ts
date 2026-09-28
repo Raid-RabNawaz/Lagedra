@@ -2,7 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { channelsApi } from "@/features/channels/services/channelsApi";
 import type { ChannelListingMapDto, ConnectChannelRequest } from "@/api/types";
 
-const channelKeys = {
+export type PmsPriceBasis = "Monthly" | "Nightly";
+
+export const channelKeys = {
   providers: ["channels", "providers"] as const,
   connections: ["channels", "connections"] as const,
   listings: (id: string) => ["channels", "listings", id] as const,
@@ -95,6 +97,26 @@ export function useSetChannelListingSync(connectionId: string) {
         syncPriceFromPms,
         syncCalendarFromPms,
       }),
+    onSuccess: (updated) => {
+      queryClient.setQueryData<ChannelListingMapDto[]>(
+        channelKeys.listings(connectionId),
+        (current) =>
+          current?.map((row) => (row.id === updated.id ? updated : row)) ?? current,
+      );
+    },
+  });
+}
+
+export function useSetChannelListingPriceBasis(connectionId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      mapId,
+      priceBasis,
+    }: {
+      mapId: string;
+      priceBasis: PmsPriceBasis;
+    }) => channelsApi.setListingPriceBasis(connectionId, mapId, { priceBasis }),
     onSuccess: (updated) => {
       queryClient.setQueryData<ChannelListingMapDto[]>(
         channelKeys.listings(connectionId),

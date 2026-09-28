@@ -58,19 +58,14 @@ public sealed class TruthSurfaceSnapshotBuilder(
     public const string ProtocolVersion = "1.0";
 
     /// <summary>
-    /// Canonical content schema version. Bumped to "2.4": adds the
-    /// <c>depositReturnTerms</c> block that seals the non-custodial deposit
-    /// contract into the signed agreement — the deposit is paid to and held by
-    /// the host, returned by the host directly after move-out (less any agreed
-    /// or arbitrated deductions), and the deal only completes once both parties
-    /// confirm the return/receipt. "2.3" removed the <c>consent</c> IP/User-Agent
-    /// fingerprints from the hashed payload (they remain on the
-    /// <see cref="TruthSnapshot"/> columns for arbitration/admin use); only
-    /// <c>userId</c>, <c>consentedAt</c>, and <c>consentVersion</c> stay in the
-    /// hashed consent block. Changes only affect new snapshots; older hashes
-    /// are unaffected.
+    /// Canonical content schema version. "2.7" adds
+    /// <c>financials.evictionProtectionTerms</c> when Eviction Protection is
+    /// included: the fee refunds on cancellation before check-in, a
+    /// non-qualifying early move-out ends coverage with the booking, and a
+    /// documented-nonpayment early move-out may still be reviewed. Older
+    /// hashes are verified against their stored content.
     /// </summary>
-    private const string CanonicalSchemaVersion = "2.5";
+    private const string CanonicalSchemaVersion = "2.7";
 
     /// <summary>Fallback deposit-return window (days after move-out) when the platform setting is unset.</summary>
     private const int DefaultDepositReturnWindowDays = 21;
@@ -264,7 +259,9 @@ public sealed class TruthSurfaceSnapshotBuilder(
         var deposit = deal.DepositAmountCents ?? 0;
         var insurance = deal.InsuranceFeeCents ?? 0;
         var serviceFee = deal.ServiceFeeCents ?? 0;
-        var totalDue = deal.TotalPayableSnapshotCents ?? (firstMonth + deposit + insurance + serviceFee);
+        var evictionFee = deal.EvictionProtectionFeeCents;
+        var totalDue = deal.TotalPayableSnapshotCents
+            ?? (firstMonth + deposit + insurance + serviceFee + evictionFee);
 
         var content = new SortedDictionary<string, object?>(StringComparer.Ordinal)
         {
@@ -305,6 +302,19 @@ public sealed class TruthSurfaceSnapshotBuilder(
                 ["tenantVerificationTier"] = deal.TenantVerificationTier?.ToString(),
                 ["insuranceFeeCents"] = insurance,
                 ["serviceFeeCents"] = serviceFee,
+                ["evictionProtectionIncluded"] = deal.EvictionProtectionIncluded,
+                ["evictionProtectionFeeCents"] = evictionFee,
+                ["evictionProtectionCapCents"] = deal.EvictionProtectionIncluded
+                    ? EvictionProtectionFee.CoverageCapCents
+                    : 0,
+                ["evictionProtectionTerms"] = deal.EvictionProtectionIncluded
+                    ? new SortedDictionary<string, object?>(StringComparer.Ordinal)
+                    {
+                        ["refundBeforeCheckIn"] = EvictionProtectionFee.RefundBeforeCheckInTerm,
+                        ["nonQualifyingEarlyMoveOut"] = EvictionProtectionFee.NonQualifyingEarlyMoveOutTerm,
+                        ["documentedNonpaymentEarlyMoveOut"] = EvictionProtectionFee.DocumentedNonpaymentEarlyMoveOutTerm,
+                    }
+                    : null,
                 ["monthlyProtocolFeeCents"] = monthlyProtocolFeeCents,
                 ["totalDueAtCheckoutCents"] = totalDue
             },

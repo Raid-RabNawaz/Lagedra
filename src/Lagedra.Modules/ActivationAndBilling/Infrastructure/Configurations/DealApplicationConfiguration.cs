@@ -51,6 +51,8 @@ public sealed class DealApplicationConfiguration : IEntityTypeConfiguration<Deal
         builder.Property(a => a.InsuranceFeeCents);
         builder.Property(a => a.FirstMonthRentCents);
         builder.Property(a => a.ServiceFeeCents);
+        builder.Property(a => a.EvictionProtectionIncluded).HasDefaultValue(false);
+        builder.Property(a => a.EvictionProtectionFeeCents).HasDefaultValue(0L);
         builder.Property(a => a.TotalPayableSnapshotCents);
 
         // Predetermined-deposit snapshot: the tier that selected the deposit

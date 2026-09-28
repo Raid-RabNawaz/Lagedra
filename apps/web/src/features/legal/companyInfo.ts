@@ -8,8 +8,8 @@ export const COMPANY = {
   postalCode: "91403",
   country: "United States",
   email: "info@lagedra.com",
-  phoneDisplay: "213-735-2362",
-  phoneE164: "+12137352362",
+  phoneDisplay: "+1 (213) 377-5272",
+  phoneE164: "+12133775272",
   website: "https://www.lagedra.com",
 } as const;
 

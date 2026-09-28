@@ -44,6 +44,8 @@ public static class PaymentConfirmationDtoMapper
             c.DepositReturnNote,
             c.DepositReturnSettledAt,
             netReturnableDepositCents,
-            c.DepositReturnEvidenceManifestId);
+            c.DepositReturnEvidenceManifestId,
+            c.EvictionProtectionFeeCents,
+            c.EvictionProtectionClaimStanding);
     }
 }

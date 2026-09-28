@@ -5,6 +5,9 @@ using System.Threading.Tasks;
 using FluentAssertions;
 using Lagedra.Infrastructure.External.Storage;
 using Lagedra.Modules.LeaseAgreements.Application.Commands;
+using Lagedra.Modules.LeaseAgreements.Application.Services;
+using Lagedra.Modules.LeaseAgreements.Domain.Entities;
+using Lagedra.Modules.LeaseAgreements.Domain.Enums;
 using Lagedra.Modules.LeaseAgreements.Infrastructure.Services;
 using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Results;
@@ -25,10 +28,13 @@ public class GenerateDealLeasePdfCommandTests
     private readonly IListingProvider _listings = Substitute.For<IListingProvider>();
     private readonly IObjectStorageService _storage = Substitute.For<IObjectStorageService>();
     private readonly IClock _clock = Substitute.For<IClock>();
+    private readonly IDealLeaseSignatureStore _signatures = Substitute.For<IDealLeaseSignatureStore>();
 
     public GenerateDealLeasePdfCommandTests()
     {
         _clock.UtcNow.Returns(new DateTime(2026, 9, 11, 0, 0, 0, DateTimeKind.Utc));
+        _signatures.ListByDealAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns(Array.Empty<DealLeaseSignature>());
     }
 
     [Fact]
@@ -128,6 +134,46 @@ public class GenerateDealLeasePdfCommandTests
         result.Error.Code.Should().Be("LeaseTemplate.FillFailed");
     }
 
+    [Fact]
+    public async Task Regenerates_when_a_signature_is_newer_than_the_stored_pdf()
+    {
+        var existing = StoredPdf();
+        var templateVersionId = existing.TemplateVersionId ?? Guid.NewGuid();
+        var templateId = existing.TemplateId ?? Guid.NewGuid();
+        _store.GetByDealIdAsync(_dealId, Arg.Any<CancellationToken>()).Returns(existing);
+        _deals.GetDealDetailsAsync(_dealId, Arg.Any<CancellationToken>())
+            .Returns((DealApplicationDetailsDto?)null);
+        _filler.FillForDealAsync(_dealId, Arg.Any<CancellationToken>())
+            .Returns(new FilledLeaseAgreement(
+                templateId,
+                templateVersionId,
+                1,
+                "US-CA",
+                "California Residential Lease",
+                "<p>signed</p>",
+                new Dictionary<string, string>(),
+                []));
+        _signatures.ListByDealAsync(_dealId, Arg.Any<CancellationToken>())
+            .Returns(
+            [
+                DealLeaseSignature.Create(
+                    _dealId,
+                    DealLeaseSignerRole.Host,
+                    Guid.NewGuid(),
+                    "Jane Host",
+                    "ABC",
+                    existing.GeneratedAtUtc.AddMinutes(1)),
+            ]);
+        _pdfGenerator.Generate(Arg.Any<string>(), Arg.Any<string>()).Returns([0x25, 0x50, 0x44, 0x46, 0x2D]);
+
+        var result = await CreateHandler().Handle(new GenerateDealLeasePdfCommand(_dealId), CancellationToken.None);
+
+        result.IsSuccess.Should().BeTrue();
+        result.Value.Should().NotBeSameAs(existing);
+        _pdfGenerator.Received(1).Generate("California Residential Lease", "<p>signed</p>");
+        await _store.Received(1).SaveAsync(Arg.Any<DealLeaseDocument>(), Arg.Any<CancellationToken>());
+    }
+
     private GenerateDealLeasePdfCommandHandler CreateHandler() =>
         new(
             _filler,
@@ -137,7 +183,8 @@ public class GenerateDealLeasePdfCommandTests
             _listings,
             _storage,
             Options.Create(new MinioSettings { Endpoint = "localhost" }),
-            _clock);
+            _clock,
+            _signatures);
 
     private DealLeaseDocument StoredPdf() =>
         new(

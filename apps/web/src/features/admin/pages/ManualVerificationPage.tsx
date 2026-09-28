@@ -25,18 +25,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Loader } from "@/components/shared/Loader";
+import { ReviewDocumentImage } from "@/features/admin/components/ReviewDocumentImage";
+import { orderReviewDocuments } from "@/features/admin/lib/kycPreview";
 
 function slaBadge(hours: number) {
   if (hours > 12) return <Badge variant="success">{hours.toFixed(1)} h</Badge>;
   if (hours > 6) return <Badge variant="accent">{hours.toFixed(1)} h</Badge>;
   return <Badge variant="destructive">{hours.toFixed(1)} h</Badge>;
 }
-
-const documentLabels: Record<string, string> = {
-  IdFront: "ID — front",
-  IdBack: "ID — back",
-  Selfie: "Live selfie",
-};
 
 export const ManualVerificationPage = () => {
   const [queue, setQueue] = useState<ManualVerificationItemDto[]>([]);
@@ -189,7 +185,7 @@ export const ManualVerificationPage = () => {
       </Card>
 
       <Dialog open={reviewing !== null} onOpenChange={(open) => !open && closeReview()}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent containerClassName="max-w-5xl" className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Identity review</DialogTitle>
             <DialogDescription>
@@ -231,22 +227,12 @@ export const ManualVerificationPage = () => {
                 </p>
               ) : (
                 <div className="grid gap-4 sm:grid-cols-2">
-                  {detail.documents.map((doc) => (
-                    <figure key={doc.documentType} className="space-y-2">
-                      <figcaption className="text-sm font-medium">
-                        {documentLabels[doc.documentType] ?? doc.documentType}
-                        <span className="ml-2 text-xs font-normal text-muted-foreground">
-                          {new Date(doc.uploadedAt).toLocaleString()}
-                        </span>
-                      </figcaption>
-                      <a href={doc.downloadUrl} target="_blank" rel="noreferrer">
-                        <img
-                          src={doc.downloadUrl}
-                          alt={documentLabels[doc.documentType] ?? doc.documentType}
-                          className="w-full rounded-lg border object-contain max-h-72 bg-muted"
-                        />
-                      </a>
-                    </figure>
+                  {orderReviewDocuments(detail.documents).map((doc) => (
+                    <ReviewDocumentImage
+                      key={`${doc.documentType}-${doc.uploadedAt}`}
+                      profileId={detail.profileId}
+                      doc={doc}
+                    />
                   ))}
                 </div>
               )}

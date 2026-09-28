@@ -16,6 +16,7 @@ public sealed class LeaseAgreementDbContext(
     public DbSet<LeaseAgreementTemplate> Templates => Set<LeaseAgreementTemplate>();
     public DbSet<LeaseTemplateVersion> Versions => Set<LeaseTemplateVersion>();
     public DbSet<DealLeaseDocumentEntity> DealDocuments => Set<DealLeaseDocumentEntity>();
+    public DbSet<DealLeaseSignature> Signatures => Set<DealLeaseSignature>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

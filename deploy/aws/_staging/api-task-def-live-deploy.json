@@ -11,7 +11,7 @@
   "containerDefinitions": [
     {
       "name": "api",
-      "image": "930218374225.dkr.ecr.us-west-1.amazonaws.com/lagedra/api@sha256:c7b8d66cce86612e29b4157ceefdcf9c99c564b1a84bd70f7a5b95cabef83864",
+      "image": "930218374225.dkr.ecr.us-west-1.amazonaws.com/lagedra/api@sha256:718c353b25bedf42a8be87b45adafc1c2b882dde39d235837ab82d718e796db5",
       "essential": true,
       "portMappings": [
         {

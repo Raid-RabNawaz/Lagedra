@@ -387,6 +387,8 @@ export type ListingDetailsDto = {
   customLeaseDocument?: CustomLeaseDocumentDto | null;
   /** Host opt-in for Truvi Stay Protection on this listing. Defaults to true. */
   stayProtectionEnabled?: boolean;
+  /** Host opt-in for in-app host/tenant signatures on Lagedra's lease. Defaults to false. */
+  requireLeaseSignatures?: boolean;
 };
 
 // Whether bookings on a listing are bound by Lagedra's jurisdiction template,
@@ -598,6 +600,7 @@ export type CreateListingRequest = {
   addedVia?: ListingAddedVia;
   addedViaDetail?: string | null;
   stayProtectionEnabled?: boolean;
+  requireLeaseSignatures?: boolean;
 };
 
 export type ListingAddedVia = "Manual" | "Url" | "Excel" | "Xml";
@@ -675,6 +678,7 @@ export type UpdateListingRequest = {
   includeBrokerClause?: boolean;
   leaseAgreementSource?: LeaseAgreementSource;
   stayProtectionEnabled?: boolean | null;
+  requireLeaseSignatures?: boolean | null;
 };
 
 export type SetApproxLocationRequest = {
@@ -1067,6 +1071,8 @@ export type DealApplicationDto = {
   screeningOrderStatus?: ScreeningOrderStatus | string | null;
   screeningResult?: "Pass" | "Review" | "Fail" | string | null;
   screeningRequestedByHostUserId?: string | null;
+  evictionProtectionFeeCents?: number;
+  evictionProtectionIncluded?: boolean;
 };
 
 export type DealApplicationSource = "TenantSelfApply" | "PartnerDirectReservation";
@@ -1095,6 +1101,8 @@ export type ReservationPreviewDto = {
   stayDurationDays: number;
   isNegotiatedOffer?: boolean;
   negotiatedOfferId?: string | null;
+  evictionProtectionFeeCents?: number;
+  evictionProtectionIncluded?: boolean;
 };
 
 /**
@@ -1220,6 +1228,12 @@ export type ChannelProviderDto = {
    * only reports true once an OAuth app is configured server-side.
    */
   usesOAuth: boolean;
+  /**
+   * How the Channels page collects credentials. `haxml` is the OwnerRez
+   * Connection ID. `oauth` and `token` are the API-for-apps paths, shown only
+   * when the server has turned that path back on.
+   */
+  connectMode: "haxml" | "oauth" | "token" | "credentials";
 };
 
 export type ChannelConnectionDto = {
@@ -1243,6 +1257,12 @@ export type ChannelListingMapDto = {
   lastImportedAt: string | null;
   syncPriceFromPms: boolean;
   syncCalendarFromPms: boolean;
+  /** Host's saved reading of the PMS amount. Null until they choose. */
+  pmsPriceBasis: "Monthly" | "Nightly" | null;
+  /** Raw PMS amount in cents, before a ×30 conversion. */
+  pmsSourceAmountCents: number | null;
+  /** True when a nightly reading of this amount would exceed $40,000 a month. */
+  pmsPriceNeedsConfirmation: boolean;
 };
 
 /** Summary returned after an on-demand content sync. */
@@ -1280,6 +1300,7 @@ export type CheckoutDto = {
   applicationFeeCents: number;
   serviceFeeCents: number;
   currency: string;
+  evictionProtectionFeeCents?: number;
 };
 
 // ── Billing & Activation ──────────────────────────────────────
@@ -1386,6 +1407,8 @@ export type PaymentConfirmationDto = {
   netReturnableDepositCents?: number | null;
   /** Sealed damage-photo manifest when the host returned less than the full deposit. */
   depositReturnEvidenceManifestId?: string | null;
+  evictionProtectionFeeCents?: number;
+  evictionProtectionClaimStanding?: "EndedNoClaim" | "ClaimReviewable" | null;
 };
 
 export type PaymentDetailsDto = {
@@ -1493,9 +1516,11 @@ export type QuoteDto = {
   protocolFeeCents: number;
   /** Platform service fee charged to the tenant; included in totalCents. */
   serviceFeeCents: number;
-  /** Tenant-payable total = rent + deposit + insurance + service fee. */
+  /** Tenant-payable total = rent + deposit + insurance + service fee + eviction protection. */
   totalCents: number;
   currency: string;
+  evictionProtectionFeeCents?: number;
+  evictionProtectionIncluded?: boolean;
 };
 
 /** Pre-flight consent state for the booking funnel. */
@@ -1720,6 +1745,10 @@ export type DealSummaryDto = {
   insuranceFeeCents?: number | null;
   /** Listing lease choice at read time. Missing means Lagedra's template. */
   leaseAgreementSource?: LeaseAgreementSource | null;
+  evictionProtectionFeeCents?: number;
+  evictionProtectionIncluded?: boolean;
+  /** Set when a covered stay ends before the scheduled check-out. */
+  evictionProtectionClaimStanding?: "EndedNoClaim" | "ClaimReviewable" | null;
 };
 
 // ── Notifications ────────────────────────────────────────────
@@ -2276,6 +2305,30 @@ export type UpsertSeoPageRequest = {
   metaTitle: string;
   metaDescription: string;
   noIndex: boolean;
+};
+
+// ── Deal lease signing (Lagedra template, listing opt-in) ───
+export type DealLeaseSignerRole = "Host" | "Tenant";
+
+export type DealLeasePartySignatureDto = {
+  role: DealLeaseSignerRole;
+  typedName: string;
+  signedAtUtc: string;
+};
+
+export type DealLeaseSigningStatusDto = {
+  signingRequired: boolean;
+  callerRole: DealLeaseSignerRole | null;
+  callerCanSign: boolean;
+  callerHasSigned: boolean;
+  bothSigned: boolean;
+  host: DealLeasePartySignatureDto | null;
+  tenant: DealLeasePartySignatureDto | null;
+};
+
+export type SignDealLeaseRequest = {
+  typedName: string;
+  accepted: boolean;
 };
 
 // ── Admin: Lease Agreement Templates ────────────────────────

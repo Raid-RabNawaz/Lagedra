@@ -26,11 +26,14 @@ import { DealPhaseBadge } from "@/features/deals/components/DealPhaseBadge";
 import { DepositReturnPanel } from "@/features/deals/components/DepositReturnPanel";
 import { DealStayAccessCard } from "@/features/deals/components/DealStayAccessCard";
 import { DealStayProtectionCard } from "@/features/deals/components/DealStayProtectionCard";
+import { DealEvictionProtectionCard } from "@/features/deals/components/DealEvictionProtectionCard";
+import { evictionProtectionApplies } from "@/features/listings/lib/evictionProtection";
 import { EndingSoonBadge } from "@/features/deals/components/BookingAttentionBanner";
 import { LeaveStayReviewPanel } from "@/features/reviews/components/LeaveStayReviewPanel";
 import { useMyDeals } from "@/features/deals/hooks/useDeals";
 import { useSnapshotByDealId } from "@/features/truth-surface/hooks/useTruthSurface";
 import { LeaseAgreementDownloadButton } from "@/features/truth-surface/components/LeaseAgreementDownloadButton";
+import { DealLeaseSigningCard } from "@/features/deals/components/DealLeaseSigningCard";
 import { listingHasLeaseAgreement } from "@/features/listings/lib/leaseAgreement";
 import { useAuthStore } from "@/app/auth/authStore";
 import { isAdmin } from "@/app/auth/permissions";
@@ -417,6 +420,17 @@ export function DealDetailPage() {
         truthSurface={truthSurface ?? null}
       />
 
+      {evictionProtectionApplies(
+        deal.evictionProtectionIncluded,
+        deal.evictionProtectionFeeCents,
+      ) && (
+        <DealEvictionProtectionCard
+          feeCents={deal.evictionProtectionFeeCents ?? 0}
+          perspective={isLandlord ? "host" : isTenant ? "guest" : "other"}
+          claimStanding={deal.evictionProtectionClaimStanding}
+        />
+      )}
+
       {stayProtectionIncluded && (
         <DealStayProtectionCard
           dealId={deal.dealId}
@@ -479,14 +493,17 @@ export function DealDetailPage() {
         {truthSurface?.status === "Confirmed"
           && (isLandlord || isTenant)
           && listingHasLeaseAgreement(deal.leaseAgreementSource) && (
-          <div className="flex items-center justify-between gap-3 rounded-xl border p-4">
-            <div className="min-w-0">
-              <p className="text-sm font-medium">Lease agreement</p>
-              <p className="text-xs text-muted-foreground">
-                The signed lease generated from the sealed deal terms.
-              </p>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3 rounded-xl border p-4">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">Lease agreement</p>
+                <p className="text-xs text-muted-foreground">
+                  The lease generated from the sealed deal terms.
+                </p>
+              </div>
+              <LeaseAgreementDownloadButton dealId={deal.dealId} size="sm" />
             </div>
-            <LeaseAgreementDownloadButton dealId={deal.dealId} size="sm" />
+            <DealLeaseSigningCard dealId={deal.dealId} />
           </div>
         )}
 

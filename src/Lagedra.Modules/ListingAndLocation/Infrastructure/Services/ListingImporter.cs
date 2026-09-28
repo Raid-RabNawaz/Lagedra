@@ -1,3 +1,4 @@
+using Lagedra.Infrastructure.External.Channels;
 using Lagedra.Modules.ListingAndLocation.Domain.Aggregates;
 using Lagedra.Modules.ListingAndLocation.Domain.Entities;
 using Lagedra.Modules.ListingAndLocation.Domain.Enums;
@@ -81,34 +82,43 @@ public sealed partial class ListingImporter(
                 listing.Id, monthlyRentCents, DateOnly.FromDateTime(clock.UtcNow)));
             created = true;
         }
-        else if (listing.Status is ListingStatus.Draft or ListingStatus.Denied)
+        else
         {
-            // Refresh draft/denied content. Rent stays Lagedra-owned unless
-            // the host opted this listing into PMS price sync.
-            var rent = request.SyncPriceFromPms ? monthlyRentCents : listing.MonthlyRentCents;
-            var deposit = request.SyncPriceFromPms ? maxDepositCents : listing.MaxDepositCents;
-            var previousRent = listing.MonthlyRentCents;
-            listing.Update(
-                propertyType,
-                title,
-                description,
-                rent,
-                bedrooms,
-                bathrooms,
-                stayRange,
-                deposit,
-                request.SquareFootage);
-            if (request.SyncPriceFromPms && previousRent != rent)
+            // Rent stays Lagedra-owned unless the host opted into PMS price sync,
+            // or the stored rent is still the old "monthly amount × 30/31" bug.
+            var applyNormalizedRent = ChannelRateNormalizer.ShouldApplyNormalizedRent(
+                listing.MonthlyRentCents,
+                monthlyRentCents,
+                request.SyncPriceFromPms,
+                request.PmsAmountIsMonthlyRent);
+
+            if (listing.Status is ListingStatus.Draft or ListingStatus.Denied)
             {
-                await RecordRentChangeAsync(listing.Id, rent, ct).ConfigureAwait(false);
+                var rent = applyNormalizedRent ? monthlyRentCents : listing.MonthlyRentCents;
+                var deposit = request.SyncPriceFromPms ? maxDepositCents : listing.MaxDepositCents;
+                var previousRent = listing.MonthlyRentCents;
+                listing.Update(
+                    propertyType,
+                    title,
+                    description,
+                    rent,
+                    bedrooms,
+                    bathrooms,
+                    stayRange,
+                    deposit,
+                    request.SquareFootage);
+                if (previousRent != rent)
+                {
+                    await RecordRentChangeAsync(listing.Id, rent, ct).ConfigureAwait(false);
+                }
             }
-        }
-        else if (request.SyncPriceFromPms
-            && listing.Status is ListingStatus.Published or ListingStatus.Activated)
-        {
-            if (listing.ApplyChannelMonthlyRent(monthlyRentCents))
+            else if (applyNormalizedRent
+                && listing.Status is ListingStatus.Published or ListingStatus.Activated)
             {
-                await RecordRentChangeAsync(listing.Id, monthlyRentCents, ct).ConfigureAwait(false);
+                if (listing.ApplyChannelMonthlyRent(monthlyRentCents))
+                {
+                    await RecordRentChangeAsync(listing.Id, monthlyRentCents, ct).ConfigureAwait(false);
+                }
             }
         }
 
@@ -154,6 +164,36 @@ public sealed partial class ListingImporter(
 
         await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
         return new ListingImportResult(listing.Id, created);
+    }
+
+    public async Task<bool> TryApplyChannelMonthlyRentAsync(
+        Guid listingId,
+        long monthlyRentCents,
+        CancellationToken ct = default)
+    {
+        if (monthlyRentCents <= 0)
+        {
+            return false;
+        }
+
+        var listing = await dbContext.Listings
+            .FirstOrDefaultAsync(l => l.Id == listingId, ct)
+            .ConfigureAwait(false);
+        if (listing is null
+            || listing.Status is not (ListingStatus.Draft or ListingStatus.Denied
+                or ListingStatus.Published or ListingStatus.Activated))
+        {
+            return false;
+        }
+
+        if (!listing.ApplyChannelMonthlyRent(monthlyRentCents))
+        {
+            return true;
+        }
+
+        await RecordRentChangeAsync(listing.Id, monthlyRentCents, ct).ConfigureAwait(false);
+        await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+        return true;
     }
 
     private async Task RecordRentChangeAsync(Guid listingId, long monthlyRentCents, CancellationToken ct)

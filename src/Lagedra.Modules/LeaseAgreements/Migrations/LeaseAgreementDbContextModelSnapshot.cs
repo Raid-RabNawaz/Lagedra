@@ -156,6 +156,56 @@ namespace LeaseAgreements.Migrations
                     b.ToTable("deal_lease_documents", "lease_agreements");
                 });
 
+            modelBuilder.Entity("Lagedra.Modules.LeaseAgreements.Domain.Entities.DealLeaseSignature", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("DealId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DocumentHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<DateTime>("SignedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("SignerUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TypedName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DealId", "Role")
+                        .IsUnique();
+
+                    b.ToTable("deal_lease_signatures", "lease_agreements");
+                });
+
             modelBuilder.Entity("Lagedra.Modules.LeaseAgreements.Domain.Entities.LeaseTemplateVersion", b =>
                 {
                     b.Property<Guid>("Id")

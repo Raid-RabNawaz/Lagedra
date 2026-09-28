@@ -215,7 +215,13 @@ export function useBeginMoveOut() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (dealId: string) => billingApi.beginMoveOut(dealId),
+    mutationFn: ({
+      dealId,
+      documentedNonpayment,
+    }: {
+      dealId: string;
+      documentedNonpayment?: boolean;
+    }) => billingApi.beginMoveOut(dealId, documentedNonpayment),
     onSuccess: (data) => {
       queryClient.setQueryData(["payment", data.dealId], data);
       invalidateDepositReturn(queryClient, data.dealId);

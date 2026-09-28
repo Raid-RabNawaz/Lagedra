@@ -1,3 +1,4 @@
+using Lagedra.Modules.ChannelIntegration.Domain.Enums;
 using Lagedra.SharedKernel.Domain;
 using Lagedra.SharedKernel.Time;
 
@@ -34,6 +35,18 @@ public sealed class ChannelListingMap : Entity<Guid>
     /// never removed by that job.
     /// </summary>
     public bool SyncCalendarFromPms { get; private set; }
+
+    /// <summary>
+    /// Host's choice for the PMS amount: nightly (× 30) or already monthly.
+    /// Null until they answer after a sync.
+    /// </summary>
+    public ChannelPmsPriceBasis? PmsPriceBasis { get; private set; }
+
+    /// <summary>
+    /// Last raw amount from the PMS feed, in cents, before monthly conversion.
+    /// Kept so a later choice can reprice the listing without another pull.
+    /// </summary>
+    public long? PmsSourceAmountCents { get; private set; }
 
     private ChannelListingMap() { }
 
@@ -78,6 +91,28 @@ public sealed class ChannelListingMap : Entity<Guid>
 
         SyncPriceFromPms = syncPriceFromPms;
         SyncCalendarFromPms = syncCalendarFromPms;
+        UpdatedAt = clock.UtcNow;
+    }
+
+    /// <summary>Stores the latest raw PMS amount. Does not change <see cref="PmsPriceBasis"/>.</summary>
+    public void RememberPmsSourceAmount(long? sourceAmountCents, IClock clock)
+    {
+        ArgumentNullException.ThrowIfNull(clock);
+
+        if (sourceAmountCents is > 0)
+        {
+            PmsSourceAmountCents = sourceAmountCents;
+        }
+
+        UpdatedAt = clock.UtcNow;
+    }
+
+    /// <summary>Remembers whether the PMS amount is monthly or nightly.</summary>
+    public void SetPmsPriceBasis(ChannelPmsPriceBasis basis, IClock clock)
+    {
+        ArgumentNullException.ThrowIfNull(clock);
+
+        PmsPriceBasis = basis;
         UpdatedAt = clock.UtcNow;
     }
 }

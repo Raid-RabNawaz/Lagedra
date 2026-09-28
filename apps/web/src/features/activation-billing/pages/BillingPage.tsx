@@ -57,6 +57,10 @@ import {
   STAY_PROTECTION_CLAIM_QUERY,
   STAY_PROTECTION_LABEL,
 } from "@/features/listings/lib/stayProtection";
+import {
+  EVICTION_PROTECTION_LABEL,
+  evictionProtectionAmountLabel,
+} from "@/features/listings/lib/evictionProtection";
 
 export const BillingPage = () => {
   const { dealId } = useParams<{ dealId: string }>();
@@ -400,6 +404,14 @@ export const BillingPage = () => {
                   <span className="text-muted-foreground">{STAY_PROTECTION_LABEL}</span>
                   <span className="font-medium">
                     {formatMoney(payment.insuranceFeeCents)}
+                  </span>
+                </div>
+              )}
+              {(payment.evictionProtectionFeeCents ?? 0) > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">{EVICTION_PROTECTION_LABEL}</span>
+                  <span className="font-medium">
+                    {evictionProtectionAmountLabel(payment.evictionProtectionFeeCents ?? 0)}
                   </span>
                 </div>
               )}

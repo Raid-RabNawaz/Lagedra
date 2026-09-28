@@ -151,7 +151,8 @@ public sealed class ListingProvider(ListingsDbContext db) : IListingProvider
                     customLease.ContentHash,
                     customLease.UploadedAtUtc)
                 : null,
-            listing.StayProtectionEnabled);
+            listing.StayProtectionEnabled,
+            listing.RequireLeaseSignatures);
     }
 
     public async Task<bool> IsAvailableAsync(

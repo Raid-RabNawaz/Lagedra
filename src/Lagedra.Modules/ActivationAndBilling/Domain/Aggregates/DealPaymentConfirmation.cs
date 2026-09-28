@@ -3,6 +3,7 @@ using Lagedra.Modules.ActivationAndBilling.Domain.Events;
 using Lagedra.Modules.ActivationAndBilling.Domain.ValueObjects;
 using Lagedra.SharedKernel.Domain;
 using Lagedra.SharedKernel.Integration.Events;
+using Lagedra.SharedKernel.Settings;
 using Lagedra.SharedKernel.Time;
 
 namespace Lagedra.Modules.ActivationAndBilling.Domain.Aggregates;
@@ -23,6 +24,25 @@ public sealed class DealPaymentConfirmation : AggregateRoot<Guid>
     /// <see cref="TotalTenantPaymentCents"/>.
     /// </summary>
     public long ServiceFeeCents { get; private set; }
+
+    /// <summary>
+    /// Snapshotted Eviction Protection fee kept by the platform. Included in
+    /// <see cref="TotalTenantPaymentCents"/> and in the Stripe application fee.
+    /// </summary>
+    public long EvictionProtectionFeeCents { get; private set; }
+
+    /// <summary>
+    /// Set when a covered stay ends before the scheduled check-out. Null when
+    /// the stay was not ended early, so a qualifying claim may still be reviewed.
+    /// </summary>
+    public EvictionProtectionClaimStanding? EvictionProtectionClaimStanding { get; private set; }
+
+    /// <summary>
+    /// Portion of checkout Stripe keeps: stay protection, service fee, and
+    /// Eviction Protection. Rent and deposit transfer to the host.
+    /// </summary>
+    public long GuestPlatformFeeCents =>
+        InsuranceFeeCents + ServiceFeeCents + EvictionProtectionFeeCents;
     public bool HostPaidPlatform { get; private set; }
     public DateTime? HostPaidPlatformAt { get; private set; }
     public bool HostConfirmed { get; private set; }
@@ -106,6 +126,7 @@ public sealed class DealPaymentConfirmation : AggregateRoot<Guid>
             InsuranceFeeCents = financials.InsuranceFeeCents,
             MonthlyProtocolFeeCents = financials.MonthlyProtocolFeeCents,
             ServiceFeeCents = financials.ServiceFeeCents,
+            EvictionProtectionFeeCents = financials.EvictionProtectionFeeCents,
             TotalTenantPaymentCents = financials.TotalTenantPaymentCents,
             TotalHostPlatformPaymentCents = financials.TotalHostPlatformPaymentCents,
             Status = PaymentConfirmationStatus.Pending,
@@ -302,7 +323,10 @@ public sealed class DealPaymentConfirmation : AggregateRoot<Guid>
     /// start it once the booking is active (payment confirmed). Idempotent:
     /// re-calling keeps the original initiator/timestamp.
     /// </summary>
-    public void BeginMoveOut(Guid initiatedByUserId, IClock clock)
+    public void BeginMoveOut(
+        Guid initiatedByUserId,
+        IClock clock,
+        EvictionProtectionClaimStanding? evictionProtectionClaimStanding = null)
     {
         ArgumentNullException.ThrowIfNull(clock);
 
@@ -319,6 +343,7 @@ public sealed class DealPaymentConfirmation : AggregateRoot<Guid>
 
         MoveOutInitiatedAt = clock.UtcNow;
         MoveOutInitiatedByUserId = initiatedByUserId;
+        EvictionProtectionClaimStanding = evictionProtectionClaimStanding;
         UpdatedAt = clock.UtcNow;
     }
 

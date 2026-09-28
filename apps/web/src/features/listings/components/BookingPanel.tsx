@@ -4,23 +4,42 @@ import { AlertCircle, ShieldAlert, Loader2, MessageSquare, Send } from "lucide-r
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
 import { ApplyDialog } from "@/features/applications/components/ApplyDialog";
 import { DateRangeField } from "@/features/listings/components/DateRangeField";
 import {
+  useListingAvailabilityBlocks,
   useListingAvailabilityRange,
   useListingQuote,
   useMyConsentStatus,
 } from "@/features/listings/hooks/useListings";
+import { toUnavailableStays } from "@/features/listings/lib/unavailableStays";
 import {
   useMyListingInquiry,
   useStartListingInquiry,
+  useSubmitSessionQuestion,
 } from "@/features/inquiry/hooks/useInquiry";
 import { formatMoney } from "@/utils/format";
 import { getApiErrorMessage } from "@/api/errors";
 import type { ListingDetailsDto } from "@/api/types";
 import { STAY_PROTECTION_LABEL } from "@/features/listings/lib/stayProtection";
+import {
+  EVICTION_PROTECTION_LABEL,
+  evictionProtectionAmountLabel,
+  evictionProtectionApplies,
+} from "@/features/listings/lib/evictionProtection";
+import { EvictionProtectionTermsList } from "@/features/listings/components/EvictionProtectionTermsList";
 import { StayProtectionGuestAgreementNote } from "@/features/listings/components/StayProtectionGuestAgreementNote";
 
 type Props = {
@@ -84,6 +103,12 @@ export const BookingPanel = ({ listing, isProspectiveGuest }: Props) => {
     if (showDateError && datesValid) setShowDateError(false);
   }, [showDateError, datesValid]);
 
+  const blockedStays = useListingAvailabilityBlocks(listing.id);
+  const unavailableStays = useMemo(
+    () => toUnavailableStays(blockedStays.data),
+    [blockedStays.data],
+  );
+
   const availability = useListingAvailabilityRange(
     listing.id,
     datesValid ? checkIn : undefined,
@@ -113,17 +138,47 @@ export const BookingPanel = ({ listing, isProspectiveGuest }: Props) => {
     isProspectiveGuest ? listing.id : undefined,
   );
   const startInquiry = useStartListingInquiry();
+  const submitQuestion = useSubmitSessionQuestion();
+  const [askOpen, setAskOpen] = useState(false);
+  const [askText, setAskText] = useState("");
+  const askPending = startInquiry.isPending || submitQuestion.isPending;
+  const askError = startInquiry.error ?? submitQuestion.error;
 
   const handleAskQuestion = () => {
-    if (existingInquiry.data) {
-      navigate(`/app/inquiry/${existingInquiry.data.sessionId}`);
-      return;
+    setAskText("");
+    startInquiry.reset();
+    submitQuestion.reset();
+    setAskOpen(true);
+  };
+
+  const sendQuestion = async () => {
+    const text = askText.trim();
+    if (!text || askPending) return;
+
+    try {
+      const existingId = existingInquiry.data?.sessionId;
+      if (existingId) {
+        await submitQuestion.mutateAsync({
+          sessionId: existingId,
+          payload: {
+            category: "RuleClarification",
+            openQuestionText: text,
+          },
+        });
+        setAskOpen(false);
+        navigate(`/app/inquiry/${existingId}`);
+        return;
+      }
+
+      const session = await startInquiry.mutateAsync({
+        listingId: listing.id,
+        message: text,
+      });
+      setAskOpen(false);
+      navigate(`/app/inquiry/${session.sessionId}`);
+    } catch {
+      // Shown via askError.
     }
-    startInquiry.mutate(listing.id, {
-      onSuccess: (session) => {
-        navigate(`/app/inquiry/${session.sessionId}`);
-      },
-    });
   };
 
   // Gate the CTA on everything the booking flow needs in one place:
@@ -185,6 +240,7 @@ export const BookingPanel = ({ listing, isProspectiveGuest }: Props) => {
         error={showDateError}
         errorMessage={showDateError ? dateErrorMessage : undefined}
         id="booking-panel-dates"
+        unavailableStays={unavailableStays}
       />
 
       {/* The inline `errorMessage` on DateRangeField already covers the
@@ -243,6 +299,17 @@ export const BookingPanel = ({ listing, isProspectiveGuest }: Props) => {
               <span>{formatMoney(quote.data.serviceFeeCents)}</span>
             </div>
           )}
+          {evictionProtectionApplies(
+            quote.data.evictionProtectionIncluded,
+            quote.data.evictionProtectionFeeCents,
+          ) && (
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">{EVICTION_PROTECTION_LABEL}</span>
+              <span>
+                {evictionProtectionAmountLabel(quote.data.evictionProtectionFeeCents ?? 0)}
+              </span>
+            </div>
+          )}
           <Separator className="my-2" />
           <div className="flex items-center justify-between font-semibold">
             <span>Due at booking</span>
@@ -250,6 +317,15 @@ export const BookingPanel = ({ listing, isProspectiveGuest }: Props) => {
           </div>
           {quote.data.insuranceFeeCents > 0 && (
             <StayProtectionGuestAgreementNote className="mt-2" />
+          )}
+          {evictionProtectionApplies(
+            quote.data.evictionProtectionIncluded,
+            quote.data.evictionProtectionFeeCents,
+          ) && (
+            <div className="mt-2 space-y-1 text-[11px] text-muted-foreground">
+              <p>{EVICTION_PROTECTION_LABEL} is separate from Stay Protection.</p>
+              <EvictionProtectionTermsList />
+            </div>
           )}
           {quote.data.protocolFeeCents > 0 && (
             <p className="mt-1 text-[11px] text-muted-foreground">
@@ -321,17 +397,53 @@ export const BookingPanel = ({ listing, isProspectiveGuest }: Props) => {
           variant="outline"
           className="w-full gap-2"
           onClick={handleAskQuestion}
-          disabled={startInquiry.isPending || existingInquiry.isLoading}
+          disabled={askPending || existingInquiry.isLoading}
         >
           <MessageSquare className="h-4 w-4" />
-          {startInquiry.isPending ? "Starting…" : "Ask the host a question"}
+          Ask the host a question
         </Button>
       )}
-      {startInquiry.isError && (
-        <Alert variant="destructive" className="text-xs">
-          {getApiErrorMessage(startInquiry.error, "Failed to start inquiry.")}
-        </Alert>
-      )}
+      <Dialog open={askOpen} onOpenChange={setAskOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Ask the host a question</DialogTitle>
+            <DialogDescription>
+              The host sees this message in the inquiry and in their email.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label htmlFor="ask-host-message">Your question</Label>
+            <Textarea
+              id="ask-host-message"
+              value={askText}
+              onChange={(e) => setAskText(e.target.value.slice(0, 1000))}
+              placeholder="Type your question for the host…"
+              rows={4}
+              maxLength={1000}
+            />
+            <p className="text-right text-[11px] text-muted-foreground">
+              {askText.length}/1000
+            </p>
+          </div>
+          {(startInquiry.isError || submitQuestion.isError) && (
+            <Alert variant="destructive" className="text-xs">
+              {getApiErrorMessage(askError, "Failed to send your question.")}
+            </Alert>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setAskOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void sendQuestion()}
+              disabled={askPending || askText.trim().length === 0}
+            >
+              {askPending ? "Sending…" : "Send question"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

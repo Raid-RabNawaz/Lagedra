@@ -66,6 +66,18 @@ export const channelsApi = {
     return response.data;
   },
 
+  async setListingPriceBasis(
+    connectionId: string,
+    mapId: string,
+    payload: { priceBasis: "Monthly" | "Nightly" },
+  ): Promise<ChannelListingMapDto> {
+    const response = await http.put<ChannelListingMapDto>(
+      endpoints.channels.listingPriceBasis(connectionId, mapId),
+      payload,
+    );
+    return response.data;
+  },
+
   async setListingSync(
     connectionId: string,
     mapId: string,

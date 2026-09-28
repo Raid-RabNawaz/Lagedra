@@ -1,1 +1,0 @@
-import{aa as s,ab as a,o as n}from"./index-lsd6rsb8.js";const r={async getMyDeals(e){return(await s.get(a.deals.mine,{params:e?{phase:e}:void 0})).data},async getStayAccess(e){return(await s.get(a.deals.stayAccess(e))).data}},o="my-deals";function c(e="all"){return n({queryKey:[o,e],queryFn:()=>r.getMyDeals(e),staleTime:3e4})}export{o as M,r as d,c as u};

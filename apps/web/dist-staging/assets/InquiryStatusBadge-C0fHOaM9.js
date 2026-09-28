@@ -1,0 +1,1 @@
+import{j as s,s as r}from"./index-BUSvGy_4.js";const a={Locked:{label:"Locked",variant:"secondary"},Open:{label:"Open",variant:"accent"},Closed:{label:"Closed",variant:"default"}},c=({status:e,className:n})=>{const{label:t,variant:o}=a[e]??a.Locked;return s.jsx(r,{variant:o,className:n,children:t})};export{c as I};

@@ -28,9 +28,7 @@ public static class ChannelEndpoints
         group.MapGet("/providers", (IChannelProviderRegistry registry, OwnerRezOAuthFlow ownerRezOAuth) =>
         {
             var providers = registry.All
-                .Select(p => new ChannelProviderDto(
-                    p.ProviderKey,
-                    UsesOAuth: p.ProviderKey == OwnerRezOAuthFlow.ProviderKey && ownerRezOAuth.IsConfigured))
+                .Select(p => ToProviderDto(p.ProviderKey, ownerRezOAuth))
                 .ToList();
             return Results.Ok(providers);
         });
@@ -86,6 +84,19 @@ public static class ChannelEndpoints
         group.MapGet("/{id:guid}/listings", async (Guid id, ClaimsPrincipal user, ISender sender) =>
         {
             var result = await sender.Send(new ListChannelListingsQuery(id, GetUserId(user)))
+                .ConfigureAwait(false);
+            return ToHttpResult(result);
+        });
+
+        group.MapPut("/{id:guid}/listings/{mapId:guid}/price-basis", async (
+            Guid id,
+            Guid mapId,
+            SetChannelListingPriceBasisRequest req,
+            ClaimsPrincipal user,
+            ISender sender) =>
+        {
+            var result = await sender.Send(new SetChannelListingPriceBasisCommand(
+                id, mapId, GetUserId(user), req.PriceBasis))
                 .ConfigureAwait(false);
             return ToHttpResult(result);
         });
@@ -172,6 +183,25 @@ public static class ChannelEndpoints
         }).AllowAnonymous().WithTags("Channels");
 
         return app;
+    }
+
+    private static ChannelProviderDto ToProviderDto(string providerKey, OwnerRezOAuthFlow ownerRez)
+    {
+        if (!string.Equals(providerKey, OwnerRezOAuthFlow.ProviderKey, StringComparison.OrdinalIgnoreCase))
+        {
+            return new ChannelProviderDto(providerKey, UsesOAuth: false, ChannelConnectMode.Credentials);
+        }
+
+        if (!ownerRez.IsOpenApiEnabled)
+        {
+            return new ChannelProviderDto(providerKey, UsesOAuth: false, ChannelConnectMode.HaXml);
+        }
+
+        var oauth = ownerRez.IsConfigured;
+        return new ChannelProviderDto(
+            providerKey,
+            UsesOAuth: oauth,
+            oauth ? ChannelConnectMode.OAuth : ChannelConnectMode.Token);
     }
 
     private static Guid GetUserId(ClaimsPrincipal user) =>

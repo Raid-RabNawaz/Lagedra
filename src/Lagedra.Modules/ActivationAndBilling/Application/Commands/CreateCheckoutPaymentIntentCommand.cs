@@ -85,8 +85,7 @@ public sealed class CreateCheckoutPaymentIntentCommandHandler(
         // insurance premium only. The monthly protocol fee is billed to the host
         // via subscription, never taken at checkout. Stripe transfers the remainder
         // (rent + deposit) to the host's connected account.
-        var applicationFeeCents = confirmation.InsuranceFeeCents
-            + confirmation.ServiceFeeCents;
+        var applicationFeeCents = confirmation.GuestPlatformFeeCents;
 
         var idempotencyKey = $"pi-deal-{request.DealId}";
         var metadata = new Dictionary<string, string>
@@ -138,7 +137,8 @@ public sealed class CreateCheckoutPaymentIntentCommandHandler(
             c.FirstMonthRentCents,
             c.DepositAmountCents,
             c.InsuranceFeeCents,
-            c.InsuranceFeeCents + c.ServiceFeeCents,
+            c.GuestPlatformFeeCents,
             c.ServiceFeeCents,
-            "usd");
+            "usd",
+            c.EvictionProtectionFeeCents);
 }

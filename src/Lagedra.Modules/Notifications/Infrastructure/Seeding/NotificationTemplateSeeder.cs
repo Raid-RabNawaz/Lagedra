@@ -227,6 +227,44 @@ public static partial class NotificationTemplateSeeder
             htmlBody: inquiryStartedHtml,
             plainTextBody: inquiryStartedText);
 
+        const string inquiryQuestionHtml = """
+            <!doctype html>
+            <html>
+            <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; color: #111;">
+              <h2 style="margin-top: 32px;">New question about your listing</h2>
+              <p>A guest asked about <strong>{listingTitle}</strong>:</p>
+              <blockquote style="margin: 16px 0; padding: 12px 16px; border-left: 3px solid #111; background: #f7f7f7; white-space: pre-wrap;">{questionTextHtml}</blockquote>
+              <p style="margin: 24px 0;">
+                <a href="{threadUrl}"
+                   style="display: inline-block; background: #111; color: #fff; padding: 12px 20px; border-radius: 8px; text-decoration: none; font-weight: 600;">
+                  Open conversation
+                </a>
+              </p>
+              <p style="font-size: 13px; color: #666;">
+                Replying quickly increases the chance the guest will book. You can also
+                review and respond from <a href="{frontendUrl}/app/dashboard">your dashboard</a>.
+              </p>
+            </body>
+            </html>
+            """;
+
+        const string inquiryQuestionText = """
+            New question about your listing
+
+            A guest asked about {listingTitle}:
+
+            {questionText}
+
+            Open the thread: {threadUrl}
+            """;
+
+        yield return new NotificationTemplate(
+            templateId: "inquiry_question",
+            channel: NotificationChannel.Email,
+            subject: "New question about {listingTitle}",
+            htmlBody: inquiryQuestionHtml,
+            plainTextBody: inquiryQuestionText);
+
         const string dealActivatedHtml = """
             <!doctype html>
             <html>

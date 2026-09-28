@@ -512,11 +512,13 @@ public sealed partial class HostawayChannelProvider(
             Str(item, "internalListingName"),
             externalId)!;
 
-        var price = Dec(item, "price");
-        long? nightlyCents = price is > 0
-            ? (long)Math.Round(price.Value * 100m, MidpointRounding.AwayFromZero)
-            : null;
-        long? monthlyCents = nightlyCents.HasValue ? nightlyCents.Value * 30 : null;
+        // Hostaway documents `price` as the default nightly base rate and does not
+        // send a period flag. `monthlyDiscount` is a length-of-stay factor, not a
+        // monthly dollar amount. Unlabeled amounts that ×30 into an absurd monthly
+        // rent are treated as already monthly (hosts who typed the monthly figure
+        // into Base Price).
+        var amountCents = ChannelRateNormalizer.ToCents(Dec(item, "price"));
+        var rate = ChannelRateNormalizer.Normalize(amountCents);
 
         var deposit = Dec(item, "refundableDamageDeposit");
         long? depositCents = deposit is > 0
@@ -542,8 +544,8 @@ public sealed partial class HostawayChannelProvider(
             ExternalListingId: externalId,
             Title: title,
             Description: Str(item, "description"),
-            MonthlyRentCents: monthlyCents,
-            NightlyRateCents: nightlyCents,
+            MonthlyRentCents: rate.MonthlyRentCents,
+            NightlyRateCents: rate.NightlyRateCents,
             Currency: Str(item, "currencyCode") ?? "USD",
             MinStayNights: Int(item, "minNights"),
             MaxStayNights: Int(item, "maxNights"),
@@ -556,7 +558,8 @@ public sealed partial class HostawayChannelProvider(
             PropertyType: MapPropertyType(Int(item, "propertyTypeId"), Str(item, "roomType")),
             Address: address,
             AmenityCodes: amenities,
-            Photos: photos);
+            Photos: photos,
+            PriceBasis: rate.PriceBasis);
     }
 
     private static List<ChannelPhoto> ParsePhotos(JsonElement item)

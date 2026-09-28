@@ -302,20 +302,20 @@ public static class CaliforniaLeaseTemplateHtml
         <p class="party-name">{{owner.fullName}}</p>
         <p class="date-line">Date</p>
         <p class="party">The Property Manager / Agent:</p>
-        <p class="sigline"></p>
+        <p class="sigline">{{host.signatureName}}</p>
         <p class="party-name">{{host.fullName}}</p>
-        <p class="date-line">Date</p>
+        <p class="date-line">Date {{host.signedAt}}</p>
         {{/if}}
         {{#unless owner.fullName}}
         <p class="party">The Landlord:</p>
-        <p class="sigline"></p>
+        <p class="sigline">{{host.signatureName}}</p>
         <p class="party-name">{{host.fullName}}</p>
-        <p class="date-line">Date</p>
+        <p class="date-line">Date {{host.signedAt}}</p>
         {{/unless}}
         <p class="party">The Tenant:</p>
-        <p class="sigline"></p>
+        <p class="sigline">{{tenant.signatureName}}</p>
         <p class="party-name">{{tenant.fullName}}</p>
-        <p class="date-line">Date</p>
+        <p class="date-line">Date {{tenant.signedAt}}</p>
 
         {{#if owner.fullName}}
         <h2>OWNER CONSENT AND AUTHORIZATION</h2>

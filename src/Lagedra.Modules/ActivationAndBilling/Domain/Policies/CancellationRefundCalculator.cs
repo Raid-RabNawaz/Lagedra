@@ -1,11 +1,13 @@
 using Lagedra.SharedKernel.Insurance;
+using Lagedra.SharedKernel.Settings;
 
 namespace Lagedra.Modules.ActivationAndBilling.Domain.Policies;
 
 public sealed record RefundBreakdown(
     long TenantRefundCents,
     long InsuranceRefundCents,
-    string PolicyApplied);
+    string PolicyApplied,
+    long EvictionProtectionRefundCents = 0);
 
 public static class CancellationRefundCalculator
 {
@@ -17,9 +19,12 @@ public static class CancellationRefundCalculator
         int freeCancellationDays,
         int? partialRefundPercent,
         int? partialRefundDays,
-        long insuranceRetainCents = StayProtectionFee.ScreeningFeeCents)
+        long insuranceRetainCents = StayProtectionFee.ScreeningFeeCents,
+        long evictionProtectionFeeCents = 0)
     {
         var daysUntilCheckIn = checkIn.DayNumber - today.DayNumber;
+        var evictionRefund = EvictionProtectionFee.RefundableCents(
+            checkIn, today, evictionProtectionFeeCents);
 
         if (daysUntilCheckIn >= freeCancellationDays)
         {
@@ -29,7 +34,8 @@ public static class CancellationRefundCalculator
                     insuranceFeeCents,
                     insuranceFeeCents,
                     insuranceRetainCents),
-                $"Full refund (cancelled {daysUntilCheckIn} days before check-in, free cancellation within {freeCancellationDays} days)");
+                $"Full refund (cancelled {daysUntilCheckIn} days before check-in, free cancellation within {freeCancellationDays} days)",
+                evictionRefund);
         }
 
         if (partialRefundPercent.HasValue && partialRefundDays.HasValue
@@ -43,10 +49,12 @@ public static class CancellationRefundCalculator
             return new RefundBreakdown(
                 refund,
                 insRefund,
-                $"Partial refund {partialRefundPercent}% (cancelled {daysUntilCheckIn} days before check-in)");
+                $"Partial refund {partialRefundPercent}% (cancelled {daysUntilCheckIn} days before check-in)",
+                evictionRefund);
         }
 
         return new RefundBreakdown(0, 0,
-            $"No refund (cancelled {daysUntilCheckIn} days before check-in, policy requires {freeCancellationDays} days)");
+            $"No refund (cancelled {daysUntilCheckIn} days before check-in, policy requires {freeCancellationDays} days)",
+            evictionRefund);
     }
 }

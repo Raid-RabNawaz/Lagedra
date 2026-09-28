@@ -18,6 +18,16 @@ public interface IListingImporter
     Task<ListingImportResult> ImportOrUpdateAsync(
         ListingImportRequest request,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Writes <paramref name="monthlyRentCents"/> onto an existing listing and
+    /// records price history when the amount changes. Returns false when the
+    /// listing is missing or not editable (in review or closed).
+    /// </summary>
+    Task<bool> TryApplyChannelMonthlyRentAsync(
+        Guid listingId,
+        long monthlyRentCents,
+        CancellationToken ct = default);
 }
 
 public enum ListingImportPropertyType
@@ -66,7 +76,13 @@ public sealed record ListingImportRequest(
     ListingImportAddress? Address = null,
     IReadOnlyList<ListingImportPhoto>? Photos = null,
     IReadOnlyList<string>? AmenityNames = null,
-    bool SyncPriceFromPms = false);
+    bool SyncPriceFromPms = false,
+    /// <summary>
+    /// True when the PMS amount was interpreted as already-monthly rent.
+    /// Content sync then corrects a stored rent that is still that amount × 30 or × 31,
+    /// even when <paramref name="SyncPriceFromPms"/> is false.
+    /// </summary>
+    bool PmsAmountIsMonthlyRent = false);
 
 public sealed record ListingImportResult(
     Guid ListingId,

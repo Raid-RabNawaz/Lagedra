@@ -29,7 +29,8 @@ public interface ICardOnFileChargeService
         long insuranceFeeCents,
         long monthlyProtocolFeeCents,
         long serviceFeeCents,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        long evictionProtectionFeeCents = 0);
 }
 
 public sealed record CardOnFileChargeResult(
@@ -55,7 +56,8 @@ public sealed partial class CardOnFileChargeService(
         long insuranceFeeCents,
         long monthlyProtocolFeeCents,
         long serviceFeeCents,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        long evictionProtectionFeeCents = 0)
     {
         ArgumentNullException.ThrowIfNull(application);
 
@@ -74,11 +76,13 @@ public sealed partial class CardOnFileChargeService(
         }
 
         var totalAmountCents =
-            firstMonthRentCents + depositAmountCents + insuranceFeeCents + serviceFeeCents;
+            firstMonthRentCents + depositAmountCents + insuranceFeeCents + serviceFeeCents
+            + evictionProtectionFeeCents;
         // Non-custodial (Option A): platform fee = tenant service fee + insurance
-        // premium only. The monthly protocol fee is billed to the host via
-        // subscription, never taken at checkout. Rent + deposit transfer to the host.
-        var applicationFeeCents = insuranceFeeCents + serviceFeeCents;
+        // premium + Eviction Protection. The monthly protocol fee is billed to
+        // the host via subscription, never taken at checkout. Rent + deposit
+        // transfer to the host.
+        var applicationFeeCents = insuranceFeeCents + serviceFeeCents + evictionProtectionFeeCents;
         var idempotencyKey = $"oss-deal-{dealId:N}";
         var metadata = new Dictionary<string, string>
         {
@@ -148,6 +152,7 @@ public sealed partial class CardOnFileChargeService(
             insuranceFeeCents,
             monthlyProtocolFeeCents,
             serviceFeeCents,
+            evictionProtectionFeeCents,
             totalAmountCents,
             charge.PaymentIntentId,
             cancellationToken).ConfigureAwait(false);
@@ -181,6 +186,7 @@ public sealed partial class CardOnFileChargeService(
         long insuranceFeeCents,
         long monthlyProtocolFeeCents,
         long serviceFeeCents,
+        long evictionProtectionFeeCents,
         long _totalAmountCents,
         string paymentIntentId,
         CancellationToken cancellationToken)
@@ -201,7 +207,8 @@ public sealed partial class CardOnFileChargeService(
                 depositAmountCents,
                 insuranceFeeCents,
                 monthlyProtocolFeeCents,
-                serviceFeeCents);
+                serviceFeeCents,
+                evictionProtectionFeeCents);
             confirmation = DealPaymentConfirmation.Create(dealId, financials, clock);
             dbContext.DealPaymentConfirmations.Add(confirmation);
         }

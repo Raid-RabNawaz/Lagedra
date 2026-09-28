@@ -36,6 +36,19 @@ export function useSimilarListings(id: string | undefined) {
 }
 
 /**
+ * Full block list for a listing calendar. Booked and host-blocked stays
+ * are disabled in the date picker before the guest chooses a window.
+ */
+export function useListingAvailabilityBlocks(listingId: string | undefined) {
+  return useQuery({
+    queryKey: ["listing", "availability", listingId, "blocks"],
+    queryFn: () => listingApi.getAvailability(listingId!),
+    enabled: Boolean(listingId),
+    staleTime: 30_000,
+  });
+}
+
+/**
  * Range-aware availability for a listing — used by the Phase 16 Listing
  * Detail booking widget to gate the price quote and Apply CTA.
  */

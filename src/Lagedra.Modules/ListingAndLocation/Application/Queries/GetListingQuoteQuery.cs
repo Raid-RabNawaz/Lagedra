@@ -2,6 +2,7 @@ using Lagedra.Modules.ListingAndLocation.Application.DTOs;
 using Lagedra.Modules.ListingAndLocation.Domain.Enums;
 using Lagedra.Modules.ListingAndLocation.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Insurance;
+using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Results;
 using Lagedra.SharedKernel.Settings;
 using MediatR;
@@ -39,7 +40,8 @@ public sealed record GetListingQuoteQuery(
 public sealed class GetListingQuoteQueryHandler(
     ListingsDbContext dbContext,
     IInsuranceFeeCalculator insuranceFeeCalculator,
-    IPlatformSettingsService platformSettings)
+    IPlatformSettingsService platformSettings,
+    IPartnerEndorsementProvider partnerEndorsements)
     : IRequestHandler<GetListingQuoteQuery, Result<QuoteDto>>
 {
     private static readonly Error NotFound = new("Listing.NotFound", "Listing not found.");
@@ -129,8 +131,12 @@ public sealed class GetListingQuoteQueryHandler(
         var serviceFeeCents = await ResolveServiceFeeAsync(
             listing.MonthlyRentCents, cancellationToken).ConfigureAwait(false);
 
+        var eviction = await ResolveEvictionProtectionAsync(
+            request.RequesterUserId, cancellationToken).ConfigureAwait(false);
+
         var totalCents =
-            listing.MonthlyRentCents + depositCents + insuranceQuote.FeeCents + serviceFeeCents;
+            listing.MonthlyRentCents + depositCents + insuranceQuote.FeeCents + serviceFeeCents
+            + eviction.FeeCents;
 
         var dto = new QuoteDto(
             request.CheckIn,
@@ -142,7 +148,9 @@ public sealed class GetListingQuoteQueryHandler(
             protocolFeeCents,
             serviceFeeCents,
             totalCents,
-            "USD");
+            "USD",
+            eviction.FeeCents,
+            eviction.Included);
 
         return Result<QuoteDto>.Success(dto);
     }
@@ -194,5 +202,31 @@ public sealed class GetListingQuoteQueryHandler(
             .ConfigureAwait(false);
 
         return TenantServiceFee.Compute(rentBaseCents, useFlat, flatCents, bps);
+    }
+
+    private async Task<(long FeeCents, bool Included)> ResolveEvictionProtectionAsync(
+        Guid? requesterUserId,
+        CancellationToken cancellationToken)
+    {
+        if (requesterUserId is not Guid userId)
+        {
+            return (0, false);
+        }
+
+        var endorsed = await partnerEndorsements
+            .HasActiveEndorsementAsync(userId, cancellationToken)
+            .ConfigureAwait(false);
+        if (!endorsed)
+        {
+            return (0, false);
+        }
+
+        var configured = await platformSettings
+            .GetLongAsync(
+                PlatformSettingKeys.EvictionProtectionFeeCents,
+                EvictionProtectionFee.DefaultFeeCents,
+                cancellationToken)
+            .ConfigureAwait(false);
+        return (EvictionProtectionFee.Normalize(configured), true);
     }
 }

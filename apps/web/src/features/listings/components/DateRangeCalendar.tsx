@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  isSelectionDisabled,
+  isValidCheckout,
+  nextRangeSelection,
+  type UnavailableStay,
+} from "@/features/listings/lib/unavailableStays";
 
 export type DateRange = { start: Date | null; end: Date | null };
 
@@ -41,9 +47,14 @@ type Props = {
   onChange: (next: DateRange) => void;
   /** Disables dates strictly before this. Defaults to today. */
   minDate?: Date;
+  /**
+   * Half-open stays already taken (booked or host-blocked). Occupied nights
+   * are disabled. The checkout morning of a taken stay stays selectable.
+   */
+  unavailableStays?: readonly UnavailableStay[];
 };
 
-export function DateRangeCalendar({ range, onChange, minDate }: Props) {
+export function DateRangeCalendar({ range, onChange, minDate, unavailableStays = [] }: Props) {
   const today = useMemo(() => startOfDay(new Date()), []);
   const min = minDate ? startOfDay(minDate) : today;
 
@@ -67,21 +78,17 @@ export function DateRangeCalendar({ range, onChange, minDate }: Props) {
   }, [range.start, range.end]);
 
   const handleDayClick = (date: Date) => {
-    if (isBeforeDay(date, min)) return;
-    const { start, end } = range;
-    if (!start || (start && end)) {
-      onChange({ start: date, end: null });
-      return;
-    }
-    if (isSameDay(date, start)) {
+    const result = nextRangeSelection(range, date, unavailableStays, min);
+    if (result.kind === "ignore") return;
+    if (result.kind === "clear") {
       onChange({ start: null, end: null });
       return;
     }
-    if (isBeforeDay(date, start)) {
-      onChange({ start: date, end: null });
+    if (result.kind === "start") {
+      onChange({ start: result.date, end: null });
       return;
     }
-    onChange({ start, end: date });
+    onChange({ start: result.start, end: result.end });
   };
 
   const monthA = viewMonth;
@@ -123,6 +130,7 @@ export function DateRangeCalendar({ range, onChange, minDate }: Props) {
           range={range}
           hovered={hovered}
           min={min}
+          unavailableStays={unavailableStays}
           onHover={setHovered}
           onClick={handleDayClick}
         />
@@ -132,6 +140,7 @@ export function DateRangeCalendar({ range, onChange, minDate }: Props) {
             range={range}
             hovered={hovered}
             min={min}
+            unavailableStays={unavailableStays}
             onHover={setHovered}
             onClick={handleDayClick}
           />
@@ -146,6 +155,9 @@ export function DateRangeCalendar({ range, onChange, minDate }: Props) {
             : range.start
               ? "Pick a check-out date"
               : "Pick a check-in date"}
+          {unavailableStays.length > 0 && (
+            <span className="mt-1 block">Struck-through dates are unavailable.</span>
+          )}
         </span>
         {(range.start || range.end) && (
           <button
@@ -168,6 +180,7 @@ function MonthGrid({
   range,
   hovered,
   min,
+  unavailableStays,
   onHover,
   onClick,
 }: {
@@ -175,6 +188,7 @@ function MonthGrid({
   range: DateRange;
   hovered: Date | null;
   min: Date;
+  unavailableStays: readonly UnavailableStay[];
   onHover: (d: Date | null) => void;
   onClick: (d: Date) => void;
 }) {
@@ -194,7 +208,7 @@ function MonthGrid({
   // the user has only chosen a start date.
   const effectiveEnd =
     range.end ??
-    (range.start && hovered && !isBeforeDay(hovered, range.start) && !isSameDay(hovered, range.start)
+    (range.start && hovered && isValidCheckout(range.start, hovered, unavailableStays)
       ? hovered
       : null);
 
@@ -215,6 +229,7 @@ function MonthGrid({
             range={range}
             effectiveEnd={effectiveEnd}
             min={min}
+            unavailableStays={unavailableStays}
             onHover={onHover}
             onClick={onClick}
           />
@@ -229,6 +244,7 @@ function DayCell({
   range,
   effectiveEnd,
   min,
+  unavailableStays,
   onHover,
   onClick,
 }: {
@@ -236,12 +252,15 @@ function DayCell({
   range: DateRange;
   effectiveEnd: Date | null;
   min: Date;
+  unavailableStays: readonly UnavailableStay[];
   onHover: (d: Date | null) => void;
   onClick: (d: Date) => void;
 }) {
   if (!date) return <div className="h-10 sm:h-11" />;
 
-  const disabled = isBeforeDay(date, min);
+  const disabled = isSelectionDisabled(date, range, unavailableStays, min);
+  const unavailable = disabled && !isBeforeDay(date, min);
+  const dateLabel = date.toLocaleDateString();
   const start = range.start;
   const end = effectiveEnd;
   const isStart = !!(start && isSameDay(start, date));
@@ -257,6 +276,7 @@ function DayCell({
     <button
       type="button"
       disabled={disabled}
+      aria-label={unavailable ? `${dateLabel}, unavailable` : dateLabel}
       onMouseEnter={() => !disabled && onHover(date)}
       onClick={() => onClick(date)}
       className={cn(

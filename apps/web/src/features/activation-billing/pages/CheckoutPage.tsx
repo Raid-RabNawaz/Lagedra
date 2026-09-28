@@ -24,6 +24,10 @@ import { useSnapshotByDealId } from "@/features/truth-surface/hooks/useTruthSurf
 import type { CheckoutDto } from "@/api/types";
 import { formatMoney } from "@/utils/format";
 import { STAY_PROTECTION_LABEL } from "@/features/listings/lib/stayProtection";
+import {
+  EVICTION_PROTECTION_LABEL,
+  evictionProtectionAmountLabel,
+} from "@/features/listings/lib/evictionProtection";
 import { StayProtectionGuestAgreementNote } from "@/features/listings/components/StayProtectionGuestAgreementNote";
 import {
   getApiErrorMessage,
@@ -57,6 +61,12 @@ function PaymentBreakdown({ checkout }: { checkout: CheckoutDto }) {
           <div className="flex justify-between">
             <span className="text-muted-foreground">Service fee</span>
             <span>{formatMoney(checkout.serviceFeeCents)}</span>
+          </div>
+        )}
+        {(checkout.evictionProtectionFeeCents ?? 0) > 0 && (
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">{EVICTION_PROTECTION_LABEL}</span>
+            <span>{evictionProtectionAmountLabel(checkout.evictionProtectionFeeCents ?? 0)}</span>
           </div>
         )}
         <div className="border-t pt-2 flex justify-between font-semibold">

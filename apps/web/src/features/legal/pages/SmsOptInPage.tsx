@@ -241,8 +241,8 @@ export const SmsOptInPage = () => {
                 info@lagedra.com
               </a>{" "}
               or{" "}
-              <a href="tel:+12137352362" className="font-medium text-[#5B3FE0] underline underline-offset-2">
-                213-735-2362
+              <a href="tel:+12133775272" className="font-medium text-[#5B3FE0] underline underline-offset-2">
+                +1 (213) 377-5272
               </a>
               .{" "}
               <Link to="/tc#sms" className="font-medium text-[#5B3FE0] underline underline-offset-2">

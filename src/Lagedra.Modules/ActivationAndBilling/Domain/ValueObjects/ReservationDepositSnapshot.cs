@@ -16,8 +16,11 @@ public sealed record ReservationDepositSnapshot(
     long FirstMonthRentCents,
     long InsuranceFeeCents,
     long ServiceFeeCents,
-    string DepositReason)
+    string DepositReason,
+    long EvictionProtectionFeeCents = 0,
+    bool EvictionProtectionIncluded = false)
 {
     public long TotalPayableCents =>
-        DepositAmountCents + FirstMonthRentCents + InsuranceFeeCents + ServiceFeeCents;
+        DepositAmountCents + FirstMonthRentCents + InsuranceFeeCents + ServiceFeeCents
+        + EvictionProtectionFeeCents;
 }

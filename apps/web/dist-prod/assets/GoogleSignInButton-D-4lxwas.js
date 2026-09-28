@@ -1,0 +1,1 @@
+import{j as t,a8 as a}from"./index-DPb6qFaF.js";function l({onSuccess:n,onError:i,text:s="continue_with"}){const o=e=>{e.credential&&n(e.credential)};return t.jsx("div",{className:"flex justify-center [&>div]:w-full",children:t.jsx(a,{onSuccess:o,onError:i,text:s,shape:"rectangular",size:"large",width:"400",theme:"outline"})})}export{l as G};

@@ -163,7 +163,7 @@ const STEPS: Step[] = [
     shortLabel: "Lease",
     icon: FileSignature,
     description: "Use Lagedra's California lease, upload your own, or list without a lease.",
-    fields: ["leaseAgreementSource", "hasCustomLeaseDocument"],
+    fields: ["leaseAgreementSource", "hasCustomLeaseDocument", "requireLeaseSignatures"],
   },
   {
     id: "review",
@@ -1144,6 +1144,16 @@ function ReviewStep({
             <ReviewRow
               label="Document"
               value={listing?.customLeaseDocument?.fileName ?? "Not uploaded yet"}
+            />
+          )}
+          {v.leaseAgreementSource === "LagedraTemplate" && (
+            <ReviewRow
+              label="Signatures"
+              value={
+                v.requireLeaseSignatures
+                  ? "Host and tenant sign in Lagedra"
+                  : "Download only"
+              }
             />
           )}
         </ReviewSection>

@@ -476,10 +476,10 @@ public sealed partial class GuestyChannelProvider(
             deposit = Dec(prices, "securityDepositFee") ?? Dec(prices, "securityDeposit");
         }
 
-        long? nightlyCents = basePrice is > 0
-            ? (long)Math.Round(basePrice.Value * 100m, MidpointRounding.AwayFromZero)
-            : null;
-        long? monthlyCents = nightlyCents.HasValue ? nightlyCents.Value * 30 : null;
+        // `prices.basePrice` is Guesty's default nightly rate. The payload has no
+        // period flag; `monthlyPriceFactor` is a discount fraction, not monthly rent.
+        var amountCents = ChannelRateNormalizer.ToCents(basePrice);
+        var rate = ChannelRateNormalizer.Normalize(amountCents);
         long? depositCents = deposit is > 0
             ? (long)Math.Round(deposit.Value * 100m, MidpointRounding.AwayFromZero)
             : null;
@@ -511,8 +511,8 @@ public sealed partial class GuestyChannelProvider(
             ExternalListingId: externalId,
             Title: title,
             Description: description,
-            MonthlyRentCents: monthlyCents,
-            NightlyRateCents: nightlyCents,
+            MonthlyRentCents: rate.MonthlyRentCents,
+            NightlyRateCents: rate.NightlyRateCents,
             Currency: currency ?? "USD",
             MinStayNights: minNights,
             MaxStayNights: maxNights,
@@ -525,7 +525,8 @@ public sealed partial class GuestyChannelProvider(
             PropertyType: MapPropertyType(Str(item, "propertyType"), Str(item, "type")),
             Address: address,
             AmenityCodes: ParseAmenities(item),
-            Photos: ParsePhotos(item));
+            Photos: ParsePhotos(item),
+            PriceBasis: rate.PriceBasis);
     }
 
     private static string? ReadDescription(JsonElement item)

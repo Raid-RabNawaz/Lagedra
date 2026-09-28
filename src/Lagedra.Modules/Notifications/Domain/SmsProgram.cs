@@ -11,7 +11,7 @@ public static class SmsProgram
     public const string HelpReply =
         "Lagedra alerts: booking and payment activity, important account updates, and occasional offers. "
         + "Msg & data rates may apply. Reply HELP for help or STOP to cancel. "
-        + "info@lagedra.com or 213-735-2362";
+        + "info@lagedra.com or +1 (213) 377-5272";
 
     public const string StopReply =
         "You are unsubscribed from Lagedra automated texts. You will not receive campaign messages. "

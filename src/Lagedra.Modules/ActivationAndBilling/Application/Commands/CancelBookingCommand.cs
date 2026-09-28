@@ -81,7 +81,8 @@ public sealed partial class CancelBookingCommandHandler(
             freeCancellationDays,
             partialRefundPercent,
             partialRefundDays,
-            StayProtectionFee.ScreeningFeeCents);
+            StayProtectionFee.ScreeningFeeCents,
+            application.EvictionProtectionFeeCents);
 
         application.Cancel(
             request.CancelledByUserId,
@@ -124,6 +125,32 @@ public sealed partial class CancelBookingCommandHandler(
             }
         }
 
+        if (refund.EvictionProtectionRefundCents > 0
+            && paymentConfirmation is not null
+            && !string.IsNullOrEmpty(paymentConfirmation.StripePaymentIntentId)
+            && paymentConfirmation.StripePaymentStatus == "succeeded")
+        {
+            try
+            {
+                // The fee was kept as a platform application fee, so the refund
+                // comes from the platform balance and does not reverse the
+                // host transfer (rent and deposit).
+                await stripeService.RefundPaymentIntentAsync(
+                    paymentConfirmation.StripePaymentIntentId,
+                    refund.EvictionProtectionRefundCents,
+                    reverseTransfer: false,
+                    refundApplicationFee: false,
+                    $"refund-eviction-{request.DealId}",
+                    cancellationToken).ConfigureAwait(false);
+
+                LogEvictionRefundIssued(logger, request.DealId, refund.EvictionProtectionRefundCents);
+            }
+            catch (Stripe.StripeException ex)
+            {
+                LogRefundFailed(logger, request.DealId, ex);
+            }
+        }
+
         paymentConfirmation?.Cancel($"Booking cancelled: {request.Reason}", clock);
 
         var billingAccount = await dbContext.BillingAccounts
@@ -142,12 +169,17 @@ public sealed partial class CancelBookingCommandHandler(
             request.DealId,
             refund.TenantRefundCents,
             refund.InsuranceRefundCents,
-            refund.PolicyApplied));
+            refund.PolicyApplied,
+            refund.EvictionProtectionRefundCents));
     }
 
     [LoggerMessage(Level = LogLevel.Information,
         Message = "Stripe refund issued for deal {DealId}: {AmountCents} cents")]
     private static partial void LogRefundIssued(ILogger logger, Guid dealId, long amountCents);
+
+    [LoggerMessage(Level = LogLevel.Information,
+        Message = "Eviction Protection fee refunded for deal {DealId}: {AmountCents} cents")]
+    private static partial void LogEvictionRefundIssued(ILogger logger, Guid dealId, long amountCents);
 
     [LoggerMessage(Level = LogLevel.Warning,
         Message = "Failed to issue Stripe refund for deal {DealId}")]

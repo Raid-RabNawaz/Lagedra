@@ -69,7 +69,8 @@ public sealed class InquirySession : AggregateRoot<Guid>
     public static InquirySession CreateForListing(
         Guid listingId,
         Guid tenantUserId,
-        Guid landlordUserId)
+        Guid landlordUserId,
+        string? initialQuestionText = null)
     {
         if (listingId == Guid.Empty)
         {
@@ -94,8 +95,19 @@ public sealed class InquirySession : AggregateRoot<Guid>
             UnlockedByLandlordAt = DateTime.UtcNow,
         };
 
-        session.AddDomainEvent(new Events.ListingInquiryStartedEvent(
-            session.Id, listingId, landlordUserId, tenantUserId, DateTime.UtcNow));
+        // Notify the host only once a question exists. Opening an empty
+        // thread used to email "New question" before the guest typed anything.
+        if (!string.IsNullOrWhiteSpace(initialQuestionText))
+        {
+            session.AddQuestion(
+                InquiryCategory.RuleClarification,
+                predefinedQuestionId: null,
+                customText: null,
+                openQuestionText: initialQuestionText.Trim(),
+                submittedByUserId: tenantUserId,
+                submittedByRole: InquiryQuestionAuthorRole.Tenant,
+                landlordUserId: landlordUserId);
+        }
 
         return session;
     }
@@ -514,6 +526,21 @@ public sealed class InquirySession : AggregateRoot<Guid>
         {
             AddDomainEvent(new InquiryPartnerQuestionSubmittedEvent(
                 Id, question.Id, ListingId, TenantUserId, orgId, byUser, landlord, question.SubmittedAt));
+        }
+        else if (submittedByRole == InquiryQuestionAuthorRole.Tenant
+            && landlordUserId is { } hostId)
+        {
+            var text = question.OpenQuestionText ?? question.CustomText;
+            AddDomainEvent(new InquiryTenantQuestionSubmittedEvent(
+                Id,
+                question.Id,
+                ListingId,
+                hostId,
+                TenantUserId,
+                string.IsNullOrWhiteSpace(text)
+                    ? "A guest asked a question about your listing."
+                    : text.Trim(),
+                question.SubmittedAt));
         }
 
         return question;

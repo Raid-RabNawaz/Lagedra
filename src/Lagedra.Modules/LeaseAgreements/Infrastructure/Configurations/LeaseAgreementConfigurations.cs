@@ -74,3 +74,18 @@ public sealed class DealLeaseDocumentEntityConfiguration : IEntityTypeConfigurat
             .IsRequired();
     }
 }
+
+public sealed class DealLeaseSignatureConfiguration : IEntityTypeConfiguration<DealLeaseSignature>
+{
+    public void Configure(EntityTypeBuilder<DealLeaseSignature> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.ToTable("deal_lease_signatures");
+        builder.HasKey(s => s.Id);
+        builder.HasIndex(s => new { s.DealId, s.Role }).IsUnique();
+        builder.Property(s => s.Role).HasConversion<string>().HasMaxLength(20).IsRequired();
+        builder.Property(s => s.TypedName).HasMaxLength(200).IsRequired();
+        builder.Property(s => s.DocumentHash).HasMaxLength(64).IsRequired();
+    }
+}

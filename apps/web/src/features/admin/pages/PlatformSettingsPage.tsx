@@ -44,6 +44,12 @@ const groupMeta: Record<string, { label: string; description: string; order: num
       "Amount charged to the host when they order a background check on an applicant. Set to $0 to waive the fee.",
     order: 1.6,
   },
+  eviction_protection: {
+    label: "Eviction Protection (paid by endorsed guest)",
+    description:
+      "Fee charged once per booking when the guest has an active partner endorsement. Set to $0 to waive the fee. Coverage still applies. A change applies to new bookings only.",
+    order: 1.7,
+  },
   stripe: {
     label: "Stripe Connect",
     description: "Stripe identifiers used when collecting the recurring host fee.",
@@ -85,6 +91,7 @@ const labelOverrides: Record<string, string> = {
   "service_fee.tenant_bps": "Percentage rate",
   "service_fee.tenant_flat_cents": "Flat amount",
   "screening.host_fee_cents": "Screening fee",
+  "eviction_protection.fee_cents": "Eviction Protection fee",
   "stripe.platform_fee_price_id": "Platform fee price ID",
 };
 

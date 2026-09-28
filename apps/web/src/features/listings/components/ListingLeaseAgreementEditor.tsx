@@ -8,6 +8,7 @@ import type { ListingFormValues } from "@/features/listings/lib/listingFormSchem
 import { ListingLeaseSpecimenPreview } from "@/features/listings/components/ListingLeaseSpecimenPreview";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { FormError } from "@/components/shared/FormError";
 import { cn } from "@/lib/utils";
 
@@ -173,6 +174,27 @@ export function ListingLeaseAgreementEditor({
               back to download the blank lease.
             </p>
           )}
+          <label className="flex items-start gap-2 pt-2">
+            <Checkbox
+              checked={form.watch("requireLeaseSignatures")}
+              onCheckedChange={(checked) =>
+                form.setValue("requireLeaseSignatures", checked, {
+                  shouldDirty: true,
+                })
+              }
+              aria-label="Require host and tenant to sign"
+            />
+            <span className="space-y-0.5">
+              <span className="block text-sm font-medium">
+                Require host and tenant to sign
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                After a booking is sealed, both parties type their name in
+                Lagedra to execute this lease. Off by default and does not
+                block checkout.
+              </span>
+            </span>
+          </label>
         </div>
       )}
 

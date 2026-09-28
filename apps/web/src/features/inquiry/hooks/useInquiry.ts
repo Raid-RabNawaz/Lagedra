@@ -126,7 +126,13 @@ export function useStartListingInquiry() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (listingId: string) => inquiryApi.startListingInquiry(listingId),
+    mutationFn: ({
+      listingId,
+      message,
+    }: {
+      listingId: string;
+      message?: string;
+    }) => inquiryApi.startListingInquiry(listingId, message),
     onSuccess: (data) => {
       queryClient.setQueryData(["inquiry", "by-listing", data.listingId], data);
       queryClient.setQueryData(["inquiry", "by-session", data.sessionId], data);

@@ -1,0 +1,1 @@
+import{j as r,d as e}from"./index-DPb6qFaF.js";import{C as i}from"./circle-alert-BDujeOx8.js";function c({message:s,className:t}){return s?r.jsxs("div",{className:e("flex items-center gap-2 text-sm text-destructive",t),children:[r.jsx(i,{className:"h-4 w-4 shrink-0"}),r.jsx("span",{children:s})]}):null}export{c as F};

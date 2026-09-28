@@ -5,6 +5,7 @@ using Lagedra.Modules.ActivationAndBilling.Domain.Aggregates;
 using Lagedra.Modules.ActivationAndBilling.Domain.Enums;
 using Lagedra.Modules.ActivationAndBilling.Domain.Events;
 using Lagedra.Modules.ActivationAndBilling.Domain.ValueObjects;
+using Lagedra.SharedKernel.Settings;
 using Lagedra.SharedKernel.Time;
 using Xunit;
 
@@ -64,6 +65,19 @@ public class DepositReturnHandshakeTests
 
         confirmation.MoveOutInitiatedByUserId.Should().Be(Host);
         confirmation.MoveOutInitiatedAt.Should().Be(firstAt);
+        confirmation.EvictionProtectionClaimStanding.Should().BeNull();
+    }
+
+    [Fact]
+    public void BeginMoveOut_keeps_the_first_eviction_protection_standing()
+    {
+        var clock = new MutableClock();
+        var confirmation = ConfirmedWithDeposit(clock);
+
+        confirmation.BeginMoveOut(Host, clock, EvictionProtectionClaimStanding.EndedNoClaim);
+        confirmation.BeginMoveOut(Tenant, clock, EvictionProtectionClaimStanding.ClaimReviewable);
+
+        confirmation.EvictionProtectionClaimStanding.Should().Be(EvictionProtectionClaimStanding.EndedNoClaim);
     }
 
     [Fact]

@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Lagedra.Modules.LeaseAgreements.Application.Services;
+using Lagedra.Modules.LeaseAgreements.Domain.Enums;
 using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Time;
 
@@ -11,7 +12,8 @@ public sealed partial class LeaseAgreementFiller(
     IListingProvider listingProvider,
     ILeasePartyProfileProvider partyProfileProvider,
     ILeaseAgreementTemplateProvider templateProvider,
-    IClock clock) : ILeaseAgreementFiller
+    IClock clock,
+    IDealLeaseSignatureStore signatures) : ILeaseAgreementFiller
 {
     /// <summary>Fill-in rule shown where a preview cannot know the real value.</summary>
     private const string BlankRule = "__________";
@@ -139,6 +141,14 @@ public sealed partial class LeaseAgreementFiller(
             ["deal.guestCount"] = deal.GuestCount.ToString(CultureInfo.InvariantCulture),
         };
 
+        var dealSignatures = await signatures.ListByDealAsync(dealId, ct).ConfigureAwait(false);
+        var hostSignature = dealSignatures.FirstOrDefault(s => s.Role == DealLeaseSignerRole.Host);
+        var tenantSignature = dealSignatures.FirstOrDefault(s => s.Role == DealLeaseSignerRole.Tenant);
+        values["host.signatureName"] = hostSignature?.TypedName ?? string.Empty;
+        values["host.signedAt"] = hostSignature is null ? string.Empty : FormatDate(hostSignature.SignedAtUtc);
+        values["tenant.signatureName"] = tenantSignature?.TypedName ?? string.Empty;
+        values["tenant.signedAt"] = tenantSignature is null ? string.Empty : FormatDate(tenantSignature.SignedAtUtc);
+
         ApplyContactFallbacks(values);
 
         var usedKeys = ExtractPlaceholders(template.BodyHtml).ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -149,6 +159,11 @@ public sealed partial class LeaseAgreementFiller(
 
         var withConditionals = LeaseTemplateConditionals.Apply(template.BodyHtml, values);
         var filledHtml = ReplacePlaceholders(withConditionals, values);
+        if (hostSignature is not null || tenantSignature is not null)
+        {
+            filledHtml += SignatureCertificateHtml();
+            filledHtml = ReplacePlaceholders(filledHtml, values);
+        }
 
         return new FilledLeaseAgreement(
             template.TemplateId,
@@ -234,7 +249,7 @@ public sealed partial class LeaseAgreementFiller(
         {
             if (!values.ContainsKey(key))
             {
-                values[key] = BlankRule;
+                values[key] = IsSignaturePlaceholder(key) ? string.Empty : BlankRule;
             }
         }
 
@@ -361,6 +376,24 @@ public sealed partial class LeaseAgreementFiller(
             };
 
     private static string YesNo(bool value) => value ? "Yes" : "No";
+
+    private static bool IsSignaturePlaceholder(string key) =>
+        key.EndsWith("signatureName", StringComparison.OrdinalIgnoreCase)
+        || key.EndsWith("signedAt", StringComparison.OrdinalIgnoreCase);
+
+    private static string SignatureCertificateHtml() =>
+        """
+        <h2>ELECTRONIC SIGNATURES</h2>
+        <p>The parties below signed this lease electronically in Lagedra. Each signature is bound to the lease PDF as it existed at the time of signing.</p>
+        <p class="party">The Landlord / Host:</p>
+        <p class="sigline">{{host.signatureName}}</p>
+        <p class="party-name">{{host.fullName}}</p>
+        <p class="date-line">Date {{host.signedAt}}</p>
+        <p class="party">The Tenant:</p>
+        <p class="sigline">{{tenant.signatureName}}</p>
+        <p class="party-name">{{tenant.fullName}}</p>
+        <p class="date-line">Date {{tenant.signedAt}}</p>
+        """;
 
     private static string ExpandUtilities(string? text)
     {

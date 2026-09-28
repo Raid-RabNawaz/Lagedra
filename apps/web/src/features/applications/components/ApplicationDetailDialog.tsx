@@ -30,6 +30,11 @@ import { useApplicationScreening } from "@/features/applications/hooks/useApplic
 import { useHostBillingStatement } from "@/features/activation-billing/hooks/useBilling";
 import { formatDateTime, formatMoney } from "@/utils/format";
 import { STAY_PROTECTION_LABEL } from "@/features/listings/lib/stayProtection";
+import {
+  EVICTION_PROTECTION_LABEL,
+  evictionProtectionAmountLabel,
+  evictionProtectionApplies,
+} from "@/features/listings/lib/evictionProtection";
 import type { DealApplicationDto } from "@/api/types";
 
 export type ApplicationPerspective = "host" | "tenant" | "owner";
@@ -219,6 +224,16 @@ export const ApplicationDetailDialog = ({
                       {formatMoney(application.serviceFeeCents)}
                     </li>
                   )}
+                {evictionProtectionApplies(
+                  application.evictionProtectionIncluded,
+                  application.evictionProtectionFeeCents,
+                ) && (
+                  <li className="flex items-center gap-2">
+                    <Shield className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-medium">{EVICTION_PROTECTION_LABEL}:</span>
+                    {evictionProtectionAmountLabel(application.evictionProtectionFeeCents ?? 0)}
+                  </li>
+                )}
                 {application.totalPayableSnapshotCents != null &&
                   application.totalPayableSnapshotCents > 0 && (
                     <li className="flex items-center gap-2 border-t pt-2 font-semibold">

@@ -266,11 +266,11 @@ export const ListingInquiryPage = () => {
           <CardContent className="py-8">
             <EmptyState
               title="No questions yet"
-              description={
-                canAskQuestions
-                  ? "Pick a category below to ask the host a structured question, or choose 'Other' to type your own."
-                  : "No questions have been asked yet."
-              }
+                description={
+                  canAskQuestions
+                    ? "Pick a category below to ask the host a structured question, or choose 'Other' to type your own."
+                    : "The guest opened this conversation but hasn't sent a question yet."
+                }
             />
           </CardContent>
         </Card>
@@ -287,7 +287,9 @@ export const ListingInquiryPage = () => {
                 </CardTitle>
                 <div className="flex shrink-0 flex-col items-end gap-1">
                   <Badge variant="secondary" className="text-xs">
-                    {categoryLabels[q.category] ?? q.category}
+                    {q.openQuestionText && !q.predefinedQuestionId
+                      ? "Message"
+                      : (categoryLabels[q.category] ?? q.category)}
                   </Badge>
                   {q.submittedByRole === "Partner" && (
                     <Badge variant="outline" className="text-xs">

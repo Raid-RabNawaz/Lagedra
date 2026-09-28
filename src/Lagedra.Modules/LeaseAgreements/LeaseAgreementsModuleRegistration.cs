@@ -1,6 +1,7 @@
 using Lagedra.Infrastructure.Eventing;
 using Lagedra.Modules.LeaseAgreements.Application.EventHandlers;
 using Lagedra.Modules.LeaseAgreements.Domain.Events;
+using Lagedra.Modules.LeaseAgreements.Application.Services;
 using Lagedra.Modules.LeaseAgreements.Infrastructure.Persistence;
 using Lagedra.Modules.LeaseAgreements.Infrastructure.Services;
 using Lagedra.SharedKernel.Integration;
@@ -28,6 +29,7 @@ public static class LeaseAgreementsModuleRegistration
         services.AddScoped<ILeaseAgreementTemplateProvider, LeaseAgreementTemplateProvider>();
         services.AddScoped<ILeaseAgreementFiller, LeaseAgreementFiller>();
         services.AddScoped<IDealLeaseDocumentStore, DealLeaseDocumentStore>();
+        services.AddScoped<IDealLeaseSignatureStore, DealLeaseSignatureStore>();
         services.AddScoped<IDealLeasePdfService, DealLeasePdfService>();
         services.AddSingleton<ILeasePdfGenerator, LeasePdfGenerator>();
 

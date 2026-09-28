@@ -120,6 +120,7 @@ export const listingFormSchema = z
     // (it needs a listing id), so the form only tracks whether one is attached.
     leaseAgreementSource: z.enum(["LagedraTemplate", "HostProvided", "None"]),
     hasCustomLeaseDocument: z.boolean(),
+    requireLeaseSignatures: z.boolean(),
   })
   .refine(
     (d) =>
@@ -269,6 +270,7 @@ export const defaultListingFormValues: ListingFormValues = {
   rentCapJustCauseExempt: false,
   leaseAgreementSource: "LagedraTemplate",
   hasCustomLeaseDocument: false,
+  requireLeaseSignatures: false,
 };
 
 export function timeToApi(t: string): string {

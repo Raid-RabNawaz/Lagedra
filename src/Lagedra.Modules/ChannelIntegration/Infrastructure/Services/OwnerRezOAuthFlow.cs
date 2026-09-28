@@ -32,6 +32,14 @@ public sealed class OwnerRezOAuthFlow(
     public bool IsConfigured => _settings.IsOAuthConfigured;
 
     /// <summary>
+    /// False while the product uses the HA-XML channel. The OAuth and personal-access-token
+    /// connect paths stay in the code and come back when this is turned on.
+    /// </summary>
+    public bool IsOpenApiEnabled => _settings.OpenApiEnabled;
+
+    public bool IsHaXmlConfigured => _settings.IsHaXmlConfigured;
+
+    /// <summary>
     /// Where OwnerRez sends the host back to. Points at the API rather than the
     /// SPA because the callback has to exchange the code using the client secret.
     /// Must match the OAuth Redirect URL registered with OwnerRez, which requires

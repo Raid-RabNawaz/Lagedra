@@ -201,13 +201,15 @@ public static class InquiryEndpoints
 
     private static async Task<IResult> StartListingInquiry(
         [FromRoute] Guid listingId,
+        [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)]
+        StartListingInquiryRequest? body,
         ClaimsPrincipal user,
         IMediator mediator,
         CancellationToken cancellationToken)
     {
         var userId = GetUserId(user);
         var result = await mediator
-            .Send(new StartListingInquiryCommand(listingId, userId), cancellationToken)
+            .Send(new StartListingInquiryCommand(listingId, userId, body?.Message), cancellationToken)
             .ConfigureAwait(true);
 
         return result.IsSuccess

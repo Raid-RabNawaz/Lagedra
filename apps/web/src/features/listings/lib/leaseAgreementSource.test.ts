@@ -107,6 +107,37 @@ describe("lease agreement source", () => {
   });
 });
 
+describe("require lease signatures", () => {
+  it("defaults new listings to download only", () => {
+    expect(defaultListingFormValues.requireLeaseSignatures).toBe(false);
+    expect(toCreateListingRequest(values()).requireLeaseSignatures).toBe(false);
+    expect(toUpdateListingRequest(values()).requireLeaseSignatures).toBe(false);
+  });
+
+  it("sends true only when the host chose Lagedra's lease", () => {
+    const form = values({ requireLeaseSignatures: true });
+
+    expect(toCreateListingRequest(form).requireLeaseSignatures).toBe(true);
+    expect(toUpdateListingRequest(form).requireLeaseSignatures).toBe(true);
+    expect(
+      toCreateListingRequest(
+        values({ leaseAgreementSource: "HostProvided", hasCustomLeaseDocument: true, requireLeaseSignatures: true }),
+      ).requireLeaseSignatures,
+    ).toBe(false);
+    expect(
+      toUpdateListingRequest(values({ leaseAgreementSource: "None", requireLeaseSignatures: true }))
+        .requireLeaseSignatures,
+    ).toBe(false);
+  });
+
+  it("round-trips an existing listing's signature choice", () => {
+    expect(listingDetailsToFormValues(baseListing).requireLeaseSignatures).toBe(false);
+    expect(
+      listingDetailsToFormValues({ ...baseListing, requireLeaseSignatures: true }).requireLeaseSignatures,
+    ).toBe(true);
+  });
+});
+
 describe("stay protection opt-in", () => {
   it("defaults new listings to include Stay Protection", () => {
     expect(defaultListingFormValues.stayProtectionEnabled).toBe(true);

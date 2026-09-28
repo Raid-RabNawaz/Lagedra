@@ -7,6 +7,8 @@ import type {
   CreateSnapshotRequest,
   ConfirmSnapshotRequest,
   ReconfirmSnapshotRequest,
+  DealLeaseSigningStatusDto,
+  SignDealLeaseRequest,
 } from "@/api/types";
 
 export const truthSurfaceApi = {
@@ -138,5 +140,23 @@ export const truthSurfaceApi = {
 
       throw err;
     }
+  },
+
+  async getDealLeaseSigning(dealId: string): Promise<DealLeaseSigningStatusDto> {
+    const response = await http.get<DealLeaseSigningStatusDto>(
+      endpoints.leaseAgreements.dealSigning(dealId),
+    );
+    return response.data;
+  },
+
+  async signDealLease(
+    dealId: string,
+    payload: SignDealLeaseRequest,
+  ): Promise<DealLeaseSigningStatusDto> {
+    const response = await http.post<DealLeaseSigningStatusDto>(
+      endpoints.leaseAgreements.dealSign(dealId),
+      payload,
+    );
+    return response.data;
   },
 };

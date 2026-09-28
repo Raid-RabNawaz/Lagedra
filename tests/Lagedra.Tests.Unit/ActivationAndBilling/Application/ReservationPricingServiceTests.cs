@@ -48,7 +48,9 @@ public class ReservationPricingServiceTests
             .CalculateFeeAsync(default, default, default);
     }
 
-    private static ReservationPricingService CreateSut(IInsuranceFeeCalculator calculator)
+    private static ReservationPricingService CreateSut(
+        IInsuranceFeeCalculator calculator,
+        bool endorsed = false)
     {
         var tiers = Substitute.For<ITenantVerificationTierResolver>();
         tiers.ResolveAsync(TenantId, Arg.Any<CancellationToken>())
@@ -64,7 +66,37 @@ public class ReservationPricingServiceTests
         offers.GetAcceptedOfferAsync(ListingId, TenantId, Arg.Any<CancellationToken>())
             .Returns((AcceptedInquiryOfferDto?)null);
 
-        return new ReservationPricingService(tiers, calculator, settings, offers);
+        var endorsements = Substitute.For<IPartnerEndorsementProvider>();
+        endorsements.HasActiveEndorsementAsync(TenantId, Arg.Any<CancellationToken>())
+            .Returns(endorsed);
+
+        return new ReservationPricingService(tiers, calculator, settings, offers, endorsements);
+    }
+
+    [Fact]
+    public async Task Adds_eviction_protection_for_an_endorsed_guest_without_stay_protection()
+    {
+        var calculator = Substitute.For<IInsuranceFeeCalculator>();
+        var sut = CreateSut(calculator, endorsed: true);
+
+        var pricing = await sut.ComputeAsync(Listing(stayProtectionEnabled: false), TenantId, 30);
+
+        pricing.EvictionProtectionIncluded.Should().BeTrue();
+        pricing.EvictionProtectionFeeCents.Should().Be(5_000);
+        pricing.InsuranceFeeCents.Should().Be(0);
+        pricing.TotalPayableCents.Should().Be(275_000 + 500_000 + 5_000);
+    }
+
+    [Fact]
+    public async Task Skips_eviction_protection_without_an_active_endorsement()
+    {
+        var calculator = Substitute.For<IInsuranceFeeCalculator>();
+        var sut = CreateSut(calculator, endorsed: false);
+
+        var pricing = await sut.ComputeAsync(Listing(stayProtectionEnabled: false), TenantId, 30);
+
+        pricing.EvictionProtectionIncluded.Should().BeFalse();
+        pricing.EvictionProtectionFeeCents.Should().Be(0);
     }
 
     private static ListingDetailsDto Listing(bool stayProtectionEnabled) =>

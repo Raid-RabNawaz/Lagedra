@@ -45,7 +45,8 @@ public sealed record UpdateListingCommand(
     string? HomeOwnerEmail = null,
     bool IncludeBrokerClause = false,
     LeaseAgreementSource? LeaseAgreementSource = null,
-    bool? StayProtectionEnabled = null) : IRequest<Result<ListingDetailsDto>>;
+    bool? StayProtectionEnabled = null,
+    bool? RequireLeaseSignatures = null) : IRequest<Result<ListingDetailsDto>>;
 
 public sealed class UpdateListingCommandValidator : AbstractValidator<UpdateListingCommand>
 {
@@ -224,6 +225,11 @@ public sealed class UpdateListingCommandHandler(
             if (request.StayProtectionEnabled.HasValue)
             {
                 listing.SetStayProtection(request.StayProtectionEnabled.Value);
+            }
+
+            if (request.RequireLeaseSignatures.HasValue)
+            {
+                listing.SetRequireLeaseSignatures(request.RequireLeaseSignatures.Value);
             }
 
             if (request.VirtualTourUrl is not null)

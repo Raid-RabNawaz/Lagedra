@@ -30,11 +30,31 @@ public sealed class PlatformSettingsService(
 
     public async Task<IReadOnlyList<PlatformSetting>> GetAllAsync(CancellationToken ct = default)
     {
+        await EnsureEvictionProtectionFeeAsync(ct).ConfigureAwait(false);
+
         return await dbContext.PlatformSettings
             .AsNoTracking()
             .OrderBy(s => s.Key)
             .ToListAsync(ct)
             .ConfigureAwait(false);
+    }
+
+    private async Task EnsureEvictionProtectionFeeAsync(CancellationToken ct)
+    {
+        var key = PlatformSettingKeys.EvictionProtectionFeeCents;
+        var exists = await dbContext.PlatformSettings
+            .AnyAsync(s => s.Key == key, ct)
+            .ConfigureAwait(false);
+        if (exists)
+        {
+            return;
+        }
+
+        dbContext.PlatformSettings.Add(PlatformSetting.Create(
+            key,
+            EvictionProtectionFee.DefaultFeeCents.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            EvictionProtectionFee.SettingDescription));
+        await dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
     }
 
     public async Task SetAsync(

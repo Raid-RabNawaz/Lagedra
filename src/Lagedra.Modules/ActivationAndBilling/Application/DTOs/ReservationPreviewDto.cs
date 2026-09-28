@@ -19,4 +19,6 @@ public sealed record ReservationPreviewDto(
     long TotalPayableCents,
     int StayDurationDays,
     bool IsNegotiatedOffer = false,
-    Guid? NegotiatedOfferId = null);
+    Guid? NegotiatedOfferId = null,
+    long EvictionProtectionFeeCents = 0,
+    bool EvictionProtectionIncluded = false);

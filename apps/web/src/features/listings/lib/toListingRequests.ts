@@ -148,5 +148,7 @@ function managementFromForm(v: ListingFormValues) {
         : null,
     includeBrokerClause: v.includeBrokerClause,
     leaseAgreementSource: v.leaseAgreementSource,
+    requireLeaseSignatures:
+      v.leaseAgreementSource === "LagedraTemplate" && v.requireLeaseSignatures,
   };
 }

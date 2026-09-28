@@ -18,6 +18,8 @@ public sealed class ChannelListingMapConfiguration : IEntityTypeConfiguration<Ch
         builder.Property(m => m.Title).HasMaxLength(1000);
         builder.Property(m => m.SyncPriceFromPms).IsRequired().HasDefaultValue(false);
         builder.Property(m => m.SyncCalendarFromPms).IsRequired().HasDefaultValue(false);
+        builder.Property(m => m.PmsPriceBasis).HasConversion<string>().HasMaxLength(20);
+        builder.Property(m => m.PmsSourceAmountCents);
 
         builder.HasIndex(m => m.ConnectionId);
         builder.HasIndex(m => new { m.ConnectionId, m.ProviderListingId }).IsUnique();

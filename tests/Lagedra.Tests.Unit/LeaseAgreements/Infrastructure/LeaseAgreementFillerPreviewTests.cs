@@ -5,6 +5,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Lagedra.Modules.LeaseAgreements.Application.Services;
+using Lagedra.Modules.LeaseAgreements.Domain.Entities;
+using Lagedra.Modules.LeaseAgreements.Domain.Enums;
 using Lagedra.Modules.LeaseAgreements.Infrastructure.Services;
 using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Time;
@@ -41,7 +43,8 @@ public class LeaseAgreementFillerPreviewTests
             new StubListingProvider(listing),
             new StubPartyProfileProvider(),
             new StubTemplateProvider(BodyHtml),
-            new StubClock());
+            new StubClock(),
+            new StubSignatureStore());
 
     private static ListingDetailsDto CreateListing(
         bool petsAllowed = true,
@@ -263,5 +266,22 @@ public class LeaseAgreementFillerPreviewTests
     private sealed class StubClock : IClock
     {
         public DateTime UtcNow { get; } = new(2026, 8, 25, 0, 0, 0, DateTimeKind.Utc);
+    }
+
+    private sealed class StubSignatureStore : IDealLeaseSignatureStore
+    {
+        public Task<IReadOnlyList<DealLeaseSignature>> ListByDealAsync(
+            Guid dealId,
+            CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<DealLeaseSignature>>([]);
+
+        public Task<DealLeaseSignature?> GetAsync(
+            Guid dealId,
+            DealLeaseSignerRole role,
+            CancellationToken ct = default) =>
+            Task.FromResult<DealLeaseSignature?>(null);
+
+        public Task SaveAsync(DealLeaseSignature signature, CancellationToken ct = default) =>
+            Task.CompletedTask;
     }
 }

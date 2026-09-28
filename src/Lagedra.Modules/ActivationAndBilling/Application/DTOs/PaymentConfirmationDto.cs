@@ -1,4 +1,5 @@
 using Lagedra.Modules.ActivationAndBilling.Domain.Enums;
+using Lagedra.SharedKernel.Settings;
 
 namespace Lagedra.Modules.ActivationAndBilling.Application.DTOs;
 
@@ -33,4 +34,6 @@ public sealed record PaymentConfirmationDto(
     // Deposit minus approved/settled damage deductions — what the host is
     // expected to return. Computed on the status query only.
     long? NetReturnableDepositCents = null,
-    Guid? DepositReturnEvidenceManifestId = null);
+    Guid? DepositReturnEvidenceManifestId = null,
+    long EvictionProtectionFeeCents = 0,
+    EvictionProtectionClaimStanding? EvictionProtectionClaimStanding = null);

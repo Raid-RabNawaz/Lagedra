@@ -5,6 +5,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using FluentAssertions;
 using Lagedra.Modules.LeaseAgreements.Application.Services;
+using Lagedra.Modules.LeaseAgreements.Domain.Entities;
+using Lagedra.Modules.LeaseAgreements.Domain.Enums;
 using Lagedra.Modules.LeaseAgreements.Infrastructure.Services;
 using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Time;
@@ -52,13 +54,39 @@ public class LeaseAgreementFillerDealTests
         result.MissingRequiredPlaceholders.Should().Contain("listing.fullAddress");
     }
 
-    private static LeaseAgreementFiller CreateFiller(ListingDetailsDto listing) =>
+    [Fact]
+    public async Task FillForDeal_stamps_typed_signatures_and_appends_the_certificate()
+    {
+        var signedAt = new DateTime(2026, 9, 12, 0, 0, 0, DateTimeKind.Utc);
+        var filler = CreateFiller(
+            CreateListing(),
+            DealLeaseSignature.Create(
+                DealId,
+                DealLeaseSignerRole.Host,
+                HostId,
+                "Jane Host",
+                "HASH1",
+                signedAt));
+
+        var result = await filler.FillForDealAsync(DealId);
+
+        result.Values["host.signatureName"].Should().Be("Jane Host");
+        result.Values["host.signedAt"].Should().Be("September 12, 2026");
+        result.Values["tenant.signatureName"].Should().BeEmpty();
+        result.FilledHtml.Should().Contain("ELECTRONIC SIGNATURES");
+        result.FilledHtml.Should().Contain("Jane Host");
+    }
+
+    private static LeaseAgreementFiller CreateFiller(
+        ListingDetailsDto listing,
+        params DealLeaseSignature[] signatures) =>
         new(
             new StubDealProvider(),
             new StubListingProvider(listing),
             new StubPartyProfileProvider(),
             new StubTemplateProvider(BodyHtml),
-            new StubClock());
+            new StubClock(),
+            new StubSignatureStore(signatures));
 
     private static ListingDetailsDto CreateListing() =>
         new(
@@ -188,5 +216,22 @@ public class LeaseAgreementFillerDealTests
     private sealed class StubClock : IClock
     {
         public DateTime UtcNow { get; } = new(2026, 9, 11, 0, 0, 0, DateTimeKind.Utc);
+    }
+
+    private sealed class StubSignatureStore(params DealLeaseSignature[] rows) : IDealLeaseSignatureStore
+    {
+        public Task<IReadOnlyList<DealLeaseSignature>> ListByDealAsync(
+            Guid dealId,
+            CancellationToken ct = default) =>
+            Task.FromResult<IReadOnlyList<DealLeaseSignature>>(rows);
+
+        public Task<DealLeaseSignature?> GetAsync(
+            Guid dealId,
+            DealLeaseSignerRole role,
+            CancellationToken ct = default) =>
+            Task.FromResult(rows.FirstOrDefault(s => s.Role == role));
+
+        public Task SaveAsync(DealLeaseSignature signature, CancellationToken ct = default) =>
+            Task.CompletedTask;
     }
 }

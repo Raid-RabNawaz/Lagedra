@@ -59,6 +59,6 @@ public class SmsProgramTests
         SmsProgram.HelpReply.Should().Contain("STOP");
         SmsProgram.HelpReply.Should().Contain("HELP");
         SmsProgram.HelpReply.Should().Contain("info@lagedra.com");
-        SmsProgram.HelpReply.Should().Contain("213-735-2362");
+        SmsProgram.HelpReply.Should().Contain("+1 (213) 377-5272");
     }
 }

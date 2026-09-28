@@ -1,6 +1,7 @@
 using System;
 using FluentAssertions;
 using Lagedra.Modules.ChannelIntegration.Domain.Entities;
+using Lagedra.Modules.ChannelIntegration.Domain.Enums;
 using Lagedra.SharedKernel.Time;
 using Xunit;
 
@@ -20,6 +21,8 @@ public class ChannelListingMapTests
 
         map.SyncPriceFromPms.Should().BeFalse();
         map.SyncCalendarFromPms.Should().BeFalse();
+        map.PmsPriceBasis.Should().BeNull();
+        map.PmsSourceAmountCents.Should().BeNull();
     }
 
     [Fact]
@@ -38,5 +41,22 @@ public class ChannelListingMapTests
 
         map.SyncPriceFromPms.Should().BeFalse();
         map.SyncCalendarFromPms.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Price_basis_is_remembered_without_clearing_the_source_amount()
+    {
+        var clock = new FixedClock();
+        var map = ChannelListingMap.Create(Guid.NewGuid(), "ext-1", "Reno", clock);
+
+        map.RememberPmsSourceAmount(860_700, clock);
+        map.SetPmsPriceBasis(ChannelPmsPriceBasis.Monthly, clock);
+
+        map.PmsSourceAmountCents.Should().Be(860_700);
+        map.PmsPriceBasis.Should().Be(ChannelPmsPriceBasis.Monthly);
+
+        map.RememberPmsSourceAmount(900_000, clock);
+        map.PmsPriceBasis.Should().Be(ChannelPmsPriceBasis.Monthly);
+        map.PmsSourceAmountCents.Should().Be(900_000);
     }
 }

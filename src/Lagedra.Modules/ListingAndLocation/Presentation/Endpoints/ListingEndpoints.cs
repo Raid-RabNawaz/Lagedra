@@ -139,7 +139,8 @@ public static class ListingEndpoints
                 LeaseAgreementSource: request.LeaseAgreementSource,
                 AddedVia: request.AddedVia,
                 AddedViaDetail: request.AddedViaDetail,
-                StayProtectionEnabled: request.StayProtectionEnabled),
+                StayProtectionEnabled: request.StayProtectionEnabled,
+                RequireLeaseSignatures: request.RequireLeaseSignatures),
             cancellationToken).ConfigureAwait(true);
 
         return result.IsSuccess
@@ -188,7 +189,8 @@ public static class ListingEndpoints
                 HomeOwnerEmail: request.HomeOwnerEmail,
                 IncludeBrokerClause: request.IncludeBrokerClause,
                 LeaseAgreementSource: request.LeaseAgreementSource,
-                StayProtectionEnabled: request.StayProtectionEnabled),
+                StayProtectionEnabled: request.StayProtectionEnabled,
+                RequireLeaseSignatures: request.RequireLeaseSignatures),
             cancellationToken).ConfigureAwait(true);
 
         return result.IsSuccess

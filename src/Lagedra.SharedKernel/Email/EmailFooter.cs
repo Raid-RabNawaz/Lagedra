@@ -7,7 +7,7 @@ namespace Lagedra.SharedKernel.Email;
 public static class EmailFooter
 {
     public const string ContactEmail = "info@lagedra.com";
-    public const string ContactPhone = "213-735-2362";
+    public const string ContactPhone = "+1 (213) 377-5272";
 
     public static string AppendHtml(string htmlBody) => EmailLayout.WrapHtml(htmlBody);
 

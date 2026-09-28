@@ -10,4 +10,5 @@ public sealed record CheckoutDto(
     long InsuranceFeeCents,
     long ApplicationFeeCents,
     long ServiceFeeCents,
-    string Currency);
+    string Currency,
+    long EvictionProtectionFeeCents = 0);

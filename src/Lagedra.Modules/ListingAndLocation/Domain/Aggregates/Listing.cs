@@ -69,6 +69,15 @@ public sealed class Listing : AggregateRoot<Guid>
     public bool StayProtectionEnabled { get; private set; } = true;
 
     /// <summary>
+    /// When <c>true</c>, bookings that use Lagedra's lease template ask the
+    /// host and tenant to type their name in-app after the lease PDF is
+    /// generated. Off by default; ignored when
+    /// <see cref="LeaseAgreementSource"/> is not
+    /// <see cref="LeaseAgreementSource.LagedraTemplate"/>.
+    /// </summary>
+    public bool RequireLeaseSignatures { get; private set; }
+
+    /// <summary>
     /// When <c>true</c> (default), verified partner organizations may create direct
     /// reservations for this listing on behalf of their guests / employees / clients
     /// (Phase 18.7). When <c>false</c>, the landlord has opted this listing out and
@@ -425,6 +434,16 @@ public sealed class Listing : AggregateRoot<Guid>
     {
         EnsureEditable();
         StayProtectionEnabled = enabled;
+    }
+
+    /// <summary>
+    /// Host opt-in for in-app host and tenant signatures on Lagedra's lease.
+    /// Does not apply to a host-uploaded lease or to listings with no lease.
+    /// </summary>
+    public void SetRequireLeaseSignatures(bool required)
+    {
+        EnsureEditable();
+        RequireLeaseSignatures = required;
     }
 
     /// <summary>

@@ -36,6 +36,18 @@ public sealed class DealApplication : AggregateRoot<Guid>
     public long? ServiceFeeCents { get; private set; }
 
     /// <summary>
+    /// True when the guest had an active partner endorsement at request time.
+    /// Later revocation does not clear this booking.
+    /// </summary>
+    public bool EvictionProtectionIncluded { get; private set; }
+
+    /// <summary>
+    /// Snapshotted Eviction Protection fee. Zero when coverage is waived or
+    /// the guest was not endorsed.
+    /// </summary>
+    public long EvictionProtectionFeeCents { get; private set; }
+
+    /// <summary>
     /// Total the tenant will be charged on host approval = deposit + first
     /// month rent + insurance + service fee. Snapshotted so the figure shown
     /// at request time is exactly what gets charged.
@@ -275,6 +287,8 @@ public sealed class DealApplication : AggregateRoot<Guid>
         FirstMonthRentCents = snapshot.FirstMonthRentCents;
         InsuranceFeeCents = snapshot.InsuranceFeeCents;
         ServiceFeeCents = snapshot.ServiceFeeCents;
+        EvictionProtectionIncluded = snapshot.EvictionProtectionIncluded;
+        EvictionProtectionFeeCents = snapshot.EvictionProtectionFeeCents;
         TotalPayableSnapshotCents = snapshot.TotalPayableCents;
         TenantVerificationTierAtRequest = snapshot.Tier;
         DepositReason = snapshot.DepositReason;

@@ -8,6 +8,7 @@ using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Routing;
 
 namespace Lagedra.Modules.ActivationAndBilling.Presentation.Endpoints;
@@ -185,6 +186,7 @@ public static class PaymentConfirmationEndpoints
 
     private static async Task<IResult> BeginMoveOut(
         [FromRoute] Guid dealId,
+        [FromBody(EmptyBodyBehavior = EmptyBodyBehavior.Allow)] BeginMoveOutRequest? request,
         ClaimsPrincipal user,
         IMediator mediator,
         CancellationToken ct)
@@ -192,7 +194,7 @@ public static class PaymentConfirmationEndpoints
         var userId = GetUserId(user);
         var isAdmin = user.IsInRole("PlatformAdmin");
         var result = await mediator
-            .Send(new BeginMoveOutCommand(dealId, userId, isAdmin), ct)
+            .Send(new BeginMoveOutCommand(dealId, userId, isAdmin, request?.DocumentedNonpayment), ct)
             .ConfigureAwait(false);
 
         return result.IsSuccess

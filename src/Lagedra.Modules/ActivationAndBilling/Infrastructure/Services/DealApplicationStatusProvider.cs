@@ -76,6 +76,8 @@ public sealed class DealApplicationStatusProvider(BillingDbContext dbContext) : 
             app.OwnerConsentRequired,
             app.OwnerTenancyConsentGiven,
             app.OwnerTenancyConsentAt,
-            app.OwnerConsentVersion);
+            app.OwnerConsentVersion,
+            app.EvictionProtectionFeeCents,
+            app.EvictionProtectionIncluded);
     }
 }

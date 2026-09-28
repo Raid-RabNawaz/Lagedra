@@ -11,7 +11,7 @@
   "containerDefinitions": [
     {
       "name": "worker",
-      "image": "930218374225.dkr.ecr.us-west-1.amazonaws.com/lagedra/worker@sha256:e1b0f21e17687870240a2f2251520607496cefe2d5bf386403c18cc785055692",
+      "image": "930218374225.dkr.ecr.us-west-1.amazonaws.com/lagedra/worker@sha256:33c7d4e8a69917ecd9fb94ca9b3fe42da800d6fbd009e0fa8401005ca08e53bf",
       "essential": true,
       "environment": [
         {

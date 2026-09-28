@@ -3,6 +3,7 @@ using Lagedra.Modules.ActivationAndBilling.Application.DTOs;
 using Lagedra.Modules.ActivationAndBilling.Domain.Enums;
 using Lagedra.Modules.ActivationAndBilling.Infrastructure.Persistence;
 using Lagedra.SharedKernel.Results;
+using Lagedra.SharedKernel.Settings;
 using Lagedra.SharedKernel.Time;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -18,7 +19,8 @@ namespace Lagedra.Modules.ActivationAndBilling.Application.Commands;
 public sealed record BeginMoveOutCommand(
     Guid DealId,
     Guid CallerUserId,
-    bool IsAdmin = false) : IRequest<Result<PaymentConfirmationDto>>;
+    bool IsAdmin = false,
+    bool? DocumentedNonpayment = null) : IRequest<Result<PaymentConfirmationDto>>;
 
 public sealed partial class BeginMoveOutCommandHandler(
     BillingDbContext dbContext,
@@ -71,6 +73,20 @@ public sealed partial class BeginMoveOutCommandHandler(
                     "Only an active booking can begin move-out."));
         }
 
+        var today = DateOnly.FromDateTime(clock.UtcNow);
+        var earlyMoveOut = EvictionProtectionFee.DecideEarlyMoveOut(
+            application.EvictionProtectionIncluded,
+            application.RequestedCheckOut,
+            today,
+            request.DocumentedNonpayment);
+
+        if (confirmation.MoveOutInitiatedAt is null && earlyMoveOut.ReasonRequired)
+        {
+            return Result<PaymentConfirmationDto>.Failure(
+                new Error("EvictionProtection.EarlyMoveOutReasonRequired",
+                    "Ending this stay before check-out needs a reason: it is not a qualifying nonpayment or eviction event, or it is connected to documented nonpayment."));
+        }
+
         var account = await dbContext.BillingAccounts
             .FirstOrDefaultAsync(b => b.DealId == request.DealId, cancellationToken)
             .ConfigureAwait(false);
@@ -98,7 +114,10 @@ public sealed partial class BeginMoveOutCommandHandler(
             account.Close();
         }
 
-        confirmation.BeginMoveOut(request.CallerUserId, clock);
+        confirmation.BeginMoveOut(
+            request.CallerUserId,
+            clock,
+            confirmation.MoveOutInitiatedAt is null ? earlyMoveOut.Standing : null);
 
         if (confirmation.DepositAmountCents <= 0)
         {

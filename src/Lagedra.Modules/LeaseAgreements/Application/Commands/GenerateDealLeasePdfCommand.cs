@@ -21,7 +21,8 @@ public sealed class GenerateDealLeasePdfCommandHandler(
     IListingProvider listingProvider,
     IObjectStorageService storageService,
     IOptions<MinioSettings> storageOptions,
-    IClock clock) : IRequestHandler<GenerateDealLeasePdfCommand, Result<DealLeaseDocument>>
+    IClock clock,
+    IDealLeaseSignatureStore signatures) : IRequestHandler<GenerateDealLeasePdfCommand, Result<DealLeaseDocument>>
 {
     private readonly string _leaseDocumentsBucket = storageOptions.Value.LeaseDocumentsBucket;
 
@@ -67,7 +68,15 @@ public sealed class GenerateDealLeasePdfCommandHandler(
 
             if (existing is not null && existing.TemplateVersionId == filled.TemplateVersionId)
             {
-                return Result<DealLeaseDocument>.Success(existing);
+                var latestSignature = (await signatures.ListByDealAsync(request.DealId, cancellationToken)
+                    .ConfigureAwait(false))
+                    .Select(s => s.SignedAtUtc)
+                    .DefaultIfEmpty()
+                    .Max();
+                if (latestSignature == default || latestSignature < existing.GeneratedAtUtc)
+                {
+                    return Result<DealLeaseDocument>.Success(existing);
+                }
             }
 
             if (filled.MissingRequiredPlaceholders.Count > 0)

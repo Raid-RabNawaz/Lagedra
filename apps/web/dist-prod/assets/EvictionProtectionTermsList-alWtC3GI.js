@@ -1,0 +1,1 @@
+import{j as i,d as t}from"./index-DPb6qFaF.js";import{b as o}from"./evictionProtection-DfEAxSIv.js";function a({className:r}){return i.jsx("ul",{className:t("list-disc space-y-1 pl-4",r),children:o.map(s=>i.jsx("li",{children:s},s))})}export{a as E};

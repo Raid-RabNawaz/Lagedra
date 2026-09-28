@@ -60,4 +60,38 @@ public class CancellationRefundCalculatorTests
         refund.TenantRefundCents.Should().Be(0);
         refund.InsuranceRefundCents.Should().Be(0);
     }
+
+    [Fact]
+    public void Eviction_protection_refunds_before_check_in_even_when_rent_does_not()
+    {
+        var refund = CancellationRefundCalculator.Calculate(
+            CheckIn,
+            new DateOnly(2026, 9, 28),
+            RentAndDepositCents,
+            StayProtectionCents,
+            freeCancellationDays: 14,
+            partialRefundPercent: 50,
+            partialRefundDays: 7,
+            evictionProtectionFeeCents: 5_000);
+
+        refund.TenantRefundCents.Should().Be(0);
+        refund.InsuranceRefundCents.Should().Be(0);
+        refund.EvictionProtectionRefundCents.Should().Be(5_000);
+    }
+
+    [Fact]
+    public void Eviction_protection_is_not_refunded_on_the_check_in_date()
+    {
+        var refund = CancellationRefundCalculator.Calculate(
+            CheckIn,
+            CheckIn,
+            RentAndDepositCents,
+            StayProtectionCents,
+            freeCancellationDays: 14,
+            partialRefundPercent: 50,
+            partialRefundDays: 7,
+            evictionProtectionFeeCents: 5_000);
+
+        refund.EvictionProtectionRefundCents.Should().Be(0);
+    }
 }

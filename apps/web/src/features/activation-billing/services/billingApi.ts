@@ -139,9 +139,13 @@ export const billingApi = {
     return response.data;
   },
 
-  async beginMoveOut(dealId: string): Promise<PaymentConfirmationDto> {
+  async beginMoveOut(
+    dealId: string,
+    documentedNonpayment?: boolean,
+  ): Promise<PaymentConfirmationDto> {
     const response = await http.post<PaymentConfirmationDto>(
       endpoints.payment.beginMoveOut(dealId),
+      documentedNonpayment === undefined ? {} : { documentedNonpayment },
     );
     return response.data;
   },

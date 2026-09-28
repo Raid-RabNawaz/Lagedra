@@ -23,6 +23,22 @@ public sealed record ChannelAddress(
 /// <summary>A single photo pulled from a channel (stable external id + URL).</summary>
 public sealed record ChannelPhoto(string ExternalId, Uri Url, string? Caption = null);
 
+/// <summary>
+/// Whether a PMS amount is a nightly rate or an already-monthly rent.
+/// Feeds rarely label this; <see cref="ChannelRateNormalizer"/> decides.
+/// </summary>
+public enum ChannelPriceBasis
+{
+    /// <summary>The feed did not label the amount, or no amount was present.</summary>
+    Unknown = 0,
+
+    /// <summary>Nightly rate. Monthly rent is that amount × 30.</summary>
+    Nightly = 1,
+
+    /// <summary>The amount is already the monthly rent.</summary>
+    Monthly = 2,
+}
+
 /// <summary>Normalized snapshot of an external listing pulled from a channel.</summary>
 public sealed record ChannelListingSnapshot(
     string ExternalListingId,
@@ -42,7 +58,8 @@ public sealed record ChannelListingSnapshot(
     string? PropertyType = null,
     ChannelAddress? Address = null,
     IReadOnlyList<string>? AmenityCodes = null,
-    IReadOnlyList<ChannelPhoto>? Photos = null);
+    IReadOnlyList<ChannelPhoto>? Photos = null,
+    ChannelPriceBasis PriceBasis = ChannelPriceBasis.Unknown);
 
 public sealed record ChannelDateBlock(DateOnly Start, DateOnly End, bool Available);
 

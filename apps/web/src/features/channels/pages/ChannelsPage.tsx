@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
@@ -15,13 +16,23 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Separator } from "@/components/ui/separator";
 import { Loader } from "@/components/shared/Loader";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { usePublicConfigStore } from "@/app/config/publicConfigStore";
 import { getApiErrorMessage } from "@/api/errors";
+import { formatMoney } from "@/utils/format";
 import { DisconnectChannelButton } from "@/features/channels/components/DisconnectChannelButton";
+import { channelsApi } from "@/features/channels/services/channelsApi";
 import {
+  channelKeys,
   useChannelConnections,
   useConnectChannel,
   useSyncChannel,
@@ -30,6 +41,8 @@ import {
   useChannelProviders,
   useStartOwnerRezOAuth,
   useSetChannelListingSync,
+  useSetChannelListingPriceBasis,
+  type PmsPriceBasis,
 } from "@/features/channels/hooks/useChannels";
 import type {
   ChannelConnectionDto,
@@ -280,7 +293,7 @@ function formatOwnerRezSyncSuccess(
   const importPart =
     result.pulled > 0
       ? `Imported ${result.created} new and updated ${result.updated} listing(s) as drafts.`
-      : "No listings were found yet — try syncing again once properties are active in OwnerRez.";
+      : "No listings were found yet — in OwnerRez, make sure the property is active and enabled for Lagedra, then sync again.";
   return `${prefix}${importPart}`;
 }
 
@@ -360,6 +373,8 @@ function OwnerRezConnectedCard({
           </Alert>
         )}
 
+        <OwnerRezRevenueShareNotice />
+
         <p className="text-sm text-muted-foreground">
           Sync updates listings already imported from OwnerRez and pulls in any
           new ones as drafts. Last sync: {formatDate(connection.lastContentSyncAt)}.
@@ -400,20 +415,31 @@ function OwnerRezConnectedCard({
 }
 
 /**
- * OwnerRez can be linked two ways, and which one is live is a server-side
- * decision: once an OwnerRez OAuth app is configured, `usesOAuth` flips and the
- * redirect flow replaces the token form. Until then hosts paste an account email
- * and personal access token.
+ * OwnerRez connect screens, picked by the server:
+ * - `haxml` (the live path) asks for the channel Connection ID.
+ * - `oauth` and `token` are the API-for-apps screens. They stay in this file
+ *   and come back when Channels:OwnerRez:OpenApiEnabled is true.
  *
- * Worth knowing about the token path: OwnerRez rate limits personal access
- * tokens to two different accounts per IP address per 24 hours, so it does not
- * scale past a small pilot — see
+ * The token path is limited to two OwnerRez accounts per IP per 24 hours:
  * https://www.ownerrez.com/support/articles/api-auth.
  */
+function OwnerRezRevenueShareNotice() {
+  return (
+    <Alert>
+      <AlertDescription>
+        Connecting OwnerRez adds a{" "}
+        <span className="font-medium text-foreground">15% charge on the revenue</span>{" "}
+        from the listings you import through this integration, in addition to your
+        usual Lagedra fees.
+      </AlertDescription>
+    </Alert>
+  );
+}
+
 function ConnectOwnerRezCard() {
   const providers = useChannelProviders();
-  const usesOAuth = providers.data?.some(
-    (p) => p.providerKey.toLowerCase() === OWNERREZ_PROVIDER_KEY && p.usesOAuth,
+  const ownerRez = providers.data?.find(
+    (p) => p.providerKey.toLowerCase() === OWNERREZ_PROVIDER_KEY,
   );
 
   // Wait for the answer rather than flashing the wrong card at a host who is
@@ -428,7 +454,132 @@ function ConnectOwnerRezCard() {
     );
   }
 
-  return usesOAuth ? <ConnectOwnerRezOAuthCard /> : <ConnectOwnerRezTokenCard />;
+  if (ownerRez?.connectMode === "haxml") {
+    return <ConnectOwnerRezHaXmlCard />;
+  }
+
+  return ownerRez?.usesOAuth ? <ConnectOwnerRezOAuthCard /> : <ConnectOwnerRezTokenCard />;
+}
+
+function ConnectOwnerRezHaXmlCard() {
+  const connect = useConnectChannel();
+  const sync = useSyncChannel();
+
+  const [displayName, setDisplayName] = useState("");
+  const [connectionId, setConnectionId] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  const busy = connect.isPending || sync.isPending;
+
+  const handleConnect = async () => {
+    setError(null);
+    setSuccess(null);
+
+    const trimmedId = connectionId.trim();
+    if (!/^ora[a-z0-9]+$/i.test(trimmedId)) {
+      setError("Enter the OwnerRez Connection ID. It starts with ora.");
+      return;
+    }
+
+    try {
+      const connection = await connect.mutateAsync({
+        providerKey: OWNERREZ_PROVIDER_KEY,
+        externalAccountId: trimmedId,
+        displayName: displayName.trim() || "OwnerRez",
+      });
+
+      const result = await sync.mutateAsync(connection.id);
+      setDisplayName("");
+      setConnectionId("");
+      setSuccess(formatOwnerRezSyncSuccess(result, "Connected. "));
+    } catch (e) {
+      setError(
+        getApiErrorMessage(
+          e,
+          "Could not connect to OwnerRez. Check the Connection ID and try again.",
+        ),
+      );
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center gap-2">
+          <Plug className="h-5 w-5" />
+          Connect OwnerRez
+        </CardTitle>
+        <CardDescription>
+          Enable Lagedra inside OwnerRez, then paste the Connection ID. Lagedra
+          imports the properties you turn on for that channel.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <OwnerRezRevenueShareNotice />
+        {error && (
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
+        {success && (
+          <Alert variant="success">
+            <CheckCircle2 className="h-4 w-4" />
+            <AlertDescription>{success}</AlertDescription>
+          </Alert>
+        )}
+
+        <ol className="list-decimal space-y-2 pl-4 text-sm text-muted-foreground">
+          <li>
+            In OwnerRez, open{" "}
+            <span className="text-foreground">Settings → Channel Integrations</span>{" "}
+            and enable Lagedra. On the stage environment that channel is named
+            HA-XML Sandbox.
+          </li>
+          <li>
+            On the Instructions tab, copy the Connection ID. It starts with{" "}
+            <code className="text-[11px]">ora</code>.
+          </li>
+          <li>
+            On the Properties tab, turn on each property you want imported.
+          </li>
+          <li>
+            Paste the Connection ID below and click{" "}
+            <span className="text-foreground">Connect &amp; import listings</span>.
+          </li>
+        </ol>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="or-connection-id">Connection ID</Label>
+            <Input
+              id="or-connection-id"
+              placeholder="ora…"
+              value={connectionId}
+              onChange={(e) => setConnectionId(e.target.value)}
+              autoComplete="off"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="or-haxml-displayName">Label (optional)</Label>
+            <Input
+              id="or-haxml-displayName"
+              placeholder="My OwnerRez account"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              autoComplete="off"
+            />
+          </div>
+        </div>
+
+        <Button onClick={handleConnect} disabled={busy} className="gap-2">
+          <Link2 className="h-4 w-4" />
+          {busy ? "Connecting..." : "Connect & import listings"}
+        </Button>
+      </CardContent>
+    </Card>
+  );
 }
 
 function ConnectOwnerRezOAuthCard() {
@@ -463,6 +614,7 @@ function ConnectOwnerRezOAuthCard() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <OwnerRezRevenueShareNotice />
         {error && (
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
@@ -559,6 +711,7 @@ function ConnectOwnerRezTokenCard() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <OwnerRezRevenueShareNotice />
         {error && (
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
@@ -1759,12 +1912,20 @@ function ComingSoonChannelCard({ providerName }: { providerName: string }) {
   );
 }
 
+function listingsNeedingPriceBasis(rows: ChannelListingMapDto[] | undefined) {
+  return (rows ?? []).filter(
+    (row) => row.listingId && row.pmsPriceNeedsConfirmation && !row.pmsPriceBasis,
+  );
+}
+
 function ConnectionCard({ connection }: { connection: ChannelConnectionDto }) {
+  const queryClient = useQueryClient();
   const sync = useSyncChannel();
   const setEnabled = useSetChannelEnabled();
   const [expanded, setExpanded] = useState(false);
   const listings = useChannelListings(connection.id);
   const [error, setError] = useState<string | null>(null);
+  const [pricePromptOpen, setPricePromptOpen] = useState(false);
 
   const disabled = connection.status === "Disabled";
   const busy = sync.isPending || setEnabled.isPending;
@@ -1774,6 +1935,15 @@ function ConnectionCard({ connection }: { connection: ChannelConnectionDto }) {
     setError(null);
     try {
       await sync.mutateAsync(connection.id);
+      const rows = await queryClient.fetchQuery({
+        queryKey: channelKeys.listings(connection.id),
+        queryFn: () => channelsApi.listListings(connection.id),
+        staleTime: 0,
+      });
+      if (listingsNeedingPriceBasis(rows).length > 0) {
+        setExpanded(true);
+        setPricePromptOpen(true);
+      }
     } catch (e) {
       setError(getApiErrorMessage(e, "Sync failed. Please try again."));
     }
@@ -1863,6 +2033,14 @@ function ConnectionCard({ connection }: { connection: ChannelConnectionDto }) {
             providerLabel={label}
           />
         )}
+
+        <PmsPriceBasisDialog
+          open={pricePromptOpen}
+          onOpenChange={setPricePromptOpen}
+          connectionId={connection.id}
+          providerLabel={label}
+          listings={listingsNeedingPriceBasis(listings.data)}
+        />
       </CardContent>
     </Card>
   );
@@ -1938,6 +2116,114 @@ function ImportedListingsList({
   );
 }
 
+function PmsPriceBasisDialog({
+  open,
+  onOpenChange,
+  connectionId,
+  providerLabel: label,
+  listings,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  connectionId: string;
+  providerLabel: string;
+  listings: ChannelListingMapDto[];
+}) {
+  useEffect(() => {
+    if (open && listings.length === 0) {
+      onOpenChange(false);
+    }
+  }, [open, listings.length, onOpenChange]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Check this PMS price</DialogTitle>
+          <DialogDescription>
+            {label} sent a price that looks high for a nightly rate. A nightly
+            reading would be more than $40,000 a month. Monthly keeps the PMS
+            amount. Nightly multiplies it by 30. Lagedra remembers your choice
+            and does not ask about ordinary nightly rates.
+          </DialogDescription>
+        </DialogHeader>
+        <ul className="space-y-3">
+          {listings.map((listing) => (
+            <li key={listing.id} className="rounded-md border p-3">
+              <p className="text-sm font-medium">
+                {listing.title ?? listing.providerListingId}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                PMS price {formatMoney(listing.pmsSourceAmountCents ?? 0)}
+              </p>
+              <PmsPriceBasisChoices
+                connectionId={connectionId}
+                listing={listing}
+              />
+            </li>
+          ))}
+        </ul>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PmsPriceBasisChoices({
+  connectionId,
+  listing,
+}: {
+  connectionId: string;
+  listing: ChannelListingMapDto;
+}) {
+  const saveBasis = useSetChannelListingPriceBasis(connectionId);
+  const [error, setError] = useState<string | null>(null);
+  const source = listing.pmsSourceAmountCents;
+  const disabled = !listing.listingId || source == null || source <= 0 || saveBasis.isPending;
+
+  const choose = async (priceBasis: PmsPriceBasis) => {
+    setError(null);
+    try {
+      await saveBasis.mutateAsync({ mapId: listing.id, priceBasis });
+    } catch (e) {
+      setError(getApiErrorMessage(e, "Could not save that price choice."));
+    }
+  };
+
+  if (source == null || source <= 0) {
+    return (
+      <p className="mt-2 text-[11px] text-muted-foreground">
+        Sync again to choose whether this PMS price is monthly or nightly.
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-2 space-y-1.5">
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          size="sm"
+          variant={listing.pmsPriceBasis === "Monthly" ? "default" : "outline"}
+          disabled={disabled}
+          onClick={() => void choose("Monthly")}
+        >
+          Monthly · {formatMoney(source)}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant={listing.pmsPriceBasis === "Nightly" ? "default" : "outline"}
+          disabled={disabled}
+          onClick={() => void choose("Nightly")}
+        >
+          Nightly · {formatMoney(source * 30)}
+        </Button>
+      </div>
+      {error && <p className="text-[11px] text-destructive">{error}</p>}
+    </div>
+  );
+}
+
 function ImportedListingRow({
   connectionId,
   listing,
@@ -1990,6 +2276,9 @@ function ImportedListingRow({
             Calendar from PMS
           </label>
         </div>
+        {imported && (listing.pmsPriceNeedsConfirmation || listing.pmsPriceBasis) && (
+          <PmsPriceBasisChoices connectionId={connectionId} listing={listing} />
+        )}
         {!imported && (
           <p className="mt-1 text-[11px] text-muted-foreground">
             Import this listing first, then choose what to keep in sync.
@@ -2057,6 +2346,12 @@ function HowItWorks() {
         <li>
           Sync anytime to update listings you already imported and pull in new
           ones from your PMS.
+        </li>
+        <li>
+          After a sync, Lagedra asks about a PMS price only when a nightly
+          reading would be more than $40,000 a month. That choice is saved and
+          used on the next sync. Ordinary nightly rates are not asked about.
+          Monthly is not multiplied. Nightly is multiplied by 30.
         </li>
         <li>
           Price and calendar stay as you set them in Lagedra unless you turn on

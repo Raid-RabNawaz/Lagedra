@@ -127,7 +127,8 @@ internal static class ListingMapper
                 ? new CustomLeaseDocumentDto(
                     cld.FileName, cld.ContentType, cld.SizeBytes, cld.UploadedAtUtc)
                 : null,
-            listing.StayProtectionEnabled);
+            listing.StayProtectionEnabled,
+            listing.RequireLeaseSignatures);
     }
 
     public static ListingSummaryDto ToSummary(

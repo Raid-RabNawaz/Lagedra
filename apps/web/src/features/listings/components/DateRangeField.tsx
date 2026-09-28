@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Calendar as CalendarIcon, X } from "lucide-react";
 import { DateRangeCalendar, type DateRange } from "@/features/listings/components/DateRangeCalendar";
+import type { UnavailableStay } from "@/features/listings/lib/unavailableStays";
 import { cn } from "@/lib/utils";
 
 /**
@@ -47,6 +48,8 @@ type Props = {
   /** Optional id linking the field to an external label / aria-describedby. */
   id?: string;
   className?: string;
+  /** Booked and host-blocked stays. Occupied nights render disabled. */
+  unavailableStays?: readonly UnavailableStay[];
 };
 
 /**
@@ -70,6 +73,7 @@ export function DateRangeField({
   errorMessage,
   id,
   className,
+  unavailableStays,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [activeSegment, setActiveSegment] = useState<"checkin" | "checkout">("checkin");
@@ -277,7 +281,11 @@ export function DateRangeField({
           )}
         >
           <div className="rounded-2xl border bg-background p-4 shadow-[0_24px_60px_-20px_rgba(15,23,42,0.35)]">
-            <DateRangeCalendar range={range} onChange={handleRangeChange} />
+            <DateRangeCalendar
+              range={range}
+              onChange={handleRangeChange}
+              unavailableStays={unavailableStays}
+            />
           </div>
         </div>
       )}

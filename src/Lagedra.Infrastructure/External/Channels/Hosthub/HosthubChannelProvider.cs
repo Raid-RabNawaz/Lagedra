@@ -140,10 +140,13 @@ public sealed partial class HosthubChannelProvider(
                 continue;
             }
 
+            // Rate-plan rows are typed daily_rate — always a nightly amount.
+            var daily = ChannelRateNormalizer.Normalize(cents, ChannelPriceBasis.Nightly);
             return snapshot with
             {
-                NightlyRateCents = cents,
-                MonthlyRentCents = cents.Value * 30,
+                NightlyRateCents = daily.NightlyRateCents,
+                MonthlyRentCents = daily.MonthlyRentCents,
+                PriceBasis = daily.PriceBasis,
                 Currency = currency ?? snapshot.Currency,
                 MinStayNights = Int(day, "minimum_length_of_stay") ?? snapshot.MinStayNights,
                 MaxStayNights = Int(day, "maximum_length_of_stay") ?? snapshot.MaxStayNights,
@@ -434,9 +437,11 @@ public sealed partial class HosthubChannelProvider(
 
         var title = FirstNonEmpty(Str(item, "name"), externalId)!;
         var description = FirstNonEmpty(Str(item, "description"), Str(item, "summary"));
-        var (nightlyCents, moneyCurrency) = ReadMoney(item, "price") is { Item1: > 0 } priced
+        var (amountCents, moneyCurrency) = ReadMoney(item, "price") is { Item1: > 0 } priced
             ? priced
             : ReadMoney(item, "nightly_rate");
+        // Rental price and nightly_rate are daily amounts (rate plans say daily_rate).
+        var rate = ChannelRateNormalizer.Normalize(amountCents, ChannelPriceBasis.Nightly);
 
         var address = new ChannelAddress(
             Line1: FirstNonEmpty(Str(item, "address"), Str(item, "street"), Str(item, "address_line1")),
@@ -453,8 +458,8 @@ public sealed partial class HosthubChannelProvider(
             ExternalListingId: externalId,
             Title: title,
             Description: description,
-            MonthlyRentCents: nightlyCents is > 0 ? nightlyCents.Value * 30 : null,
-            NightlyRateCents: nightlyCents is > 0 ? nightlyCents : null,
+            MonthlyRentCents: rate.MonthlyRentCents,
+            NightlyRateCents: rate.NightlyRateCents,
             Currency: moneyCurrency ?? Str(item, "currency") ?? "USD",
             MinStayNights: Int(item, "minimum_length_of_stay") ?? Int(item, "min_nights"),
             MaxStayNights: Int(item, "maximum_length_of_stay") ?? Int(item, "max_nights"),
@@ -468,7 +473,8 @@ public sealed partial class HosthubChannelProvider(
                 FirstNonEmpty(Str(item, "property_type"), Str(item, "type"))),
             Address: address,
             AmenityCodes: ParseAmenities(item),
-            Photos: ParsePhotos(item));
+            Photos: ParsePhotos(item),
+            PriceBasis: rate.PriceBasis);
     }
 
     private List<ChannelPhoto> ParsePhotos(JsonElement item)

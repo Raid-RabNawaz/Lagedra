@@ -14,6 +14,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { formatDate, formatMoney } from "@/utils/format";
+import { EvictionProtectionTermsList } from "@/features/listings/components/EvictionProtectionTermsList";
 
 /**
  * Renders the sealed Truth Surface agreement as a clean, human-readable
@@ -222,6 +223,14 @@ export const AgreementDocument = ({ canonicalContent, compact = false }: Props) 
         : undefined,
     },
     { label: "Service fee", value: money("serviceFeeCents") },
+    {
+      label: "Eviction Protection",
+      value: asBool(financials?.evictionProtectionIncluded)
+        ? (asNumber(financials?.evictionProtectionFeeCents) ?? 0) > 0
+          ? money("evictionProtectionFeeCents")
+          : "Included"
+        : undefined,
+    },
     { label: "Protocol fee (monthly)", value: money("monthlyProtocolFeeCents") },
   ].filter((r) => r.value !== undefined);
 
@@ -288,6 +297,9 @@ export const AgreementDocument = ({ canonicalContent, compact = false }: Props) 
               label="Total due now"
               value={<span className="text-base font-semibold">{totalDue}</span>}
             />
+          )}
+          {asBool(financials?.evictionProtectionIncluded) && (
+            <EvictionProtectionTermsList className="py-2 text-sm" />
           )}
         </Section>
       )}

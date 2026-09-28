@@ -208,6 +208,13 @@ namespace ChannelIntegration.Migrations
                     b.Property<Guid?>("ListingId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("PmsPriceBasis")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<long?>("PmsSourceAmountCents")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("ProviderListingId")
                         .IsRequired()
                         .HasMaxLength(200)

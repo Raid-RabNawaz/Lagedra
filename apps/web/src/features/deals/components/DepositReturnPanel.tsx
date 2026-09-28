@@ -20,6 +20,10 @@ import {
 } from "@/features/activation-billing/hooks/useBilling";
 import { MY_DEALS_KEY } from "@/features/deals/hooks/useDeals";
 import { formatDate, formatMoney } from "@/utils/format";
+import {
+  evictionProtectionApplies,
+  isEarlyMoveOut,
+} from "@/features/listings/lib/evictionProtection";
 import type { DealSummaryDto } from "@/api/types";
 
 type Props = {
@@ -49,6 +53,11 @@ function apiError(e: unknown): string {
   );
 }
 
+function apiErrorCode(e: unknown): string | undefined {
+  return (e as { response?: { data?: { error?: string } } })?.response?.data
+    ?.error;
+}
+
 /**
  * Non-custodial deposit return. On an Active deal it offers the "end stay" CTA
  * that opens the handshake; on an AwaitingDepositReturn deal it drives the
@@ -75,8 +84,21 @@ function EndStayCard({
   canAct: boolean;
 }) {
   const [confirming, setConfirming] = useState(false);
+  const [documentedNonpayment, setDocumentedNonpayment] = useState<
+    boolean | null
+  >(null);
   const beginMoveOut = useBeginMoveOut();
   const hasDeposit = (deal.depositAmountCents ?? 0) > 0;
+  const covered = evictionProtectionApplies(
+    deal.evictionProtectionIncluded,
+    deal.evictionProtectionFeeCents,
+  );
+  const serverNeedsReason =
+    beginMoveOut.isError &&
+    apiErrorCode(beginMoveOut.error) ===
+      "EvictionProtection.EarlyMoveOutReasonRequired";
+  const needsEarlyMoveOutReason =
+    covered && (isEarlyMoveOut(deal.requestedCheckOut) || serverNeedsReason);
 
   if (!canAct) return null;
 
@@ -107,25 +129,74 @@ function EndStayCard({
             End stay{hasDeposit ? " & return deposit" : ""}
           </Button>
         ) : (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium">
-              End the stay now? This closes billing.
-            </span>
-            <Button
-              size="sm"
-              disabled={beginMoveOut.isPending}
-              onClick={() => beginMoveOut.mutate(deal.dealId)}
-            >
-              {beginMoveOut.isPending ? "Ending…" : "Yes, end stay"}
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              disabled={beginMoveOut.isPending}
-              onClick={() => setConfirming(false)}
-            >
-              Cancel
-            </Button>
+          <div className="space-y-3">
+            {needsEarlyMoveOutReason && (
+              <fieldset className="space-y-2">
+                <legend className="text-sm font-medium">
+                  This stay is ending before check-out. Which applies to Eviction
+                  Protection?
+                </legend>
+                <label className="flex items-start gap-2 text-sm text-muted-foreground">
+                  <input
+                    type="radio"
+                    name={`eviction-early-${deal.dealId}`}
+                    className="mt-1"
+                    checked={documentedNonpayment === false}
+                    onChange={() => setDocumentedNonpayment(false)}
+                  />
+                  <span>
+                    This is not a qualifying nonpayment or eviction event. Coverage
+                    ends when the booking ends and no claim applies.
+                  </span>
+                </label>
+                <label className="flex items-start gap-2 text-sm text-muted-foreground">
+                  <input
+                    type="radio"
+                    name={`eviction-early-${deal.dealId}`}
+                    className="mt-1"
+                    checked={documentedNonpayment === true}
+                    onChange={() => setDocumentedNonpayment(true)}
+                  />
+                  <span>
+                    This early move-out is connected to documented nonpayment. A
+                    claim may still be reviewed under the Eviction Protection terms.
+                  </span>
+                </label>
+              </fieldset>
+            )}
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium">
+                End the stay now? This closes billing.
+              </span>
+              <Button
+                size="sm"
+                disabled={
+                  beginMoveOut.isPending ||
+                  (needsEarlyMoveOutReason && documentedNonpayment === null)
+                }
+                onClick={() =>
+                  beginMoveOut.mutate({
+                    dealId: deal.dealId,
+                    documentedNonpayment: needsEarlyMoveOutReason
+                      ? (documentedNonpayment ?? undefined)
+                      : undefined,
+                  })
+                }
+              >
+                {beginMoveOut.isPending ? "Ending…" : "Yes, end stay"}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={beginMoveOut.isPending}
+                onClick={() => {
+                  setConfirming(false);
+                  setDocumentedNonpayment(null);
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
           </div>
         )}
       </CardContent>

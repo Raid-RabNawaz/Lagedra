@@ -362,15 +362,17 @@ public sealed partial class OwnerRezChannelProvider(
         OwnerRezProperty property,
         OwnerRezListingContent? content)
     {
-        var nightlyCents = content?.NightlyCents;
-        var monthlyCents = nightlyCents.HasValue ? nightlyCents.Value * 30 : (long?)null;
+        // Listing content names the figure nightly_rate_min / nightly_rate_max.
+        var rate = ChannelRateNormalizer.Normalize(
+            content?.NightlyCents,
+            ChannelPriceBasis.Nightly);
 
         return new ChannelListingSnapshot(
             ExternalListingId: property.Id.ToString(CultureInfo.InvariantCulture),
             Title: FirstNonEmpty(property.Title, content?.Headline) ?? property.Title,
             Description: content?.Description,
-            MonthlyRentCents: monthlyCents,
-            NightlyRateCents: nightlyCents,
+            MonthlyRentCents: rate.MonthlyRentCents,
+            NightlyRateCents: rate.NightlyRateCents,
             Currency: property.Currency ?? "USD",
             MinStayNights: null,
             MaxStayNights: null,
@@ -383,7 +385,8 @@ public sealed partial class OwnerRezChannelProvider(
             PropertyType: property.PropertyType,
             Address: property.Address,
             AmenityCodes: content?.AmenityCodes ?? [],
-            Photos: content?.Photos ?? []);
+            Photos: content?.Photos ?? [],
+            PriceBasis: rate.PriceBasis);
     }
 
     private static List<ChannelPhoto> ParsePhotos(JsonElement item, int propertyId)

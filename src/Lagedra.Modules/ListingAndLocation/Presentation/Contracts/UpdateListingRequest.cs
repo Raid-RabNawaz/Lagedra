@@ -31,7 +31,8 @@ public sealed record UpdateListingRequest(
     string? HomeOwnerEmail = null,
     bool IncludeBrokerClause = false,
     LeaseAgreementSource? LeaseAgreementSource = null,
-    bool? StayProtectionEnabled = null);
+    bool? StayProtectionEnabled = null,
+    bool? RequireLeaseSignatures = null);
 
 public sealed record LeaseTermsRequest(
     int RentDueDayOfMonth = 1,

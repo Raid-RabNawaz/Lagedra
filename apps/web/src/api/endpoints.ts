@@ -127,6 +127,8 @@ export const endpoints = {
     listings: (id: string) => `/v1/channels/${id}/listings`,
     listingSync: (id: string, mapId: string) =>
       `/v1/channels/${id}/listings/${mapId}`,
+    listingPriceBasis: (id: string, mapId: string) =>
+      `/v1/channels/${id}/listings/${mapId}/price-basis`,
     disconnect: (id: string) => `/v1/channels/${id}`,
     ownerRezOAuthStart: "/v1/channels/ownerrez/oauth/start",
   },
@@ -321,6 +323,8 @@ export const endpoints = {
   adminIdentity: {
     manualQueue: "/v1/admin/identity/manual-queue",
     manualDetail: (id: string) => `/v1/admin/identity/manual-queue/${id}`,
+    manualDocument: (id: string, documentType: string) =>
+      `/v1/admin/identity/manual-queue/${id}/documents/${documentType}`,
     approveManual: (id: string) => `/v1/admin/identity/manual-queue/${id}/approve`,
     rejectManual: (id: string) => `/v1/admin/identity/manual-queue/${id}/reject`,
     allFraudFlags: "/v1/admin/identity/fraud-flags",
@@ -410,6 +414,8 @@ export const endpoints = {
       `/v1/lease-agreements/${id}/versions/${versionId}/deprecate`,
     getByCode: (code: string) => `/v1/lease-agreements/${code}`,
     dealPdf: (dealId: string) => `/v1/lease-agreements/deals/${dealId}/pdf`,
+    dealSigning: (dealId: string) => `/v1/lease-agreements/deals/${dealId}/signing`,
+    dealSign: (dealId: string) => `/v1/lease-agreements/deals/${dealId}/sign`,
     listingPreview: (listingId: string, specimen = false) =>
       `/v1/lease-agreements/listings/${listingId}/preview?specimen=${specimen ? "true" : "false"}`,
   },

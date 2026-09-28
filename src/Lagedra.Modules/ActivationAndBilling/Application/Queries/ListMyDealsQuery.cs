@@ -90,7 +90,8 @@ public sealed class ListMyDealsQueryHandler(
             long? totalAmount = app.FirstMonthRentCents.HasValue
                 ? (app.FirstMonthRentCents.Value
                    + (app.DepositAmountCents ?? 0)
-                   + (app.InsuranceFeeCents ?? 0))
+                   + (app.InsuranceFeeCents ?? 0)
+                   + app.EvictionProtectionFeeCents)
                 : null;
 
             results.Add(new DealSummaryDto(
@@ -120,7 +121,10 @@ public sealed class ListMyDealsQueryHandler(
                 payment?.TenantConfirmedDepositReceivedAt,
                 payment?.DepositReturnSettledAt,
                 app.InsuranceFeeCents,
-                listing?.LeaseAgreementSource));
+                listing?.LeaseAgreementSource,
+                app.EvictionProtectionFeeCents,
+                app.EvictionProtectionIncluded,
+                payment?.EvictionProtectionClaimStanding));
         }
 
         return Result<IReadOnlyList<DealSummaryDto>>.Success(results);
