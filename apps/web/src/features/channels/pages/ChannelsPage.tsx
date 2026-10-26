@@ -416,9 +416,9 @@ function OwnerRezConnectedCard({
 
 /**
  * OwnerRez connect screens, picked by the server:
- * - `haxml` (the live path) asks for the channel Connection ID.
- * - `oauth` and `token` are the API-for-apps screens. They stay in this file
- *   and come back when Channels:OwnerRez:OpenApiEnabled is true.
+ * - `oauth` and `token` are the public API (the live path).
+ * - `haxml` asks for the channel Connection ID when
+ *   Channels:OwnerRez:OpenApiEnabled is false.
  *
  * The token path is limited to two OwnerRez accounts per IP per 24 hours:
  * https://www.ownerrez.com/support/articles/api-auth.

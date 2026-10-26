@@ -10,6 +10,7 @@ import type {
   KycDocumentDto,
   KycDocumentType,
   SubmitManualKycRequest,
+  HostKind,
 } from "@/api/types";
 
 export const verificationApi = {
@@ -89,6 +90,13 @@ export const verificationApi = {
       endpoints.identity.manualKycSubmit,
       payload,
     );
+    return response.data;
+  },
+
+  async setHostKind(hostKind: HostKind): Promise<VerificationStatusDto> {
+    const response = await http.put<VerificationStatusDto>(endpoints.identity.hostKind, {
+      hostKind,
+    });
     return response.data;
   },
 };

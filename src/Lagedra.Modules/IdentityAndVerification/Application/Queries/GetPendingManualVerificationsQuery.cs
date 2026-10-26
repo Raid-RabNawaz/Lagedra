@@ -1,3 +1,4 @@
+using Lagedra.SharedKernel.Domain;
 using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Results;
 using Lagedra.Modules.IdentityAndVerification.Infrastructure.Persistence;
@@ -13,7 +14,8 @@ public sealed record ManualVerificationItemDto(
     string? FirstName,
     string? LastName,
     DateTime SubmittedAt,
-    double HoursRemaining);
+    double HoursRemaining,
+    HostKind HostKind);
 
 public sealed record GetPendingManualVerificationsQuery
     : IRequest<Result<IReadOnlyList<ManualVerificationItemDto>>>;
@@ -44,6 +46,7 @@ public sealed class GetPendingManualVerificationsQueryHandler(
                 p.FirstName,
                 p.LastName,
                 p.UpdatedAt,
+                p.HostKind,
             })
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
@@ -56,7 +59,7 @@ public sealed class GetPendingManualVerificationsQueryHandler(
             var elapsed = (utcNow - p.UpdatedAt).TotalHours;
             var remaining = Math.Max(0, SlaHours - elapsed);
             items.Add(new ManualVerificationItemDto(
-                p.Id, p.UserId, email, p.FirstName, p.LastName, p.UpdatedAt, remaining));
+                p.Id, p.UserId, email, p.FirstName, p.LastName, p.UpdatedAt, remaining, p.HostKind));
         }
 
         return Result<IReadOnlyList<ManualVerificationItemDto>>.Success(items);

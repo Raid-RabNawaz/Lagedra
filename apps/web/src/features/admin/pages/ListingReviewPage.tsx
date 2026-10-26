@@ -640,7 +640,13 @@ function HostSummary({ item }: { item: ListingReviewItemDto }) {
           )}
         >
           <IdCard className="h-3 w-3" />
-          {item.hostIsGovernmentIdVerified ? "ID verified" : "ID not verified"}
+          {item.hostIsGovernmentIdVerified
+            ? item.hostKind === "PropertyManagementCompany"
+              ? "Business verified"
+              : "ID verified"
+            : item.hostKind === "PropertyManagementCompany"
+              ? "Business not verified"
+              : "ID not verified"}
         </span>
         <span
           className={cn(

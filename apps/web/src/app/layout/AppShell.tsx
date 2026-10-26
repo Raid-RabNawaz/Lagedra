@@ -48,7 +48,7 @@ import { useAuthStore } from "@/app/auth/authStore";
 import { getSidebarGroupsForRole, supportsModeSwitching, type NavItem } from "@/app/auth/permissions";
 import { resolveModeSwitchRedirect } from "@/app/auth/modeNavigation";
 import { roleLabel } from "@/app/auth/roles";
-import { useModeStore } from "@/app/auth/modeStore";
+import { useEffectiveAppMode } from "@/app/auth/modeStore";
 import { usePublicConfigStore } from "@/app/config/publicConfigStore";
 import { isPreLaunchLimitedHost } from "@/app/auth/preLaunchAccess";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -120,10 +120,11 @@ export const AppShell = () => {
   const expanded = pinned || hovered;
   const collapsed = !expanded;
 
-  const mode = useModeStore((s) => s.mode);
+  const mode = useEffectiveAppMode();
+  const hostingEnabled = Boolean(user?.hostingEnabled);
   const preLaunchEnabled = usePublicConfigStore((s) => s.preLaunchEnabled);
-  const preLaunchLimited = isPreLaunchLimitedHost(preLaunchEnabled, user?.role);
-  const showModeSwitch = !preLaunchLimited && supportsModeSwitching(user?.role);
+  const preLaunchLimited = isPreLaunchLimitedHost(preLaunchEnabled, user?.role, hostingEnabled);
+  const canSwitchMode = supportsModeSwitching(user?.role);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -131,16 +132,16 @@ export const AppShell = () => {
   // toggling mode updates the sidebar but leaves you on e.g. `/app/applications`
   // while the UI says "Travelling".
   useEffect(() => {
-    if (!showModeSwitch) return;
+    if (!canSwitchMode) return;
     const redirect = resolveModeSwitchRedirect(location.pathname, mode);
     if (redirect) {
       navigate(redirect, { replace: true });
     }
-  }, [mode, location.pathname, navigate, showModeSwitch]);
+  }, [mode, location.pathname, navigate, canSwitchMode]);
 
   const groups = getSidebarGroupsForRole(
     user?.role ?? "",
-    showModeSwitch ? mode : undefined,
+    canSwitchMode ? mode : undefined,
     { preLaunchLimited },
   );
 

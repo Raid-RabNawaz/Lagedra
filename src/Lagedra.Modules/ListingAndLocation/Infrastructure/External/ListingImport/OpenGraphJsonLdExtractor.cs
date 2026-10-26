@@ -22,10 +22,15 @@ namespace Lagedra.Modules.ListingAndLocation.Infrastructure.External.ListingImpo
 /// </summary>
 public sealed partial class OpenGraphJsonLdExtractor : IListingMetadataExtractor
 {
+    /// <summary>
+    /// schema.org types that describe the listing itself, most specific first.
+    /// When a page emits several entities (Airbnb emits a VacationRental and a
+    /// Product), the earliest type in this list wins.
+    /// </summary>
     private static readonly string[] PropertyEntityTypes =
     [
-        "Accommodation", "Apartment", "House", "SingleFamilyResidence", "Residence",
-        "Place", "LodgingBusiness", "Hotel", "Product", "Room", "Suite", "RentAction",
+        "VacationRental", "Accommodation", "Apartment", "House", "SingleFamilyResidence", "Residence",
+        "LodgingBusiness", "Hotel", "Room", "Suite", "Place", "RentAction", "Product",
     ];
 
     public ImportedListingDraftDto Extract(string html, Uri finalUrl)
@@ -83,19 +88,29 @@ public sealed partial class OpenGraphJsonLdExtractor : IListingMetadataExtractor
         string? houseRules = null;
         string? cancellationPolicy = null;
 
-        // Airbnb-specific enrichment: og:title is auto-generated noise and the
-        // real name lives in og:description, while the description, amenities,
-        // photo gallery, house rules, and cancellation policy are only in the
-        // page's embedded JSON state.
+        // Airbnb-specific enrichment. Airbnb's Open Graph tags are unusable (og:title
+        // is the generic site title, og:description is empty on current pages, and
+        // older pages put the listing name in og:description). The real name,
+        // description, counts, amenities, photo gallery and house rules live in the
+        // page's embedded JSON state, with the JSON-LD VacationRental entity as a
+        // thinner fallback.
         if (IsAirbnb(finalUrl))
         {
-            var listingName = og.GetValueOrDefault("og:description");
+            var state = ReadAirbnbState(document, finalUrl);
+
+            var listingName = FirstNonEmpty(
+                state?.Name,
+                og.GetValueOrDefault("og:description"),
+                ReadString(primary, "name"));
             if (!string.IsNullOrWhiteSpace(listingName))
             {
                 title = listingName;
             }
+            else if (IsAirbnbGenericTitle(title))
+            {
+                title = null;
+            }
 
-            var state = ReadAirbnbState(document, finalUrl);
             if (!string.IsNullOrWhiteSpace(state?.Description))
             {
                 description = state.Description;
@@ -118,6 +133,17 @@ public sealed partial class OpenGraphJsonLdExtractor : IListingMetadataExtractor
 
             if (state is not null)
             {
+                // "3 guests · 2 bedrooms · 2 beds · 1 bath" from the overview header is
+                // what guests see on the page; Airbnb's JSON-LD occupancy has been
+                // observed to disagree with it, so the overview wins when present.
+                var (overviewBedrooms, overviewBathrooms, overviewGuests) = ReadCountsFromText(state.OverviewText);
+                bedrooms = overviewBedrooms ?? bedrooms;
+                bathrooms = overviewBathrooms ?? bathrooms;
+                maxGuests = overviewGuests ?? maxGuests;
+
+                propertyType = state.PropertyType ?? propertyType;
+                approxAddress = state.Location ?? approxAddress;
+
                 petsAllowed = state.PetsAllowed;
                 smokingAllowed = state.SmokingAllowed;
                 partiesAllowed = state.PartiesAllowed;
@@ -266,15 +292,31 @@ public sealed partial class OpenGraphJsonLdExtractor : IListingMetadataExtractor
 
     private static JsonElement? SelectPrimaryEntity(List<JsonElement> entities)
     {
-        // Prefer an entity whose @type looks like a property/place/product.
+        // Prefer the entity whose @type is the most specific property/place type;
+        // ties keep document order.
+        JsonElement? best = null;
+        var bestRank = int.MaxValue;
         foreach (var entity in entities)
         {
             var type = ReadEntityType(entity);
-            if (type is not null &&
-                PropertyEntityTypes.Any(t => type.Contains(t, StringComparison.OrdinalIgnoreCase)))
+            if (type is null)
             {
-                return entity;
+                continue;
             }
+
+            var rank = Array.FindIndex(
+                PropertyEntityTypes,
+                t => type.Contains(t, StringComparison.OrdinalIgnoreCase));
+            if (rank >= 0 && rank < bestRank)
+            {
+                best = entity;
+                bestRank = rank;
+            }
+        }
+
+        if (best is not null)
+        {
+            return best;
         }
 
         // Otherwise fall back to the first entity that at least has a name.
@@ -393,7 +435,12 @@ public sealed partial class OpenGraphJsonLdExtractor : IListingMetadataExtractor
 
     private static int? ReadOccupancy(JsonElement entity)
     {
-        if (!entity.TryGetProperty("occupancy", out var occ))
+        // VacationRental nests it: containsPlace { @type: Accommodation, occupancy }.
+        var found = entity.TryGetProperty("occupancy", out var occ) ||
+            (entity.TryGetProperty("containsPlace", out var place) &&
+             place.ValueKind == JsonValueKind.Object &&
+             place.TryGetProperty("occupancy", out occ));
+        if (!found)
         {
             return null;
         }
@@ -405,6 +452,14 @@ public sealed partial class OpenGraphJsonLdExtractor : IListingMetadataExtractor
 
         return ToInt(ParseDecimal(GetScalarString(occ)));
     }
+
+    /// <summary>
+    /// Airbnb serves its site-wide marketing title ("Airbnb: Vacation Rentals,
+    /// Cabins, Beach Houses, …") as og:title and &lt;title&gt; on listing pages.
+    /// </summary>
+    private static bool IsAirbnbGenericTitle(string? title) =>
+        !string.IsNullOrWhiteSpace(title) &&
+        title.StartsWith("Airbnb:", StringComparison.OrdinalIgnoreCase);
 
     private static (string? CheckIn, string? CheckOut) ReadCheckTimes(JsonElement? entity)
     {

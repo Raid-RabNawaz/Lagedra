@@ -8,6 +8,8 @@ const documentLabels: Record<KycDocumentType, string> = {
   IdFront: "ID — front",
   IdBack: "ID — back",
   Selfie: "Live selfie",
+  BusinessRegistration: "Business registration",
+  ProofOfAuthority: "Proof of authority",
 };
 
 export function ReviewDocumentImage({
@@ -18,6 +20,8 @@ export function ReviewDocumentImage({
   doc: ManualVerificationDocumentDto;
 }) {
   const label = documentLabels[doc.documentType] ?? doc.documentType;
+  const isPdf =
+    doc.mimeType.toLowerCase().includes("pdf") || doc.fileName.toLowerCase().endsWith(".pdf");
   const [src, setSrc] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -33,7 +37,9 @@ export function ReviewDocumentImage({
           doc.documentType,
           controller.signal,
         );
-        const preview = await prepareKycPreviewBlob(blob, doc.mimeType, doc.fileName);
+        const preview = isPdf
+          ? blob
+          : await prepareKycPreviewBlob(blob, doc.mimeType, doc.fileName);
         objectUrl = URL.createObjectURL(preview);
         if (cancelled) {
           URL.revokeObjectURL(objectUrl);
@@ -52,7 +58,7 @@ export function ReviewDocumentImage({
       controller.abort();
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [profileId, doc.documentType, doc.fileName, doc.mimeType, doc.uploadedAt]);
+  }, [profileId, doc.documentType, doc.fileName, doc.mimeType, doc.uploadedAt, isPdf]);
 
   return (
     <figure className="space-y-2">
@@ -63,7 +69,16 @@ export function ReviewDocumentImage({
         </span>
       </figcaption>
       <div className="flex min-h-64 items-center justify-center overflow-hidden rounded-lg border bg-muted">
-        {src ? (
+        {src && isPdf ? (
+          <a
+            href={src}
+            target="_blank"
+            rel="noreferrer"
+            className="px-4 py-8 text-sm font-medium text-primary underline"
+          >
+            Open {label}
+          </a>
+        ) : src ? (
           <button
             type="button"
             className="block w-full cursor-zoom-in"

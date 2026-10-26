@@ -161,7 +161,7 @@ dist-new
 ```powershell
 docker build -f apps/web/Dockerfile.build `
   --build-arg VITE_API_BASE_URL=https://api.lagedra.com `
-  --build-arg VITE_GOOGLE_CLIENT_ID=262822188598-915tp2sk0cgsv9sj0c6nifnp661998ba.apps.googleusercontent.com `
+  --build-arg VITE_GOOGLE_CLIENT_ID=1074067576483-7a9u94qhlvk79s1bce60hi11d36q0eal.apps.googleusercontent.com `
   --build-arg VITE_STRIPE_PUBLISHABLE_KEY=pk_test_51TH4W49C1zhcxwIed13rUO089U9x7zqymxW7pjkgeEDIUFss6MBN9WPwXfQQSH3JWOOdnUSm0EYObonbUpprqBbh004eAq2YhU `
   -o apps/web/dist-new `
   apps/web
@@ -309,7 +309,7 @@ These are baked into the frontend at build time via Vite's `import.meta.env`:
 | Variable                       | Production Value                                                    |
 | ------------------------------ | ------------------------------------------------------------------- |
 | `VITE_API_BASE_URL`            | `https://api.lagedra.com`                                           |
-| `VITE_GOOGLE_CLIENT_ID`        | `262822188598-915tp2sk0cgsv9sj0c6nifnp661998ba.apps.googleusercontent.com` |
+| `VITE_GOOGLE_CLIENT_ID`        | `1074067576483-7a9u94qhlvk79s1bce60hi11d36q0eal.apps.googleusercontent.com` |
 | `VITE_STRIPE_PUBLISHABLE_KEY`  | `pk_test_51TH4W49C1zhcxwIed13rUO089U9x7zqymxW7pjkgeEDIUFss6MBN9WPwXfQQSH3JWOOdnUSm0EYObonbUpprqBbh004eAq2YhU` |
 
 Defined in [`apps/web/src/app/config.ts`](apps/web/src/app/config.ts).

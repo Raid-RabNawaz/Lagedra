@@ -1,0 +1,1 @@
+import{o as r}from"./index-Cab6PCUq.js";import{p as s}from"./partnerApi-DBe-iBNF.js";function a(){const e=r({queryKey:["partner","my-membership"],queryFn:()=>s.getMyMembership(),staleTime:6e4,retry:!1});return{isLoading:e.isLoading,membership:e.data??null,error:e.error,refresh:e.refetch}}export{a as u};

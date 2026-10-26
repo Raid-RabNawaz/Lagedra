@@ -14,6 +14,7 @@ namespace Lagedra.Modules.ListingAndLocation.Application.Queries;
 
 public sealed record SearchListingsQuery(
     string? Keyword,
+    string? PostalCode,
     double? Latitude,
     double? Longitude,
     double? RadiusKm,
@@ -129,11 +130,57 @@ public sealed class SearchListingsQueryHandler(
                 b.CheckInDate <= from && b.CheckOutDate >= to));
         }
 
-        if (request.Latitude.HasValue && request.Longitude.HasValue && request.RadiusKm.HasValue)
+        var postal = SearchKeywordTokenizer.NormalizePostalCode(request.PostalCode);
+        var hasRadius = request.Latitude.HasValue && request.Longitude.HasValue && request.RadiusKm.HasValue;
+        var hasBox = request.SwLat.HasValue && request.SwLng.HasValue &&
+                     request.NeLat.HasValue && request.NeLng.HasValue;
+
+        // A ZIP search matches the stored postal code or the map area. Approx
+        // pins are often offset from the exact code, and the code is sometimes
+        // missing from the public pin, so either signal is enough.
+        if (postal is not null && (hasRadius || hasBox))
         {
-            var lat = request.Latitude.Value;
-            var lon = request.Longitude.Value;
-            var radiusKm = request.RadiusKm.Value;
+            if (hasRadius)
+            {
+                var lat = request.Latitude!.Value;
+                var lon = request.Longitude!.Value;
+                var radiusKm = request.RadiusKm!.Value;
+                var deltaLat = radiusKm / KmPerDegreeLat;
+                var deltaLon = radiusKm / (KmPerDegreeLat * Math.Cos(lat * Math.PI / 180));
+                query = query.Where(l =>
+                    (l.PreciseAddress != null &&
+                     EF.Functions.ILike(
+                         l.PreciseAddress.ZipCode.Replace(" ", "").Replace("-", ""),
+                         postal + "%")) ||
+                    (l.ApproxGeoPoint != null &&
+                     l.ApproxGeoPoint.Latitude >= lat - deltaLat &&
+                     l.ApproxGeoPoint.Latitude <= lat + deltaLat &&
+                     l.ApproxGeoPoint.Longitude >= lon - deltaLon &&
+                     l.ApproxGeoPoint.Longitude <= lon + deltaLon));
+            }
+            else
+            {
+                var swLat = request.SwLat!.Value;
+                var swLng = request.SwLng!.Value;
+                var neLat = request.NeLat!.Value;
+                var neLng = request.NeLng!.Value;
+                query = query.Where(l =>
+                    (l.PreciseAddress != null &&
+                     EF.Functions.ILike(
+                         l.PreciseAddress.ZipCode.Replace(" ", "").Replace("-", ""),
+                         postal + "%")) ||
+                    (l.ApproxGeoPoint != null &&
+                     l.ApproxGeoPoint.Latitude >= swLat &&
+                     l.ApproxGeoPoint.Latitude <= neLat &&
+                     l.ApproxGeoPoint.Longitude >= swLng &&
+                     l.ApproxGeoPoint.Longitude <= neLng));
+            }
+        }
+        else if (hasRadius)
+        {
+            var lat = request.Latitude!.Value;
+            var lon = request.Longitude!.Value;
+            var radiusKm = request.RadiusKm!.Value;
             var deltaLat = radiusKm / KmPerDegreeLat;
             var deltaLon = radiusKm / (KmPerDegreeLat * Math.Cos(lat * Math.PI / 180));
             query = query.Where(l =>
@@ -143,19 +190,26 @@ public sealed class SearchListingsQueryHandler(
                 l.ApproxGeoPoint.Longitude >= lon - deltaLon &&
                 l.ApproxGeoPoint.Longitude <= lon + deltaLon);
         }
-        else if (request.SwLat.HasValue && request.SwLng.HasValue &&
-                 request.NeLat.HasValue && request.NeLng.HasValue)
+        else if (hasBox)
         {
-            var swLat = request.SwLat.Value;
-            var swLng = request.SwLng.Value;
-            var neLat = request.NeLat.Value;
-            var neLng = request.NeLng.Value;
+            var swLat = request.SwLat!.Value;
+            var swLng = request.SwLng!.Value;
+            var neLat = request.NeLat!.Value;
+            var neLng = request.NeLng!.Value;
             query = query.Where(l =>
                 l.ApproxGeoPoint != null &&
                 l.ApproxGeoPoint.Latitude >= swLat &&
                 l.ApproxGeoPoint.Latitude <= neLat &&
                 l.ApproxGeoPoint.Longitude >= swLng &&
                 l.ApproxGeoPoint.Longitude <= neLng);
+        }
+        else if (postal is not null)
+        {
+            query = query.Where(l =>
+                l.PreciseAddress != null &&
+                EF.Functions.ILike(
+                    l.PreciseAddress.ZipCode.Replace(" ", "").Replace("-", ""),
+                    postal + "%"));
         }
 
         if (request.AmenityIds is { Count: > 0 } amenityIds)

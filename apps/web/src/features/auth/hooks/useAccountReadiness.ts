@@ -13,6 +13,7 @@ export function useAccountReadiness(audience: ReadinessAudience) {
         audience,
         user,
         kycStatus: verification.data?.status,
+        hostKind: verification.data?.hostKind ?? user.hostKind,
         stripe: stripe.data,
       })
     : null;

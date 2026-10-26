@@ -105,6 +105,43 @@ const US_STATE_ABBR: Record<string, string> = {
 /** Bias suggestions toward California without blocking other US places. */
 const CA_VIEWBOX = "-124.48,42.01,-114.13,32.53";
 
+/** ZIP polygons from Nominatim are often a point. Cover the neighborhood around it. */
+export const POSTAL_SEARCH_RADIUS_KM = 8;
+
+const US_ZIP = /^(\d{5})(?:-\d{4})?$/;
+const CA_POSTAL = /^[A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d$/;
+
+/**
+ * US ZIP or Canadian postal code, compacted. Also accepts a place line that
+ * ends in a ZIP, such as "Los Angeles, CA 90012".
+ */
+export function normalizePostalCode(query: string): string | null {
+  const trimmed = query.trim();
+  const us = US_ZIP.exec(trimmed);
+  if (us) return us[1];
+
+  const compact = trimmed.replace(/[\s-]/g, "").toUpperCase();
+  if (/^[A-Z]\d[A-Z]\d[A-Z]\d$/.test(compact)) return compact;
+
+  const trailingZip = trimmed.match(/^(?:.*[,\s])(\d{5})(?:-\d{4})?$/);
+  if (trailingZip) return trailingZip[1];
+
+  const trailingPostal = trimmed.match(/^(?:.*[,\s])([A-Za-z]\d[A-Za-z][ -]?\d[A-Za-z]\d)$/);
+  if (trailingPostal) return trailingPostal[1].replace(/[\s-]/g, "").toUpperCase();
+
+  return null;
+}
+
+export function isPostalOnlyQuery(query: string): boolean {
+  const trimmed = query.trim();
+  return US_ZIP.test(trimmed) || CA_POSTAL.test(trimmed);
+}
+
+function nominatimPostalParam(postal: string): string {
+  if (/^\d{5}$/.test(postal)) return postal;
+  return `${postal.slice(0, 3)} ${postal.slice(3)}`;
+}
+
 function localityName(addr: NominatimAddress): string {
   return (
     addr.city ??
@@ -145,11 +182,20 @@ function placeKindHint(kind: string): string {
  * Turn a Nominatim hit into a short typeahead row (city, address, neighborhood, or state).
  */
 export function nominatimToSuggestion(hit: NominatimHit): PlaceSuggestion | null {
-  const place = nominatimToPlace(hit);
+  let place = nominatimToPlace(hit);
   if (!place) return null;
 
   const addr = hit.address ?? {};
   const kind = (hit.addresstype ?? hit.type ?? "").toLowerCase();
+  if (kind === "postcode" || addr.postcode) {
+    const postal = normalizePostalCode(addr.postcode ?? "");
+    if (postal && (kind === "postcode" || isPostalOnlyQuery(addr.postcode ?? ""))) {
+      place = {
+        ...place,
+        bounds: expandBoundsToMinRadius(place.bounds, POSTAL_SEARCH_RADIUS_KM),
+      };
+    }
+  }
   const cityState = cityStateLine(addr);
   const road = addr.road ?? addr.pedestrian ?? "";
   const id = `${hit.osm_type ?? "place"}-${hit.osm_id ?? hit.display_name ?? `${place.lat},${place.lng}`}`;
@@ -220,16 +266,22 @@ export async function suggestPlaces(
   const term = query.trim();
   if (term.length < 2) return [];
   try {
+    const postalOnly = isPostalOnlyQuery(term);
+    const postal = postalOnly ? normalizePostalCode(term) : null;
     const params = new URLSearchParams({
-      q: term,
       format: "json",
       addressdetails: "1",
       limit: "8",
-      countrycodes: "us",
+      countrycodes: postal && /^[A-Z]/.test(postal) ? "ca" : "us",
       viewbox: CA_VIEWBOX,
       bounded: "0",
       dedupe: "1",
     });
+    if (postal && postalOnly) {
+      params.set("postalcode", nominatimPostalParam(postal));
+    } else {
+      params.set("q", term);
+    }
     const res = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
       headers: { "Accept-Language": "en" },
       signal,
@@ -283,6 +335,19 @@ export function nominatimToPlace(hit: NominatimHit): GeocodedPlace | null {
   return { lat, lng, bounds: radiusBounds(lat, lng, 20) };
 }
 
+/** Grow a box so a point-sized ZIP hit still covers nearby listings. */
+export function expandBoundsToMinRadius(bounds: MapBounds, minRadiusKm: number): MapBounds {
+  const min = radiusBounds(bounds.centerLat, bounds.centerLng, minRadiusKm);
+  return {
+    swLat: Math.min(bounds.swLat, min.swLat),
+    swLng: Math.min(bounds.swLng, min.swLng),
+    neLat: Math.max(bounds.neLat, min.neLat),
+    neLng: Math.max(bounds.neLng, min.neLng),
+    centerLat: bounds.centerLat,
+    centerLng: bounds.centerLng,
+  };
+}
+
 /** Rough bounding box around a point so a place search works before the map moves. */
 export function radiusBounds(lat: number, lng: number, radiusKm: number): MapBounds {
   const kmPerDegLat = 111;
@@ -303,11 +368,33 @@ export async function geocodePlace(query: string): Promise<GeocodedPlace | null>
   const term = query.trim();
   if (!term) return null;
   try {
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(term)}&format=json&limit=1`;
-    const res = await fetch(url, { headers: { "Accept-Language": "en" } });
+    const postalOnly = isPostalOnlyQuery(term);
+    const postal = postalOnly ? normalizePostalCode(term) : null;
+    const params = new URLSearchParams({
+      format: "json",
+      limit: "1",
+      addressdetails: "1",
+      countrycodes: postal && /^[A-Z]/.test(postal) ? "ca" : "us",
+    });
+    if (postal && postalOnly) {
+      params.set("postalcode", nominatimPostalParam(postal));
+    } else {
+      params.set("q", term);
+    }
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
+      headers: { "Accept-Language": "en" },
+    });
     const data: unknown = await res.json();
     if (!Array.isArray(data) || data.length === 0) return null;
-    return nominatimToPlace(data[0] as NominatimHit);
+    const place = nominatimToPlace(data[0] as NominatimHit);
+    if (!place) return null;
+    if (normalizePostalCode(term)) {
+      return {
+        ...place,
+        bounds: expandBoundsToMinRadius(place.bounds, POSTAL_SEARCH_RADIUS_KM),
+      };
+    }
+    return place;
   } catch {
     return null;
   }
@@ -329,13 +416,21 @@ export function applyLocationToSearchParams(
 ): SearchListingsParams {
   const next = { ...params };
   const keyword = options.keyword.trim();
-  if (keyword && !options.placeResolved) {
+  const postal = normalizePostalCode(keyword);
+  if (postal) {
+    next.postalCode = postal;
+    delete next.keyword;
+  } else if (keyword && !options.placeResolved) {
     next.keyword = keyword;
   } else {
     delete next.keyword;
+    delete next.postalCode;
   }
 
-  const bounds = options.userMapBounds ?? options.placeBounds;
+  const bounds = options.userMapBounds
+    ?? (options.placeBounds && postal
+      ? expandBoundsToMinRadius(options.placeBounds, POSTAL_SEARCH_RADIUS_KM)
+      : options.placeBounds);
   if (bounds) {
     next.swLat = bounds.swLat;
     next.swLng = bounds.swLng;

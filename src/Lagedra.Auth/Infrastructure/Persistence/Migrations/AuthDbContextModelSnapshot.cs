@@ -89,6 +89,18 @@ namespace Lagedra.Auth.Infrastructure.Persistence.Migrations
                     b.Property<string>("FirstName")
                         .HasColumnType("text");
 
+                    b.Property<string>("HostKind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasDefaultValue("Individual");
+
+                    b.Property<bool>("HostingEnabled")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false);
+
                     b.Property<string>("HousingType")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");

@@ -648,7 +648,12 @@ function HostAboutSection({
     .filter(Boolean)
     .join(", ");
   const badges = [
-    host.isGovernmentIdVerified && { icon: CheckCircle2, label: "Identity verified" },
+    host.isGovernmentIdVerified && {
+      icon: CheckCircle2,
+      label: host.hostKind === "PropertyManagementCompany" || hostPublic?.hostKind === "PropertyManagementCompany"
+        ? "Business verified"
+        : "Identity verified",
+    },
     host.isPhoneVerified && { icon: CheckCircle2, label: "Phone verified" },
     hostPublic?.isEmailVerified && { icon: MailCheck, label: "Email verified" },
     listing.hostVerificationBadges?.isInsuranceActive && {

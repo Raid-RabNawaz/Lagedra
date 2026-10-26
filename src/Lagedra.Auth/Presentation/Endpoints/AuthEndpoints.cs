@@ -3,6 +3,7 @@ using Lagedra.Auth.Application.Commands;
 using Lagedra.Auth.Application.Queries;
 using Lagedra.Auth.Domain;
 using Lagedra.Auth.Presentation.Contracts;
+using Lagedra.SharedKernel.Domain;
 using Lagedra.SharedKernel.Results;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
@@ -31,6 +32,7 @@ public static class AuthEndpoints
         group.MapPost("/reset-password", ResetPassword).AllowAnonymous();
         group.MapGet("/me", GetMe).RequireAuthorization();
         group.MapPut("/me", UpdateProfile).RequireAuthorization();
+        group.MapPost("/me/hosting", EnableHosting).RequireAuthorization();
         group.MapPost("/phone/send-code", SendPhoneCode).RequireAuthorization();
         group.MapPost("/phone/confirm", ConfirmPhoneCode).RequireAuthorization();
         group.MapPost("/me/profile-photo", UploadProfilePhoto)
@@ -312,6 +314,36 @@ public static class AuthEndpoints
                 request.BrokerName,
                 request.BrokerDreLicense,
                 request.BrokerScopeNotes),
+            ct).ConfigureAwait(true);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
+    }
+
+    private static async Task<IResult> EnableHosting(
+        [FromBody] EnableHostingRequest request,
+        ClaimsPrincipal principal,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var userId = GetUserId(principal);
+        if (userId is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        var result = await mediator.Send(
+            new EnableHostingCommand(
+                userId.Value,
+                request.City,
+                request.Country,
+                request.Bio,
+                request.HostKind,
+                request.State,
+                request.Languages,
+                request.Occupation,
+                request.CompanyName),
             ct).ConfigureAwait(true);
 
         return result.IsSuccess

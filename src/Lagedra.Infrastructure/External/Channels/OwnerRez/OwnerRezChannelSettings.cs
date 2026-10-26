@@ -81,13 +81,13 @@ public sealed class OwnerRezChannelSettings
         !string.IsNullOrWhiteSpace(ClientId) && !string.IsNullOrWhiteSpace(ClientSecret);
 
     /// <summary>
-    /// When false (the default), new OwnerRez connections use the channel feed:
-    /// the host pastes the Connection ID (<c>ora…</c>) and Lagedra reads HA-XML.
-    /// The API-for-apps client stays in place and still serves any connection that
-    /// already holds a token. Set this to true to offer personal access tokens or
-    /// OAuth on the Channels page again.
+    /// When true (the default), new OwnerRez connections use the public API:
+    /// OAuth when a client id and secret are configured, otherwise a personal
+    /// access token. Set this to false to offer the HA-XML Connection ID instead.
+    /// A connection that already holds a token keeps using the public API, and a
+    /// connection that only has an advertiser id keeps using HA-XML.
     /// </summary>
-    public bool OpenApiEnabled { get; init; }
+    public bool OpenApiEnabled { get; init; } = true;
 
     /// <summary>
     /// HA-XML root. Sandbox is <c>https://faststage.ownerrez.com</c>. Production,

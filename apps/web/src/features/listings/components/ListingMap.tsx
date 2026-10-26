@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import { MapContainer, TileLayer, useMap, useMapEvents } from "react-leaflet";
 import type { Map as LeafletMap } from "leaflet";
 import type { ListingSummaryDto } from "@/api/types";
@@ -20,6 +20,13 @@ type ListingMapProps = {
   onBoundsChange: (bounds: MapBounds) => void;
   flyTo?: { lat: number; lng: number; zoom?: number; bounds?: MapBounds } | null;
   searchOnMove: boolean;
+  /**
+   * While true, map move events are not reported. A place search sets this so
+   * the default viewport cannot replace the city the user just picked.
+   */
+  suspendBoundsRef: RefObject<boolean>;
+  /** Called after a programmatic fly/fit has finished (or timed out). */
+  onFlySettled?: () => void;
 };
 
 const DEFAULT_CENTER: [number, number] = [39.8, -98.5];
@@ -46,9 +53,11 @@ function extractBounds(map: LeafletMap): MapBounds {
 function MapEvents({
   onBoundsChange,
   searchOnMove,
+  suspendBoundsRef,
 }: {
   onBoundsChange: (bounds: MapBounds) => void;
   searchOnMove: boolean;
+  suspendBoundsRef: RefObject<boolean>;
 }) {
   const timerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const onBoundsRef = useRef(onBoundsChange);
@@ -66,59 +75,90 @@ function MapEvents({
 
   const map = useMapEvents({
     moveend: () => {
-      if (!searchOnMoveRef.current) return;
-      // The first settle is the default/fit view, not a user pan. Sending
-      // those bounds immediately re-filters the result set and hides pins
-      // that were used to frame the map.
-      if (!initialDispatched.current) {
-        initialDispatched.current = true;
-        return;
-      }
-      if (timerRef.current) clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(() => {
-        onBoundsRef.current(extractBounds(map));
-      }, 400);
+      publishBounds();
     },
     zoomend: () => {
-      if (!searchOnMoveRef.current) return;
-      if (!initialDispatched.current) {
-        initialDispatched.current = true;
-        return;
-      }
-      if (timerRef.current) clearTimeout(timerRef.current);
-      timerRef.current = setTimeout(() => {
-        onBoundsRef.current(extractBounds(map));
-      }, 400);
+      publishBounds();
     },
   });
+
+  function publishBounds() {
+    if (suspendBoundsRef.current) return;
+    if (!searchOnMoveRef.current) return;
+    // The first settle is the default view, not a user pan. Sending those
+    // bounds immediately re-filters the result set and hides pins.
+    if (!initialDispatched.current) {
+      initialDispatched.current = true;
+      return;
+    }
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      if (suspendBoundsRef.current) return;
+      onBoundsRef.current(extractBounds(map));
+    }, 400);
+  }
 
   return null;
 }
 
-function FlyToHandler({ flyTo }: { flyTo: ListingMapProps["flyTo"] }) {
+function FlyToHandler({
+  flyTo,
+  onSettled,
+}: {
+  flyTo: ListingMapProps["flyTo"];
+  onSettled?: () => void;
+}) {
   const map = useMap();
-  const prevFlyTo = useRef(flyTo);
+  // Start unset so a fly target that exists on the first render still runs.
+  // Seeding this with `flyTo` made the map stay on the US default and the
+  // first search used that empty view.
+  const prevFlyTo = useRef<ListingMapProps["flyTo"]>(undefined);
+  const onSettledRef = useRef(onSettled);
 
   useEffect(() => {
-    if (
-      flyTo &&
-      (flyTo.lat !== prevFlyTo.current?.lat
-        || flyTo.lng !== prevFlyTo.current?.lng
-        || flyTo.bounds !== prevFlyTo.current?.bounds)
-    ) {
-      if (flyTo.bounds) {
-        map.fitBounds(
-          [
-            [flyTo.bounds.swLat, flyTo.bounds.swLng],
-            [flyTo.bounds.neLat, flyTo.bounds.neLng],
-          ],
-          { padding: [40, 40], maxZoom: 13, animate: true },
-        );
-      } else {
-        map.flyTo([flyTo.lat, flyTo.lng], flyTo.zoom ?? 12, { duration: 1.2 });
-      }
-    }
+    onSettledRef.current = onSettled;
+  }, [onSettled]);
+
+  useEffect(() => {
+    if (!flyTo) return;
+    const prev = prevFlyTo.current;
+    const changed =
+      !prev
+      || flyTo.lat !== prev.lat
+      || flyTo.lng !== prev.lng
+      || flyTo.bounds !== prev.bounds;
     prevFlyTo.current = flyTo;
+    if (!changed) return;
+
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      onSettledRef.current?.();
+    };
+    const timer = window.setTimeout(finish, 1600);
+    const onEnd = () => {
+      window.clearTimeout(timer);
+      finish();
+    };
+    map.once("moveend", onEnd);
+
+    if (flyTo.bounds) {
+      map.fitBounds(
+        [
+          [flyTo.bounds.swLat, flyTo.bounds.swLng],
+          [flyTo.bounds.neLat, flyTo.bounds.neLng],
+        ],
+        { padding: [40, 40], maxZoom: 13, animate: true },
+      );
+    } else {
+      map.flyTo([flyTo.lat, flyTo.lng], flyTo.zoom ?? 12, { duration: 1.2 });
+    }
+
+    return () => {
+      window.clearTimeout(timer);
+      map.off("moveend", onEnd);
+    };
   }, [flyTo, map]);
 
   return null;
@@ -180,6 +220,8 @@ export function ListingMap({
   onBoundsChange,
   flyTo,
   searchOnMove,
+  suspendBoundsRef,
+  onFlySettled,
 }: ListingMapProps) {
   return (
     <MapContainer
@@ -193,8 +235,12 @@ export function ListingMap({
         attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
       />
-      <MapEvents onBoundsChange={onBoundsChange} searchOnMove={searchOnMove} />
-      <FlyToHandler flyTo={flyTo} />
+      <MapEvents
+        onBoundsChange={onBoundsChange}
+        searchOnMove={searchOnMove}
+        suspendBoundsRef={suspendBoundsRef}
+      />
+      <FlyToHandler flyTo={flyTo} onSettled={onFlySettled} />
       <FitListings listings={listings} hasFlyTo={Boolean(flyTo)} />
       {listings.map((listing) =>
         listing.latitude != null && listing.longitude != null ? (

@@ -6,6 +6,7 @@ import type {
   BackgroundCheckConsentRequest,
   KycDocumentType,
   SubmitManualKycRequest,
+  HostKind,
 } from "@/api/types";
 
 type VerificationStatusOptions = {
@@ -100,6 +101,17 @@ export function useUploadKycDocument() {
       fileName?: string;
     }) => verificationApi.uploadKycDocument(documentType, file, fileName),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["kyc-documents", "me"] });
+    },
+  });
+}
+
+export function useSetHostKind() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (hostKind: HostKind) => verificationApi.setHostKind(hostKind),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["verification", data.userId], data);
       void queryClient.invalidateQueries({ queryKey: ["kyc-documents", "me"] });
     },
   });

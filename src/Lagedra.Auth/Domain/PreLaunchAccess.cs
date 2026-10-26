@@ -8,6 +8,7 @@ namespace Lagedra.Auth.Domain;
 public static class PreLaunchAccess
 {
     public const string HostSignupType = "Host";
+    public const string MemberSignupType = "Member";
     public const string PartnerSignupType = "Partner";
 
     private static readonly HashSet<UserRole> ExemptRoles =
@@ -18,13 +19,24 @@ public static class PreLaunchAccess
     public static bool IsHostSignup(string? signupType) =>
         string.Equals(signupType, HostSignupType, StringComparison.OrdinalIgnoreCase);
 
+    public static bool IsMemberSignup(string? signupType) =>
+        string.Equals(signupType, MemberSignupType, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The personal join door: new accounts (<see cref="MemberSignupType"/>)
+    /// and legacy founding-host accounts (<see cref="HostSignupType"/>).
+    /// </summary>
+    public static bool IsPersonalSignup(string? signupType) =>
+        IsMemberSignup(signupType) || IsHostSignup(signupType);
+
     public static bool IsPartnerSignup(string? signupType) =>
         string.Equals(signupType, PartnerSignupType, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Members who signed up as hosts may authenticate during pre-launch.
-    /// Everyone else (except operational staff) is blocked at login.
+    /// Personal accounts (guests, and hosts who joined before the guest-first
+    /// signup) may authenticate during pre-launch. Institution partners stay
+    /// on the waitlist. Operational staff are always allowed.
     /// </summary>
     public static bool CanSignIn(ApplicationUser user) =>
-        IsExemptRole(user.Role) || IsHostSignup(user.SignupType);
+        IsExemptRole(user.Role) || IsPersonalSignup(user.SignupType);
 }

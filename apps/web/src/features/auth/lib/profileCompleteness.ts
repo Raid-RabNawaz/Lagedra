@@ -28,6 +28,7 @@ type ProfileFields = Pick<
   | "languages"
   | "occupation"
   | "dateOfBirth"
+  | "hostKind"
 >;
 
 const filled = (value: string | null | undefined): boolean =>
@@ -110,8 +111,10 @@ export function computeProfileCompleteness(
     { label: "Country", filled: filled(profile.country) },
     { label: "Languages", filled: filled(profile.languages) },
     { label: "Occupation", filled: filled(profile.occupation) },
-    { label: "Date of birth", filled: filled(profile.dateOfBirth) },
   ];
+  if (profile.hostKind !== "PropertyManagementCompany") {
+    signals.push({ label: "Date of birth", filled: filled(profile.dateOfBirth) });
+  }
 
   const filledCount = signals.filter((s) => s.filled).length;
   const percent = Math.round((filledCount * 100) / signals.length);

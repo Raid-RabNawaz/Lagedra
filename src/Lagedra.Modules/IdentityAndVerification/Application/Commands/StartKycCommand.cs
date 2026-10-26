@@ -71,10 +71,6 @@ public sealed class StartKycCommandHandler(
 
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        return Result<VerificationStatusDto>.Success(MapToDto(profile));
+        return Result<VerificationStatusDto>.Success(VerificationStatusDto.From(profile));
     }
-
-    private static VerificationStatusDto MapToDto(IdentityProfile p) =>
-        new(p.Id, p.UserId, p.Status, p.VerificationClass,
-            p.FirstName, p.LastName, p.DateOfBirth, p.CreatedAt);
 }

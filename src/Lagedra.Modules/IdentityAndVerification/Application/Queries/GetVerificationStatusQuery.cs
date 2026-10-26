@@ -29,10 +29,6 @@ public sealed class GetVerificationStatusQueryHandler(IdentityDbContext dbContex
                 new Error("Identity.NotFound", "Identity profile not found."));
         }
 
-        return Result<VerificationStatusDto>.Success(MapToDto(profile));
+        return Result<VerificationStatusDto>.Success(VerificationStatusDto.From(profile));
     }
-
-    private static VerificationStatusDto MapToDto(IdentityProfile p) =>
-        new(p.Id, p.UserId, p.Status, p.VerificationClass,
-            p.FirstName, p.LastName, p.DateOfBirth, p.CreatedAt);
 }

@@ -10,19 +10,33 @@ namespace Lagedra.Modules.ListingAndLocation.Infrastructure.External.ListingImpo
 /// <summary>
 /// Airbnb-aware enrichment for <see cref="OpenGraphJsonLdExtractor"/>.
 ///
-/// Airbnb publishes almost nothing useful in Open Graph / JSON-LD: the og:title
-/// is an auto-generated "Room type in City · ★rating · N bedroom · N bed · N bath"
-/// string, og:description holds the host's actual listing name, and there is no
-/// machine-readable description, amenity list, photo gallery, house rules, or
-/// cancellation policy. All of that data is, however, present (publicly, for a
-/// listing the host owns) inside the page's embedded GraphQL bootstrap state — a
-/// single <c>&lt;script id="data-deferred-state-0" type="application/json"&gt;</c> blob.
+/// Airbnb publishes little that is useful in Open Graph: og:title / og:description
+/// are the generic site title and an empty string on current pages. Its schema.org
+/// JSON-LD (<c>VacationRental</c>) carries the name, a truncated description, a
+/// handful of photos, occupancy and the city — the generic extractor reads those.
+/// Everything else (full description, amenity list, complete photo gallery, house
+/// rules, bedroom/bath/guest counts, property type) lives in the page's embedded
+/// GraphQL bootstrap state — a <c>&lt;script id="data-deferred-state-0"
+/// type="application/json"&gt;</c> blob that is present in the server-rendered HTML.
 ///
-/// This reader walks that JSON defensively, anchoring only on stable field names
-/// (<c>htmlDescription.htmlText</c>, <c>AmenityItem</c>, listing-scoped
-/// <c>.../im/pictures/.../Hosting-&lt;id&gt;/...</c> photo URLs, <c>houseRulesSections</c>,
-/// and <c>localized_cancellation_policy_name</c>). It never throws: anything it
-/// cannot find is simply left for the generic extractor to fill.
+/// This reader walks that JSON defensively and anchors only on typed nodes that
+/// have been stable across listings of different vintages (verified Oct 2026):
+/// <list type="bullet">
+///   <item><c>PdpUGCText</c> / <c>UGCText</c> for the listing name and
+///   <c>longDescriptionHtml</c> for the description;</item>
+///   <item><c>StaysPdpOverview</c> for "N guests · N bedrooms · N baths";</item>
+///   <item><c>AmenityItem</c> for amenities;</item>
+///   <item><c>HeroImageItem</c> / <c>ImageMediaTourItem</c> /
+///   <c>PhotoTourModalSection.mediaItems</c> for the gallery;</item>
+///   <item><c>StaysPdpDetailItem</c> with a <c>HOUSE_RULES_*</c> type for rules.</item>
+/// </list>
+/// The pre-2026 shapes (<c>htmlDescription.htmlText</c>, <c>houseRulesSections</c>,
+/// <c>Hosting-&lt;id&gt;</c> photo paths, <c>localized_cancellation_policy_name</c>)
+/// are still recognised. It never throws: anything it cannot find is simply left
+/// for the generic extractor to fill.
+///
+/// Note: the cancellation policy is not part of the server-rendered state (Airbnb
+/// only resolves it once dates are chosen), so it is usually unavailable.
 /// </summary>
 public sealed partial class OpenGraphJsonLdExtractor
 {
@@ -33,7 +47,11 @@ public sealed partial class OpenGraphJsonLdExtractor
     private const int MaxWalkDepth = 96;
 
     internal sealed record AirbnbListingState(
+        string? Name,
         string? Description,
+        string? PropertyType,
+        string? Location,
+        string? OverviewText,
         IReadOnlyList<string> Amenities,
         IReadOnlyList<ImportedPhotoCandidateDto> Photos,
         bool? PetsAllowed,
@@ -48,7 +66,17 @@ public sealed partial class OpenGraphJsonLdExtractor
 
     private sealed class AirbnbStateAccumulator
     {
+        public string? Name { get; set; }
+
         public string? Description { get; set; }
+
+        public string? PropertyType { get; set; }
+
+        public string? Location { get; set; }
+
+        public string? OverviewTitle { get; set; }
+
+        public string? OverviewText { get; set; }
 
         public List<string> Amenities { get; } = [];
 
@@ -72,7 +100,8 @@ public sealed partial class OpenGraphJsonLdExtractor
 
         public string? CheckOutTime { get; set; }
 
-        public string? HouseRules { get; set; }
+        /// <summary>Host-written rule paragraphs, in page order (rules, then requests).</summary>
+        public List<string> HouseRuleParagraphs { get; } = [];
 
         public string? CancellationPolicy { get; set; }
     }
@@ -81,9 +110,10 @@ public sealed partial class OpenGraphJsonLdExtractor
         url.Host.Contains("airbnb.", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Reads the listing description, amenities, photo gallery, house rules, and
-    /// cancellation policy from the Airbnb page's embedded JSON state. Returns
-    /// <c>null</c> when nothing usable could be found.
+    /// Reads the listing name, description, overview counts, amenities, photo
+    /// gallery, house rules, and (when present) cancellation policy from the
+    /// Airbnb page's embedded JSON state. Returns <c>null</c> when nothing usable
+    /// could be found.
     /// </summary>
     private static AirbnbListingState? ReadAirbnbState(IDocument document, Uri finalUrl)
     {
@@ -103,6 +133,8 @@ public sealed partial class OpenGraphJsonLdExtractor
             // Only parse scripts that actually look like PDP state.
             if (!raw.Contains("/im/pictures/", StringComparison.OrdinalIgnoreCase) &&
                 !raw.Contains("AmenityItem", StringComparison.Ordinal) &&
+                !raw.Contains("longDescriptionHtml", StringComparison.Ordinal) &&
+                !raw.Contains("HOUSE_RULES_", StringComparison.Ordinal) &&
                 !raw.Contains("htmlDescription", StringComparison.Ordinal) &&
                 !raw.Contains("houseRulesSections", StringComparison.Ordinal))
             {
@@ -126,14 +158,25 @@ public sealed partial class OpenGraphJsonLdExtractor
         }
 
         var description = CleanDescriptionHtml(acc.Description);
-        var hasAnything = description is not null ||
+        var houseRules = acc.HouseRuleParagraphs.Count == 0
+            ? null
+            : CleanDescriptionHtml(string.Join("\n\n", acc.HouseRuleParagraphs));
+        var location = acc.Location ?? LocationFromOverviewTitle(acc.OverviewTitle);
+
+        var hasAnything = acc.Name is not null ||
+            description is not null ||
+            acc.PropertyType is not null ||
+            location is not null ||
+            acc.OverviewText is not null ||
             acc.Amenities.Count > 0 ||
             acc.Photos.Count > 0 ||
             acc.PetsAllowed is not null ||
             acc.SmokingAllowed is not null ||
             acc.PartiesAllowed is not null ||
             acc.QuietHoursStart is not null ||
-            acc.HouseRules is not null ||
+            acc.CheckInTime is not null ||
+            acc.CheckOutTime is not null ||
+            houseRules is not null ||
             acc.CancellationPolicy is not null;
 
         if (!hasAnything)
@@ -142,7 +185,11 @@ public sealed partial class OpenGraphJsonLdExtractor
         }
 
         return new AirbnbListingState(
+            acc.Name,
             description,
+            acc.PropertyType,
+            location,
+            acc.OverviewText,
             acc.Amenities,
             acc.Photos,
             acc.PetsAllowed,
@@ -152,7 +199,7 @@ public sealed partial class OpenGraphJsonLdExtractor
             acc.QuietHoursEnd,
             acc.CheckInTime,
             acc.CheckOutTime,
-            CleanDescriptionHtml(acc.HouseRules),
+            houseRules,
             acc.CancellationPolicy);
     }
 
@@ -170,8 +217,13 @@ public sealed partial class OpenGraphJsonLdExtractor
         switch (element.ValueKind)
         {
             case JsonValueKind.Object:
-                CollectAirbnbAmenity(element, acc);
+                CollectAirbnbListingFacts(element, acc);
+                CollectAirbnbName(element, acc);
                 CollectAirbnbDescription(element, acc);
+                CollectAirbnbOverview(element, acc);
+                CollectAirbnbLocation(element, acc);
+                CollectAirbnbAmenity(element, acc);
+                CollectAirbnbGalleryPhotos(element, acc);
                 CollectAirbnbHouseRules(element, acc);
                 CollectAirbnbCancellation(element, acc);
 
@@ -179,7 +231,7 @@ public sealed partial class OpenGraphJsonLdExtractor
                 {
                     if (property.Value.ValueKind == JsonValueKind.String)
                     {
-                        TryAddAirbnbPhoto(property.Value.GetString(), listingId, acc);
+                        TryAddAirbnbPhoto(property.Value.GetString(), listingId, requireListingMarker: true, acc);
                     }
                     else
                     {
@@ -194,7 +246,7 @@ public sealed partial class OpenGraphJsonLdExtractor
                 {
                     if (item.ValueKind == JsonValueKind.String)
                     {
-                        TryAddAirbnbPhoto(item.GetString(), listingId, acc);
+                        TryAddAirbnbPhoto(item.GetString(), listingId, requireListingMarker: true, acc);
                     }
                     else
                     {
@@ -208,6 +260,160 @@ public sealed partial class OpenGraphJsonLdExtractor
                 break;
         }
     }
+
+    // ── listing node: property type ─────────────────────────────────
+
+    /// <summary>
+    /// The <c>DemandStayListing</c> node carries <c>propertyType</c> ("APARTMENT",
+    /// "CONDOMINIUM", "PRIVATE_SUITE", …) and <c>spaceType</c> ("ENTIRE_HOME", …).
+    /// Both must be present so that an unrelated <c>propertyType</c> key elsewhere
+    /// in the state is not mistaken for the listing's.
+    /// </summary>
+    private static void CollectAirbnbListingFacts(JsonElement element, AirbnbStateAccumulator acc)
+    {
+        if (acc.PropertyType is not null ||
+            !element.TryGetProperty("spaceType", out var spaceType) ||
+            spaceType.ValueKind != JsonValueKind.String)
+        {
+            return;
+        }
+
+        var propertyType = ReadString(element, "propertyType");
+        if (!string.IsNullOrWhiteSpace(propertyType))
+        {
+            acc.PropertyType = HumanizeEnumToken(propertyType);
+        }
+    }
+
+    // ── name ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The host's listing name is the <c>PdpUGCText</c> under
+    /// <c>pdpPresentation.title</c>, and also <c>DemandStayListingDescription.name</c>.
+    /// </summary>
+    private static void CollectAirbnbName(JsonElement element, AirbnbStateAccumulator acc)
+    {
+        if (acc.Name is not null)
+        {
+            return;
+        }
+
+        if (element.TryGetProperty("title", out var title) &&
+            title.ValueKind == JsonValueKind.Object &&
+            string.Equals(ReadString(title, "__typename"), "PdpUGCText", StringComparison.Ordinal))
+        {
+            acc.Name = NormalizeSpaces(ReadUgcText(title));
+            return;
+        }
+
+        if (string.Equals(ReadString(element, "__typename"), "DemandStayListingDescription", StringComparison.Ordinal) &&
+            element.TryGetProperty("name", out var name))
+        {
+            acc.Name = NormalizeSpaces(ReadUgcText(name));
+        }
+    }
+
+    // ── description ─────────────────────────────────────────────────
+
+    private static void CollectAirbnbDescription(JsonElement element, AirbnbStateAccumulator acc)
+    {
+        // Current shape: pdpPresentation.descriptions.longDescriptionHtml (UGCText),
+        // with shortDescriptionHtml (PdpUGCText) as a truncated sibling.
+        if (element.TryGetProperty("longDescriptionHtml", out var longHtml))
+        {
+            OfferDescription(ReadUgcText(longHtml), acc);
+        }
+
+        if (element.TryGetProperty("shortDescriptionHtml", out var shortHtml))
+        {
+            OfferDescription(ReadUgcText(shortHtml), acc);
+        }
+
+        // Legacy shape: { "htmlDescription": { "htmlText": "…" } }.
+        if (element.TryGetProperty("htmlDescription", out var htmlDescription) &&
+            htmlDescription.ValueKind == JsonValueKind.Object)
+        {
+            OfferDescription(ReadString(htmlDescription, "htmlText"), acc);
+        }
+    }
+
+    /// <summary>Keeps the richest description if several nodes expose one.</summary>
+    private static void OfferDescription(string? candidate, AirbnbStateAccumulator acc)
+    {
+        if (string.IsNullOrWhiteSpace(candidate))
+        {
+            return;
+        }
+
+        if (acc.Description is null || candidate.Length > acc.Description.Length)
+        {
+            acc.Description = candidate;
+        }
+    }
+
+    // ── overview / location ─────────────────────────────────────────
+
+    /// <summary>
+    /// <c>StaysPdpOverview</c> is the "Entire rental unit in Gray, Tennessee" header
+    /// with items like ["3 guests", "2 bedrooms", "2 beds", "1 bath"]. The items feed
+    /// the generic count parser; the title yields an approximate location.
+    /// </summary>
+    private static void CollectAirbnbOverview(JsonElement element, AirbnbStateAccumulator acc)
+    {
+        if (acc.OverviewText is not null ||
+            !string.Equals(ReadString(element, "__typename"), "StaysPdpOverview", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        acc.OverviewTitle = NormalizeSpaces(ReadString(element, "title"));
+
+        if (element.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
+        {
+            var parts = items.EnumerateArray()
+                .Where(i => i.ValueKind == JsonValueKind.String)
+                .Select(i => NormalizeSpaces(i.GetString()))
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .ToList();
+
+            if (parts.Count > 0)
+            {
+                acc.OverviewText = string.Join(" \u00b7 ", parts);
+            }
+        }
+    }
+
+    /// <summary><c>StaysPdpLocation.subtitle</c> is "City, Region, Country" (no street).</summary>
+    private static void CollectAirbnbLocation(JsonElement element, AirbnbStateAccumulator acc)
+    {
+        if (acc.Location is not null ||
+            !string.Equals(ReadString(element, "__typename"), "StaysPdpLocation", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        acc.Location = NormalizeSpaces(ReadString(element, "subtitle"));
+    }
+
+    /// <summary>"Entire rental unit in Gray, Tennessee, United States" → "Gray, Tennessee, United States".</summary>
+    private static string? LocationFromOverviewTitle(string? overviewTitle)
+    {
+        if (string.IsNullOrWhiteSpace(overviewTitle))
+        {
+            return null;
+        }
+
+        var index = overviewTitle.LastIndexOf(" in ", StringComparison.OrdinalIgnoreCase);
+        if (index < 0 || index + 4 >= overviewTitle.Length)
+        {
+            return null;
+        }
+
+        var location = overviewTitle[(index + 4)..].Trim();
+        return string.IsNullOrWhiteSpace(location) ? null : location;
+    }
+
+    // ── amenities ───────────────────────────────────────────────────
 
     private static void CollectAirbnbAmenity(JsonElement element, AirbnbStateAccumulator acc)
     {
@@ -230,26 +436,7 @@ public sealed partial class OpenGraphJsonLdExtractor
         }
     }
 
-    private static void CollectAirbnbDescription(JsonElement element, AirbnbStateAccumulator acc)
-    {
-        if (!element.TryGetProperty("htmlDescription", out var htmlDescription) ||
-            htmlDescription.ValueKind != JsonValueKind.Object)
-        {
-            return;
-        }
-
-        var htmlText = ReadString(htmlDescription, "htmlText");
-        if (string.IsNullOrWhiteSpace(htmlText))
-        {
-            return;
-        }
-
-        // Keep the richest description if several sections expose htmlText.
-        if (acc.Description is null || htmlText.Length > acc.Description.Length)
-        {
-            acc.Description = htmlText;
-        }
-    }
+    // ── cancellation policy ─────────────────────────────────────────
 
     private static void CollectAirbnbCancellation(JsonElement element, AirbnbStateAccumulator acc)
     {
@@ -258,43 +445,68 @@ public sealed partial class OpenGraphJsonLdExtractor
             return;
         }
 
-        var name = ReadString(element, "localized_cancellation_policy_name");
+        var name = ReadString(element, "localized_cancellation_policy_name") ??
+            ReadString(element, "localizedCancellationPolicyName");
         if (!string.IsNullOrWhiteSpace(name))
         {
             acc.CancellationPolicy = name.Trim();
         }
     }
 
+    // ── house rules ─────────────────────────────────────────────────
+
     /// <summary>
     /// Reads Airbnb's structured "House rules" list (check-in/out, guest cap,
     /// pets/smoking/parties, quiet hours, and the host's free-text additional
-    /// rules) from a <c>houseRulesSections</c> node.
+    /// rules). Current shape: <c>StaysPdpRuleDetails.groupItems[].items[]</c> of
+    /// typed <c>StaysPdpDetailItem</c>s; legacy shape: <c>houseRulesSections[].items[]</c>.
     /// </summary>
     private static void CollectAirbnbHouseRules(JsonElement element, AirbnbStateAccumulator acc)
     {
-        if (!element.TryGetProperty("houseRulesSections", out var sections) ||
-            sections.ValueKind != JsonValueKind.Array)
+        if (element.TryGetProperty("groupItems", out var groups) && groups.ValueKind == JsonValueKind.Array)
         {
-            return;
+            foreach (var group in groups.EnumerateArray())
+            {
+                if (group.ValueKind != JsonValueKind.Object ||
+                    !group.TryGetProperty("items", out var items) ||
+                    items.ValueKind != JsonValueKind.Array)
+                {
+                    continue;
+                }
+
+                foreach (var item in items.EnumerateArray())
+                {
+                    // Only typed house-rule items; other detail groups (safety,
+                    // accessibility) share the same container shape.
+                    var type = ReadString(item, "type");
+                    if (type is not null && type.StartsWith("HOUSE_RULES_", StringComparison.Ordinal))
+                    {
+                        InterpretHouseRuleItem(item, type, acc);
+                    }
+                }
+            }
         }
 
-        foreach (var section in sections.EnumerateArray())
+        if (element.TryGetProperty("houseRulesSections", out var sections) && sections.ValueKind == JsonValueKind.Array)
         {
-            if (section.ValueKind != JsonValueKind.Object ||
-                !section.TryGetProperty("items", out var items) ||
-                items.ValueKind != JsonValueKind.Array)
+            foreach (var section in sections.EnumerateArray())
             {
-                continue;
-            }
+                if (section.ValueKind != JsonValueKind.Object ||
+                    !section.TryGetProperty("items", out var items) ||
+                    items.ValueKind != JsonValueKind.Array)
+                {
+                    continue;
+                }
 
-            foreach (var item in items.EnumerateArray())
-            {
-                InterpretHouseRuleItem(item, acc);
+                foreach (var item in items.EnumerateArray())
+                {
+                    InterpretHouseRuleItem(item, type: null, acc);
+                }
             }
         }
     }
 
-    private static void InterpretHouseRuleItem(JsonElement item, AirbnbStateAccumulator acc)
+    private static void InterpretHouseRuleItem(JsonElement item, string? type, AirbnbStateAccumulator acc)
     {
         if (item.ValueKind != JsonValueKind.Object)
         {
@@ -306,6 +518,11 @@ public sealed partial class OpenGraphJsonLdExtractor
         {
             return;
         }
+
+        // Secondary text: legacy "subtitle" string, or the current "description"
+        // which is a LocalizedText { text } for quiet hours and a PdpUGCText for
+        // the host's free-text rules.
+        var detail = NormalizeSpaces(ReadString(item, "subtitle") ?? ReadLocalizedOrUgcText(item, "description"));
 
         if (Has(title, "no pets"))
         {
@@ -334,19 +551,25 @@ public sealed partial class OpenGraphJsonLdExtractor
             acc.PartiesAllowed = true;
         }
 
-        if (Has(title, "check-in") || Has(title, "check in"))
+        // Check-in windows read "Check-in after 4:00 PM" or "Check-in: 2:00 PM - 8:00 PM";
+        // "Self check-in with keypad" has a distinct type and no time to parse.
+        var isCheckIn = type is "HOUSE_RULES_CHECK_IN_WINDOW" ||
+            (type is null && (Has(title, "check-in") || Has(title, "check in")));
+        var isCheckOut = type is "HOUSE_RULES_CHECK_OUT_TIME" ||
+            (type is null && (Has(title, "checkout") || Has(title, "check-out") || Has(title, "check out")));
+
+        if (isCheckIn)
         {
             acc.CheckInTime ??= ParseClockTime(title);
         }
-        else if (Has(title, "checkout") || Has(title, "check-out") || Has(title, "check out"))
+        else if (isCheckOut)
         {
             acc.CheckOutTime ??= ParseClockTime(title);
         }
 
-        if (Has(title, "quiet hours"))
+        if (type is "HOUSE_RULES_QUIET_HOURS" || Has(title, "quiet hours"))
         {
-            var subtitle = NormalizeSpaces(ReadString(item, "subtitle"));
-            var times = ClockTimeRegex().Matches(subtitle ?? string.Empty);
+            var times = ClockTimeRegex().Matches(detail ?? string.Empty);
             if (times.Count >= 2)
             {
                 acc.QuietHoursStart ??= NormalizeClock(times[0].Value);
@@ -354,17 +577,26 @@ public sealed partial class OpenGraphJsonLdExtractor
             }
         }
 
-        if (Has(title, "additional rules") &&
-            item.TryGetProperty("html", out var html) &&
-            html.ValueKind == JsonValueKind.Object)
+        var isFreeText = type is "HOUSE_RULES_ADDITIONAL_RULES" or "HOUSE_RULES_ADDITIONAL_REQUESTS" ||
+            (type is null && (Has(title, "additional rules") || Has(title, "additional requests")));
+        if (isFreeText)
         {
-            var htmlText = ReadString(html, "htmlText");
-            if (!string.IsNullOrWhiteSpace(htmlText))
+            // Legacy items carry the text in html.htmlText; current ones in description.
+            string? text = null;
+            if (item.TryGetProperty("html", out var html) && html.ValueKind == JsonValueKind.Object)
             {
-                acc.HouseRules ??= htmlText;
+                text = ReadString(html, "htmlText");
+            }
+
+            text ??= ReadLocalizedOrUgcText(item, "description");
+            if (!string.IsNullOrWhiteSpace(text) && !acc.HouseRuleParagraphs.Contains(text, StringComparer.Ordinal))
+            {
+                acc.HouseRuleParagraphs.Add(text);
             }
         }
     }
+
+    // ── photos ──────────────────────────────────────────────────────
 
     /// <summary>
     /// Cap how many Airbnb gallery photos we surface. Listings often expose
@@ -373,7 +605,53 @@ public sealed partial class OpenGraphJsonLdExtractor
     /// </summary>
     private const int MaxImportedPhotos = 20;
 
-    private static void TryAddAirbnbPhoto(string? value, string? listingId, AirbnbStateAccumulator acc)
+    /// <summary>
+    /// Gallery photos are only taken from containers that are known to hold the
+    /// host's listing photos — never from the generic URL scan — because review
+    /// icons, host avatars and platform assets share the same CDN prefix.
+    /// </summary>
+    private static void CollectAirbnbGalleryPhotos(JsonElement element, AirbnbStateAccumulator acc)
+    {
+        var typename = ReadString(element, "__typename");
+        switch (typename)
+        {
+            // pdpPresentation.heroMedia.edges[].node and mediaTour.stops[].items[]
+            case "HeroImageItem":
+            case "ImageMediaTourItem":
+                if (element.TryGetProperty("image", out var image) && image.ValueKind == JsonValueKind.Object)
+                {
+                    TryAddAirbnbPhoto(ReadString(image, "uri"), listingId: null, requireListingMarker: false, acc);
+                }
+
+                break;
+
+            // sections[].section for sectionId PHOTO_TOUR_SCROLLABLE_MODAL (and its
+            // legacy name); mediaItems[] are Image { baseUrl }.
+            case "PhotoTourModalSection":
+            case "PdpPhotoTourModalSection":
+                if (element.TryGetProperty("mediaItems", out var mediaItems) && mediaItems.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var media in mediaItems.EnumerateArray())
+                    {
+                        if (media.ValueKind == JsonValueKind.Object)
+                        {
+                            TryAddAirbnbPhoto(ReadString(media, "baseUrl"), listingId: null, requireListingMarker: false, acc);
+                        }
+                    }
+                }
+
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    private static void TryAddAirbnbPhoto(
+        string? value,
+        string? listingId,
+        bool requireListingMarker,
+        AirbnbStateAccumulator acc)
     {
         if (acc.Photos.Count >= MaxImportedPhotos)
         {
@@ -386,12 +664,24 @@ public sealed partial class OpenGraphJsonLdExtractor
             return;
         }
 
-        // Only listing photos (scoped to this listing's "Hosting-<id>" namespace),
-        // never platform assets (favicons, icons, host avatars, map tiles).
-        var marker = listingId is null ? "Hosting-" : "Hosting-" + listingId;
-        if (!value.Contains(marker, StringComparison.OrdinalIgnoreCase))
+        // Never platform assets (favicons, review icons, map pins) or user avatars.
+        if (value.Contains("platform-assets", StringComparison.OrdinalIgnoreCase) ||
+            value.Contains("PlatformAssets", StringComparison.OrdinalIgnoreCase) ||
+            value.Contains("/im/pictures/user/", StringComparison.OrdinalIgnoreCase) ||
+            value.Contains("/user/User/", StringComparison.OrdinalIgnoreCase))
         {
             return;
+        }
+
+        // Strings found by the generic walk are only accepted when they carry the
+        // listing-scoped "Hosting-<id>" namespace used by the older photo pipeline.
+        if (requireListingMarker)
+        {
+            var marker = listingId is null ? "Hosting-" : "Hosting-" + listingId;
+            if (!value.Contains(marker, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
         }
 
         if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
@@ -409,6 +699,70 @@ public sealed partial class OpenGraphJsonLdExtractor
         }
 
         acc.Photos.Add(new ImportedPhotoCandidateDto($"{path}?im_w=1200"));
+    }
+
+    // ── text helpers ────────────────────────────────────────────────
+
+    /// <summary>
+    /// Reads Airbnb's <c>UGCText</c> ({ localizedStringWithTranslationPreference |
+    /// localizedString | source }) or a <c>PdpUGCText</c> wrapper ({ content: UGCText }).
+    /// </summary>
+    private static string? ReadUgcText(JsonElement element)
+    {
+        if (element.ValueKind == JsonValueKind.String)
+        {
+            return element.GetString();
+        }
+
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        if (element.TryGetProperty("content", out var content) && content.ValueKind == JsonValueKind.Object)
+        {
+            return ReadUgcText(content);
+        }
+
+        return ReadString(element, "localizedStringWithTranslationPreference") ??
+            ReadString(element, "localizedString") ??
+            ReadString(element, "source");
+    }
+
+    /// <summary>
+    /// Reads a property that may be a plain string, a <c>LocalizedText</c> ({ text }),
+    /// or a <c>PdpUGCText</c> / <c>UGCText</c>.
+    /// </summary>
+    private static string? ReadLocalizedOrUgcText(JsonElement element, string property)
+    {
+        if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(property, out var value))
+        {
+            return null;
+        }
+
+        return value.ValueKind switch
+        {
+            JsonValueKind.String => value.GetString(),
+            JsonValueKind.Object => ReadString(value, "text") ?? ReadUgcText(value),
+            _ => null,
+        };
+    }
+
+    /// <summary>"PRIVATE_SUITE" → "Private suite"; "APARTMENT" → "Apartment".</summary>
+    private static string? HumanizeEnumToken(string? token)
+    {
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            return null;
+        }
+
+        var chars = token.Trim().ToCharArray();
+        for (var i = 0; i < chars.Length; i++)
+        {
+            chars[i] = chars[i] == '_' ? ' ' : i == 0 ? char.ToUpperInvariant(chars[i]) : char.ToLowerInvariant(chars[i]);
+        }
+
+        return new string(chars);
     }
 
     /// <summary>

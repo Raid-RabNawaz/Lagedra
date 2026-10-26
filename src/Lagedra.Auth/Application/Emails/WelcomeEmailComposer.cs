@@ -26,7 +26,8 @@ public static class WelcomeEmailComposer
         new($"{frontendUrl.TrimEnd('/')}/how-it-works");
 
     /// <summary>
-    /// Post-launch (and resend) verification email: partner / host / tenant variants.
+    /// Post-launch (and resend) verification email. Partners keep their own copy.
+    /// Personal accounts get wording that covers both staying and hosting.
     /// </summary>
     public static WelcomeEmailMessage BuildWelcomeEmail(ApplicationUser user, Uri verifyUrl)
     {
@@ -54,62 +55,18 @@ public static class WelcomeEmailComposer
                 href);
         }
 
-        if (PreLaunchAccess.IsHostSignup(user.SignupType))
-        {
-            return ComposeVerifyEmail(
-                subject: "Welcome to Lagedra — verify your email and start listing",
-                title: "Welcome, host",
-                greeting: greeting,
-                intro:
-                "Thanks for joining Lagedra as a host. Verify your email to activate your account, then list your furnished rentals for qualified tenants looking for 30+ day stays.",
-                nextSteps:
-                [
-                    "Create your first listing — or import it straight from Hostaway.",
-                    "Add the location, photos and house rules, then submit it for review.",
-                    "Set up payouts so rent and deposits reach you as soon as bookings land."
-                ],
-                ctaLabel: "Verify email & start listing",
-                href);
-        }
-
-        return ComposeVerifyEmail(
-            subject: "Welcome to Lagedra — verify your email and find a home",
-            title: "Welcome, tenant",
-            greeting: greeting,
-            intro:
-            "Thanks for joining Lagedra as a tenant. Verify your email to activate your account and start browsing verified, fully-furnished homes for stays of 30 days and up.",
-            nextSteps:
-            [
-                "Browse verified mid-term homes and save the ones that fit your stay.",
-                "Complete your profile and get verified to qualify for reduced deposits.",
-                "Book securely — payments and deposits are protected through Lagedra."
-            ],
-            ctaLabel: "Verify email & start browsing",
-            href);
+        return ComposeMemberVerifyEmail(greeting, href, includePasswordStep: false);
     }
 
     /// <summary>
-    /// Pre-launch founding host: verify email, then set a password, then list / import.
+    /// Pre-launch personal signup with no password yet: verify email, then set a password.
     /// </summary>
     public static WelcomeEmailMessage BuildFoundingHostWelcomeEmail(ApplicationUser user, Uri verifyUrl)
     {
         ArgumentNullException.ThrowIfNull(user);
         ArgumentNullException.ThrowIfNull(verifyUrl);
 
-        return ComposeVerifyEmail(
-            subject: "Welcome to Lagedra — verify your email and start listing",
-            title: "Welcome, founding host",
-            greeting: Greeting(user),
-            intro:
-            "Thanks for joining Lagedra as a founding host. Verify your email, set a password, and you can start listing your furnished rentals and importing from Hostaway right away.",
-            nextSteps:
-            [
-                "Verify your email — you'll be asked to set a password next.",
-                "Create your first listing — or import it straight from Hostaway.",
-                "Add the location, photos and house rules so your home is ready for review."
-            ],
-            ctaLabel: "Verify email & start listing",
-            verifyUrl.AbsoluteUri);
+        return ComposeMemberVerifyEmail(Greeting(user), verifyUrl.AbsoluteUri, includePasswordStep: true);
     }
 
     /// <summary>
@@ -181,17 +138,13 @@ public static class WelcomeEmailComposer
     /// </summary>
     public static string BuildInAppWelcomeTitle(UserRole role, string? signupType)
     {
+        _ = signupType;
         if (role == UserRole.InstitutionPartner)
         {
             return "Welcome, partner";
         }
 
-        if (PreLaunchAccess.IsHostSignup(signupType))
-        {
-            return "Welcome, host";
-        }
-
-        return "Welcome, tenant";
+        return "Welcome to Lagedra";
     }
 
     /// <summary>
@@ -199,17 +152,13 @@ public static class WelcomeEmailComposer
     /// </summary>
     public static string BuildInAppWelcomeBody(UserRole role, string? signupType)
     {
+        _ = signupType;
         if (role == UserRole.InstitutionPartner)
         {
             return "Your partner institution account is ready. Complete your organization profile to start sourcing verified 30+ day housing for your clients.";
         }
 
-        if (PreLaunchAccess.IsHostSignup(signupType))
-        {
-            return "Your host account is ready. Create or import your first listing to get it in front of qualified long-stay tenants.";
-        }
-
-        return "Your tenant account is ready. Browse verified mid-term homes and complete your profile to get started.";
+        return "Your account is ready. Browse furnished stays, and choose Become a host from your account menu whenever you want to list a place.";
     }
 
     /// <summary>
@@ -224,12 +173,42 @@ public static class WelcomeEmailComposer
         ArgumentNullException.ThrowIfNull(user);
         ArgumentNullException.ThrowIfNull(verifyUrl);
 
-        if (!hasPassword && PreLaunchAccess.IsHostSignup(user.SignupType))
+        if (!hasPassword && PreLaunchAccess.IsPersonalSignup(user.SignupType))
         {
             return BuildFoundingHostWelcomeEmail(user, verifyUrl);
         }
 
         return BuildWelcomeEmail(user, verifyUrl);
+    }
+
+    private static WelcomeEmailMessage ComposeMemberVerifyEmail(
+        string greeting,
+        string href,
+        bool includePasswordStep)
+    {
+        var nextSteps = includePasswordStep
+            ? new[]
+            {
+                "Verify your email — you'll be asked to set a password next.",
+                "Browse furnished stays of 30 days and up, and complete your profile when you're ready to book.",
+                "When you want to list a place, choose Become a host from your account menu."
+            }
+            : new[]
+            {
+                "Browse furnished stays of 30 days and up, and save the ones that fit.",
+                "Complete your profile and get verified when you're ready to book.",
+                "When you want to list a place, choose Become a host from your account menu."
+            };
+
+        return ComposeVerifyEmail(
+            subject: "Welcome to Lagedra — verify your email",
+            title: "Welcome to Lagedra",
+            greeting: greeting,
+            intro:
+            "Thanks for joining Lagedra. Verify your email to activate your account. You can browse furnished stays of 30 days and up, and become a host from the same account whenever you want to list a place.",
+            nextSteps: nextSteps,
+            ctaLabel: "Verify email",
+            href);
     }
 
     private static string Greeting(ApplicationUser user) =>

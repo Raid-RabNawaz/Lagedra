@@ -1,4 +1,5 @@
 using Lagedra.Auth.Domain;
+using Lagedra.SharedKernel.Domain;
 
 namespace Lagedra.Auth.Application.DTOs;
 
@@ -41,4 +42,6 @@ public sealed record UserProfileDto(
     string? NoticeCountry = null,
     string? BrokerName = null,
     string? BrokerDreLicense = null,
-    string? BrokerScopeNotes = null);
+    string? BrokerScopeNotes = null,
+    HostKind HostKind = HostKind.Individual,
+    bool HostingEnabled = false);

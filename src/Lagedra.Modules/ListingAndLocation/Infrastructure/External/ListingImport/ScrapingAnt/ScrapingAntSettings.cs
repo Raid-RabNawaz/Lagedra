@@ -5,11 +5,14 @@ namespace Lagedra.Modules.ListingAndLocation.Infrastructure.External.ListingImpo
 /// <summary>
 /// Optional configuration for fetching listing pages through the ScrapingAnt
 /// web-scraping API (https://scrapingant.com). ScrapingAnt renders the page in
-/// a real headless browser behind rotating proxies, which is what allows us to
-/// read JavaScript-rendered listings (e.g. Airbnb) that block plain server-side
-/// HTTP fetches. When <see cref="ApiKey"/> is empty the integration is never
-/// registered and the importer falls back to the direct <c>HttpClient</c>
-/// fetcher, so default behaviour is unchanged.
+/// a real headless browser behind rotating (residential) proxies, which gets
+/// past anti-bot walls that a plain server-side HTTP fetch cannot.
+///
+/// When <see cref="ApiKey"/> is empty the integration is never registered and
+/// the importer uses the direct <c>HttpClient</c> fetcher only. When a key is
+/// set, <see cref="Mode"/> decides the order: by default ScrapingAnt is tried
+/// first and the direct fetcher takes over only when ScrapingAnt fails (expired
+/// subscription, exceeded credit limit, API error, unusable page).
 /// </summary>
 public sealed class ScrapingAntSettings
 {
@@ -19,6 +22,12 @@ public sealed class ScrapingAntSettings
     /// ScrapingAnt API key. Empty disables the integration entirely.
     /// </summary>
     public string? ApiKey { get; set; }
+
+    /// <summary>
+    /// How ScrapingAnt is combined with the direct fetcher when a key is set.
+    /// Defaults to <see cref="ScrapingAntMode.Primary"/>.
+    /// </summary>
+    public ScrapingAntMode Mode { get; set; } = ScrapingAntMode.Primary;
 
     /// <summary>Base address of the ScrapingAnt v2 API.</summary>
     [SuppressMessage("Design", "CA1056:URI-like properties should not be strings",

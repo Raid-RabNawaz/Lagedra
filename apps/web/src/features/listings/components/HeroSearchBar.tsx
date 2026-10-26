@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { DateRangeCalendar, type DateRange } from "@/features/listings/components/DateRangeCalendar";
 import { PlaceSearchField } from "@/features/listings/components/PlaceSearchField";
+import type { GeocodedPlace, PlaceSuggestion } from "@/features/listings/lib/placeSearch";
 import { cn } from "@/lib/utils";
 
 type Segment = "where" | "checkin" | "checkout" | "who" | "filter" | null;
@@ -44,6 +45,17 @@ export function HeroSearchBar() {
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const whereInputRef = useRef<HTMLInputElement | null>(null);
+  const selectedPlace = useRef<GeocodedPlace | null>(null);
+
+  const editWhere = (value: string) => {
+    setWhere(value);
+    selectedPlace.current = null;
+  };
+
+  const rememberPlace = (suggestion: PlaceSuggestion) => {
+    setWhere(suggestion.query);
+    selectedPlace.current = suggestion.place;
+  };
 
   // Close popover on outside click
   useEffect(() => {
@@ -77,6 +89,15 @@ export function HeroSearchBar() {
   const submit = () => {
     const params = new URLSearchParams();
     if (where.trim()) params.set("keyword", where.trim());
+    const place = selectedPlace.current;
+    if (place) {
+      params.set("latitude", String(place.lat));
+      params.set("longitude", String(place.lng));
+      params.set("swLat", String(place.bounds.swLat));
+      params.set("swLng", String(place.bounds.swLng));
+      params.set("neLat", String(place.bounds.neLat));
+      params.set("neLng", String(place.bounds.neLng));
+    }
     if (range.start) params.set("availableFrom", toIsoDate(range.start));
     if (range.end) params.set("availableTo", toIsoDate(range.end));
     if (guests > 0) params.set("guests", String(guests));
@@ -110,8 +131,8 @@ export function HeroSearchBar() {
         <PlaceSearchField
           className="w-full"
           value={where}
-          onChange={setWhere}
-          onSelect={(s) => setWhere(s.query)}
+          onChange={editWhere}
+          onSelect={rememberPlace}
           showPopularWhenEmpty
           placeholder="Where to?"
           fieldClassName="flex items-stretch overflow-hidden rounded-full bg-background shadow-[0_12px_40px_-16px_rgba(15,23,42,0.35)] ring-1 ring-border"
@@ -221,9 +242,9 @@ export function HeroSearchBar() {
               <WherePanel
                 value={where}
                 inputRef={whereInputRef}
-                onChange={setWhere}
-                onPick={(v) => {
-                  setWhere(v);
+                onChange={editWhere}
+                onPick={(suggestion) => {
+                  rememberPlace(suggestion);
                   setActive("checkin");
                 }}
               />
@@ -314,7 +335,7 @@ function WherePanel({
   value: string;
   inputRef: React.RefObject<HTMLInputElement | null>;
   onChange: (v: string) => void;
-  onPick: (v: string) => void;
+  onPick: (suggestion: PlaceSuggestion) => void;
 }) {
   return (
     <PlaceSearchField
@@ -322,9 +343,9 @@ function WherePanel({
       value={value}
       inputRef={inputRef}
       onChange={onChange}
-      onSelect={(s) => onPick(s.query)}
+      onSelect={onPick}
       showPopularWhenEmpty
-      placeholder="Search a city, address, or state"
+      placeholder="Search a city, address, ZIP, or state"
     />
   );
 }

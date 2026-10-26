@@ -32,7 +32,7 @@ import {
 import { authApi } from "@/features/auth/services/authApi";
 import { useAuthStore } from "@/app/auth/authStore";
 import { roleLabel, roles } from "@/app/auth/roles";
-import { useModeStore } from "@/app/auth/modeStore";
+import { useEffectiveAppMode } from "@/app/auth/modeStore";
 import type { UpdateProfileRequest } from "@/api/types";
 import {
   phoneVerificationStatus,
@@ -169,6 +169,7 @@ type ProfileTab = (typeof PROFILE_TABS)[number];
 export const ProfilePage = () => {
   const user = useAuthStore((state) => state.user);
   const setUser = useAuthStore((state) => state.setUser);
+  const mode = useEffectiveAppMode();
   const [isLoading, setIsLoading] = useState(!user);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -360,10 +361,15 @@ export const ProfilePage = () => {
       { label: "Email verified", ok: Boolean(user.emailConfirmed ?? user.isActive) },
       ...(isMemberRole
         ? [
-            { label: "Date of birth", ok: Boolean(user.dateOfBirth) },
+            ...(user.hostKind === "PropertyManagementCompany"
+              ? []
+              : [{ label: "Date of birth", ok: Boolean(user.dateOfBirth) }]),
             { label: "City / location", ok: Boolean(user.city?.trim()) },
             { label: "Bio", ok: Boolean(user.bio?.trim() && user.bio.trim().length >= 40) },
-            { label: "Government ID verified", ok: Boolean(user.isGovernmentIdVerified) },
+            {
+              label: user.hostKind === "PropertyManagementCompany" ? "Business verified" : "Government ID verified",
+              ok: Boolean(user.isGovernmentIdVerified),
+            },
           ]
         : []),
     ];
@@ -409,7 +415,6 @@ export const ProfilePage = () => {
   // their working data lives in their own workspaces (partner org, cases, …).
   const role = String(user?.role ?? "");
   const isMember = role === roles.member;
-  const mode = useModeStore((s) => s.mode);
   const sections = {
     about: isMember,
     leaseDetails: isMember,
@@ -588,7 +593,7 @@ export const ProfilePage = () => {
               />
               <VerificationRow
                 icon={IdCard}
-                label="Government ID"
+                label={user?.hostKind === "PropertyManagementCompany" ? "Business" : "Government ID"}
                 verified={Boolean(user?.isGovernmentIdVerified)}
               />
               {user?.city && (
@@ -627,7 +632,9 @@ export const ProfilePage = () => {
           {sections.about && (
             <Card>
               <CardHeader className="pb-3">
-                <CardTitle className="text-base">About this host</CardTitle>
+                <CardTitle className="text-base">
+                  {mode === "host" ? "About this host" : "About you"}
+                </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 text-sm text-muted-foreground">
                 <div className="flex items-start gap-2">

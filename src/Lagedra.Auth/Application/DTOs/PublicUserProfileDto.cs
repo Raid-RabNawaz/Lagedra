@@ -1,3 +1,5 @@
+using Lagedra.SharedKernel.Domain;
+
 namespace Lagedra.Auth.Application.DTOs;
 
 /// <summary>
@@ -23,4 +25,5 @@ public sealed record PublicUserProfileDto(
     bool IsEmailVerified,
     int? ResponseRatePercent,
     int? ResponseTimeMinutes,
-    DateTime MemberSince);
+    DateTime MemberSince,
+    HostKind HostKind = HostKind.Individual);

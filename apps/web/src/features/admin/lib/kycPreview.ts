@@ -9,7 +9,13 @@ const heicMimeTypes = new Set([
 
 const heicBrands = new Set(["heic", "heix", "hevc", "hevx", "heim", "heis", "mif1", "msf1"]);
 
-const previewOrder: KycDocumentType[] = ["IdFront", "Selfie", "IdBack"];
+const previewOrder: KycDocumentType[] = [
+  "BusinessRegistration",
+  "ProofOfAuthority",
+  "IdFront",
+  "Selfie",
+  "IdBack",
+];
 
 export function orderReviewDocuments<T extends { documentType: KycDocumentType }>(documents: T[]): T[] {
   return [...documents].sort((a, b) => rank(a.documentType) - rank(b.documentType));

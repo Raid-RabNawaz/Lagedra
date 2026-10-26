@@ -1,0 +1,1 @@
+function r(n){return n==="PropertyManagementCompany"}function s(n,i="row"){const e=r(n);switch(i){case"short":return e?"Business":"ID";case"badge":return e?"Business verified":"ID verified";case"listing":return e?"Business verified":"Identity verified";default:return e?"Business":"Government ID"}}export{r as a,s as i};

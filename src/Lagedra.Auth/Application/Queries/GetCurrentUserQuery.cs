@@ -64,5 +64,7 @@ public sealed class GetCurrentUserQueryHandler(UserManager<ApplicationUser> user
             NoticeCountry: user.NoticeCountry,
             BrokerName: user.BrokerName,
             BrokerDreLicense: user.BrokerDreLicense,
-            BrokerScopeNotes: user.BrokerScopeNotes);
+            BrokerScopeNotes: user.BrokerScopeNotes,
+            HostKind: user.HostKind,
+            HostingEnabled: user.HostingEnabled);
 }

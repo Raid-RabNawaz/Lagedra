@@ -11,6 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Lagedra.Modules.ListingAndLocation;
 
@@ -56,45 +57,7 @@ public static class ListingAndLocationModuleRegistration
         // extractor. Mirrors the typed-HttpClient pattern used for IGeocodingService.
         services.AddSingleton<IListingMetadataExtractor, OpenGraphJsonLdExtractor>();
 
-        // The page fetcher is pluggable. When a ScrapingAnt API key is configured
-        // we route fetches through ScrapingAnt's headless-browser + proxy API so
-        // JavaScript-rendered / bot-protected listings (e.g. Airbnb) resolve to
-        // real HTML. Otherwise we use the plain HttpClient fetcher. Both satisfy
-        // IListingImportClient, so the extractor/enricher pipeline is unchanged.
-        var scrapingAntSettings = configuration
-            .GetSection(ScrapingAntSettings.SectionName)
-            .Get<ScrapingAntSettings>();
-        services.Configure<ScrapingAntSettings>(
-            configuration.GetSection(ScrapingAntSettings.SectionName));
-
-        if (!string.IsNullOrWhiteSpace(scrapingAntSettings?.ApiKey))
-        {
-            var apiKey = scrapingAntSettings.ApiKey;
-            var renderTimeout = Math.Clamp(scrapingAntSettings.TimeoutSeconds, 5, 60);
-            services.AddHttpClient<IListingImportClient, ScrapingAntListingImportClient>(client =>
-            {
-                client.BaseAddress = new Uri(EnsureTrailingSlash(scrapingAntSettings.BaseUrl));
-                // Allow margin over ScrapingAnt's own render timeout so the
-                // HttpClient does not abort a still-valid response.
-                client.Timeout = TimeSpan.FromSeconds(renderTimeout + 20);
-                client.DefaultRequestHeaders.TryAddWithoutValidation("x-api-key", apiKey);
-            });
-        }
-        else
-        {
-            services.AddHttpClient<IListingImportClient, HttpListingImportClient>(client =>
-            {
-                client.Timeout = ListingImportPolicy.FetchTimeout;
-                client.MaxResponseContentBufferSize = ListingImportPolicy.MaxResponseBytes;
-                client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", ListingImportPolicy.UserAgent);
-            })
-            .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
-            {
-                AllowAutoRedirect = true,
-                MaxAutomaticRedirections = ListingImportPolicy.MaxRedirectDepth,
-                AutomaticDecompression = System.Net.DecompressionMethods.All,
-            });
-        }
+        services.AddListingImportFetcher(configuration);
 
         // Optional AI enrichment for the "import from URL" pre-fill. The enricher
         // is always registered but is a transparent no-op unless the
@@ -139,6 +102,79 @@ public static class ListingAndLocationModuleRegistration
 
         services.AddMediatR(cfg =>
             cfg.RegisterServicesFromAssembly(typeof(ListingAndLocationModuleRegistration).Assembly));
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers the "import from URL" page fetcher behind <see cref="IListingImportClient"/>.
+    ///
+    /// The direct <see cref="HttpListingImportClient"/> is always registered. When a
+    /// ScrapingAnt API key is configured, <see cref="ScrapingAntListingImportClient"/>
+    /// (headless browser + residential proxies) is registered too and both are
+    /// combined by <see cref="FallbackListingImportClient"/>. The default
+    /// (<c>ListingImport:ScrapingAnt:Mode=Primary</c>) tries ScrapingAnt first and
+    /// falls back to the direct fetcher when ScrapingAnt fails — exceeded credit
+    /// limit, expired subscription, API error, or unusable page. <c>Mode=Fallback</c>
+    /// reverses the order so credits are only spent when the direct fetch is blocked.
+    /// All variants satisfy <see cref="IListingImportClient"/>, so the
+    /// extractor/enricher pipeline is unchanged.
+    /// </summary>
+    public static IServiceCollection AddListingImportFetcher(
+        this IServiceCollection services,
+        IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        var scrapingAntSettings = configuration
+            .GetSection(ScrapingAntSettings.SectionName)
+            .Get<ScrapingAntSettings>();
+        services.Configure<ScrapingAntSettings>(
+            configuration.GetSection(ScrapingAntSettings.SectionName));
+
+        services.AddHttpClient<HttpListingImportClient>(client =>
+        {
+            client.Timeout = ListingImportPolicy.FetchTimeout;
+            client.MaxResponseContentBufferSize = ListingImportPolicy.MaxResponseBytes;
+            client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", ListingImportPolicy.UserAgent);
+        })
+        .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler
+        {
+            AllowAutoRedirect = true,
+            MaxAutomaticRedirections = ListingImportPolicy.MaxRedirectDepth,
+            AutomaticDecompression = System.Net.DecompressionMethods.All,
+        });
+
+        if (!string.IsNullOrWhiteSpace(scrapingAntSettings?.ApiKey))
+        {
+            var apiKey = scrapingAntSettings.ApiKey;
+            var renderTimeout = Math.Clamp(scrapingAntSettings.TimeoutSeconds, 5, 60);
+            services.AddHttpClient<ScrapingAntListingImportClient>(client =>
+            {
+                client.BaseAddress = new Uri(EnsureTrailingSlash(scrapingAntSettings.BaseUrl));
+                // Allow margin over ScrapingAnt's own render timeout so the
+                // HttpClient does not abort a still-valid response.
+                client.Timeout = TimeSpan.FromSeconds(renderTimeout + 20);
+                client.DefaultRequestHeaders.TryAddWithoutValidation("x-api-key", apiKey);
+            });
+
+            var scrapingAntFirst = scrapingAntSettings.Mode == ScrapingAntMode.Primary;
+            services.AddTransient<IListingImportClient>(sp =>
+            {
+                IListingImportClient scrapingAnt = sp.GetRequiredService<ScrapingAntListingImportClient>();
+                IListingImportClient direct = sp.GetRequiredService<HttpListingImportClient>();
+                var logger = sp.GetRequiredService<ILogger<FallbackListingImportClient>>();
+                return scrapingAntFirst
+                    ? new FallbackListingImportClient(scrapingAnt, direct, logger)
+                    : new FallbackListingImportClient(direct, scrapingAnt, logger);
+            });
+        }
+        else
+        {
+            services.AddTransient<IListingImportClient>(sp =>
+                sp.GetRequiredService<HttpListingImportClient>());
+        }
 
         return services;
     }

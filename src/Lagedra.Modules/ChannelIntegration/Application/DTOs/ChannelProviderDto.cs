@@ -9,10 +9,10 @@ namespace Lagedra.Modules.ChannelIntegration.Application.DTOs;
 /// only reports true once an OAuth app's client id and secret are configured.
 /// </param>
 /// <param name="ConnectMode">
-/// How the Channels page should collect credentials. <c>haxml</c> is the OwnerRez
-/// channel Connection ID. <c>oauth</c> and <c>token</c> are the API-for-apps paths,
-/// offered only when <c>Channels:OwnerRez:OpenApiEnabled</c> is true. Every other
-/// provider uses <c>credentials</c>.
+/// How the Channels page should collect credentials. <c>oauth</c> and <c>token</c>
+/// are the OwnerRez public API, offered while <c>Channels:OwnerRez:OpenApiEnabled</c>
+/// is true. <c>haxml</c> is the channel Connection ID, offered when that flag is
+/// false. Every other provider uses <c>credentials</c>.
 /// </param>
 public sealed record ChannelProviderDto(string ProviderKey, bool UsesOAuth, string ConnectMode);
 

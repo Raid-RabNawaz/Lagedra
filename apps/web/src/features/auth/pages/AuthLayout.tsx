@@ -35,7 +35,7 @@ export const AuthLayout = () => {
       </header>
 
       <main className="flex flex-1 items-center justify-center px-4 py-12">
-        <div className="w-full max-w-[440px]">
+        <div className="w-full max-w-[400px]">
           <Outlet />
         </div>
       </main>

@@ -16,6 +16,8 @@ export type AuthResultDto = {
   role: UserRole | number;
 };
 
+export type HostKind = "Individual" | "PropertyManagementCompany";
+
 export type PublicUserProfileDto = {
   userId: string;
   displayName?: string | null;
@@ -34,6 +36,7 @@ export type PublicUserProfileDto = {
   responseRatePercent?: number | null;
   responseTimeMinutes?: number | null;
   memberSince: string;
+  hostKind?: HostKind | null;
 };
 
 export type UserProfileDto = {
@@ -76,6 +79,8 @@ export type UserProfileDto = {
   brokerName?: string | null;
   brokerDreLicense?: string | null;
   brokerScopeNotes?: string | null;
+  hostKind?: HostKind | null;
+  hostingEnabled?: boolean;
 };
 
 export type LoginRequest = {
@@ -329,6 +334,7 @@ export type HostProfileDto = {
   responseRatePercent?: number | null;
   responseTimeMinutes?: number | null;
   memberSince: string;
+  hostKind?: HostKind | null;
 };
 
 export type ListingVerificationBadgesDto = {
@@ -458,6 +464,7 @@ export type ListingReviewItemDto = {
   usesCustomLeaseAgreement?: boolean;
   customLeaseFileName?: string | null;
   leaseAgreementSource?: LeaseAgreementSource;
+  hostKind?: HostKind | null;
 };
 
 export type DenyListingRequest = {
@@ -504,6 +511,8 @@ export type SearchListingsResultDto = {
 
 export type SearchListingsParams = {
   keyword?: string;
+  /** US ZIP or Canadian postal code. Matched on the address or the map area. */
+  postalCode?: string;
   latitude?: number;
   longitude?: number;
   radiusKm?: number;
@@ -1605,10 +1614,19 @@ export type VerificationStatusDto = {
   lastName: string | null;
   dateOfBirth: string | null;
   createdAt: string;
+  hostKind?: HostKind | null;
+  legalBusinessName?: string | null;
+  businessRegistrationNumber?: string | null;
+  businessJurisdiction?: string | null;
 };
 
 // ── Manual KYC (ID photos + live selfie, admin-reviewed) ────
-export type KycDocumentType = "IdFront" | "IdBack" | "Selfie";
+export type KycDocumentType =
+  | "IdFront"
+  | "IdBack"
+  | "Selfie"
+  | "BusinessRegistration"
+  | "ProofOfAuthority";
 
 export type KycDocumentDto = {
   documentType: KycDocumentType;
@@ -1620,6 +1638,9 @@ export type SubmitManualKycRequest = {
   firstName?: string | null;
   lastName?: string | null;
   dateOfBirth?: string | null;
+  legalBusinessName?: string | null;
+  businessRegistrationNumber?: string | null;
+  businessJurisdiction?: string | null;
 };
 
 export type ManualVerificationDocumentDto = {
@@ -1638,6 +1659,10 @@ export type ManualVerificationDetailDto = {
   lastName: string | null;
   dateOfBirth: string | null;
   documents: ManualVerificationDocumentDto[];
+  hostKind?: HostKind | null;
+  legalBusinessName?: string | null;
+  businessRegistrationNumber?: string | null;
+  businessJurisdiction?: string | null;
 };
 
 export type StartKycRequest = {
@@ -2169,6 +2194,7 @@ export type ManualVerificationItemDto = {
   lastName: string | null;
   submittedAt: string;
   hoursRemaining: number;
+  hostKind?: HostKind | null;
 };
 
 // ── Admin: Audit Log ────────────────────────────────────────

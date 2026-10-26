@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Alert } from "@/components/ui/alert";
 import { Loader } from "@/components/shared/Loader";
 import { usePublicProfile } from "@/features/auth/hooks/usePublicProfile";
+import { identityCheckLabel } from "@/features/verification/lib/hostKind";
 import {
   useUserReputation,
   useUserReviews,
@@ -143,7 +144,7 @@ export function ApplicationProfilePanel({
             {profile.isGovernmentIdVerified && (
               <Badge variant="secondary" className="gap-1">
                 <BadgeCheck className="h-3 w-3" />
-                ID
+                {identityCheckLabel(profile.hostKind, "short")}
               </Badge>
             )}
             {showReputation &&
@@ -194,7 +195,7 @@ export function ApplicationProfilePanel({
             {profile.isGovernmentIdVerified && (
               <Badge variant="secondary" className="gap-1">
                 <BadgeCheck className="h-3 w-3" />
-                ID verified
+                {identityCheckLabel(profile.hostKind, "badge")}
               </Badge>
             )}
             {showReputation &&

@@ -12,7 +12,7 @@ function toFriendlyMessage(error: unknown): string {
   if (isAxiosError(error)) {
     const status = error.response?.status;
     if (status === 429) {
-      return "You have reached the import limit (5 per hour, 30 per day). Please try again later.";
+      return "You have reached the import limit (20 per hour, 150 per day). Please try again later.";
     }
     const detail = (error.response?.data as { detail?: string } | undefined)?.detail;
     if (detail) return detail;

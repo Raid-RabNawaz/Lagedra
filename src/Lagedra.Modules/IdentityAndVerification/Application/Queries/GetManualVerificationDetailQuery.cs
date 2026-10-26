@@ -1,6 +1,7 @@
 using Lagedra.Infrastructure.External.Storage;
 using Lagedra.Modules.IdentityAndVerification.Domain.Enums;
 using Lagedra.Modules.IdentityAndVerification.Infrastructure.Persistence;
+using Lagedra.SharedKernel.Domain;
 using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Results;
 using MediatR;
@@ -31,7 +32,11 @@ public sealed record ManualVerificationDetailDto(
     string? FirstName,
     string? LastName,
     DateTime? DateOfBirth,
-    IReadOnlyList<ManualVerificationDocumentDto> Documents);
+    IReadOnlyList<ManualVerificationDocumentDto> Documents,
+    HostKind HostKind,
+    string? LegalBusinessName,
+    string? BusinessRegistrationNumber,
+    string? BusinessJurisdiction);
 
 public sealed class GetManualVerificationDetailQueryHandler(
     IdentityDbContext dbContext,
@@ -85,6 +90,10 @@ public sealed class GetManualVerificationDetailQueryHandler(
         return Result<ManualVerificationDetailDto>.Success(new ManualVerificationDetailDto(
             profile.Id, profile.UserId, email,
             profile.FirstName, profile.LastName, profile.DateOfBirth,
-            documentDtos));
+            documentDtos,
+            profile.HostKind,
+            profile.LegalBusinessName,
+            profile.BusinessRegistrationNumber,
+            profile.BusinessJurisdiction));
     }
 }

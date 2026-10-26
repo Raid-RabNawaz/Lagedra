@@ -14,7 +14,7 @@ import { EmptyState } from "@/components/shared/EmptyState";
 import { ErrorState } from "@/components/shared/ErrorState";
 import { useMyDeals } from "@/features/deals/hooks/useDeals";
 import { useAuthStore } from "@/app/auth/authStore";
-import { useModeStore } from "@/app/auth/modeStore";
+import { useEffectiveAppMode } from "@/app/auth/modeStore";
 import {
   dealNeedsAttention,
   getDealIssue,
@@ -47,7 +47,7 @@ function matchesFilter(deal: DealSummaryDto, filter: ListFilter): boolean {
 export function MyDealsPage() {
   const [phase, setPhase] = useState<ListFilter>("active");
   const user = useAuthStore((s) => s.user);
-  const mode = useModeStore((s) => s.mode);
+  const mode = useEffectiveAppMode();
 
   const { data, isLoading, error, refetch } = useMyDeals("all");
 

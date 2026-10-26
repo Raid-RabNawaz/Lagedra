@@ -2,25 +2,31 @@ using Lagedra.Modules.IdentityAndVerification.Application.DTOs;
 using Lagedra.Modules.IdentityAndVerification.Domain.Aggregates;
 using Lagedra.Modules.IdentityAndVerification.Domain.Enums;
 using Lagedra.Modules.IdentityAndVerification.Infrastructure.Persistence;
+using Lagedra.SharedKernel.Domain;
+using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Results;
-using Lagedra.SharedKernel.Time;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
 
 namespace Lagedra.Modules.IdentityAndVerification.Application.Commands;
 
 /// <summary>
-/// Submits the uploaded ID photos + live selfie for manual admin review.
-/// Requires at least the ID front and a selfie. Moves the identity profile
-/// to ManualReviewRequired, where it appears in the admin queue.
+/// Submits uploaded documents for manual admin review. Individuals must include
+/// an ID front and a live selfie. Property-management companies submit a
+/// business registration instead and are not asked for a personal ID.
 /// </summary>
 public sealed record SubmitManualKycCommand(
     Guid UserId,
     string? FirstName,
     string? LastName,
-    DateTime? DateOfBirth) : IRequest<Result<VerificationStatusDto>>;
+    DateTime? DateOfBirth,
+    string? LegalBusinessName = null,
+    string? BusinessRegistrationNumber = null,
+    string? BusinessJurisdiction = null) : IRequest<Result<VerificationStatusDto>>;
 
-public sealed class SubmitManualKycCommandHandler(IdentityDbContext dbContext)
+public sealed class SubmitManualKycCommandHandler(
+    IdentityDbContext dbContext,
+    IUserVerificationFlagUpdater flagUpdater)
     : IRequestHandler<SubmitManualKycCommand, Result<VerificationStatusDto>>
 {
     public async Task<Result<VerificationStatusDto>> Handle(
@@ -29,14 +35,6 @@ public sealed class SubmitManualKycCommandHandler(IdentityDbContext dbContext)
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        if (request.DateOfBirth is { } dob
-            && !MinimumAge.IsAtLeast(MinimumAge.AdultYears, dob, DateTime.UtcNow))
-        {
-            return Result<VerificationStatusDto>.Failure(new Error(
-                "Identity.Kyc.Underage",
-                "You must be at least 18 years old to complete identity verification."));
-        }
-
         var documentTypes = await dbContext.KycDocuments
             .AsNoTracking()
             .Where(d => d.UserId == request.UserId)
@@ -44,23 +42,24 @@ public sealed class SubmitManualKycCommandHandler(IdentityDbContext dbContext)
             .ToListAsync(cancellationToken)
             .ConfigureAwait(false);
 
-        if (!documentTypes.Contains(KycDocumentType.IdFront))
-        {
-            return Result<VerificationStatusDto>.Failure(
-                new Error("Identity.Kyc.MissingIdFront",
-                    "Upload a photo of the front of your government-issued ID before submitting."));
-        }
-
-        if (!documentTypes.Contains(KycDocumentType.Selfie))
-        {
-            return Result<VerificationStatusDto>.Failure(
-                new Error("Identity.Kyc.MissingSelfie",
-                    "Capture a live selfie before submitting."));
-        }
-
         var profile = await dbContext.IdentityProfiles
             .FirstOrDefaultAsync(p => p.UserId == request.UserId, cancellationToken)
             .ConfigureAwait(false);
+
+        var hostKind = profile?.HostKind ?? HostKind.Individual;
+        var validationError = HostVerificationRules.ValidateSubmission(
+            hostKind,
+            documentTypes,
+            request.DateOfBirth,
+            request.LegalBusinessName,
+            request.BusinessRegistrationNumber,
+            request.BusinessJurisdiction,
+            DateTime.UtcNow);
+
+        if (validationError is not null)
+        {
+            return Result<VerificationStatusDto>.Failure(validationError);
+        }
 
         if (profile is null)
         {
@@ -97,6 +96,14 @@ public sealed class SubmitManualKycCommandHandler(IdentityDbContext dbContext)
                 request.DateOfBirth ?? profile.DateOfBirth);
         }
 
+        if (hostKind == HostKind.PropertyManagementCompany)
+        {
+            profile.SetBusinessDetails(
+                request.LegalBusinessName!,
+                request.BusinessRegistrationNumber!,
+                request.BusinessJurisdiction!);
+        }
+
         profile.RequireManualReview();
 
         var hasOpenCase = await dbContext.VerificationCases
@@ -108,10 +115,14 @@ public sealed class SubmitManualKycCommandHandler(IdentityDbContext dbContext)
             dbContext.VerificationCases.Add(VerificationCase.Create(request.UserId));
         }
 
+        await flagUpdater.SetHostKindAsync(
+            request.UserId,
+            profile.HostKind,
+            profile.LegalBusinessName,
+            cancellationToken).ConfigureAwait(false);
+
         await dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
 
-        return Result<VerificationStatusDto>.Success(new VerificationStatusDto(
-            profile.Id, profile.UserId, profile.Status, profile.VerificationClass,
-            profile.FirstName, profile.LastName, profile.DateOfBirth, profile.CreatedAt));
+        return Result<VerificationStatusDto>.Success(VerificationStatusDto.From(profile));
     }
 }

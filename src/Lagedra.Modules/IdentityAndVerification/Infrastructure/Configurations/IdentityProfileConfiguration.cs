@@ -1,4 +1,5 @@
 using Lagedra.Modules.IdentityAndVerification.Domain.Aggregates;
+using Lagedra.SharedKernel.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -28,6 +29,16 @@ public sealed class IdentityProfileConfiguration : IEntityTypeConfiguration<Iden
             .HasConversion<string>()
             .HasMaxLength(20)
             .IsRequired();
+
+        builder.Property(p => p.HostKind)
+            .HasConversion<string>()
+            .HasMaxLength(40)
+            .HasDefaultValue(HostKind.Individual)
+            .IsRequired();
+
+        builder.Property(p => p.LegalBusinessName).HasMaxLength(200);
+        builder.Property(p => p.BusinessRegistrationNumber).HasMaxLength(80);
+        builder.Property(p => p.BusinessJurisdiction).HasMaxLength(100);
 
         builder.Ignore(p => p.DomainEvents);
     }

@@ -1,1 +1,0 @@
-import{r as e,j as p,d as l}from"./index-BUSvGy_4.js";const i=e.forwardRef(({className:o,orientation:r="horizontal",decorative:a=!0,...s},t)=>p.jsx("div",{ref:t,role:a?"none":"separator","aria-orientation":a?void 0:r,className:l("shrink-0 bg-border",r==="horizontal"?"h-[1px] w-full":"h-full w-[1px]",o),...s}));i.displayName="Separator";export{i as S};

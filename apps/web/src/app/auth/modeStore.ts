@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useAuthStore } from "@/app/auth/authStore";
 
 export type AppMode = "guest" | "host";
 
@@ -29,3 +30,10 @@ export const useModeStore = create<ModeStoreState>((set) => ({
       return { mode: next };
     }),
 }));
+
+/** Guest until the member completes "Become a host", even if a previous session stored host mode. */
+export function useEffectiveAppMode(): AppMode {
+  const mode = useModeStore((s) => s.mode);
+  const hostingEnabled = useAuthStore((s) => Boolean(s.user?.hostingEnabled));
+  return hostingEnabled ? mode : "guest";
+}

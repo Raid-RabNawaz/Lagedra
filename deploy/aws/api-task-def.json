@@ -11,7 +11,7 @@
   "containerDefinitions": [
     {
       "name": "api",
-      "image": "930218374225.dkr.ecr.us-west-1.amazonaws.com/lagedra/api@sha256:718c353b25bedf42a8be87b45adafc1c2b882dde39d235837ab82d718e796db5",
+      "image": "930218374225.dkr.ecr.us-west-1.amazonaws.com/lagedra/api@sha256:d5512cfb256c7d1a96c12bbfbbf94d2aca32912f94368d74f6ad2829bfdf8262",
       "essential": true,
       "portMappings": [
         {
@@ -98,7 +98,7 @@
         },
         {
           "name": "ExternalAuth__Google__ClientId",
-          "value": "262822188598-915tp2sk0cgsv9sj0c6nifnp661998ba.apps.googleusercontent.com"
+          "value": "1074067576483-7a9u94qhlvk79s1bce60hi11d36q0eal.apps.googleusercontent.com"
         },
         {
           "name": "ListingImport__ScrapingAnt__ApiKey",

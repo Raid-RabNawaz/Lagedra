@@ -1,4 +1,5 @@
 using Lagedra.Auth.Domain;
+using Lagedra.SharedKernel.Domain;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -33,6 +34,12 @@ public sealed class ApplicationUserConfiguration : IEntityTypeConfiguration<Appl
 
         // Sign-up flow metadata (founding-partner / pre-launch join flow).
         builder.Property(u => u.CompanyName).HasMaxLength(200).IsRequired(false);
+        builder.Property(u => u.HostKind)
+            .HasConversion<string>()
+            .HasMaxLength(40)
+            .HasDefaultValue(HostKind.Individual)
+            .IsRequired();
+        builder.Property(u => u.HostingEnabled).HasDefaultValue(false);
         builder.Property(u => u.SignupType).HasMaxLength(20).IsRequired(false);
         builder.Property(u => u.PortfolioSize).HasMaxLength(20).IsRequired(false);
         builder.Property(u => u.HousingType).HasMaxLength(50).IsRequired(false);

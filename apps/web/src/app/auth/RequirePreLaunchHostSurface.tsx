@@ -24,7 +24,7 @@ export const RequirePreLaunchHostSurface = () => {
     return <Loader fullPage label="Loading..." />;
   }
 
-  if (!isPreLaunchLimitedHost(preLaunchEnabled, user?.role)) {
+  if (!isPreLaunchLimitedHost(preLaunchEnabled, user?.role, Boolean(user?.hostingEnabled))) {
     return <Outlet />;
   }
 

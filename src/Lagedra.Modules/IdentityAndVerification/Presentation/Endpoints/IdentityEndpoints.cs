@@ -5,6 +5,7 @@ using Lagedra.Modules.IdentityAndVerification.Application.Queries;
 using Lagedra.Modules.IdentityAndVerification.Domain.Enums;
 using Lagedra.Modules.IdentityAndVerification.Domain.ValueObjects;
 using Lagedra.Modules.IdentityAndVerification.Presentation.Contracts;
+using Lagedra.SharedKernel.Domain;
 using MediatR;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -34,6 +35,7 @@ public static class IdentityEndpoints
             .WithMetadata(new RequestSizeLimitAttribute(12L * 1024 * 1024));
         group.MapGet("/kyc/manual/documents", GetMyManualKycDocuments);
         group.MapPost("/kyc/manual/submit", SubmitManualKyc);
+        group.MapPut("/host-kind", SetHostKind);
 
         return app;
     }
@@ -65,7 +67,7 @@ public static class IdentityEndpoints
             return Results.BadRequest(new
             {
                 error = "Identity.Kyc.InvalidDocumentType",
-                detail = "documentType must be IdFront, IdBack, or Selfie.",
+                detail = "documentType must be IdFront, IdBack, Selfie, BusinessRegistration, or ProofOfAuthority.",
             });
         }
 
@@ -127,7 +129,13 @@ public static class IdentityEndpoints
 
         var result = await mediator.Send(
             new SubmitManualKycCommand(
-                userId.Value, request.FirstName, request.LastName, request.DateOfBirth),
+                userId.Value,
+                request.FirstName,
+                request.LastName,
+                request.DateOfBirth,
+                request.LegalBusinessName,
+                request.BusinessRegistrationNumber,
+                request.BusinessJurisdiction),
             ct).ConfigureAwait(false);
 
         return result.IsSuccess
@@ -188,20 +196,30 @@ public static class IdentityEndpoints
 
         if (result.Error.Code == "Identity.NotFound")
         {
-            var notStarted = new VerificationStatusDto(
-                Guid.Empty,
-                userId,
-                VerificationStatus.NotStarted,
-                VerificationClass.Low,
-                null,
-                null,
-                null,
-                DateTime.UtcNow);
-
-            return Results.Ok(notStarted);
+            return Results.Ok(VerificationStatusDto.NotStarted(userId));
         }
 
         return Results.NotFound(new { error = result.Error.Code, detail = result.Error.Description });
+    }
+
+    private static async Task<IResult> SetHostKind(
+        [FromBody] SetHostKindRequest request,
+        ClaimsPrincipal principal,
+        IMediator mediator,
+        CancellationToken ct)
+    {
+        var userId = GetUserId(principal);
+        if (userId is null)
+        {
+            return Results.Unauthorized();
+        }
+
+        var result = await mediator.Send(new SetHostKindCommand(userId.Value, request.HostKind), ct)
+            .ConfigureAwait(false);
+
+        return result.IsSuccess
+            ? Results.Ok(result.Value)
+            : Results.BadRequest(new { error = result.Error.Code, detail = result.Error.Description });
     }
 }
 
@@ -210,4 +228,9 @@ public sealed record CompleteKycRequest(Guid UserId, string? ExternalInquiryId);
 public sealed record SubmitManualKycRequest(
     string? FirstName,
     string? LastName,
-    DateTime? DateOfBirth);
+    DateTime? DateOfBirth,
+    string? LegalBusinessName = null,
+    string? BusinessRegistrationNumber = null,
+    string? BusinessJurisdiction = null);
+
+public sealed record SetHostKindRequest(HostKind HostKind);

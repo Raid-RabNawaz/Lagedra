@@ -81,7 +81,7 @@ public sealed class RegisterUserCommandHandler(
         // Institution partners stay on the password-less waitlist.
         if (preLaunch)
         {
-            return PreLaunchAccess.IsHostSignup(user.SignupType)
+            return PreLaunchAccess.IsPersonalSignup(user.SignupType)
                 ? await CreateFoundingHostAccountAsync(user, cancellationToken).ConfigureAwait(true)
                 : await CreatePreLaunchLeadAsync(user, cancellationToken).ConfigureAwait(true);
         }

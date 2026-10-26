@@ -158,14 +158,16 @@ export const SignupForm = ({ variant, preLaunch, onBack, onSuccess }: SignupForm
           />
         </Field>
 
-        <Field label="Company name">
-          <input
-            className={inputClass}
-            placeholder={content.companyPlaceholder}
-            disabled={isSubmitting}
-            {...form.register("companyName")}
-          />
-        </Field>
+        {variant === "partner" && (
+          <Field label="Company name">
+            <input
+              className={inputClass}
+              placeholder={content.companyPlaceholder}
+              disabled={isSubmitting}
+              {...form.register("companyName")}
+            />
+          </Field>
+        )}
 
         <Field label="Email" error={form.formState.errors.email?.message}>
           <input
@@ -236,11 +238,7 @@ export const SignupForm = ({ variant, preLaunch, onBack, onSuccess }: SignupForm
             waitlistMode ? "Joining..." : "Creating account..."
           ) : (
             <>
-              {waitlistMode
-                ? "Join the partner program"
-                : preLaunch
-                  ? "Create host account"
-                  : "Create account"}
+              {waitlistMode ? "Join the partner program" : "Create account"}
               <ArrowRight className="h-4 w-4" />
             </>
           )}

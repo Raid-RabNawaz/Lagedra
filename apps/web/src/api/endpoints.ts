@@ -14,6 +14,7 @@ export const endpoints = {
     resetPassword: "/v1/auth/reset-password",
     changePassword: "/v1/auth/change-password",
     me: "/v1/auth/me",
+    enableHosting: "/v1/auth/me/hosting",
     profilePhoto: "/v1/auth/me/profile-photo",
     sendPhoneCode: "/v1/auth/phone/send-code",
     confirmPhoneCode: "/v1/auth/phone/confirm",
@@ -225,6 +226,7 @@ export const endpoints = {
     status: (userId: string) => `/v1/identity/status?userId=${userId}`,
     manualKycDocuments: "/v1/identity/kyc/manual/documents",
     manualKycSubmit: "/v1/identity/kyc/manual/submit",
+    hostKind: "/v1/identity/host-kind",
   },
   verification: {
     backgroundCheckConsent: "/v1/verification/background-check/consent",

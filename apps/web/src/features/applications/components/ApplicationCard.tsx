@@ -28,6 +28,7 @@ import {
   type ApplicationPerspective,
 } from "./ApplicationDetailDialog";
 import { HostPayoutReadinessNotice } from "@/components/shared/HostPayoutReadinessNotice";
+import { identityCheckLabel } from "@/features/verification/lib/hostKind";
 import { useApplicationProfilePreview } from "./ApplicationProfilePanel";
 import { formatDate, formatDateTime, formatMoney } from "@/utils/format";
 import {
@@ -227,7 +228,7 @@ export const ApplicationCard = ({
                     {counterpartyProfile?.isGovernmentIdVerified && (
                       <Badge variant="secondary" className="gap-1 px-1.5 py-0">
                         <BadgeCheck className="h-3 w-3" />
-                        ID
+                        {identityCheckLabel(counterpartyProfile?.hostKind, "short")}
                       </Badge>
                     )}
                     {counterpartyReputation &&

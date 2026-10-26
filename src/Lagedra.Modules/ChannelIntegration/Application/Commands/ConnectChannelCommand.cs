@@ -73,8 +73,8 @@ public sealed class ConnectChannelCommandHandler(
         var accountId = request.ExternalAccountId?.Trim() ?? string.Empty;
         if (provider.ProviderKey == OwnerRezOAuthFlow.ProviderKey && !ownerRezOAuth.IsOpenApiEnabled)
         {
-            // HA-XML is the live path. The token and OAuth handlers stay callable
-            // once Channels:OwnerRez:OpenApiEnabled is turned back on.
+            // Used only when Channels:OwnerRez:OpenApiEnabled is false. The public
+            // API (token or OAuth) is the connect path while that flag is true.
             if (!ownerRezOAuth.IsHaXmlConfigured)
             {
                 return Result<ChannelConnectionDto>.Failure(HaXmlNotConfigured);

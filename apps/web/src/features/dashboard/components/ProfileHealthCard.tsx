@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { buttonVariants } from "@/components/ui/button-variants";
 import type { UserProfileDto } from "@/api/types";
+import { identityCheckLabel } from "@/features/verification/lib/hostKind";
 import {
   type ProfileSignalStatus,
   emailVerificationStatus,
@@ -56,6 +57,7 @@ const STATUS_WEIGHT: Record<ProfileSignalStatus, number> = {
  * click away regardless of whether the user is traveling or hosting.
  */
 export function ProfileHealthCard({ user }: { user: UserProfileDto }) {
+  const identityLabel = identityCheckLabel(user.hostKind);
   const score = PROFILE_CHECKS.reduce(
     (acc, check) => acc + STATUS_WEIGHT[check.status(user)],
     0,
@@ -85,8 +87,9 @@ export function ProfileHealthCard({ user }: { user: UserProfileDto }) {
           <div className="space-y-2.5">
             {PROFILE_CHECKS.map((check) => {
               const status = check.status(user);
+              const label = check.label === "Government ID" ? identityLabel : check.label;
               return (
-                <div key={check.label} className="flex items-center gap-3">
+                <div key={label} className="flex items-center gap-3">
                   <StatusCircle status={status} />
                   <span
                     className={cn(
@@ -94,7 +97,7 @@ export function ProfileHealthCard({ user }: { user: UserProfileDto }) {
                       status === "empty" ? "text-muted-foreground" : "text-foreground",
                     )}
                   >
-                    {check.label}
+                    {label}
                   </span>
                   {status === "pending" && (
                     <span className="ml-auto text-[11px] font-semibold uppercase tracking-wide text-warning">
@@ -136,7 +139,7 @@ export function ProfileHealthCard({ user }: { user: UserProfileDto }) {
             <VerificationItem label="Email" status={emailVerificationStatus(user)} />
             <VerificationItem label="Phone" status={phoneVerificationStatus(user)} />
             <VerificationItem
-              label="Government ID"
+              label={identityLabel}
               status={governmentIdVerificationStatus(user)}
             />
           </div>

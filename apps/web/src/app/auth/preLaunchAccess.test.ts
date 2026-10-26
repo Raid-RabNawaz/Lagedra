@@ -15,6 +15,7 @@ describe("preLaunchAccess", () => {
     expect(isPreLaunchHostPath("/app/listings/abc/edit")).toBe(true);
     expect(isPreLaunchHostPath("/app/channels")).toBe(true);
     expect(isPreLaunchHostPath("/app/profile")).toBe(true);
+    expect(isPreLaunchHostPath("/app/become-a-host")).toBe(true);
     expect(isPreLaunchHostPath("/app/verification")).toBe(true);
     expect(isPreLaunchHostPath("/app/payout-setup")).toBe(true);
     expect(isPreLaunchHostPath("/app/stripe-onboarding")).toBe(true);
@@ -29,10 +30,11 @@ describe("preLaunchAccess", () => {
     expect(isPreLaunchStaff(roles.member)).toBe(false);
   });
 
-  it("limits non-staff members when pre-launch is on", () => {
-    expect(isPreLaunchLimitedHost(true, roles.member)).toBe(true);
-    expect(isPreLaunchLimitedHost(true, roles.platformAdmin)).toBe(false);
-    expect(isPreLaunchLimitedHost(false, roles.member)).toBe(false);
+  it("limits hosting members when pre-launch is on, and leaves guests on the full guest surface", () => {
+    expect(isPreLaunchLimitedHost(true, roles.member, true)).toBe(true);
+    expect(isPreLaunchLimitedHost(true, roles.member, false)).toBe(false);
+    expect(isPreLaunchLimitedHost(true, roles.platformAdmin, true)).toBe(false);
+    expect(isPreLaunchLimitedHost(false, roles.member, true)).toBe(false);
   });
 
   it("exports the host home path", () => {

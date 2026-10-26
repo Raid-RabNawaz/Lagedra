@@ -15,6 +15,15 @@ public sealed class IdentityProfile : AggregateRoot<Guid>
     public VerificationStatus Status { get; private set; }
     public VerificationClass VerificationClass { get; private set; }
 
+    /// <summary>
+    /// Individual hosts verify with a government ID. Property-management
+    /// companies verify with a business registration and are not asked for an ID.
+    /// </summary>
+    public HostKind HostKind { get; private set; }
+    public string? LegalBusinessName { get; private set; }
+    public string? BusinessRegistrationNumber { get; private set; }
+    public string? BusinessJurisdiction { get; private set; }
+
     private IdentityProfile() { }
 
     public static IdentityProfile Create(Guid userId, string? firstName, string? lastName, DateTime? dateOfBirth)
@@ -28,8 +37,43 @@ public sealed class IdentityProfile : AggregateRoot<Guid>
             DateOfBirth = AsUtcDate(dateOfBirth),
             Status = VerificationStatus.NotStarted,
             VerificationClass = VerificationClass.Low,
+            HostKind = HostKind.Individual,
             CreatedAt = DateTime.UtcNow
         };
+    }
+
+    /// <summary>
+    /// Switches the verification path. Locked once a submission is in review or
+    /// already approved, so a verified identity cannot be rewritten as a business
+    /// (or the reverse) without a new review.
+    /// </summary>
+    public bool TrySetHostKind(HostKind kind)
+    {
+        if (Status is VerificationStatus.Verified or VerificationStatus.ManualReviewRequired)
+        {
+            return false;
+        }
+
+        HostKind = kind;
+        if (kind == HostKind.Individual)
+        {
+            LegalBusinessName = null;
+            BusinessRegistrationNumber = null;
+            BusinessJurisdiction = null;
+        }
+
+        return true;
+    }
+
+    public void SetBusinessDetails(string legalName, string registrationNumber, string jurisdiction)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(legalName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(registrationNumber);
+        ArgumentException.ThrowIfNullOrWhiteSpace(jurisdiction);
+
+        LegalBusinessName = legalName.Trim();
+        BusinessRegistrationNumber = registrationNumber.Trim();
+        BusinessJurisdiction = jurisdiction.Trim();
     }
 
     /// <summary>

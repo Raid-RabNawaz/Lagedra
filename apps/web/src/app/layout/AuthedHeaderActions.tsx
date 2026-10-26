@@ -3,12 +3,13 @@ import { Link, useNavigate } from "react-router-dom";
 import {
   ArrowLeftRight,
   ChevronDown,
+  Home,
   LayoutDashboard,
   LogOut,
   User,
 } from "lucide-react";
 import { useAuthStore } from "@/app/auth/authStore";
-import { useModeStore } from "@/app/auth/modeStore";
+import { useEffectiveAppMode, useModeStore } from "@/app/auth/modeStore";
 import { supportsModeSwitching } from "@/app/auth/permissions";
 import {
   isPreLaunchLimitedHost,
@@ -57,11 +58,15 @@ export function AuthedHeaderActions({
   const setUser = useAuthStore((s) => s.setUser);
   const navigate = useNavigate();
 
-  const mode = useModeStore((s) => s.mode);
+  const mode = useEffectiveAppMode();
   const toggleMode = useModeStore((s) => s.toggleMode);
+  const hostingEnabled = Boolean(user?.hostingEnabled);
   const preLaunchEnabled = usePublicConfigStore((s) => s.preLaunchEnabled);
-  const preLaunchLimited = isPreLaunchLimitedHost(preLaunchEnabled, user?.role);
-  const showModeSwitch = !preLaunchLimited && supportsModeSwitching(user?.role);
+  const preLaunchLimited = isPreLaunchLimitedHost(preLaunchEnabled, user?.role, hostingEnabled);
+  const showModeSwitch =
+    hostingEnabled && !preLaunchLimited && supportsModeSwitching(user?.role);
+  const showBecomeHost =
+    !hostingEnabled && !preLaunchLimited && supportsModeSwitching(user?.role);
 
   // Keep the SignalR hub primed wherever this component mounts so the
   // notification badge stays live across `/app` and the marketplace.
@@ -160,6 +165,17 @@ export function AuthedHeaderActions({
               >
                 <LayoutDashboard className="h-4 w-4" />
                 {preLaunchLimited ? "My listings" : "Dashboard"}
+              </Link>
+            )}
+
+            {showBecomeHost && (
+              <Link
+                to="/app/become-a-host"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors"
+              >
+                <Home className="h-4 w-4" />
+                Become a host
               </Link>
             )}
 

@@ -1,6 +1,8 @@
 using System;
 using FluentAssertions;
 using Lagedra.Modules.IdentityAndVerification.Domain.Aggregates;
+using Lagedra.Modules.IdentityAndVerification.Domain.Enums;
+using Lagedra.SharedKernel.Domain;
 using Xunit;
 
 namespace Lagedra.Tests.Unit.IdentityAndVerification.Domain;
@@ -39,5 +41,22 @@ public class IdentityProfileTests
         var profile = IdentityProfile.Create(Guid.NewGuid(), null, null, null);
 
         profile.DateOfBirth.Should().BeNull();
+        profile.HostKind.Should().Be(HostKind.Individual);
+    }
+
+    [Fact]
+    public void TrySetHostKind_switches_to_a_company_until_review_starts()
+    {
+        var profile = IdentityProfile.Create(Guid.NewGuid(), null, null, null);
+
+        profile.TrySetHostKind(HostKind.PropertyManagementCompany).Should().BeTrue();
+        profile.HostKind.Should().Be(HostKind.PropertyManagementCompany);
+
+        profile.StartVerification();
+        profile.RequireManualReview();
+
+        profile.TrySetHostKind(HostKind.Individual).Should().BeFalse();
+        profile.HostKind.Should().Be(HostKind.PropertyManagementCompany);
+        profile.Status.Should().Be(VerificationStatus.ManualReviewRequired);
     }
 }

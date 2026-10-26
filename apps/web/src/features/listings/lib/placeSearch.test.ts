@@ -5,6 +5,7 @@ import {
   mergePlaceSuggestions,
   nominatimToPlace,
   nominatimToSuggestion,
+  normalizePostalCode,
   radiusBounds,
 } from "./placeSearch";
 
@@ -74,6 +75,24 @@ describe("applyLocationToSearchParams", () => {
 
     expect(params.keyword).toBe("furnished loft");
     expect(params.swLat).toBeUndefined();
+  });
+
+  it("searches a ZIP as a postal code across a neighborhood, not as a title keyword", () => {
+    const tiny = radiusBounds(34.09, -118.4, 0.2);
+    const params = applyLocationToSearchParams(
+      { page: 1 },
+      {
+        keyword: "90210-1234",
+        placeResolved: true,
+        userMapBounds: null,
+        placeBounds: tiny,
+        radiusAnchor: null,
+      },
+    );
+
+    expect(params.keyword).toBeUndefined();
+    expect(params.postalCode).toBe("90210");
+    expect(params.neLat! - params.swLat!).toBeGreaterThan(tiny.neLat - tiny.swLat);
   });
 
   it("prefers the user's panned map bounds over the original place box", () => {
@@ -163,6 +182,16 @@ describe("nominatimToSuggestion", () => {
 
     expect(suggestion?.label).toBe("California");
     expect(suggestion?.hint).toBe("United States");
+  });
+});
+
+describe("normalizePostalCode", () => {
+  it("accepts US ZIP, ZIP+4, and Canadian postal codes", () => {
+    expect(normalizePostalCode("90210")).toBe("90210");
+    expect(normalizePostalCode("90210-1234")).toBe("90210");
+    expect(normalizePostalCode("M5V 2T6")).toBe("M5V2T6");
+    expect(normalizePostalCode("Los Angeles, CA 90012")).toBe("90012");
+    expect(normalizePostalCode("Los Angeles, CA")).toBeNull();
   });
 });
 

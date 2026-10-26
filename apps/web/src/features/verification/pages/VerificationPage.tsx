@@ -24,10 +24,16 @@ import {
   useVerificationStatus,
   useMyVerificationTier,
   useRiskView,
+  useSetHostKind,
 } from "@/features/verification/hooks/useVerification";
+import { BusinessVerificationForm } from "@/features/verification/components/BusinessVerificationForm";
+import {
+  identityCheckLabel,
+  isPropertyManagementCompany,
+} from "@/features/verification/lib/hostKind";
 import { formatScreenedOn, tierDescription, tierLabel } from "@/features/applications/lib/bookingConsent";
 import { ManualKycUpload } from "@/features/verification/components/ManualKycUpload";
-import type { VerificationStatus, VerificationClassLevel } from "@/api/types";
+import type { HostKind, VerificationStatus, VerificationClassLevel } from "@/api/types";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -74,6 +80,7 @@ export const VerificationPage = () => {
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const userId = user?.userId;
+  const setHostKind = useSetHostKind();
 
   const { data: verificationStatus, isLoading, error: statusError } = useVerificationStatus(userId);
   const riskUserId = verificationStatus?.status === "Verified" ? userId : undefined;
@@ -116,6 +123,12 @@ export const VerificationPage = () => {
     return () => window.clearTimeout(t);
   }, [actionError]);
 
+  const hostKind: HostKind =
+    verificationStatus?.hostKind ?? user?.hostKind ?? "Individual";
+  const isCompany = isPropertyManagementCompany(hostKind);
+  const showHostKindChoice = true;
+  const identityLabel = identityCheckLabel(hostKind);
+
   const kycStatus = verificationStatus?.status ?? "NotStarted";
   const kycConfig = statusConfig(kycStatus);
   const KycIcon = kycConfig.icon;
@@ -157,17 +170,26 @@ export const VerificationPage = () => {
       };
     }
     if (canStartKyc || isPending) {
-      return {
-        title: "Verify your identity",
-        body: "Upload photos of your government-issued ID and take a live selfie. Our team reviews every submission personally.",
-        href: "#kyc",
-        cta: kycStatus === "Failed" ? "Retry verification" : "Start verification",
-      };
+      return isCompany
+        ? {
+            title: "Verify your business",
+            body: "Upload the company's registration. Property managers are not asked for a personal ID.",
+            href: "#kyc",
+            cta: kycStatus === "Failed" ? "Retry verification" : "Start verification",
+          }
+        : {
+            title: "Verify your identity",
+            body: "Upload photos of your government-issued ID and take a live selfie. Our team reviews every submission personally.",
+            href: "#kyc",
+            cta: kycStatus === "Failed" ? "Retry verification" : "Start verification",
+          };
     }
     if (kycStatus === "ManualReviewRequired") {
       return {
         title: "Under manual review",
-        body: "Our team is reviewing your ID and selfie. We'll notify you once it's done — typically within 24 hours.",
+        body: isCompany
+          ? "Our team is reviewing the business registration. We'll notify you once it's done — typically within 24 hours."
+          : "Our team is reviewing your ID and selfie. We'll notify you once it's done — typically within 24 hours.",
         href: "#kyc",
         cta: null,
       };
@@ -192,7 +214,27 @@ export const VerificationPage = () => {
     classInfo,
     user?.email,
     user?.phoneNumber,
+    isCompany,
   ]);
+
+  const canEditHostKind = kycStatus === "NotStarted" || kycStatus === "Failed";
+
+  const chooseHostKind = async (next: HostKind) => {
+    if (next === hostKind || setHostKind.isPending || !canEditHostKind) return;
+    setActionError(null);
+    try {
+      await setHostKind.mutateAsync(next);
+      const me = await authApi.getCurrentUser();
+      useAuthStore.getState().setUser(me);
+    } catch (e) {
+      setActionError(getApiErrorMessage(e) || "Could not update the host type.");
+    }
+  };
+
+  const refreshSignedInUser = async () => {
+    const me = await authApi.getCurrentUser();
+    useAuthStore.getState().setUser(me);
+  };
 
   if (isLoading) {
     return <Loader fullPage label="Loading verification status..." />;
@@ -369,9 +411,11 @@ export const VerificationPage = () => {
               onClick={() => scrollToAnchor("#email")}
             />
             <StepIndicator
-              label="Government ID"
+              label={identityLabel}
               done={govIdVerified}
-              description={govIdVerified ? "Verified" : "Complete KYC below"}
+              description={
+                govIdVerified ? "Verified" : isCompany ? "Upload registration" : "Complete KYC below"
+              }
               onClick={() => scrollToAnchor("#kyc")}
             />
             {phoneStepEnabled && (
@@ -493,10 +537,12 @@ export const VerificationPage = () => {
             <div>
               <CardTitle className="text-lg flex items-center gap-2">
                 <UserCheck className="h-5 w-5" />
-                Identity verification
+                {isCompany ? "Business verification" : "Identity verification"}
               </CardTitle>
               <CardDescription className="mt-1">
-                Verify your identity with a government-issued ID. This confirms you are who you say you are.
+                {isCompany
+                  ? "Verify the property management company with its registration. A personal ID is not required."
+                  : "Verify your identity with a government-issued ID. This confirms you are who you say you are."}
               </CardDescription>
             </div>
             <Badge variant={kycConfig.badgeVariant}>
@@ -510,10 +556,13 @@ export const VerificationPage = () => {
             <div className="flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 p-4">
               <ShieldCheck className="h-8 w-8 text-emerald-600 shrink-0" />
               <div>
-                <p className="font-medium text-emerald-800">Identity verified</p>
+                <p className="font-medium text-emerald-800">
+                  {isCompany ? "Business verified" : "Identity verified"}
+                </p>
                 <p className="text-sm text-emerald-700 mt-0.5">
-                  Your government ID has been verified. This contributes to your trust level and may lower
-                  your deposit requirements.
+                  {isCompany
+                    ? "The company registration has been verified. This contributes to your trust level."
+                    : "Your government ID has been verified. This contributes to your trust level and may lower your deposit requirements."}
                 </p>
               </div>
             </div>
@@ -521,17 +570,51 @@ export const VerificationPage = () => {
 
           {(canStartKyc || isPending) && (
             <div className="space-y-4">
+              {showHostKindChoice && (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <HostKindOption
+                    title="Individual"
+                    body="Verify with a government-issued photo ID and a live selfie."
+                    selected={!isCompany}
+                    disabled={!canEditHostKind || setHostKind.isPending}
+                    onSelect={() => void chooseHostKind("Individual")}
+                  />
+                  <HostKindOption
+                    title="Property management company"
+                    body="Verify with the company's registration. No personal ID."
+                    selected={isCompany}
+                    disabled={!canEditHostKind || setHostKind.isPending}
+                    onSelect={() => void chooseHostKind("PropertyManagementCompany")}
+                  />
+                </div>
+              )}
+
               <div className="rounded-lg border p-4 bg-muted/30 space-y-3">
                 <h4 className="font-medium text-sm">What you'll need</h4>
                 <ul className="text-sm text-muted-foreground space-y-1.5">
-                  <li className="flex items-center gap-2">
-                    <ChevronRight className="h-3 w-3 shrink-0" />
-                    Clear photos of a valid government-issued photo ID (driver's license, passport, or state ID)
-                  </li>
-                  <li className="flex items-center gap-2">
-                    <ChevronRight className="h-3 w-3 shrink-0" />
-                    A device with a camera for a live selfie
-                  </li>
+                  {isCompany ? (
+                    <>
+                      <li className="flex items-center gap-2">
+                        <ChevronRight className="h-3 w-3 shrink-0" />
+                        The company's legal name, registration number, and where it is registered
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <ChevronRight className="h-3 w-3 shrink-0" />
+                        A registration certificate or business license (PDF or photo)
+                      </li>
+                    </>
+                  ) : (
+                    <>
+                      <li className="flex items-center gap-2">
+                        <ChevronRight className="h-3 w-3 shrink-0" />
+                        Clear photos of a valid government-issued photo ID (driver's license, passport, or state ID)
+                      </li>
+                      <li className="flex items-center gap-2">
+                        <ChevronRight className="h-3 w-3 shrink-0" />
+                        A device with a camera for a live selfie
+                      </li>
+                    </>
+                  )}
                   <li className="flex items-center gap-2">
                     <ChevronRight className="h-3 w-3 shrink-0" />
                     Our team reviews submissions manually, typically within 24 hours
@@ -548,19 +631,39 @@ export const VerificationPage = () => {
                 </Alert>
               )}
 
-              <ManualKycUpload
-                firstName={user?.firstName}
-                lastName={user?.lastName}
-                dateOfBirth={user?.dateOfBirth}
-                beforeSubmit={async () => {
-                  if (userId) await privacyApi.ensureRequiredConsents(userId);
-                }}
-                onSubmitted={() => {
-                  setActionSuccess(
-                    "Verification submitted. Our team will review your documents and notify you — typically within 24 hours.",
-                  );
-                }}
-              />
+              {isCompany ? (
+                <BusinessVerificationForm
+                  firstName={user?.firstName}
+                  lastName={user?.lastName}
+                  legalBusinessName={verificationStatus?.legalBusinessName}
+                  businessRegistrationNumber={verificationStatus?.businessRegistrationNumber}
+                  businessJurisdiction={verificationStatus?.businessJurisdiction}
+                  beforeSubmit={async () => {
+                    if (userId) await privacyApi.ensureRequiredConsents(userId);
+                  }}
+                  onSubmitted={() => {
+                    void refreshSignedInUser();
+                    setActionSuccess(
+                      "Business verification submitted. Our team will review the registration and notify you — typically within 24 hours.",
+                    );
+                  }}
+                />
+              ) : (
+                <ManualKycUpload
+                  firstName={user?.firstName}
+                  lastName={user?.lastName}
+                  dateOfBirth={user?.dateOfBirth}
+                  beforeSubmit={async () => {
+                    if (userId) await privacyApi.ensureRequiredConsents(userId);
+                  }}
+                  onSubmitted={() => {
+                    void refreshSignedInUser();
+                    setActionSuccess(
+                      "Verification submitted. Our team will review your documents and notify you — typically within 24 hours.",
+                    );
+                  }}
+                />
+              )}
             </div>
           )}
 
@@ -734,6 +837,35 @@ export const VerificationPage = () => {
     </div>
   );
 };
+
+function HostKindOption({
+  title,
+  body,
+  selected,
+  disabled,
+  onSelect,
+}: {
+  title: string;
+  body: string;
+  selected: boolean;
+  disabled: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      aria-pressed={selected}
+      onClick={onSelect}
+      className={`rounded-lg border p-3 text-left transition-colors disabled:opacity-60 ${
+        selected ? "border-primary bg-primary/5" : "hover:bg-muted/40"
+      }`}
+    >
+      <p className="text-sm font-medium">{title}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{body}</p>
+    </button>
+  );
+}
 
 function StepIndicator({
   label,

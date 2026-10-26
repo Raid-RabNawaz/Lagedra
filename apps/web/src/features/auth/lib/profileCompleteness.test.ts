@@ -94,6 +94,23 @@ describe("computeProfileCompleteness", () => {
     expect(result.meetsListingThreshold).toBe(true);
   });
 
+  it("does not require a date of birth for a property management company", () => {
+    const result = computeProfileCompleteness(
+      profile({
+        displayName: "Northwind PM",
+        bio: "We manage homes.",
+        profilePhotoUrl: "https://example.com/a.png",
+        city: "Austin",
+        country: "United States",
+        languages: "English",
+        occupation: "Property manager",
+        hostKind: "PropertyManagementCompany",
+      }),
+    );
+    expect(result.missing).not.toContain("Date of birth");
+    expect(result.percent).toBe(100);
+  });
+
   it("reaches 100% with every signal filled", () => {
     const result = computeProfileCompleteness(
       profile({

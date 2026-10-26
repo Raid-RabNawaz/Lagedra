@@ -77,8 +77,33 @@ const sortOptions: { value: SearchListingsSortBy; label: string }[] = [
 type FlyToTarget = { lat: number; lng: number; zoom?: number; bounds?: MapBounds };
 
 export const SearchPage = () => {
-  const [keyword, setKeyword] = useState("");
-  const [searchKeyword, setSearchKeyword] = useState("");
+  const [searchParams] = useSearchParams();
+  const urlKeyword = searchParams.get("keyword")?.trim() ?? "";
+  const urlLat = Number(searchParams.get("latitude"));
+  const urlLng = Number(searchParams.get("longitude"));
+  const urlRadius = Number(searchParams.get("radiusKm"));
+  const urlSwLat = Number(searchParams.get("swLat"));
+  const urlSwLng = Number(searchParams.get("swLng"));
+  const urlNeLat = Number(searchParams.get("neLat"));
+  const urlNeLng = Number(searchParams.get("neLng"));
+  const urlHasBox = [urlSwLat, urlSwLng, urlNeLat, urlNeLng].every((n) => Number.isFinite(n));
+  const urlHasCoords = Number.isFinite(urlLat) && Number.isFinite(urlLng);
+  const urlKm = Number.isFinite(urlRadius) && urlRadius > 0 ? urlRadius : 25;
+  const urlBounds: MapBounds | null = urlHasBox
+    ? {
+        swLat: urlSwLat,
+        swLng: urlSwLng,
+        neLat: urlNeLat,
+        neLng: urlNeLng,
+        centerLat: urlHasCoords ? urlLat : (urlSwLat + urlNeLat) / 2,
+        centerLng: urlHasCoords ? urlLng : (urlSwLng + urlNeLng) / 2,
+      }
+    : urlHasCoords
+      ? radiusBounds(urlLat, urlLng, urlKm)
+      : null;
+
+  const [keyword, setKeyword] = useState(urlKeyword);
+  const [searchKeyword, setSearchKeyword] = useState(urlKeyword);
   const [propertyType, setPropertyType] = useState<PropertyType | "">("");
   const [minBedrooms, setMinBedrooms] = useState<string>("");
   const [minBathrooms, setMinBathrooms] = useState<string>("");
@@ -96,24 +121,44 @@ export const SearchPage = () => {
   const [page, setPage] = useState(1);
   const [showFilters, setShowFilters] = useState(false);
 
-  const [showMap, setShowMap] = useState(false);
+  const [showMap, setShowMap] = useState(Boolean(urlKeyword) || urlBounds != null);
   const [searchOnMove, setSearchOnMove] = useState(true);
   const [mapBounds, setMapBounds] = useState<MapBounds | null>(null);
-  const [placeBounds, setPlaceBounds] = useState<MapBounds | null>(null);
-  const [placeResolved, setPlaceResolved] = useState(false);
-  const [geoPending, setGeoPending] = useState(false);
+  const [placeBounds, setPlaceBounds] = useState<MapBounds | null>(urlBounds);
+  const [placeResolved, setPlaceResolved] = useState(urlBounds != null);
+  const [geoPending, setGeoPending] = useState(Boolean(urlKeyword) && urlBounds == null);
   const [radiusAnchor, setRadiusAnchor] = useState<{
     lat: number;
     lng: number;
     radiusKm: number;
-  } | null>(null);
-  const [flyTo, setFlyTo] = useState<FlyToTarget | null>(null);
+  } | null>(urlHasCoords ? { lat: urlLat, lng: urlLng, radiusKm: urlKm } : null);
+  const [flyTo, setFlyTo] = useState<FlyToTarget | null>(
+    urlBounds
+      ? {
+          lat: urlHasCoords ? urlLat : urlBounds.centerLat,
+          lng: urlHasCoords ? urlLng : urlBounds.centerLng,
+          zoom: 12,
+          bounds: urlBounds,
+        }
+      : null,
+  );
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
 
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  // Ignore map move events until the camera finishes flying to the place.
+  // The map otherwise reports its default US view first and that empty box
+  // replaces the city, so the first search returns nothing.
+  const suspendBoundsRef = useRef(Boolean(urlKeyword) || urlBounds != null);
+  const searchGen = useRef(0);
   const defs = useListingDefinitions();
 
+  const resumeMapBounds = useCallback(() => {
+    suspendBoundsRef.current = false;
+  }, []);
+
   const applyPlace = useCallback((place: GeocodedPlace) => {
+    suspendBoundsRef.current = true;
+    setMapBounds(null);
     setPlaceResolved(true);
     setPlaceBounds(place.bounds);
     setRadiusAnchor(null);
@@ -121,59 +166,80 @@ export const SearchPage = () => {
     setShowMap(true);
   }, []);
 
-  const [searchParams] = useSearchParams();
-  useEffect(() => {
-    const kw = searchParams.get("keyword");
-    const pt = searchParams.get("propertyType") as PropertyType | null;
-    const g = searchParams.get("guests");
-    const from = searchParams.get("availableFrom");
-    const to = searchParams.get("availableTo");
-    const sort = searchParams.get("sortBy") as SearchListingsSortBy | null;
-    const lat = Number(searchParams.get("latitude"));
-    const lng = Number(searchParams.get("longitude"));
-    const radius = Number(searchParams.get("radiusKm"));
-    const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
+  const urlPropertyType = searchParams.get("propertyType");
+  const urlGuests = searchParams.get("guests");
+  const urlFrom = searchParams.get("availableFrom");
+  const urlTo = searchParams.get("availableTo");
+  const urlSort = searchParams.get("sortBy");
 
-    if (from) setAvailableFrom(from);
-    if (to) setAvailableTo(to);
-    if (sort && sortOptions.some((o) => o.value === sort)) {
-      setSortBy(sort);
+  useEffect(() => {
+    if (urlFrom) setAvailableFrom(urlFrom);
+    if (urlTo) setAvailableTo(urlTo);
+    if (urlSort && sortOptions.some((o) => o.value === urlSort)) {
+      setSortBy(urlSort as SearchListingsSortBy);
     }
-    if (pt && propertyTypes.includes(pt)) {
-      setPropertyType(pt);
+    if (urlPropertyType && propertyTypes.includes(urlPropertyType as PropertyType)) {
+      setPropertyType(urlPropertyType as PropertyType);
     }
-    // Hero search bar hands off the party size as `guests`; the API filter is
-    // `minGuests` ("listing fits at least this many").
-    const gNum = g ? Number(g) : NaN;
+    const gNum = urlGuests ? Number(urlGuests) : NaN;
     if (Number.isInteger(gNum) && gNum > 0) {
       setGuests(String(gNum));
     }
+  }, [urlFrom, urlTo, urlSort, urlPropertyType, urlGuests]);
 
-    if (hasCoords) {
-      const km = Number.isFinite(radius) && radius > 0 ? radius : 25;
-      const bounds = radiusBounds(lat, lng, km);
+  useEffect(() => {
+    const hasBox = [urlSwLat, urlSwLng, urlNeLat, urlNeLng].every((n) => Number.isFinite(n));
+    const hasCoords = Number.isFinite(urlLat) && Number.isFinite(urlLng);
+    const bounds: MapBounds | null = hasBox
+      ? {
+          swLat: urlSwLat,
+          swLng: urlSwLng,
+          neLat: urlNeLat,
+          neLng: urlNeLng,
+          centerLat: hasCoords ? urlLat : (urlSwLat + urlNeLat) / 2,
+          centerLng: hasCoords ? urlLng : (urlSwLng + urlNeLng) / 2,
+        }
+      : hasCoords
+        ? radiusBounds(urlLat, urlLng, urlKm)
+        : null;
+    if (!urlKeyword && !bounds) return;
+
+    const gen = ++searchGen.current;
+    setKeyword(urlKeyword);
+    setSearchKeyword(urlKeyword);
+    setPage(1);
+    setMapBounds(null);
+    if (bounds) {
+      suspendBoundsRef.current = true;
       setPlaceResolved(true);
       setPlaceBounds(bounds);
-      setRadiusAnchor({ lat, lng, radiusKm: km });
-      setFlyTo({ lat, lng, zoom: 12, bounds });
+      setGeoPending(false);
       setShowMap(true);
+      setFlyTo({
+        lat: hasCoords ? urlLat : bounds.centerLat,
+        lng: hasCoords ? urlLng : bounds.centerLng,
+        zoom: 12,
+        bounds,
+      });
+      return;
     }
 
-    if (kw) {
-      setKeyword(kw);
-      setSearchKeyword(kw);
-      if (!hasCoords) {
-        setGeoPending(true);
-        setShowMap(true);
-        void geocodePlace(kw).then((place) => {
-          if (place) applyPlace(place);
-          setGeoPending(false);
-        });
-      }
-    }
-    // intentionally only run on initial mount — URL params seed initial filters
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    suspendBoundsRef.current = true;
+    setPlaceResolved(false);
+    setPlaceBounds(null);
+    setGeoPending(true);
+    setShowMap(true);
+    let cancelled = false;
+    void geocodePlace(urlKeyword).then((place) => {
+      if (cancelled || gen !== searchGen.current) return;
+      if (place) applyPlace(place);
+      else suspendBoundsRef.current = false;
+      setGeoPending(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [urlKeyword, urlLat, urlLng, urlKm, urlSwLat, urlSwLng, urlNeLat, urlNeLng, applyPlace]);
 
   const pageSize = showMap ? MAP_PAGE_SIZE : PAGE_SIZE;
 
@@ -230,6 +296,8 @@ export const SearchPage = () => {
   const runLocationSearch = useCallback(
     async (term: string, place?: GeocodedPlace | null) => {
       const trimmed = term.trim();
+      const gen = ++searchGen.current;
+      suspendBoundsRef.current = true;
       setKeyword(trimmed);
       setSearchKeyword(trimmed);
       setPage(1);
@@ -238,14 +306,19 @@ export const SearchPage = () => {
       setPlaceBounds(null);
       setRadiusAnchor(null);
       if (!showMap) setShowMap(true);
-      if (!trimmed) return;
+      if (!trimmed) {
+        suspendBoundsRef.current = false;
+        return;
+      }
       if (place) {
         applyPlace(place);
         return;
       }
       setGeoPending(true);
       const resolved = await geocodePlace(trimmed);
+      if (gen !== searchGen.current) return;
       if (resolved) applyPlace(resolved);
+      else suspendBoundsRef.current = false;
       setGeoPending(false);
     },
     [showMap, applyPlace],
@@ -494,7 +567,7 @@ export const SearchPage = () => {
 
   const listContent = (
     <>
-      {isLoading ? (
+      {isLoading || geoPending ? (
         <Loader label="Searching listings..." />
       ) : isError ? (
         <div className="py-16 text-center">
@@ -614,7 +687,7 @@ export const SearchPage = () => {
               onChange={setKeyword}
               onSelect={handlePlaceSelect}
               showPopularWhenEmpty
-              placeholder="Search by city, address, or state..."
+              placeholder="Search by city, address, ZIP, or state..."
               leadingIcon={
                 <Search className="pointer-events-none absolute left-3.5 top-1/2 z-10 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
               }
@@ -978,6 +1051,8 @@ export const SearchPage = () => {
                 onBoundsChange={handleBoundsChange}
                 flyTo={flyTo}
                 searchOnMove={searchOnMove}
+                suspendBoundsRef={suspendBoundsRef}
+                onFlySettled={resumeMapBounds}
               />
             </Suspense>
 

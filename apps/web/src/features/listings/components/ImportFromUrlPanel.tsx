@@ -21,6 +21,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Loader } from "@/components/shared/Loader";
+import { PhotoThumbBox } from "@/features/listings/components/PhotoThumbBox";
+import { cn } from "@/lib/utils";
 
 export type ApplyImportPayload = {
   values: Partial<ListingFormValues>;
@@ -142,7 +144,7 @@ export function ImportFromUrlPanel({
       </Button>
 
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Import from a listing URL</DialogTitle>
             <DialogDescription>
@@ -269,23 +271,30 @@ export function ImportFromUrlPanel({
                       is created (max {MAX_IMPORT_PHOTOS} at a time). Some sites may block this; any
                       that fail can be added manually.
                     </p>
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                      {draft.photos.map((photo) => (
-                        <label
-                          key={photo.url}
-                          className="flex cursor-pointer items-center gap-2 rounded-md border bg-background p-2 text-xs"
-                        >
-                          <input
-                            type="checkbox"
-                            className="h-4 w-4 rounded border-input"
-                            checked={selectedPhotoUrls.has(photo.url)}
-                            onChange={() => togglePhoto(photo.url)}
-                          />
-                          <span className="truncate" title={photo.altText ?? photo.url}>
-                            {photo.altText?.trim() || "Photo"}
-                          </span>
-                        </label>
-                      ))}
+                    <div className="grid max-h-72 grid-cols-3 gap-2 overflow-y-auto pr-1 sm:grid-cols-4">
+                      {draft.photos.map((photo, index) => {
+                        const selected = selectedPhotoUrls.has(photo.url);
+                        const label = photo.altText?.trim() || `Photo ${index + 1}`;
+                        return (
+                          <label
+                            key={photo.url}
+                            title={label}
+                            className={cn(
+                              "relative block cursor-pointer rounded-md",
+                              selected ? "ring-2 ring-foreground" : "ring-1 ring-border",
+                            )}
+                          >
+                            <input
+                              type="checkbox"
+                              className="absolute left-1.5 top-1.5 z-10 h-4 w-4 rounded border-input bg-background"
+                              checked={selected}
+                              onChange={() => togglePhoto(photo.url)}
+                              aria-label={label}
+                            />
+                            <PhotoThumbBox src={photo.url} alt={label} />
+                          </label>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

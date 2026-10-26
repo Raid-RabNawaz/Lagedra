@@ -3,6 +3,7 @@ using Lagedra.Infrastructure.External.Storage;
 using Lagedra.Modules.IdentityAndVerification.Domain.Entities;
 using Lagedra.Modules.IdentityAndVerification.Domain.Enums;
 using Lagedra.Modules.IdentityAndVerification.Infrastructure.Persistence;
+using Lagedra.SharedKernel.Domain;
 using Lagedra.SharedKernel.Results;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
@@ -50,6 +51,11 @@ public sealed partial class UploadKycDocumentCommandHandler(
         "image/heif",
     };
 
+    private static readonly HashSet<string> BusinessMimeTypes = new(AllowedMimeTypes, StringComparer.OrdinalIgnoreCase)
+    {
+        "application/pdf",
+    };
+
     public async Task<Result<KycDocumentDto>> Handle(
         UploadKycDocumentCommand request,
         CancellationToken cancellationToken)
@@ -87,15 +93,28 @@ public sealed partial class UploadKycDocumentCommandHandler(
                     "Your submission is under review and can no longer be changed."));
         }
 
+        var hostKind = profile?.HostKind ?? HostKind.Individual;
+        var kindError = HostVerificationRules.ValidateUpload(hostKind, request.DocumentType);
+        if (kindError is not null)
+        {
+            return Result<KycDocumentDto>.Failure(kindError);
+        }
+
         var safeFileName = SanitizeFileName(request.OriginalFileName);
         var storageKey = $"kyc/{request.UserId}/{request.DocumentType}/{Guid.NewGuid()}/{safeFileName}";
         var mimeType = ResolveMimeType(request.MimeType, safeFileName);
 
-        if (!AllowedMimeTypes.Contains(mimeType))
+        var allowed = HostVerificationRules.AcceptsPdf(request.DocumentType)
+            ? BusinessMimeTypes
+            : AllowedMimeTypes;
+        if (!allowed.Contains(mimeType))
         {
+            var allowedLabel = HostVerificationRules.AcceptsPdf(request.DocumentType)
+                ? "JPEG, PNG, WebP, HEIC, or PDF"
+                : "JPEG, PNG, WebP, or HEIC";
             return Result<KycDocumentDto>.Failure(
                 new Error("Identity.Kyc.UnsupportedFileType",
-                    $"File type '{request.MimeType}' is not allowed. Allowed: JPEG, PNG, WebP, HEIC."));
+                    $"File type '{request.MimeType}' is not allowed. Allowed: {allowedLabel}."));
         }
 
         // Private bucket on purpose — KYC documents must never be publicly
@@ -151,6 +170,7 @@ public sealed partial class UploadKycDocumentCommandHandler(
             ".WEBP" => "image/webp",
             ".HEIC" => "image/heic",
             ".HEIF" => "image/heif",
+            ".PDF" => "application/pdf",
             _ => mimeType?.Trim() ?? string.Empty,
         };
     }

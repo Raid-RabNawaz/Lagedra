@@ -26,4 +26,15 @@ public class SearchKeywordTokenizerTests
         SearchKeywordTokenizer.Tokenize("   ").Should().BeEmpty();
         SearchKeywordTokenizer.Tokenize(null).Should().BeEmpty();
     }
+
+    [Theory]
+    [InlineData("90210", "90210")]
+    [InlineData("90210-1234", "90210")]
+    [InlineData("M5V 2T6", "M5V2T6")]
+    [InlineData("m5v2t6", "M5V2T6")]
+    [InlineData("Los Angeles, CA", null)]
+    public void Normalizes_postal_codes(string? input, string? expected)
+    {
+        SearchKeywordTokenizer.NormalizePostalCode(input).Should().Be(expected);
+    }
 }

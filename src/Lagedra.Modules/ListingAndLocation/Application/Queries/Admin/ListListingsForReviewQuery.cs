@@ -1,5 +1,6 @@
 using Lagedra.Modules.ListingAndLocation.Domain.Enums;
 using Lagedra.Modules.ListingAndLocation.Infrastructure.Persistence;
+using Lagedra.SharedKernel.Domain;
 using Lagedra.SharedKernel.Integration;
 using Lagedra.SharedKernel.Results;
 using MediatR;
@@ -42,7 +43,8 @@ public sealed record ListingReviewItemDto(
     // approving. Does not block approval.
     bool UsesCustomLeaseAgreement = false,
     string? CustomLeaseFileName = null,
-    string LeaseAgreementSource = "LagedraTemplate");
+    string LeaseAgreementSource = "LagedraTemplate",
+    HostKind HostKind = HostKind.Individual);
 
 public sealed class ListListingsForReviewQueryHandler(
     ListingsDbContext dbContext,
@@ -118,7 +120,8 @@ public sealed class ListListingsForReviewQueryHandler(
                 r.InstantBookingEnabled,
                 r.UsesCustomLeaseAgreement,
                 r.CustomLeaseFileName,
-                r.LeaseAgreementSource);
+                r.LeaseAgreementSource,
+                host?.Profile?.HostKind ?? HostKind.Individual);
         }).ToList();
 
         return Result<IReadOnlyList<ListingReviewItemDto>>.Success(items);

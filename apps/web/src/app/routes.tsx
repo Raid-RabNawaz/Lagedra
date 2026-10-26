@@ -27,6 +27,7 @@ const ForgotPasswordPage = lazy(() => import("@/features/auth/pages/ForgotPasswo
 const ResetPasswordPage = lazy(() => import("@/features/auth/pages/ResetPasswordPage").then((m) => ({ default: m.ResetPasswordPage })));
 const DashboardPage = lazy(() => import("@/features/auth/pages/DashboardPage").then((m) => ({ default: m.DashboardPage })));
 const ProfilePage = lazy(() => import("@/features/auth/pages/ProfilePage").then((m) => ({ default: m.ProfilePage })));
+const BecomeAHostPage = lazy(() => import("@/features/auth/pages/BecomeAHostPage").then((m) => ({ default: m.BecomeAHostPage })));
 const PublicProfilePage = lazy(() => import("@/features/auth/pages/PublicProfilePage").then((m) => ({ default: m.PublicProfilePage })));
 const UsersPage = lazy(() => import("@/features/admin/pages/UsersPage").then((m) => ({ default: m.UsersPage })));
 const DefinitionsPage = lazy(() => import("@/features/admin/pages/DefinitionsPage").then((m) => ({ default: m.DefinitionsPage })));
@@ -232,6 +233,7 @@ export const router = createBrowserRouter([
             children: [
           { index: true, element: <LazyPage><DashboardPage /></LazyPage> },
           { path: "profile", element: <LazyPage><ProfilePage /></LazyPage> },
+          { path: "become-a-host", element: <LazyPage><BecomeAHostPage /></LazyPage> },
           { path: "users/:userId", element: <LazyPage><PublicProfilePage /></LazyPage> },
           { path: "verification", element: <LazyPage><VerificationPage /></LazyPage> },
           { path: "notifications", element: <LazyPage><NotificationsPage /></LazyPage> },

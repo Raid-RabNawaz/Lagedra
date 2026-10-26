@@ -15,6 +15,7 @@ import type {
   UpdateRoleRequest,
   UserProfileDto,
   VerifyEmailResponse,
+  HostKind,
 } from "@/api/types";
 import { useAuthStore } from "@/app/auth/authStore";
 
@@ -96,6 +97,21 @@ export const authApi = {
 
   async updateProfile(payload: UpdateProfileRequest): Promise<UserProfileDto> {
     const response = await http.put<UserProfileDto>(endpoints.auth.me, payload);
+    useAuthStore.getState().setUser(response.data);
+    return response.data;
+  },
+
+  async enableHosting(payload: {
+    city: string;
+    country: string;
+    bio: string;
+    hostKind: HostKind;
+    state?: string;
+    languages?: string;
+    occupation?: string;
+    companyName?: string;
+  }): Promise<UserProfileDto> {
+    const response = await http.post<UserProfileDto>(endpoints.auth.enableHosting, payload);
     useAuthStore.getState().setUser(response.data);
     return response.data;
   },

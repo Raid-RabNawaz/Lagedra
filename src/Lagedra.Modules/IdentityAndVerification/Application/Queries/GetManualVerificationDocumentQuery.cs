@@ -101,6 +101,7 @@ public sealed partial class GetManualVerificationDocumentQueryHandler(
             "IMAGE/WEBP" => "image/webp",
             "IMAGE/HEIC" or "IMAGE/HEIC-SEQUENCE" => "image/heic",
             "IMAGE/HEIF" or "IMAGE/HEIF-SEQUENCE" => "image/heif",
+            "APPLICATION/PDF" => "application/pdf",
             _ => "application/octet-stream",
         };
     }

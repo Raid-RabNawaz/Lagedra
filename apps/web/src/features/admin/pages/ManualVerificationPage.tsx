@@ -27,6 +27,7 @@ import {
 import { Loader } from "@/components/shared/Loader";
 import { ReviewDocumentImage } from "@/features/admin/components/ReviewDocumentImage";
 import { orderReviewDocuments } from "@/features/admin/lib/kycPreview";
+import { isPropertyManagementCompany } from "@/features/verification/lib/hostKind";
 
 function slaBadge(hours: number) {
   if (hours > 12) return <Badge variant="success">{hours.toFixed(1)} h</Badge>;
@@ -116,7 +117,7 @@ export const ManualVerificationPage = () => {
           Manual Verification
         </h1>
         <p className="mt-1 text-muted-foreground">
-          Review submitted ID photos and live selfies to verify user identity. SLA: ≤ 24 hours.
+          Review individual ID checks and property-management business registrations. SLA: ≤ 24 hours.
         </p>
       </div>
 
@@ -139,6 +140,7 @@ export const ManualVerificationPage = () => {
                 <TableRow>
                   <TableHead>User ID</TableHead>
                   <TableHead>Name</TableHead>
+                  <TableHead>Type</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead className="hidden md:table-cell">
                     Submitted At
@@ -157,6 +159,9 @@ export const ManualVerificationPage = () => {
                       {[item.firstName, item.lastName]
                         .filter(Boolean)
                         .join(" ") || "—"}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {isPropertyManagementCompany(item.hostKind) ? "Company" : "Individual"}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {item.email || "—"}
@@ -187,10 +192,15 @@ export const ManualVerificationPage = () => {
       <Dialog open={reviewing !== null} onOpenChange={(open) => !open && closeReview()}>
         <DialogContent containerClassName="max-w-5xl" className="max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Identity review</DialogTitle>
+            <DialogTitle>
+              {isPropertyManagementCompany(detail?.hostKind ?? reviewing?.hostKind)
+                ? "Business review"
+                : "Identity review"}
+            </DialogTitle>
             <DialogDescription>
-              Compare the live selfie against the ID photo, and check that the name and date of
-              birth below match the document.
+              {isPropertyManagementCompany(detail?.hostKind ?? reviewing?.hostKind)
+                ? "Check the legal name and registration number against the uploaded business document. A personal ID is not required."
+                : "Compare the live selfie against the ID photo, and check that the name and date of birth below match the document."}
             </DialogDescription>
           </DialogHeader>
 
@@ -207,14 +217,31 @@ export const ManualVerificationPage = () => {
                     {[detail.firstName, detail.lastName].filter(Boolean).join(" ") || "—"}
                   </p>
                 </div>
-                <div>
-                  <p className="text-muted-foreground">Date of birth</p>
-                  <p className="font-medium">
-                    {detail.dateOfBirth
-                      ? new Date(detail.dateOfBirth).toLocaleDateString()
-                      : "—"}
-                  </p>
-                </div>
+                {isPropertyManagementCompany(detail.hostKind) ? (
+                  <>
+                    <div>
+                      <p className="text-muted-foreground">Legal name</p>
+                      <p className="font-medium">{detail.legalBusinessName || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Registration number</p>
+                      <p className="font-medium">{detail.businessRegistrationNumber || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-muted-foreground">Registered in</p>
+                      <p className="font-medium">{detail.businessJurisdiction || "—"}</p>
+                    </div>
+                  </>
+                ) : (
+                  <div>
+                    <p className="text-muted-foreground">Date of birth</p>
+                    <p className="font-medium">
+                      {detail.dateOfBirth
+                        ? new Date(detail.dateOfBirth).toLocaleDateString()
+                        : "—"}
+                    </p>
+                  </div>
+                )}
                 <div>
                   <p className="text-muted-foreground">Email</p>
                   <p className="font-medium break-all">{detail.email || "—"}</p>

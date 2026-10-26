@@ -67,7 +67,7 @@ if (-not $container) {
 }
 
 $haXmlEnv = [ordered]@{
-    "Channels__OwnerRez__OpenApiEnabled" = "false"
+    "Channels__OwnerRez__OpenApiEnabled" = "true"
     "Channels__OwnerRez__HaXmlBaseUrl"   = "https://faststage.ownerrez.com"
     "Channels__OwnerRez__HaXmlUsername"  = "HaXmlSandbox"
     "Channels__OwnerRez__HaXmlUserAgent" = "Lagedra/1.0 (staging)"

@@ -18,8 +18,8 @@ public static class RateLimitingSetup
     /// </summary>
     public const string ListingImportPolicy = "ListingImport";
 
-    private const int ListingImportPerHour = 5;
-    private const int ListingImportPerDay = 30;
+    private const int ListingImportPerHour = 20;
+    private const int ListingImportPerDay = 150;
     private const string ListingImportPath = "/v1/listings/import-from-url";
 
     public static IServiceCollection AddLagedraRateLimiting(this IServiceCollection services)
@@ -74,7 +74,7 @@ public static class RateLimitingSetup
 
                 var detail = context.HttpContext.Request.Path.StartsWithSegments(
                         ListingImportPath, StringComparison.OrdinalIgnoreCase)
-                    ? "Import limit reached. You can import up to 5 listings per hour and 30 per day. Please try again later."
+                    ? $"Import limit reached. You can import up to {ListingImportPerHour} listings per hour and {ListingImportPerDay} per day. Please try again later."
                     : "Monthly dispute limit reached. Please try again next month.";
 
                 await context.HttpContext.Response.WriteAsJsonAsync(new

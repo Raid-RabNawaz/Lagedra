@@ -288,4 +288,173 @@ public sealed class OpenGraphJsonLdExtractorTests
 
         draft.CancellationPolicy.Should().Be("Moderate");
     }
+
+    // ── Current (Oct 2026) Airbnb page shape ─────────────────────────────
+    // og:title/<title> are the generic site title, og:description is empty, the
+    // JSON-LD VacationRental carries a truncated description, and everything
+    // else lives under niobeClientData → node.pdpPresentation.
+
+    private static readonly Uri Airbnb2026Url = new("https://www.airbnb.com/rooms/28198214");
+
+    [Fact]
+    public void Extract_Airbnb2026_TitleComesFromStateNotGenericOgTitle()
+    {
+        var html = ListingImportFixtures.Load("airbnb-deferred-state-2026.html");
+
+        var draft = _extractor.Extract(html, Airbnb2026Url);
+
+        draft.Title.Should().Be("Lakeside Two Bedroom Retreat");
+        draft.Title.Should().NotContain("Airbnb:");
+    }
+
+    [Fact]
+    public void Extract_Airbnb2026_GenericTitleIsDroppedWhenNoNameIsAvailable()
+    {
+        // No state, no JSON-LD, empty og:description: better no title than the
+        // site-wide marketing title.
+        const string html =
+            "<html><head>" +
+            "<title>Airbnb: Vacation Rentals, Cabins, Beach Houses, Unique Homes &amp; Experiences</title>" +
+            "<meta property=\"og:title\" content=\"Airbnb: Vacation Rentals, Cabins, Beach Houses, Unique Homes &amp; Experiences\" />" +
+            "<meta property=\"og:description\" content=\"\" />" +
+            "</head><body></body></html>";
+
+        var draft = _extractor.Extract(html, Airbnb2026Url);
+
+        draft.Title.Should().BeNull();
+    }
+
+    [Fact]
+    public void Extract_Airbnb2026_DescriptionIsTheFullLongDescription()
+    {
+        var html = ListingImportFixtures.Load("airbnb-deferred-state-2026.html");
+
+        var draft = _extractor.Extract(html, Airbnb2026Url);
+
+        // longDescriptionHtml beats the truncated JSON-LD / shortDescriptionHtml
+        // text; <br> and <b> are stripped and entities decoded.
+        draft.Description.Should().Contain("Two bedrooms, one bath");
+        draft.Description.Should().Contain("washer & dryer");
+        draft.Description.Should().NotContain("<br");
+        draft.Description.Should().NotContain("<b>");
+        draft.Description.Should().NotContain("truncated by Airbnb");
+    }
+
+    [Fact]
+    public void Extract_Airbnb2026_OverviewFillsCountsAndLocationAndType()
+    {
+        var html = ListingImportFixtures.Load("airbnb-deferred-state-2026.html");
+
+        var draft = _extractor.Extract(html, Airbnb2026Url);
+
+        // "3 guests · 2 bedrooms · 2 beds · 1 bath"; the overview's 3 guests wins
+        // over the JSON-LD containsPlace.occupancy of 2.
+        draft.Bedrooms.Should().Be(2);
+        draft.Bathrooms.Should().Be(1m);
+        draft.MaxGuests.Should().Be(3);
+
+        draft.ApproxAddress.Should().Be("Gray, Tennessee, United States");
+        draft.PropertyType.Should().Be("Apartment");
+    }
+
+    [Fact]
+    public void Extract_Airbnb2026_AmenitiesExcludeUnavailableAndDedupePreview()
+    {
+        var html = ListingImportFixtures.Load("airbnb-deferred-state-2026.html");
+
+        var draft = _extractor.Extract(html, Airbnb2026Url);
+
+        draft.AmenityHints.Should().NotBeNull();
+        draft.AmenityHints!.Should().BeEquivalentTo(["Lake view", "Kitchen", "Dishes and silverware"]);
+        // "Not included" group items are available:false.
+        draft.AmenityHints!.Should().NotContain("Wifi");
+        draft.AmenityHints!.Should().NotContain("Smoke alarm");
+    }
+
+    [Fact]
+    public void Extract_Airbnb2026_PhotosComeFromGalleryContainersOnly()
+    {
+        var html = ListingImportFixtures.Load("airbnb-deferred-state-2026.html");
+
+        var draft = _extractor.Extract(html, Airbnb2026Url);
+
+        draft.Photos.Should().NotBeNull();
+        var urls = draft.Photos!.Select(p => p.Url).ToList();
+
+        // Four distinct gallery photos across heroMedia / mediaTour / photo tour
+        // (same photo repeated across containers and at ?im_w=720 dedupes by path).
+        urls.Should().HaveCount(4);
+        urls.Should().OnlyContain(u => u.EndsWith("?im_w=1200", StringComparison.Ordinal));
+        urls.Should().Contain(u => u.Contains("71cb70e0-cd37-4682-bb72-873455788719", StringComparison.Ordinal));
+        urls.Should().Contain(u => u.Contains("Hosting-28198214", StringComparison.Ordinal));
+        urls.Should().Contain(u => u.Contains("0482126d-2d88-4ded-a3c4-7c2af152a3da", StringComparison.Ordinal));
+
+        // Review-tag icons (platform assets) and the host avatar share the CDN
+        // prefix but are not listing photos.
+        urls.Should().NotContain(u => u.Contains("PlatformAssets", StringComparison.Ordinal));
+        urls.Should().NotContain(u => u.Contains("/im/pictures/user/", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void Extract_Airbnb2026_TypedHouseRulesAndCheckTimes()
+    {
+        var html = ListingImportFixtures.Load("airbnb-deferred-state-2026.html");
+
+        var draft = _extractor.Extract(html, Airbnb2026Url);
+
+        // "Check-in: 2:00 PM - 8:00 PM" yields the window start; "Self check-in
+        // with keypad" must not be mistaken for a time.
+        draft.CheckInTime.Should().Be("14:00");
+        draft.CheckOutTime.Should().Be("11:00");
+
+        draft.PetsAllowed.Should().BeTrue();
+        draft.SmokingAllowed.Should().BeFalse();
+        draft.PartiesAllowed.Should().BeFalse();
+
+        // Quiet hours come from the LocalizedText description.
+        draft.QuietHoursStart.Should().Be("23:00");
+        draft.QuietHoursEnd.Should().Be("07:00");
+
+        // Host free text: "Additional rules" and "Additional requests" paragraphs.
+        draft.HouseRules.Should().Contain("water the plants");
+        draft.HouseRules.Should().Contain("No loud music");
+        draft.HouseRules.Should().Contain("respect the agreed check-out time");
+
+        // Safety & property items share the detail-group shape but are not rules.
+        draft.HouseRules.Should().NotContain("smoke alarm");
+    }
+
+    [Fact]
+    public void Extract_Airbnb2026_CancellationPolicyIsNotServerRendered()
+    {
+        var html = ListingImportFixtures.Load("airbnb-deferred-state-2026.html");
+
+        var draft = _extractor.Extract(html, Airbnb2026Url);
+
+        draft.CancellationPolicy.Should().BeNull();
+    }
+
+    [Fact]
+    public void Extract_VacationRentalJsonLd_IsPrimaryEntityAndReadsNestedOccupancy()
+    {
+        // Generic (non-Airbnb host) check that schema.org VacationRental is
+        // preferred over a sibling Product and containsPlace.occupancy is read.
+        const string html =
+            "<html><head>" +
+            "<script type=\"application/ld+json\">" +
+            "{\"@context\":\"https://schema.org\",\"@type\":\"Product\",\"name\":\"Cabin\",\"description\":\"A cabin.\"}" +
+            "</script>" +
+            "<script type=\"application/ld+json\">" +
+            "{\"@context\":\"https://schema.org\",\"@type\":\"VacationRental\",\"name\":\"Cabin\"," +
+            "\"containsPlace\":{\"@type\":\"Accommodation\",\"occupancy\":{\"@type\":\"QuantitativeValue\",\"value\":6}}," +
+            "\"address\":{\"addressLocality\":\"Gray\",\"addressRegion\":\"TN\"}}" +
+            "</script>" +
+            "</head><body></body></html>";
+
+        var draft = _extractor.Extract(html, new Uri("https://cabins.test/rooms/1"));
+
+        draft.MaxGuests.Should().Be(6);
+        draft.ApproxAddress.Should().Be("Gray, TN");
+        draft.PropertyType.Should().Be("VacationRental");
+    }
 }

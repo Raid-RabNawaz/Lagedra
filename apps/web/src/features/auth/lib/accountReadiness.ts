@@ -1,9 +1,11 @@
 import type { ProfileSignalStatus } from "@/features/auth/lib/profileCompleteness";
 import type {
+  HostKind,
   HostStripeStatusDto,
   UserProfileDto,
   VerificationStatus,
 } from "@/api/types";
+import { isPropertyManagementCompany } from "@/features/verification/lib/hostKind";
 
 export type ReadinessAudience = "host" | "guest";
 
@@ -64,6 +66,7 @@ export function buildAccountReadiness(input: {
   audience: ReadinessAudience;
   user: Pick<UserProfileDto, "isGovernmentIdVerified">;
   kycStatus?: VerificationStatus | null;
+  hostKind?: HostKind | null;
   stripe?: Parameters<typeof payoutReadinessStatus>[0];
 }): AccountReadiness {
   const identity = identityReadinessStatus(input.user, input.kycStatus);
@@ -71,11 +74,14 @@ export function buildAccountReadiness(input: {
   const payouts = isHost ? payoutReadinessStatus(input.stripe) : "complete";
   const isEligible = identity === "complete" && (!isHost || payouts === "complete");
 
+  const company = isPropertyManagementCompany(input.hostKind);
   const steps: ReadinessStep[] = [
     {
       id: "identity",
-      label: "Identity",
-      detail: "Verify a government-issued ID so the other party knows who you are.",
+      label: company ? "Business" : "Identity",
+      detail: company
+        ? "Upload your business registration. Property managers are not asked for a personal ID."
+        : "Verify a government-issued ID so the other party knows who you are.",
       status: identity,
       href: "/app/verification#kyc",
     },

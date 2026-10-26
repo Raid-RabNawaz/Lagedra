@@ -1,3 +1,5 @@
+using Lagedra.SharedKernel.Domain;
+
 namespace Lagedra.SharedKernel.Integration;
 
 /// <summary>
@@ -37,7 +39,8 @@ public sealed record HostProfileDto(
     bool IsPhoneVerified,
     int? ResponseRatePercent,
     int? ResponseTimeMinutes,
-    DateTime MemberSince);
+    DateTime MemberSince,
+    HostKind HostKind = HostKind.Individual);
 
 /// <summary>
 /// Snapshot of how filled-in a host's profile is.

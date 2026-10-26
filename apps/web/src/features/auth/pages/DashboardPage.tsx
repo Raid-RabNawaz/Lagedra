@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { AlertCircle } from "lucide-react";
 import { authApi } from "@/features/auth/services/authApi";
 import { useAuthStore } from "@/app/auth/authStore";
-import { useModeStore } from "@/app/auth/modeStore";
+import { useEffectiveAppMode } from "@/app/auth/modeStore";
 import { supportsModeSwitching } from "@/app/auth/permissions";
 import { Loader } from "@/components/shared/Loader";
 import { TravelingDashboard } from "@/features/dashboard/components/TravelingDashboard";
@@ -15,7 +15,7 @@ export const DashboardPage = () => {
   const [isLoading, setIsLoading] = useState(!user);
   const [error, setError] = useState<string | null>(null);
 
-  const mode = useModeStore((s) => s.mode);
+  const mode = useEffectiveAppMode();
 
   useEffect(() => {
     if (user) return;

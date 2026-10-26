@@ -44,7 +44,8 @@ public sealed class GetPublicProfileQueryHandler(UserManager<ApplicationUser> us
             IsEmailVerified: user.EmailConfirmed,
             ResponseRatePercent: user.ResponseRatePercent,
             ResponseTimeMinutes: user.ResponseTimeMinutes,
-            MemberSince: user.CreatedAt);
+            MemberSince: user.CreatedAt,
+            HostKind: user.HostKind);
 
     private static string? ResolveDisplayName(ApplicationUser user)
     {

@@ -29,6 +29,7 @@ import {
   buildListingXmlTemplate,
   parseListingImportXml,
 } from "@/features/listings/lib/listingXmlImport";
+import { PhotoThumbBox } from "@/features/listings/components/PhotoThumbBox";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -302,7 +303,7 @@ export function ImportListingsDialog({ format, amenities }: ImportListingsDialog
       </Button>
 
       <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{config.title}</DialogTitle>
             <DialogDescription>{config.description}</DialogDescription>
@@ -399,6 +400,37 @@ export function ImportListingsDialog({ format, amenities }: ImportListingsDialog
                     : ""}{" "}
                   will be applied after each draft is created.
                 </p>
+              )}
+
+              {validRows.some((r) => r.photoUrls && r.photoUrls.length > 0) && (
+                <div className="max-h-72 space-y-3 overflow-y-auto pr-1">
+                  {validRows
+                    .filter((r) => r.photoUrls && r.photoUrls.length > 0)
+                    .map((row) => (
+                      <div key={row.rowNumber} className="space-y-2">
+                        <p className="text-sm font-medium">
+                          {config.rowNoun} {row.rowNumber} — {row.title}
+                          <span className="ml-1 font-normal text-muted-foreground">
+                            ({row.photoUrls!.length} photo{row.photoUrls!.length === 1 ? "" : "s"})
+                          </span>
+                        </p>
+                        <div className="grid grid-cols-4 gap-2 sm:grid-cols-5">
+                          {row.photoUrls!.slice(0, 10).map((url, index) => (
+                            <PhotoThumbBox
+                              key={`${row.rowNumber}-${url}`}
+                              src={url}
+                              alt={`${row.title} photo ${index + 1}`}
+                            />
+                          ))}
+                          {row.photoUrls!.length > 10 && (
+                            <div className="flex aspect-square items-center justify-center rounded-md bg-muted text-xs text-muted-foreground">
+                              +{row.photoUrls!.length - 10}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                </div>
               )}
 
               {(invalidRows.length > 0 || warningsToShow.length > 0) && (

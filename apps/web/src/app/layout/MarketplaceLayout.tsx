@@ -20,7 +20,7 @@ import {
 import logoSvg from "@/assets/logo.svg";
 import { useAuthStore } from "@/app/auth/authStore";
 import { getBottomTabsForRole, supportsModeSwitching, type NavItem } from "@/app/auth/permissions";
-import { useModeStore } from "@/app/auth/modeStore";
+import { useEffectiveAppMode } from "@/app/auth/modeStore";
 import { AuthedHeaderActions } from "@/app/layout/AuthedHeaderActions";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { cn } from "@/lib/utils";
@@ -48,7 +48,7 @@ export const MarketplaceLayout = () => {
   const user = useAuthStore((s) => s.user);
   const accessToken = useAuthStore((s) => s.accessToken);
   const isLoggedIn = Boolean(accessToken);
-  const mode = useModeStore((s) => s.mode);
+  const mode = useEffectiveAppMode();
 
   const role = isLoggedIn ? (user?.role ?? null) : null;
   const bottomTabs = getBottomTabsForRole(

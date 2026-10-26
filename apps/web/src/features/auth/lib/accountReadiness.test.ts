@@ -82,4 +82,16 @@ describe("accountReadiness", () => {
     expect(ready.isEligible).toBe(true);
     expect(ready.percent).toBe(100);
   });
+
+  it("asks a property management company for a business registration, not an ID", () => {
+    const readiness = buildAccountReadiness({
+      audience: "host",
+      user: { isGovernmentIdVerified: false },
+      hostKind: "PropertyManagementCompany",
+    });
+
+    const identity = readiness.steps.find((s) => s.id === "identity");
+    expect(identity?.label).toBe("Business");
+    expect(identity?.detail).toContain("not asked for a personal ID");
+  });
 });

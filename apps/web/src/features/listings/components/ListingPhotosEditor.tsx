@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ImagePlus,
   Trash2,
@@ -12,6 +12,7 @@ import {
   Loader2,
   CheckCircle2,
 } from "lucide-react";
+import { PhotoThumbBox } from "@/features/listings/components/PhotoThumbBox";
 import { listingApi } from "@/features/listings/services/listingApi";
 import {
   imageFilesFromList,
@@ -52,6 +53,17 @@ export function ListingPhotosEditor({
     completed: number;
     total: number;
   } | null>(null);
+  const [localPreviews, setLocalPreviews] = useState<
+    { id: string; url: string; name: string }[]
+  >([]);
+  const photoCountAtUpload = useRef<number | null>(null);
+
+  const dropPreviews = useCallback(() => {
+    setLocalPreviews((current) => {
+      for (const preview of current) URL.revokeObjectURL(preview.url);
+      return [];
+    });
+  }, []);
 
   const hasPhotos = listing.photos.length > 0;
 
@@ -99,8 +111,19 @@ export function ListingPhotosEditor({
         (error instanceof Error ? error.message : "Upload failed.");
       setMediaError(detail);
     },
-    onSettled: () => setUploadProgress(null),
+    onSettled: (result) => {
+      setUploadProgress(null);
+      if (!result || result.uploaded === 0) dropPreviews();
+    },
   });
+
+  useEffect(() => {
+    if (uploadPhotosMutation.isPending) return;
+    if (photoCountAtUpload.current == null) return;
+    if (listing.photos.length <= photoCountAtUpload.current) return;
+    photoCountAtUpload.current = null;
+    dropPreviews();
+  }, [listing.photos.length, uploadPhotosMutation.isPending, dropPreviews]);
 
   const uploadVideoMutation = useMutation({
     mutationFn: (file: File) => listingApi.uploadMedia(id, file, null),
@@ -212,6 +235,16 @@ export function ListingPhotosEditor({
                     const inputEl = e.target;
                     if (files.length > 0) {
                       setMediaError(null);
+                      photoCountAtUpload.current = listing.photos.length;
+                      const next = files.map((file) => ({
+                        id: crypto.randomUUID(),
+                        url: URL.createObjectURL(file),
+                        name: file.name,
+                      }));
+                      setLocalPreviews((current) => {
+                        for (const preview of current) URL.revokeObjectURL(preview.url);
+                        return next;
+                      });
                       uploadPhotosMutation.mutate(files);
                     } else if (e.target.files && e.target.files.length > 0) {
                       setMediaError("Select JPEG, PNG, GIF, WebP, or HEIC images.");
@@ -284,94 +317,105 @@ export function ListingPhotosEditor({
           {addPhotoMutation.isPending ? "Adding..." : "Add photo from URL"}
         </Button>
 
-        <ul className="space-y-2 pt-4 border-t">
-          {sorted.length === 0 ? (
-            <li className="text-sm text-muted-foreground">No photos yet.</li>
+        <div className="space-y-3 border-t pt-4">
+          {sorted.length === 0 && localPreviews.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No photos yet.</p>
           ) : (
-            sorted.map((p, idx) => (
-              <li
-                key={p.id}
-                draggable
-                onDragStart={() => setDragIdx(idx)}
-                onDragEnd={() => setDragIdx(null)}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={() => handleDrop(idx)}
-                className={cn(
-                  "flex items-center gap-2 rounded-lg border p-2 text-sm transition-colors",
-                  dragIdx === idx && "opacity-50",
-                  dragIdx !== null && dragIdx !== idx && "border-dashed border-accent/40",
-                )}
-              >
-                <GripVertical className="h-4 w-4 shrink-0 text-muted-foreground cursor-grab" />
-
-                {p.url && (
-                  <img
-                    src={p.url}
-                    alt={p.caption ?? ""}
-                    loading="lazy"
-                    decoding="async"
-                    className="h-10 w-10 rounded object-cover shrink-0"
-                  />
-                )}
-
-                <span className="truncate flex-1 min-w-0">
-                  {p.caption || p.url?.toString() || p.id}
-                </span>
-
-                <div className="flex items-center gap-0.5 shrink-0">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    disabled={idx === 0 || reorderMutation.isPending}
-                    onClick={() => movePhoto(idx, idx - 1)}
-                  >
-                    <ChevronUp className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    disabled={idx === sorted.length - 1 || reorderMutation.isPending}
-                    onClick={() => movePhoto(idx, idx + 1)}
-                  >
-                    <ChevronDown className="h-3.5 w-3.5" />
-                  </Button>
-
-                  {p.isCover ? (
-                    <Badge variant="accent" className="text-[10px] ml-1">
-                      Cover
-                    </Badge>
-                  ) : (
+            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {localPreviews.map((preview) => (
+                <li
+                  key={preview.id}
+                  className="overflow-hidden rounded-lg border bg-background"
+                >
+                  <PhotoThumbBox src={preview.url} alt={preview.name} className="rounded-none" />
+                  <p className="truncate px-2 py-1.5 text-xs text-muted-foreground">
+                    Uploading…
+                  </p>
+                </li>
+              ))}
+              {sorted.map((p, idx) => (
+                <li
+                  key={p.id}
+                  draggable={!readOnly}
+                  onDragStart={() => setDragIdx(idx)}
+                  onDragEnd={() => setDragIdx(null)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={() => handleDrop(idx)}
+                  className={cn(
+                    "overflow-hidden rounded-lg border bg-background text-sm transition-colors",
+                    dragIdx === idx && "opacity-50",
+                    dragIdx !== null && dragIdx !== idx && "border-dashed border-accent/40",
+                  )}
+                >
+                  <div className="relative">
+                    <PhotoThumbBox
+                      src={p.url}
+                      alt={p.caption ?? `Photo ${idx + 1}`}
+                      className="rounded-none"
+                    />
+                    {p.isCover && (
+                      <Badge variant="accent" className="absolute left-2 top-2 text-[10px]">
+                        Cover
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-0.5 p-1">
+                    <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-muted-foreground" />
+                    <span className="min-w-0 flex-1 truncate text-xs">
+                      {p.caption || `Photo ${idx + 1}`}
+                    </span>
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7"
-                      onClick={() => coverMutation.mutate(p.id)}
-                      disabled={coverMutation.isPending}
+                      disabled={idx === 0 || reorderMutation.isPending}
+                      onClick={() => movePhoto(idx, idx - 1)}
+                      aria-label="Move photo earlier"
                     >
-                      <Star className="h-3.5 w-3.5" />
+                      <ChevronUp className="h-3.5 w-3.5" />
                     </Button>
-                  )}
-
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-destructive"
-                    onClick={() => removePhotoMutation.mutate(p.id)}
-                    disabled={removePhotoMutation.isPending}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              </li>
-            ))
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      disabled={idx === sorted.length - 1 || reorderMutation.isPending}
+                      onClick={() => movePhoto(idx, idx + 1)}
+                      aria-label="Move photo later"
+                    >
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </Button>
+                    {!p.isCover && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => coverMutation.mutate(p.id)}
+                        disabled={coverMutation.isPending}
+                        aria-label="Set as cover"
+                      >
+                        <Star className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive"
+                      onClick={() => removePhotoMutation.mutate(p.id)}
+                      disabled={removePhotoMutation.isPending}
+                      aria-label="Remove photo"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </li>
+              ))}
+            </ul>
           )}
-        </ul>
+        </div>
         </fieldset>
       </CardContent>
     </Card>

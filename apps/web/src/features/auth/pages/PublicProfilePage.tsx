@@ -130,7 +130,7 @@ export const PublicProfilePage = () => {
               {profile.isGovernmentIdVerified && (
                 <Badge variant="secondary" className="gap-1">
                   <BadgeCheck className="h-3 w-3" />
-                  ID verified
+                  {profile.hostKind === "PropertyManagementCompany" ? "Business verified" : "ID verified"}
                 </Badge>
               )}
             </div>
@@ -177,7 +177,7 @@ export const PublicProfilePage = () => {
           </CardHeader>
           <CardContent className="space-y-2 text-sm">
             <VerificationRow
-              label="Government ID"
+              label={profile.hostKind === "PropertyManagementCompany" ? "Business" : "Government ID"}
               verified={profile.isGovernmentIdVerified}
               icon={<BadgeCheck className="h-4 w-4" />}
             />

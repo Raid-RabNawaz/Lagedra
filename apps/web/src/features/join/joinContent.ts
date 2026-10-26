@@ -10,7 +10,7 @@ export type VariantContent = {
   /** Maps to the backend UserRole created for this door. */
   role: UserRole;
   /** Value stored in `signupType` for lead qualification. */
-  signupType: "Host" | "Partner";
+  signupType: "Member" | "Partner";
   badge: string;
   brandTitle: string;
   brandSubtitle: string;
@@ -27,15 +27,15 @@ export const foundingFootnote = "Launching 2026 · Founding-partner spots are li
 export const chooserContent = {
   title: "How do you want to join Lagedra?",
   subtitle: "Choose the option that fits you — we'll tailor the rest.",
-  browsePrompt: "Looking for a place to stay instead?",
+  browsePrompt: "Just browsing?",
   browseCta: "Browse rentals",
   options: [
     {
       variant: "host" as const,
       icon: "Home" as const,
-      title: "I'm a host",
+      title: "I want to stay or list a home",
       description:
-        "List your furnished rentals — one property or fifty — and fill them with qualified 30+ day tenants.",
+        "One account for both. Start by browsing furnished stays of 30 days and up, and list a place later whenever you're ready.",
     },
     {
       variant: "partner" as const,
@@ -49,26 +49,21 @@ export const chooserContent = {
 export const variantContent: Record<JoinVariant, VariantContent> = {
   host: {
     role: roles.member,
-    signupType: "Host",
-    badge: "Partner Program",
-    brandTitle: "List your furnished rentals for stays of 30 days and up",
+    signupType: "Member",
+    badge: "Join Lagedra",
+    brandTitle: "One account for staying, and for listing a home",
     brandSubtitle:
-      "Join the marketplace built for mid-term, fully-furnished living. We bring the long-stay demand — you keep your calendars full.",
+      "Browse fully-furnished stays of 30 days and up. When you want to host, you can list a place from the same account.",
     benefits: [
-      { lead: "Qualified long-stay tenants", rest: " — fewer turnovers, steadier income" },
-      { lead: "Free to list", rest: " — founding partners onboard free" },
-      { lead: "One simple dashboard", rest: " — every property and booking in one place" },
+      { lead: "Browse verified homes", rest: " — furnished stays of 30 days and up" },
+      { lead: "One account", rest: " — stay now, and host later without signing up again" },
+      { lead: "Become a host when you're ready", rest: " — list a place from your account menu" },
     ],
-    formTitle: "Tell us about your properties",
-    formSubtitle: "A few quick details and we'll get you set up. Takes under a minute.",
-    companyPlaceholder: "Rivera Stays",
-    segments: [
-      {
-        label: "Roughly how many properties do you manage?",
-        options: ["1–5", "6–20", "21–50", "50+"],
-      },
-    ],
-    consent: "By joining you agree to be contacted about listing your properties. No spam, ever.",
+    formTitle: "Create your account",
+    formSubtitle: "A few details and you're in. You can browse stays right away, and become a host later.",
+    companyPlaceholder: "",
+    segments: [],
+    consent: "By joining you agree to be contacted about your account. No spam, ever.",
   },
   partner: {
     role: roles.institutionPartner,

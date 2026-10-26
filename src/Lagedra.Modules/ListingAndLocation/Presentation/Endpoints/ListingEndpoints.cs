@@ -277,6 +277,7 @@ public static class ListingEndpoints
 
     private static async Task<IResult> SearchListings(
         [FromQuery] string? keyword,
+        [FromQuery] string? postalCode,
         [FromQuery] double? latitude,
         [FromQuery] double? longitude,
         [FromQuery] double? radiusKm,
@@ -306,6 +307,7 @@ public static class ListingEndpoints
         var result = await mediator.Send(
             new SearchListingsQuery(
                 keyword,
+                postalCode,
                 latitude, longitude, radiusKm,
                 swLat, swLng, neLat, neLng,
                 propertyType, minBedrooms, minBathrooms,

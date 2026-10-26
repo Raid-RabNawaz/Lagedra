@@ -1,5 +1,6 @@
 using Lagedra.Auth.Domain;
 using Lagedra.Auth.Infrastructure.Persistence;
+using Lagedra.SharedKernel.Domain;
 using Lagedra.SharedKernel.Integration;
 using Microsoft.EntityFrameworkCore;
 
@@ -73,7 +74,8 @@ public sealed class HostProfileProvider(AuthDbContext dbContext) : IHostProfileP
             user.IsPhoneVerified,
             user.ResponseRatePercent,
             user.ResponseTimeMinutes,
-            user.CreatedAt);
+            user.CreatedAt,
+            user.HostKind);
 
     private static string? ResolveDisplayName(ApplicationUser user)
     {
@@ -112,12 +114,19 @@ public sealed class HostProfileProvider(AuthDbContext dbContext) : IHostProfileP
             ("Country", !string.IsNullOrWhiteSpace(user.Country)),
             ("Languages", !string.IsNullOrWhiteSpace(user.Languages)),
             ("Occupation", !string.IsNullOrWhiteSpace(user.Occupation)),
-            ("Date of birth", user.DateOfBirth is not null),
+            ("Date of birth", user.HostKind != HostKind.PropertyManagementCompany && user.DateOfBirth is not null),
         };
 
-        var filled = signals.Count(s => s.Filled);
-        var percent = (int)Math.Round(filled * 100.0 / signals.Length, MidpointRounding.AwayFromZero);
-        var missing = signals.Where(s => !s.Filled).Select(s => s.Label).ToList();
+        // A company is not a person; a missing personal date of birth must not
+        // count against the listing gate. Drop the signal entirely so the
+        // percentage stays comparable to the web checklist.
+        var applicable = user.HostKind == HostKind.PropertyManagementCompany
+            ? signals.Where(s => s.Label != "Date of birth").ToArray()
+            : signals;
+
+        var filled = applicable.Count(s => s.Filled);
+        var percent = (int)Math.Round(filled * 100.0 / applicable.Length, MidpointRounding.AwayFromZero);
+        var missing = applicable.Where(s => !s.Filled).Select(s => s.Label).ToList();
 
         return new HostProfileCompletenessDto(percent, missing);
     }

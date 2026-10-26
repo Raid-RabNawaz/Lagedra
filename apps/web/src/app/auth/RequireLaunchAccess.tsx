@@ -52,18 +52,19 @@ export const RequireLaunchAccess = ({
   // would ping-pong between RequireMember's `/app` bounce and our listings
   // redirect, so they go to the join page like everyone else.
   const isMember = Boolean(user && hasRole(user.role, [roles.member]));
+  const hostingEnabled = Boolean(user?.hostingEnabled);
 
   if (surface === "app" && isMember) {
-    // Send bare `/app` (dashboard) straight to listings so hosts land usefully.
-    if (location.pathname === "/app" || location.pathname === "/app/") {
+    // Hosts land on listings. Guests keep the travelling dashboard.
+    if (hostingEnabled && (location.pathname === "/app" || location.pathname === "/app/")) {
       return <Navigate to={PRE_LAUNCH_HOST_HOME} replace />;
     }
     return <Outlet />;
   }
 
-  // Marketplace stays closed; signed-in hosts go to their listing home.
+  // Marketplace stays closed. Hosts go to listings; guests go to their dashboard.
   if (isMember) {
-    return <Navigate to={PRE_LAUNCH_HOST_HOME} replace />;
+    return <Navigate to={hostingEnabled ? PRE_LAUNCH_HOST_HOME : "/app"} replace />;
   }
 
   return <Navigate to="/join" replace />;

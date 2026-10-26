@@ -23,6 +23,20 @@ public sealed class ApplicationUser : IdentityUser<Guid>, ISoftDeletable
     /// </summary>
     public string? CompanyName { get; set; }
 
+    /// <summary>
+    /// Individual hosts verify with a government ID. Property-management
+    /// companies verify with a business registration. Existing accounts stay
+    /// <see cref="HostKind.Individual"/>.
+    /// </summary>
+    public HostKind HostKind { get; set; } = HostKind.Individual;
+
+    /// <summary>
+    /// True once the member has completed "Become a host". Until then the
+    /// account is a guest only and cannot switch into hosting.
+    /// Legacy host signups are backfilled to true.
+    /// </summary>
+    public bool HostingEnabled { get; set; }
+
     // ── Sign-up flow metadata ───────────────────────────────────────────
     // Lightweight, string-valued lead qualifiers captured by the multi-step
     // join flow. Nullable so legacy accounts and API-created users are

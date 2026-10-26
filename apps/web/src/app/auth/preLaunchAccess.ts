@@ -19,6 +19,7 @@ export function isPreLaunchHostPath(pathname: string): boolean {
   if (pathname === "/app/profile" || pathname.startsWith("/app/profile/")) {
     return true;
   }
+  if (pathname === "/app/become-a-host") return true;
   if (pathname === "/app/verification" || pathname.startsWith("/app/verification/")) {
     return true;
   }
@@ -45,6 +46,7 @@ export function isPreLaunchStaff(
 export function isPreLaunchLimitedHost(
   preLaunchEnabled: boolean,
   role: UserRole | string | number | null | undefined,
+  hostingEnabled = false,
 ): boolean {
-  return preLaunchEnabled && !isPreLaunchStaff(role);
+  return preLaunchEnabled && hostingEnabled && !isPreLaunchStaff(role);
 }
